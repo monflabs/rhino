@@ -6,6 +6,12 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Backward compatibility document (2026-10-07)
+
+- `BACKWARD_COMPATIBILITY.md` lists every change that makes code or an embedding behave differently from stock
+  Rhino 1.9.0: changes gated by `VERSION_ECMASCRIPT`, bug fixes that also apply to `VERSION_ES6`, and platform
+  changes, each with an example, the spec section and how to keep the old behavior. `RELEASE-NOTES.md` points to it.
+
 ### Assignment to a const (2026-10-07, plan 1.1c)
 
 - **Gated, `VERSION_ECMASCRIPT`:** assigning to a `const` binding throws `TypeError: Assignment to constant variable
@@ -15,7 +21,7 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
   Global consts (top-level `const` of a script) are covered with 1.1e.
 - **`VERSION_ES6`:** assigning to a block-level `const` used to succeed (its block scope stored it as a plain
   variable); it now has no effect, like every other const (TypeError in strict mode, as before).
-- Documented in the `VERSION_ECMASCRIPT` Javadoc and `RELEASE-NOTES.md`.
+- Documented in the `VERSION_ECMASCRIPT` Javadoc and `BACKWARD_COMPATIBILITY.md`.
 - test262: 2 more files pass (the other const-assignment tests use a global const, see 1.1e).
 
 ### Lexical declarations in loops (2026-10-07, plan 1.1a/1.1b)

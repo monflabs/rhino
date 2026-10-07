@@ -76,10 +76,11 @@ constraints apply to every change made toward that goal:
   `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors (so that
   `grep isLatestEcmaScript` lists every gated behavior), rather than introducing ad-hoc flags. Test both sides with
   `Utils.assertGatedBehavior`.
-- **Document every breaking change.** Each change gated by `VERSION_ECMASCRIPT` must be documented (what changes, why
-  the spec requires it, and how to get the old behavior) in [RELEASE-NOTES.md](RELEASE-NOTES.md) and
-  [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md), and listed under "Behavior changes" in the Javadoc of
-  `Context.VERSION_ECMASCRIPT`.
+- **Document every breaking change** in [BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md): every change that
+  makes code or an embedding behave differently from stock Rhino, whether gated by `VERSION_ECMASCRIPT` (section 1)
+  or applied to `VERSION_ES6` too after a decision (section 2), with a before/after example, the spec section, and
+  how to keep the old behavior. Gated changes are also listed under "Behavior changes" in the Javadoc of
+  `Context.VERSION_ECMASCRIPT`, and every change gets a [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) entry.
 - **test262 is the conformance target.** With `VERSION_ECMASCRIPT`, the engine must pass the full test262 suite. The
   suite already runs with this version (see `Test262SuiteTest`). When a change makes more tests pass, update
   [tests/testsrc/test262.properties](tests/testsrc/test262.properties) as described in

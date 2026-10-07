@@ -121,7 +121,8 @@ public class Context implements Closeable {
      * existing code. Engine code tests for it with {@link #isLatestEcmaScript()} (or {@link
      * CompilerEnvirons#isLatestEcmaScript()} at compile time).
      *
-     * <p>Behavior changes compared to {@link #VERSION_ES6}:
+     * <p>Behavior changes compared to {@link #VERSION_ES6} (with examples in
+     * BACKWARD_COMPATIBILITY.md):
      *
      * <ul>
      *   <li>Assigning to a {@code const} binding ({@code =}, compound assignment, {@code ++}/{@code

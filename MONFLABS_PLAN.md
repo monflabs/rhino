@@ -30,6 +30,7 @@ existing code and without slowing the engine down.
 | 2026-10-07 | 1.1: TDZ (ReferenceError) and TypeError on const assignment — **`VERSION_ECMASCRIPT` only**; under `VERSION_ES6`, assigning to a block-level const becomes a silent no-op like every other const. |
 | 2026-10-07 | 1.1: top-level `let`/`const` in a separate declarative scope with cross-script redeclaration checks (like Nashorn's `Global.LexicalScope`) — **`VERSION_ECMASCRIPT` only**. |
 | 2026-10-07 | 0.4 and the 1.1 loop fixes were committed **before the perf gate ran** (a stuck Time Machine backup blocked it); the gate is run on them together as soon as the machine is idle, and any regression is fixed in a follow-up. |
+| 2026-10-07 | Every change that makes code or an embedding behave differently from stock Rhino (gated or not) is documented in **`BACKWARD_COMPATIBILITY.md`**. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -60,8 +61,10 @@ These restate and extend the constraints in `AGENTS.md`.
    code (new syntax that was a `SyntaxError`, a new built-in) is enabled for `VERSION_ES6` too. Anything that can
    change the result of existing code (stricter early errors, TDZ, `const` enforcement, block-function semantics,
    enumeration order, `Function.prototype.toString` output, removed legacy behavior, …) is active only under
-   `VERSION_ECMASCRIPT`, documented in `CHANGELOG_MONFLABS.md` and in `RELEASE-NOTES.md`, and named in the Javadoc of
-   `Context.VERSION_ECMASCRIPT`. When it is unclear whether a change is breaking, ask (it is a decision). Gated code
+   `VERSION_ECMASCRIPT`, documented in `BACKWARD_COMPATIBILITY.md` (before/after example, spec section, how to keep
+   the old behavior), in `CHANGELOG_MONFLABS.md`, and named in the Javadoc of `Context.VERSION_ECMASCRIPT`. A change
+   decided to apply to `VERSION_ES6` too (a plain bug fix) is documented in `BACKWARD_COMPATIBILITY.md` as well.
+   When it is unclear whether a change is breaking, ask (it is a decision). Gated code
    tests `cx.isLatestEcmaScript()` (runtime) or `compilerEnv.isLatestEcmaScript()` (syntax, early errors), and its
    unit tests use `Utils.assertGatedBehavior(es6Result, ecmaResult, script)`.
 2. **Both backends.** Every language feature works in the interpreter (`CodeGenerator`/`Interpreter`) and in compiled
@@ -88,6 +91,7 @@ These restate and extend the constraints in `AGENTS.md`.
 - [ ] Implemented in parser/IR as needed, and in **both** backends.
 - [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` via `isLatestEcmaScript()` (decision asked if
       unclear), listed in the `VERSION_ECMASCRIPT` Javadoc, tested with `Utils.assertGatedBehavior`.
+- [ ] Every behavior change compared to stock Rhino (gated or not) documented in `BACKWARD_COMPATIBILITY.md`.
 - [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
 - [ ] `test262.properties` regenerated on the reference JDK (`RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test
       --tests '*Test262SuiteTest' -DupdateTest262properties`), diff reviewed: only removals, or justified moves.
@@ -172,7 +176,7 @@ order; dependencies are noted. The "test262" line names the feature tags or dire
 ### M0 — Foundations (no engine semantics change)
 
 **0.1 Plan, changelog, status tooling.** This file, `CHANGELOG_MONFLABS.md`, `tests/test262-status.py`, `AGENTS.md`
-rules. *(done with this commit)*
+rules. *(done)* `BACKWARD_COMPATIBILITY.md` (added 2026-10-07) lists every behavior change compared to stock Rhino.
 
 **0.2 Performance gate (port of Nashorn's `perf-gate.sh`).**
 - Tag `perf-baseline` on the last commit before any engine change (the commit that adds this plan).

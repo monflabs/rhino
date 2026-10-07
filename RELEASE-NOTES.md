@@ -1,11 +1,8 @@
-# MONFLABS fork: behavior changes under `VERSION_ECMASCRIPT`
+# MONFLABS fork
 
-These changes are only active when the language version is `Context.VERSION_ECMASCRIPT`; code running under
-`VERSION_ES6` (the default) keeps its previous behavior. See `CHANGELOG_MONFLABS.md` for all fork changes.
-
-* **Assignment to a `const` throws a TypeError**, also outside strict mode (`=`, `+=` and other compound
-  assignments, `++`/`--`, destructuring, `for-in/of` targets). Previously it was silently ignored. To keep the old
-  behavior, use `VERSION_ES6`.
+Changes that make this fork behave differently from stock Rhino are listed in
+[BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md); the full history is in
+[CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md).
 
 # Rhino 1.9.0
 ## December 22, 2025
