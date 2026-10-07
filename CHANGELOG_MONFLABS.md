@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Performance gate (2026-10-07)
+
+- `buildtools/perf-gate.sh [base-ref]` compares the working tree with a base revision (default: the `perf-baseline`
+  tag) on 116 metrics, and fails on a regression beyond each metric's tolerance: startup, compile time of a large
+  script, and steady-state runs of 20 micro-benchmarks (ported from Nashorn's perf gate) and 7 V8 benchmarks, each in
+  interpreted and compiled mode and under `VERSION_ES6` and `VERSION_ECMASCRIPT`. Base and head run the same
+  harness (`benchmarks/src/perf`) in interleaved rounds; only the engine jar differs.
+- Tolerances (`benchmarks/testsrc/perf-tolerances.properties`) are calibrated by `buildtools/perf-calibrate.py`
+  from 12 recordings of identical code; most are 10–20%. Validated in both directions: identical code passes, and a
+  deliberate `instanceof` slowdown of +15–19% fails.
+- Findings for the final performance pass are recorded in `MONFLABS_PLAN.md` (M14). No engine change.
+
 ### Android integration tests removed (2026-10-07)
 
 - The `it-android` module (Rhino's integration tests on an Android emulator) and the Android CI workflow are

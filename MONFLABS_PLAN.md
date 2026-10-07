@@ -388,6 +388,14 @@ experience: number fast paths in BigInt-aware generic operators, regexp caching,
 an iterator object, `Promise.prototype.then` using the intrinsic `%Promise%`, symbol-keyed property lookup without
 double `ToPrimitive`. Every optimization keeps test262 green and records its gain in the changelog.
 
+
+Findings recorded while building the perf gate (2026-10-07), to investigate in this pass:
+
+- Top-level script code is often slower in compiled mode than in the interpreter (e.g. `wideobject`, `split`,
+  `matchreplace`, `regexp` in `testsrc/perf`), most likely global variable access from compiled top-level code.
+- `run.wideobject.cmp` is bimodal across JVMs (19 ms or 60 ms): the JIT settles in one of two states.
+- `run.properties.cmp` depends on what ran before it in the same JVM (profile pollution): 25 ms alone, 50 ms in the
+  full run.
 ---
 
 ## Status tracker
@@ -395,8 +403,8 @@ double `ToPrimitive`. Every optimization keeps test262 green and records its gai
 | #    | Feature                                         | Status      | test262 slice before → after | Commit |
 |------|-------------------------------------------------|-------------|------------------------------|--------|
 | 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.9% (JDK 25)      | 7ed50a954 |
-| 0.2  | Perf gate                                       | next        |                              |        |
-| 0.3  | test262 harness upgrades                        | todo        |                              |        |
+| 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
+| 0.3  | test262 harness upgrades                        | next        |                              |        |
 | 0.4  | Gating plumbing                                 | todo        |                              |        |
 | 1.1  | Lexical declarations                            | todo        |                              |        |
 | 1.2  | Function semantics                              | todo        |                              |        |

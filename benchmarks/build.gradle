@@ -40,3 +40,13 @@ jmh {
     warmupIterations = 4
     warmup = '5s'
 }
+
+// The performance gate's harness (see buildtools/perf-gate.sh). Plain Java, not JMH: it is
+// run against two engines in turn, and only needs the rhino jar on its class path.
+sourceSets {
+    perf
+}
+
+dependencies {
+    perfImplementation project(':rhino')
+}

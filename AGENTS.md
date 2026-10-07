@@ -107,6 +107,7 @@ it documents. Port the logic, not the code structure, and keep the differences i
 - [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) gets an entry for every change to the engine.
 - `python3 tests/test262-status.py [--by-feature] [--by-dir N]` reports the in-scope test262 pass rate.
 - Scope is ES2026 minus Nashorn's exclusions: proper tail calls, `staging/`, `intl402/` and post-ES2026 proposals.
-- No performance regression: run the perf gate before committing engine changes (once it exists, see plan item 0.2).
+- No performance regression: run `buildtools/perf-gate.sh` before committing engine changes (about 12 minutes; see
+  `benchmarks/README.md`). Keep the machine otherwise idle while it runs.
 - When several reasonable options exist, ask the user; recommend the option aligned with Nashorn.
 - When a feature is done, present it to the user, then commit it on the `monflabs_enhancements` branch.
