@@ -35,10 +35,3 @@ so it tries to convert `null` to String.
 Adding rhino-kotlin dependency fixes the problem, allowing JavaScript functions to have nullable parameters.
 
 At the moment, only parameter nullability is supported, but we might add more Kotlin-specific support in future.
-
-**Note:** If building for Android, make sure the kotlin.Metadata class is not obfuscated by adding the following line
-into the proguard configuration:
-```
--keep class kotlin.Metadata
-```
-Without this line Rhino Kotlin support won't work in release apk.

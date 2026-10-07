@@ -83,7 +83,6 @@ The release contains the following other modules, which are used while building 
 testing but which are not published to Maven Central:
 
 * **tests**: The tests that depend on all of Rhino and also the external tests, including the Mozilla legacy test scripts and the test262 tests.
-* **it-android**: Integration tests for android, [see the details.](./it-android/README.md)
 * **benchmarks**: Runs benchmarks using JMH.
 * **examples**: Surprisingly, this contains example code.
 
@@ -188,10 +187,6 @@ this using the command:
 
 Not all installers seem to put JDKs in the places where Gradle can find them. When in doubt,
 installations from [Adoptium](https://adoptium.net) seem to work on most platforms.
-
-### Testing on Android
-
-[see here](./it-android/README.md)
 
 ### Code Coverage
 

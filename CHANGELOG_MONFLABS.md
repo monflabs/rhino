@@ -6,6 +6,11 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Android integration tests removed (2026-10-07)
+
+- The `it-android` module (Rhino's integration tests on an Android emulator) and the Android CI workflow are
+  removed, since Android is not a target of this fork. No engine change.
+
 ### Bazel build removed (2026-10-07)
 
 - The optional Bazel build that upstream added in March 2026 (as a faster, cacheable alternative for running the
