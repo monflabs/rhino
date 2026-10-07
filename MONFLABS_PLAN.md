@@ -1,0 +1,401 @@
+# MONFLABS plan: Rhino to full ECMAScript 2026
+
+This is the working plan for bringing this fork of Rhino (`org.monflabs.mozilla`, branch `monflabs_enhancements`) to
+full conformance with **ECMA-262 17th edition (ECMAScript 2026, June 2026)**, measured by test262, without breaking
+existing code and without slowing the engine down.
+
+- **Normative source:** `~/Documents/EcmaScript 262-402-404 Specifications/ECMA-262_17th_edition_june_2026.pdf`.
+  Earlier editions (5th–16th) in the same folder can be used to understand when and why a behavior changed.
+- **Reference implementation:** Nashorn (`../nashorn`), which went through the same journey and ended up with ES2026
+  and a passing test262. See its `CLAUDE.md`, `CHANGELOG.md`, `doc/CONFORMANCE.md`,
+  `doc/nashorn/internals/*.md` and `buildtools/perf-gate.sh`. Port the logic, not the structure (see `AGENTS.md`).
+- **Status:** see the [tracker](#status-tracker) at the end; it is updated with every milestone.
+
+## Decisions taken
+
+| Date       | Decision                                                                                                                                                                                                                                                         |
+|------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-10-07 | Breaking changes are gated by `Context.VERSION_ECMASCRIPT`, which always means the latest edition (`AGENTS.md`).                                                                                                                                                  |
+| 2026-10-07 | Packages renamed to `org.monflabs.mozilla.*`, Maven group `org.monflabs.mozilla`.                                                                                                                                                                                |
+| 2026-10-07 | **Scope = Nashorn's exclusions.** Out: proper tail calls, `staging/`, `intl402/`, and everything that postdates ES2026 (see [Scope](#scope)). In: everything else, including ES modules, async, `SharedArrayBuffer`/`Atomics` and Annex B.                         |
+| 2026-10-07 | **Ordering = foundations first, then edition by edition** (ES2015 gaps, then ES2016 → ES2026).                                                                                                                                                                   |
+| 2026-10-07 | **Performance guardrail = a port of Nashorn's perf gate** (interleaved base-vs-head measurement, per-metric tolerances, both evaluation modes).                                                                                                                    |
+| 2026-10-07 | **Full ES modules** with a pluggable module-loader API, coexisting with CommonJS `require()`.                                                                                                                                                                    |
+
+Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
+
+## Ground rules
+
+These restate and extend the constraints in `AGENTS.md`.
+
+1. **No breaking change outside `VERSION_ECMASCRIPT`.** A new feature that cannot change the behavior of existing
+   code (new syntax that was a `SyntaxError`, a new built-in) is enabled for `VERSION_ES6` too. Anything that can
+   change the result of existing code (stricter early errors, TDZ, `const` enforcement, block-function semantics,
+   enumeration order, `Function.prototype.toString` output, removed legacy behavior, …) is active only under
+   `VERSION_ECMASCRIPT`, documented in `CHANGELOG_MONFLABS.md` and in `RELEASE-NOTES.md`, and named in the Javadoc of
+   `Context.VERSION_ECMASCRIPT`. When it is unclear whether a change is breaking, ask (it is a decision).
+2. **Both backends.** Every language feature works in the interpreter (`CodeGenerator`/`Interpreter`) and in compiled
+   mode (`Codegen`). test262 runs both; a milestone is not done until both pass.
+3. **test262 is the acceptance test.** Each feature is validated by its test262 slice (strict and sloppy, interpreted
+   and compiled). `tests/testsrc/test262.properties` is regenerated as tests start passing and is committed with
+   the feature. A new expected failure is a regression, never a way to make the build green.
+4. **No performance regression.** The perf gate (milestone 0.2) runs before every commit that touches the engine and
+   must pass. Obvious optimizations found on the way are welcome if they keep test262 green; each is measured and
+   recorded.
+5. **Java only.** Built-ins are implemented in Java, using the JDK (`BigDecimal`, `Base64`, `HexFormat`,
+   `Character`/`java.text` Unicode data, `java.lang.ref`, …), never in bundled JavaScript.
+6. **Unit tests** for anything test262 does not cover (Java API, embedding, `VERSION_ES6` vs `VERSION_ECMASCRIPT`
+   gating). New test classes use JUnit 5.
+7. **Changelog.** Every change to the engine gets an entry in `CHANGELOG_MONFLABS.md` (what, why, which test262
+   slice moved, any gated behavior, perf impact).
+8. **Present, then commit.** When a feature is done, it is presented to the user (what changed, test262 before/after,
+   perf gate result, gated behavior, open questions), then committed on `monflabs_enhancements`, one commit per
+   feature (or per coherent sub-feature).
+
+### Definition of done for each feature
+
+- [ ] Spec sections read in the ES2026 PDF; Nashorn implementation reviewed for approach and pitfalls.
+- [ ] Implemented in parser/IR as needed, and in **both** backends.
+- [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` (decision asked if unclear).
+- [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
+- [ ] `test262.properties` regenerated on Java 17 (`RHINO_TEST_JAVA_VERSION=17 ./gradlew :tests:test
+      --tests '*Test262SuiteTest' -DupdateTest262properties`), diff reviewed: only removals, or justified moves.
+- [ ] `./gradlew check` green (all modules, Mozilla legacy suite included).
+- [ ] Perf gate green, numbers recorded in the changelog entry when relevant.
+- [ ] `CHANGELOG_MONFLABS.md` entry; tracker below updated; `python3 tests/test262-status.py` numbers updated.
+- [ ] Presented to the user; committed.
+
+### Decision protocol
+
+Whenever more than one reasonable option exists (API shape, semantics under `VERSION_ES6`, whether something is
+breaking, data source, scope), stop and ask the user, presenting the options with a recommendation. The recommended
+option is the one aligned with Nashorn's implementation, unless Rhino's architecture or compatibility rules make it
+inappropriate (in that case, say why). Record the answer in [Decisions taken](#decisions-taken).
+
+## Scope
+
+**In scope:** all of `test/built-ins`, `test/language`, `test/annexB` and `test/harness` in the pinned test262
+checkout (`tests/test262`, commit `82d777218c`, 2026-05-15, which already carries every ES2026 subtree), except:
+
+| Out of scope                                                                                     | Why                                                                                     |
+|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
+| `tail-call-optimization`                                                                         | Normative, but a calling convention the JVM cannot afford on every call (as Nashorn).   |
+| `staging/`                                                                                       | Proposals, not part of an edition.                                                      |
+| `intl402/`                                                                                       | ECMA-402 is a separate standard; open question, as in Nashorn.                          |
+| `Temporal`, `explicit-resource-management` (`using`, `DisposableStack`, `SuppressedError`), `import-defer`, `Atomics.pause` | ES2027 (not in the ES2026 PDF).                                      |
+| `ShadowRealm`, `decorators`, `joint-iteration` (`Iterator.zip`), `immutable-arraybuffer`, `await-dictionary`, `source-phase-imports*`, `import-bytes`, `import-text`, `nonextensible-applies-to-private`, `Intl.Era-monthcode` | Proposals not in ES2026.          |
+
+`tests/test262-status.py` encodes this list. The **ES2026-specific additions** (confirmed in the PDF) are exactly the
+seven Nashorn implemented: `Error.isError`, `Math.sumPrecise`, `Map`/`WeakMap` `getOrInsert`/`getOrInsertComputed`,
+`Iterator.concat`, `Uint8Array` base64/hex, JSON source access (`JSON.rawJSON`, `JSON.isRawJSON`, reviver `context`),
+and `Array.fromAsync`. The only Temporal content in ES2026 is the date-time string grammar used by `Date.parse`.
+
+`UNSUPPORTED_FEATURES` in `Test262SuiteTest` will shrink to the out-of-scope tags only (plus `IsHTMLDDA`, which needs
+a host hook Rhino does not have, and `u180e`, which is a pre-Unicode-6.3 behavior: both to be confirmed as decisions
+when reached).
+
+## Baseline (2026-10-07)
+
+Measured with `python3 tests/test262-status.py` against the committed `test262.properties` (not a new run).
+
+| In-scope test files | Pass   | Fail (all modes) | Fail (strict or sloppy only) | Skipped | Pass rate |
+|---------------------|--------|------------------|------------------------------|---------|-----------|
+| 42,616              | 24,202 | 3,386            | 805                          | 14,223  | **56.8%** |
+
+Skipped tests are dominated by `class` (4,738), `async-iteration` (4,968), `async-functions` (705), class fields and
+private members (~5,000), modules (`module` flag, `language/module-code`, `language/import`, `dynamic-import`), and
+`async`-flagged tests the harness cannot run yet.
+
+Per-area pass rates (selected; full list via `--by-feature` / `--by-dir 3`):
+
+| Area                                  | Pass % | Area                                   | Pass % |
+|---------------------------------------|--------|----------------------------------------|--------|
+| `destructuring-binding`               | 28.1   | `built-ins/RegExp`                     | 66.8   |
+| `default-parameters`                  | 22.7   | `regexp-unicode-property-escapes`      | 44.8   |
+| `generators`                          | 20.9   | `regexp-v-flag`                        | 27.3   |
+| `Symbol.iterator`                     | 19.2   | `regexp-match-indices`                 | 3.2    |
+| `computed-property-names`             | 17.2   | `regexp-modifiers`                     | 69.6   |
+| `let` / `const`                       | 26 / 0 | `resizable-arraybuffer`                | 45.0   |
+| `language/statements/for-of`          | 64.8   | `iterator-helpers`                     | 9.4    |
+| `language/arguments-object`           | 30.4   | `set-methods`                          | 75.3   |
+| `language/eval-code`                  | 35.4   | `uint8array-base64`                    | 11.4   |
+| `globalThis`                          | 2.1    | `json-parse-with-source`               | 0      |
+| `Proxy` / `Reflect`                   | 68 / 68| `Math.sumPrecise`, `RegExp.escape`     | 0      |
+| `built-ins/Promise`                   | 38.8   | `logical-assignment-operators`         | 38.0   |
+| `built-ins/Function`                  | 76.6   | `optional-chaining`                    | 64.3   |
+| `built-ins/JSON`                      | 75.2   | `TypedArray` / `DataView`              | 77 / 61|
+
+Already complete or nearly so: `Float16Array`, `array-find-from-last`, `array-grouping`, `Array.prototype.at`,
+`Object.fromEntries`, `regexp-lookbehind`, `numeric-separator-literal`, `json-superset`, `stable-array-sort`,
+`optional-catch-binding`, `change-array-by-copy` (96%), `Error.isError` (92%), `hashbang` (93%).
+
+---
+
+## Milestones
+
+Each numbered item is a feature: implemented, presented and committed on its own. Items within a milestone are in
+order; dependencies are noted. The "test262" line names the feature tags or directories that must end up passing.
+
+### M0 — Foundations (no engine semantics change)
+
+**0.1 Plan, changelog, status tooling.** This file, `CHANGELOG_MONFLABS.md`, `tests/test262-status.py`, `AGENTS.md`
+rules. *(done with this commit)*
+
+**0.2 Performance gate (port of Nashorn's `perf-gate.sh`).**
+- Tag `perf-baseline` on the last commit before any engine change (the commit that adds this plan).
+- `buildtools/perf-gate.sh [base-ref]`: builds the base revision in a temporary `git worktree` (engine jars only) and
+  the working tree; the harness and benchmark scripts always come from the working tree, so both sides differ only
+  in the engine.
+- Harness (`benchmarks/src/perf/...`, plain Java main, not JMH, as in Nashorn's `PerfBenchmark`):
+  1. steady state: each script compiled once, run repeatedly in one scope;
+  2. minimum within a JVM, median across JVMs;
+  3. base and head interleaved round by round;
+  4. pinned heap (`-Xms1g -Xmx1g -XX:+UseG1GC`);
+  5. **both** `EvaluationMethod.Interpreter` and compiled mode, and both `VERSION_ES6` and `VERSION_ECMASCRIPT`
+     (to prove that the gated paths cost nothing to `VERSION_ES6` users);
+  6. per-metric tolerances, measured rather than chosen (10 runs of identical code both ways, then set the band);
+     a missing metric fails; `-Dperf.tolerance=` override for a considered re-run.
+- Scripts: port Nashorn's 20 `core/src/test/scripts/perf/*.js` (arith, arraymap, closures, concat, evalcache, forof,
+  instanceof, matchreplace, megamorphic, properties, protochain, regexp, regexptest, sort, split, strbuild,
+  stringmethods, toprimitive, typedarray, wideobject), plus compile-time metrics on a large script, plus a
+  steady-state run of selected SunSpider/V8 scripts already in `benchmarks/testsrc`. Add a script whenever a
+  feature touches a hot path that no script exercises (e.g. property access with symbols, iteration, calls through
+  `super`, generators, async).
+- Documentation: `doc`/`benchmarks/README.md` section; `AGENTS.md` rule: run the gate before committing engine
+  changes. The existing JMH suite stays for deep dives and profiling (`PROFILERS=cpu`).
+
+**0.3 test262 harness upgrades** (in `Test262SuiteTest`; each fixes test infrastructure, not the engine):
+- run `async`-flagged tests: `$DONE`/`doneprintHandle.js` and `asyncHelpers.js`, draining Rhino's microtask queue
+  until settled, with a timeout (Nashorn: 120 s per test on its own thread);
+- verify `negative: {phase, type}` (parse vs runtime, and the error constructor), if not already done;
+- a per-test timeout so an adversarial iterator cannot hang the run;
+- **fail on unexpected pass** (today it is only logged), so conformance only moves forward — `Test262UnexpectedlyPassingTest`
+  to be checked first; decision if it changes the existing workflow;
+- `$262` host hooks audit: `createRealm`, `detachArrayBuffer`, `evalScript`, `gc`, `global`, `IsHTMLDDA`, `agent`
+  (agent arrives with M3.4);
+- `module` flag support arrives with M1.12 (modules).
+- Re-baseline `test262.properties` on Java 17 after each harness change (tests that were silently skipped now run
+  and are listed as failing; that is expected and not a regression).
+
+**0.4 Gating plumbing.** A single, cheap way to test for the latest edition (e.g. a cached boolean on `Context` /
+`CompilerEnvirons` set from `getLanguageVersion() >= VERSION_ECMASCRIPT`) so that gated checks cost a field read on
+hot paths. Javadoc of `VERSION_ECMASCRIPT` gets a "Behavior changes" list maintained from then on. Unit test helper
+that runs a script under both versions.
+
+### M1 — ES2015 completion
+
+Most later work depends on these. Order chosen by dependency: scoping → functions → destructuring/iteration →
+object literals → generators → classes → built-in protocols → RegExp → modules.
+
+**1.1 Lexical declarations.** `let`/`const` per spec: TDZ, per-iteration bindings in `for`/`for-in`/`for-of` heads
+(closures capture each iteration), `const` assignment `TypeError`, redeclaration early errors, global lexical
+environment (`language/global-code`, `language/block-scope`, `language/statements/{let,const,for}`),
+`let` as an identifier in sloppy code. *Gating:* TDZ errors and `const` enforcement are breaking → `VERSION_ECMASCRIPT`
+(audit what `VERSION_ES6` already enforces first). Nashorn: `ES6Desugar`, `Lower`, block scoping in `codegen`.
+
+**1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
+function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
+when parameters have expressions), rest parameters, duplicate-parameter early errors, `Function` constructor
+(`built-ins/Function`, `ThrowTypeError`), `Function.prototype.toString` source text (ES2019 revision, done here
+because tests depend on it) — *gating* of the `toString` format is a decision. Direct/indirect `eval` semantics
+(`language/eval-code`, `language/function-code`: var hoisting, conflicts with lexical declarations).
+
+**1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
+nested defaults, holes, rest elements; `IteratorClose` on abrupt completion; evaluation order
+(`destructuring-binding`, `destructuring-assignment`, `language/expressions/assignment`,
+`language/statements/for-of`).
+
+**1.4 Iteration protocol.** `GetIterator`/`IteratorStep`/`IteratorClose` as shared runtime helpers used by `for-of`,
+spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`Map`, `Set`, `WeakMap`, `WeakSet`,
+`Promise.all*`, `%TypedArray%.from`). `%IteratorPrototype%`, `%ArrayIteratorPrototype%` etc. (`Symbol.iterator`,
+`for-of`). Perf: fast path for built-in array iteration in `for-of` (Nashorn did the same).
+
+**1.5 Object literal extensions.** Computed property names (17%), shorthand and concise methods, accessor names,
+`__proto__: ` in literals (Annex B), `super` property access in object methods (`[[HomeObject]]`),
+`language/expressions/object`, `language/expressions/super`.
+
+**1.6 Generators completion.** Generator declarations/expressions/methods, `yield*` delegation with
+`return`/`throw` forwarding, `GeneratorPrototype` details, generator objects as iterables; both backends
+(`generators`, `built-ins/Generator*`). Prerequisite for async functions (M3.1) if they are built on the generator
+machinery (decision at M3.1).
+
+**1.7 Classes (ES2015).** Declarations and expressions, constructors, `extends` (including `null` and expressions),
+`super()` and `super.x`, derived-constructor `this` TDZ, `new.target`, static methods, accessors, computed members,
+class name binding, strict-mode bodies, `[[ConstructorKind]]`, subclassing built-ins via `NewTarget` plumbing
+through every built-in constructor (`Array`, `Error`s, `RegExp`, `Map`, `Set`, `Promise`, typed arrays, `Function`,
+`Boolean`, `Number`, `String`, `Date`, `ArrayBuffer`, `DataView`). Removes `class` from `UNSUPPORTED_FEATURES` and
+un-skips `language/{statements,expressions}/class` (~8,400 tests; tests using later class features stay skipped by
+their own tags until M8). Biggest single item; may be split into 1.7a (syntax + runtime) and 1.7b (built-in
+subclassing). Nashorn: classes desugared in its IR with `NewTarget` threaded through built-in constructors.
+
+**1.8 Well-known symbols and built-in protocol conformance.** `Symbol.species`, `toStringTag`, `unscopables`
+(`with`), `hasInstance`, `toPrimitive`, `isConcatSpreadable`; `Proxy` invariants and trap ordering, `Reflect`
+(68% → 100%); `TypedArray`/`ArrayBuffer`/`DataView` (non-resizable) conformance; `String.fromCodePoint`,
+`String.raw`, `String.prototype` methods; `Promise` (non-async parts); `Object` residuals; `cross-realm` behaviors
+(needs `$262.createRealm`).
+
+**1.9 RegExp (ES2015).** `u` flag (code point semantics, `\u{...}`, case folding), `y` sticky, `flags`, the four
+symbol methods (`@@match`, `@@replace`, `@@search`, `@@split`) with observable spec steps, `RegExp` subclassing,
+`lastIndex` handling (`built-ins/RegExp` core). Rhino keeps its own regexp engine (`regexp/NativeRegExp`) — whether
+to extend it or to route some features to `java.util.regex`, as Nashorn did, is a decision at M4.3.
+
+**1.10 Template literals and misc syntax residuals.** Tagged template caching (`[[TemplateMap]]`), raw strings,
+`new.target` outside classes, `language/expressions/arrow-function` residuals (82%), `language/literals`,
+`language/identifiers` (Unicode ID_Start/ID_Continue from the JDK), reserved words.
+
+**1.11 Annex B (ES2015 parts).** Block-level function declarations in sloppy mode (B.3.3), `__proto__`,
+`__defineGetter__` and kin, HTML-like comments, legacy octal, `RegExp` legacy syntax (`annexB/language`,
+`annexB/built-ins`). *Gating:* B.3.3 changes how existing Rhino scripts resolve functions declared in blocks →
+`VERSION_ECMASCRIPT` (decision).
+
+**1.12 ES modules.** Module parsing (`import`/`export` in all forms, `default`, namespace objects, live bindings,
+cyclic graphs, `language/module-code`, `language/import`, `language/export`), a pluggable **module-loader API**
+(`ModuleLoader` resolving a specifier relative to a referrer and returning source, registered on the
+`ContextFactory`/`Context`; filesystem and classpath loaders provided; coexists with `commonjs.module.Require`), module
+records, linking and evaluation in both backends, `module` flag support in the test262 harness. API shape is a
+decision (recommended: modeled on Nashorn's `api.modules`). Later module features land in their editions: `export * as
+ns` and `import()`/`import.meta` (M6), top-level await (M8), import attributes and JSON modules (M11).
+
+### M2 — ES2016
+
+**2.1** `**` and `**=` (72%: precedence and unary-operand early errors, BigInt). **2.2** `Array.prototype.includes`
+(64%: `SameValueZero`, typed arrays, length coercion).
+
+### M3 — ES2017
+
+**3.1 Async functions.** `async function`, async arrows, async methods, `await`; job queue integration with Rhino's
+existing microtask processing (`Context` promise jobs); both backends. Implementation strategy is a decision
+(recommended, as Nashorn's `AsyncSupport`: a generator-like suspension driven by promise reactions, reusing M1.6).
+Un-skips `async-functions` and the `async` flag tests that depend only on promises.
+**3.2** `Object.values`/`entries`/`getOwnPropertyDescriptors`, `String.prototype.padStart`/`padEnd`, trailing commas in
+parameter and argument lists (residuals only).
+**3.3** `SharedArrayBuffer` (non-growable) and `Atomics` (all operations except `wait`).
+**3.4** `Atomics.wait`/`notify` and the `$262.agent` multi-agent harness (worker threads, a host that can block).
+Memory-model tests that need true parallel agents are verified here.
+
+### M4 — ES2018
+
+**4.1 Async iteration.** Async generators, `for await`, `Symbol.asyncIterator`, `%AsyncFromSyncIteratorPrototype%`,
+`%AsyncIteratorPrototype%` (`async-iteration`: 4,968 tests, the largest skipped group after classes).
+**4.2 Object rest/spread** in literals and patterns (34%/45%: `CopyDataProperties`, excluded keys, getters order).
+**4.3 RegExp ES2018.** `s` (dotAll, 35%), named groups residuals (91%), lookbehind (done), **Unicode property escapes**
+(45%): data source is a decision — the JDK's `Character`/`Character.UnicodeScript` cover General_Category and Script
+but not all binary properties nor `Script_Extensions` (Nashorn held some out as engine limits); options: generate
+compact tables from the UCD at build time vs JDK-only with documented hold-outs.
+**4.4** `Promise.prototype.finally` (52%), template literal revision (invalid escapes in tagged templates).
+
+### M5 — ES2019
+
+Mostly present. **5.1** Residuals: `flat`/`flatMap`, `trimStart`/`trimEnd` (and Annex B aliases as the same
+function objects), `Symbol.prototype.description`, well-formed `JSON.stringify`, stable sort, `Function.prototype.toString`
+(if not finished in 1.2).
+
+### M6 — ES2020
+
+**6.1** `globalThis` (2%: property attributes, strict/sloppy access). **6.2** Optional chaining (64%) and nullish
+coalescing (88%) residuals: short-circuit chains, `?.` with calls/templates/`super`, early errors.
+**6.3** `BigInt` residuals (74%: typed arrays `BigInt64Array`/`BigUint64Array`, `DataView` accessors, `asIntN`/`asUintN`,
+comparisons, mixed-type errors). **6.4** `String.prototype.matchAll`, `Promise.allSettled` (with async tests).
+**6.5** `for-in` enumeration order (78%; *gating* decision — may change existing iteration order).
+**6.6 Module additions:** `export * as ns from`, dynamic `import()`, `import.meta` (host-populated through the
+module-loader API).
+
+### M7 — ES2021
+
+**7.1** Logical assignment `&&=`, `||=`, `??=` (38%: short-circuit without assignment, named evaluation).
+**7.2** `String.prototype.replaceAll`, `Promise.any` + `AggregateError` residuals. **7.3** `WeakRef`/`FinalizationRegistry`
+residuals (cleanup callbacks scheduled on the job queue), numeric separators residuals.
+
+### M8 — ES2022
+
+**8.1 Class fields.** Public instance and static fields, computed keys, `NamedEvaluation`, initializer scope
+(`class-fields-public`, `class-static-fields-public`). **8.2 Private names.** `#x` fields, methods, accessors,
+static forms, brand checks, `#x in obj` (`class-fields-private`, `class-methods-private`, `class-static-*-private`,
+`class-fields-private-in`; ~4,700 tests); storage invisible to reflection, Java interop, and `Proxy` (decision on
+representation; Nashorn uses a per-object slot). **8.3** Class static blocks (23%). **8.4** RegExp `d` flag
+(`hasIndices`, `.indices`; 3%). **8.5** Top-level `await` in modules (async module evaluation). **8.6** Residuals:
+`.at()`, `Object.hasOwn`, error `cause`.
+
+### M9 — ES2023
+
+**9.1** Residuals: `findLast*`, change-array-by-copy (96%), hashbang (93%), symbols as `WeakMap`/`WeakRef` keys.
+
+### M10 — ES2024
+
+**10.1 Resizable `ArrayBuffer` / growable `SharedArrayBuffer`** (45%): `maxByteLength`, `resize`/`grow`,
+length-tracking and out-of-bounds typed-array views, `transfer`/`transferToFixedLength`/`detached`. Perf-sensitive:
+fixed-length buffers must keep their current element-access fast path (Nashorn gated the resizable path off the hot
+path). **10.2 RegExp `v` flag** (27%): class set operations, `\q{}`, properties of strings (data source per 4.3).
+**10.3** `Atomics.waitAsync`. **10.4** Residuals: `Promise.withResolvers`, `Object.groupBy`/`Map.groupBy`,
+`isWellFormed`/`toWellFormed`.
+
+### M11 — ES2025
+
+**11.1 Iterator helpers** (9%): `Iterator` global, `Iterator.from`, lazy `map`/`filter`/`take`/`drop`/`flatMap`,
+eager `reduce`/`toArray`/`forEach`/`some`/`every`/`find`, `%WrapForValidIteratorPrototype%`,
+`%IteratorHelperPrototype%`. **11.2 Set methods** (75%): `union`, `intersection`, `difference`,
+`symmetricDifference`, `isSubsetOf`, `isSupersetOf`, `isDisjointFrom` over GetSetRecord. **11.3** `RegExp.escape`.
+**11.4 RegExp pattern modifiers** `(?ims-ims:…)` (70%) and duplicate named groups (81%). **11.5** `Promise.try`
+(with async tests). **11.6 Import attributes and JSON modules** (`with { type: "json" }`, dynamic `import()` second
+argument). `Float16Array`, `Math.f16round`, `DataView` float16 are already complete.
+
+### M12 — ES2026
+
+**12.1** `Error.isError` (92%). **12.2** `Math.sumPrecise` (exact summation, `BigDecimal` as in Nashorn, or a
+Shewchuk-style algorithm if faster — measured). **12.3** Upsert: `Map`/`WeakMap` `getOrInsert`/`getOrInsertComputed`.
+**12.4** `Iterator.concat` (`iterator-sequencing`). **12.5** `Uint8Array` base64/hex: `fromBase64`, `fromHex`,
+`toBase64`, `toHex`, `setFromBase64`, `setFromHex` with `alphabet`/`lastChunkHandling`/`omitPadding` (11%).
+**12.6** JSON source access: reviver `context.source`, `JSON.rawJSON`, `JSON.isRawJSON` (0%). **12.7** `Array.fromAsync`
+(needs async + async iteration). **12.8** `Date.parse` date-time string grammar alignment (decision: Rhino's legacy
+lenient parsing must stay for `VERSION_ES6`).
+
+### M13 — Long tail to zero
+
+Walk the remaining entries of `test262.properties` area by area (`annexB`, `built-ins/Date`, `built-ins/String`,
+`built-ins/Object`, `built-ins/Array`, `language/*`) until the only remaining expected failures are documented
+decisions. Each remaining exception gets a recorded reason in a `doc/CONFORMANCE_MONFLABS.md` (mirrors Nashorn's
+`doc/CONFORMANCE.md`). Then decide whether to flip Rhino's default to stricter test262 expectations.
+
+### M14 — Performance (continuous, with a final dedicated pass)
+
+Optimizations found along the way are done when obvious and measured. A final pass profiles the V8/SunSpider/perf-gate
+scripts on the ES2026 engine (`PROFILERS=cpu ./gradlew jmh`) in both modes. Candidates known from Nashorn's
+experience: number fast paths in BigInt-aware generic operators, regexp caching, `for-of` over built-in arrays without
+an iterator object, `Promise.prototype.then` using the intrinsic `%Promise%`, symbol-keyed property lookup without
+double `ToPrimitive`. Every optimization keeps test262 green and records its gain in the changelog.
+
+---
+
+## Status tracker
+
+| #    | Feature                                         | Status      | test262 slice before → after | Commit |
+|------|-------------------------------------------------|-------------|------------------------------|--------|
+| 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.8%               | (this) |
+| 0.2  | Perf gate                                       | next        |                              |        |
+| 0.3  | test262 harness upgrades                        | todo        |                              |        |
+| 0.4  | Gating plumbing                                 | todo        |                              |        |
+| 1.1  | Lexical declarations                            | todo        |                              |        |
+| 1.2  | Function semantics                              | todo        |                              |        |
+| 1.3  | Destructuring                                   | todo        |                              |        |
+| 1.4  | Iteration protocol                              | todo        |                              |        |
+| 1.5  | Object literal extensions                       | todo        |                              |        |
+| 1.6  | Generators                                      | todo        |                              |        |
+| 1.7  | Classes                                         | todo        |                              |        |
+| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
+| 1.9  | RegExp ES2015                                   | todo        |                              |        |
+| 1.10 | Templates and syntax residuals                  | todo        |                              |        |
+| 1.11 | Annex B (ES2015)                                | todo        |                              |        |
+| 1.12 | ES modules                                      | todo        |                              |        |
+| 2.x  | ES2016                                          | todo        |                              |        |
+| 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
+| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
+| 5.x  | ES2019 residuals                                | todo        |                              |        |
+| 6.x  | ES2020                                          | todo        |                              |        |
+| 7.x  | ES2021                                          | todo        |                              |        |
+| 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |
+| 9.x  | ES2023 residuals                                | todo        |                              |        |
+| 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
+| 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |
+| 12.x | ES2026                                          | todo        |                              |        |
+| 13   | Long tail to zero                               | todo        |                              |        |
+| 14   | Performance pass                                | continuous  |                              |        |
