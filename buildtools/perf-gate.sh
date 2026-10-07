@@ -40,6 +40,16 @@ MSG
     exit 2
 fi
 
+# A Time Machine backup takes a full core for as long as it runs and turned every
+# metric into a "regression" (as it did for Nashorn's gate). Refuse to measure
+# during one; PERF_ALLOW_BACKUP=1 overrides.
+if [ -z "${PERF_ALLOW_BACKUP:-}" ] && command -v tmutil >/dev/null \
+        && tmutil status 2>/dev/null | grep -q "Running = 1"; then
+    echo "perf-gate: a Time Machine backup is running; measurements would be meaningless." >&2
+    echo "Wait for it to finish (tmutil status), or set PERF_ALLOW_BACKUP=1." >&2
+    exit 3
+fi
+
 BASE_SHA="$(git -C "$ROOT" rev-parse --short "$BASE_REF^{commit}")"
 echo "perf-gate: $BASE_REF ($BASE_SHA) -> working tree"
 

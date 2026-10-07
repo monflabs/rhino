@@ -64,21 +64,21 @@ public final class PerfBenchmark {
 
     private static final String TOLERANCE_OVERRIDE = System.getProperty("perf.tolerance");
     private static final Pattern ONLY = Pattern.compile(System.getProperty("perf.only", ".*"));
-    private static final int WARMUP = Integer.getInteger("perf.warmup", 5);
+    private static final int WARMUP = Integer.getInteger("perf.warmup", 20);
     private static final int ITERATIONS = Integer.getInteger("perf.iterations", 10);
 
     /**
      * Smallest duration of one timed sample; short benchmark functions are repeated to reach it.
      */
-    private static final double MIN_SAMPLE_MS = 20;
+    private static final double MIN_SAMPLE_MS = 10;
 
     private static final Path PERF_SCRIPTS = Path.of("testsrc/perf");
     private static final Path V8 = Path.of("testsrc/benchmarks/v8-benchmarks-v6");
     private static final Path FRAMEWORK = Path.of("testsrc/benchmarks/framework.js");
 
     private enum Mode {
-        INT("int", EvaluationMethod.Interpreter, 0.4),
-        CMP("cmp", EvaluationMethod.Compiler, 1.0);
+        INT("int", EvaluationMethod.Interpreter, 0.2),
+        CMP("cmp", EvaluationMethod.Compiler, 0.5);
 
         final String label;
         final EvaluationMethod method;
@@ -311,7 +311,9 @@ public final class PerfBenchmark {
 
     /**
      * The fastest of several timed runs after warmup. Noise (GC, scheduling, other processes) only
-     * ever makes a run slower, so the fastest one is the most reproducible.
+     * ever makes a run slower, so the fastest one is the most reproducible. The warmup is long on
+     * purpose: with 5 runs, compiled-mode scripts settled in one of two JIT states from one JVM to
+     * the next (e.g. 18 or 33 ms), which made the comparison flaky; with 20 they converge.
      */
     private static double best(Measurement measurement) {
         for (int i = 0; i < WARMUP; i++) {

@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Performance gate: longer warmup, backup guard (2026-10-07)
+
+- 20 warmup runs instead of 5 (with shorter runs, `PERF_SCALE` 0.2/0.5): with 5, compiled-mode scripts settled in
+  one of two JIT states from one JVM to the next and the gate reported false regressions. A gate run now takes about
+  18 minutes. The tolerances in `perf-tolerances.properties` were calibrated with the old settings and still need
+  recalibrating with the new ones.
+- The gate refuses to run while a Time Machine backup is running (`PERF_ALLOW_BACKUP=1` overrides).
+
 ### Gating plumbing for `VERSION_ECMASCRIPT` (2026-10-07)
 
 - `Context.isLatestEcmaScript()` and `CompilerEnvirons.isLatestEcmaScript()`: the single check for behavior that is

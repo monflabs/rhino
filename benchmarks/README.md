@@ -65,7 +65,9 @@ for many internal objects, and lambda functions.
 `buildtools/perf-gate.sh [base-ref]` compares the performance of the working tree with an earlier
 revision (by default the `perf-baseline` tag, the last commit before the ES2026 work started) and
 fails if any metric regressed beyond its tolerance. Run it before committing a change to the
-engine. It takes about 12 minutes.
+engine. It takes about 18 minutes, and refuses to run during a Time Machine backup
+(`PERF_ALLOW_BACKUP=1` overrides): a backup takes a full core and turns every metric into a
+"regression".
 
     buildtools/perf-gate.sh                       # against perf-baseline
     buildtools/perf-gate.sh HEAD                  # uncommitted changes only
@@ -84,16 +86,17 @@ How it works:
     perf gate; each one guards a hot path that the ES2015+ work could slow down);
   * `run.v8-<benchmark>`: steady-state execution of the V8 benchmark functions, normalized to one
     call.
-* Inside a JVM, each metric is the fastest of 10 runs after 5 warmup runs (noise only ever makes
-  a run slower). The two sides are measured in alternating rounds (3 by default, one JVM per side
+* Inside a JVM, each metric is the fastest of 10 runs after 20 warmup runs (noise only ever makes
+  a run slower; with only 5 warmup runs, compiled-mode scripts settled in one of two JIT states from
+  one JVM to the next, e.g. 18 or 33 ms, which made the gate flaky). The two sides are measured in alternating rounds (3 by default, one JVM per side
   and round, heap pinned to 1 GB with G1), and each side's result is the median across rounds.
 * Tolerances are per metric, in `testsrc/perf-tolerances.properties`, measured rather than chosen:
   `buildtools/perf-calibrate.py` simulates the gate's 3-vs-3 comparison 5,000 times over
   recordings of identical code and takes the 99th percentile of the apparent regression, plus a
   25% margin (minimum 10%). A metric missing from the working tree's run fails the gate.
 
-Scripts read `PERF_SCALE` (0.4 in the interpreter, 1 in compiled mode) to size their loops, so a
-run takes 10–80 ms in either mode. When adding a script, keep it in that range, and only use
+Scripts read `PERF_SCALE` (0.2 in the interpreter, 0.5 in compiled mode) to size their loops, so a
+run takes 5–40 ms in either mode. When adding a script, keep it in that range, and only use
 features the base revision supports.
 
 ### Sensitivity and calibration
