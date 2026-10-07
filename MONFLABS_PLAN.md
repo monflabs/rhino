@@ -25,6 +25,11 @@ existing code and without slowing the engine down.
 | 2026-10-07 | **Gradle is the only build**: the optional upstream Bazel build is removed. |
 | 2026-10-07 | The Android integration-test module (`it-android`) and its CI workflow are removed. |
 | 2026-10-07 | A test listed as failing that passes **fails the test262 run** by default (opt out: `-Dtest262.allowUnexpectedPass`). |
+| 2026-10-07 | 1.1: `const` re-evaluated in a loop body takes each iteration's value — a bug fix, **all versions**. |
+| 2026-10-07 | 1.1: per-iteration bindings for `let`/`const` loop heads — **all versions**. |
+| 2026-10-07 | 1.1: TDZ (ReferenceError) and TypeError on const assignment — **`VERSION_ECMASCRIPT` only**; under `VERSION_ES6`, assigning to a block-level const becomes a silent no-op like every other const. |
+| 2026-10-07 | 1.1: top-level `let`/`const` in a separate declarative scope with cross-script redeclaration checks (like Nashorn's `Global.LexicalScope`) — **`VERSION_ECMASCRIPT` only**. |
+| 2026-10-07 | 0.4 and the 1.1 loop fixes were committed **before the perf gate ran** (a stuck Time Machine backup blocked it); the gate is run on them together as soon as the machine is idle, and any regression is fixed in a follow-up. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -235,6 +240,16 @@ environment (`language/global-code`, `language/block-scope`, `language/statement
 `let` as an identifier in sloppy code. *Gating:* TDZ errors and `const` enforcement are breaking → `VERSION_ECMASCRIPT`
 (audit what `VERSION_ES6` already enforces first). Nashorn: `ES6Desugar`, `Lower`, block scoping in `codegen`.
 
+Split into separately committed steps:
+- *1.1a (done)* `const` in a loop body: a JavaScript 1.x const kept its first value (`0,0,0`); code compiled for
+  ES6+ now initializes the binding on every evaluation. Also `for (const x of/in …)` initializes `x` (it stayed
+  `undefined` in functions without closures). Functions now record their compile-time language version (it was
+  always 0).
+- *1.1b (done)* per-iteration bindings: `COPY_SCOPE` (new token/icode) replaces a loop's let scope with a copy after
+  the init and before each increment (`for`), or at the start of each iteration (`for-in/of`); only emitted when the
+  loop has bindings, and dropped when they live in registers (no closure can observe them).
+- *1.1c* const assignment; *1.1d* TDZ; *1.1e* global lexical scope (gated, see decisions).
+
 **1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
 function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
 when parameters have expressions), rest parameters, duplicate-parameter early errors, `Function` constructor
@@ -424,7 +439,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
-| 1.1  | Lexical declarations                            | next        |                              |        |
+| 1.1  | Lexical declarations                            | in progress | 1.1a+b: 57.6% → 57.7%        | (this) |
 | 1.2  | Function semantics                              | todo        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |

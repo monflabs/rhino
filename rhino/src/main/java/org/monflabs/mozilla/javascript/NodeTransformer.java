@@ -107,6 +107,13 @@ public class NodeTransformer {
             }
 
             switch (type) {
+                case Token.COPY_SCOPE:
+                    if (!createScopeObjects) {
+                        // bindings live in registers: no closure can observe a per-iteration copy
+                        node = replaceCurrent(parent, previous, node, new Node(Token.EMPTY));
+                    }
+                    break;
+
                 case Token.LABEL:
                 case Token.SWITCH:
                 case Token.LOOP:

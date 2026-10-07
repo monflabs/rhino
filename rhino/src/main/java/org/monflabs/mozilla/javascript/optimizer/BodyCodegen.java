@@ -836,6 +836,15 @@ class BodyCodegen {
                 decReferenceWordLocal(variableObjectLocal);
                 break;
 
+            case Token.COPY_SCOPE:
+                cfw.addALoad(variableObjectLocal);
+                addScriptRuntimeInvoke(
+                        "copyScope",
+                        "(Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + ")Lorg/monflabs/mozilla/javascript/VarScope;");
+                cfw.addAStore(variableObjectLocal);
+                break;
+
             case Token.ENUM_INIT_KEYS:
             case Token.ENUM_INIT_VALUES:
             case Token.ENUM_INIT_ARRAY:
@@ -4650,6 +4659,22 @@ class BodyCodegen {
         generateExpression(child.getNext(), node);
         boolean isNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);
         int reg = varRegisters[varIndex];
+        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+            // ES6 block-scoped const: each evaluation of the declaration (e.g. in a loop body)
+            // initializes a new binding, where a JavaScript 1.x const ignored all but the first.
+            if (isNumber) {
+                cfw.addPush(1);
+                cfw.addIStore(reg + 2);
+                if (needValue) cfw.add(ByteCode.DUP2);
+                cfw.addDStore(reg);
+            } else {
+                cfw.addPush(1);
+                cfw.addIStore(reg + 1);
+                if (needValue) cfw.add(ByteCode.DUP);
+                cfw.addAStore(reg);
+            }
+            return;
+        }
         int beyond = cfw.acquireLabel();
         int noAssign = cfw.acquireLabel();
         if (isNumber) {

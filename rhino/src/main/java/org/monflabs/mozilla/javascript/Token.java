@@ -250,7 +250,8 @@ public class Token {
             NULLISH_COALESCING = DOTDOTDOT + 1, // nullish coalescing (??)
             QUESTION_DOT = NULLISH_COALESCING + 1, // optional chaining operator (?.)
             OBJECT_REST = QUESTION_DOT + 1, // ES6 object rest operation
-            LAST_TOKEN = OBJECT_REST + 1;
+            COPY_SCOPE = OBJECT_REST + 1, // per-iteration copy of a loop's let scope
+            LAST_TOKEN = COPY_SCOPE + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -607,6 +608,8 @@ public class Token {
                 return "TO_DOUBLE";
             case OBJECT_REST:
                 return "OBJECT_REST";
+            case COPY_SCOPE:
+                return "COPY_SCOPE";
             case GET:
                 return "GET";
             case SET:

@@ -143,6 +143,7 @@ public class Codegen implements Evaluator {
         String mainClassName = "org.monflabs.mozilla.javascript.gen." + baseName + "_" + serial;
 
         JSDescriptor.Builder<T> builder = new JSDescriptor.Builder<>();
+        builder.languageVersion = compilerEnv.getLanguageVersion();
         MHJSCode.BuilderEnv builderEnv = new MHJSCode.BuilderEnv(mainClassName);
         byte[] mainClassBytes =
                 compileToClassFile(

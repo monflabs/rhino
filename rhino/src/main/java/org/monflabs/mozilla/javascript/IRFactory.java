@@ -1632,14 +1632,44 @@ public final class IRFactory {
             Scope let = Scope.splitScope(loop);
             let.setType(Token.LET);
             let.addChildrenToBack(init);
-            let.addChildToBack(createLoop(loop, LOOP_FOR, body, test, new Node(Token.EMPTY), incr));
+            // the loop must stay the let's direct child: NodeTransformer.visitLet re-parents it
+            let.addChildToBack(
+                    createLoop(
+                            loop,
+                            LOOP_FOR,
+                            body,
+                            test,
+                            new Node(Token.EMPTY),
+                            incr,
+                            hasBindings(let)));
             return let;
         }
-        return createLoop(loop, LOOP_FOR, body, test, init, incr);
+        return createLoop(loop, LOOP_FOR, body, test, init, incr, false);
+    }
+
+    /**
+     * Whether a loop scope declares lexical bindings, so that it becomes a runtime scope that
+     * {@link Token#COPY_SCOPE} can copy per iteration.
+     */
+    private static boolean hasBindings(Node scope) {
+        return scope instanceof Scope
+                && ((Scope) scope).getSymbolTable() != null
+                && !((Scope) scope).getSymbolTable().isEmpty();
     }
 
     private static Node createLoop(
             Jump loop, int loopType, Node body, Node cond, Node init, Node incr) {
+        return createLoop(loop, loopType, body, cond, init, incr, false);
+    }
+
+    private static Node createLoop(
+            Jump loop,
+            int loopType,
+            Node body,
+            Node cond,
+            Node init,
+            Node incr,
+            boolean perIterationScope) {
         Node bodyTarget = Node.newTarget();
         Node condTarget = Node.newTarget();
         if (loopType == LOOP_FOR && cond.getType() == Token.EMPTY) {
@@ -1676,9 +1706,20 @@ public final class IRFactory {
                 }
                 Node incrTarget = Node.newTarget();
                 loop.addChildAfter(incrTarget, body);
+                Node beforeIncr = incrTarget;
+                if (perIterationScope) {
+                    // CreatePerIterationEnvironment: the increment runs in the next iteration's
+                    // copy
+                    beforeIncr = new Node(Token.COPY_SCOPE);
+                    loop.addChildAfter(beforeIncr, incrTarget);
+                }
                 if (incr.getType() != Token.EMPTY) {
                     incr = new Node(Token.EXPR_VOID, incr);
-                    loop.addChildAfter(incr, incrTarget);
+                    loop.addChildAfter(incr, beforeIncr);
+                }
+                if (perIterationScope) {
+                    // the first iteration gets its own copy too, right after the init
+                    loop.addChildToFront(new Node(Token.COPY_SCOPE));
                 }
                 continueTarget = incrTarget;
             }
@@ -1761,8 +1802,19 @@ public final class IRFactory {
                     // with an array type of length 2 (to hold key and value)
                     parser.reportError("msg.bad.for.in.destruct");
                 }
+            } else if (declType == Token.CONST && lvalue.getType() == Token.NAME) {
+                // initializes the binding; a plain assignment to a const is ignored
+                assign =
+                        new Node(
+                                Token.SETCONST,
+                                Node.newString(Token.BINDNAME, lvalue.getString()),
+                                id);
             } else {
                 assign = parser.simpleAssignment(lvalue, id);
+            }
+            if ((declType == Token.LET || declType == Token.CONST) && hasBindings(loop)) {
+                // a new binding for each iteration
+                newBody.addChildToBack(new Node(Token.COPY_SCOPE));
             }
             newBody.addChildToBack(new Node(Token.EXPR_VOID, assign));
             newBody.addChildToBack(body);

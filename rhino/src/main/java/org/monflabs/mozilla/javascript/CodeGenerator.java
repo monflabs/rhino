@@ -95,6 +95,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         }
 
         builder = new JSDescriptor.Builder<T>();
+        builder.languageVersion = compilerEnv.getLanguageVersion();
         itsData = new InterpreterData.Builder<T>();
         builder.code = itsData;
 
@@ -365,6 +366,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.LEAVE_SCOPE:
                 addToken(Token.LEAVE_SCOPE);
+                break;
+
+            case Token.COPY_SCOPE:
+                addIcode(Icode.COPY_SCOPE);
                 break;
 
             case Token.LOCAL_BLOCK:

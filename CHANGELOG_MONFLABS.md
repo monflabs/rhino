@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Lexical declarations in loops (2026-10-07, plan 1.1a/1.1b)
+
+Bug fixes, for every language version from `VERSION_ES6` on (decided 2026-10-07):
+
+- **`const` in a loop body takes each iteration's value.** `for (...) { const c = i; }` kept the first value of `c`
+  in functions without closures (`0,0,0` instead of `0,1,2`), a JavaScript 1.x const behavior. Code compiled for
+  versions before `VERSION_ES6` keeps it.
+- **`for (const x of/in ...)`** initializes `x` on each iteration; it stayed `undefined` in functions without
+  closures (a `NaN` sum, for example).
+- **Per-iteration bindings** for `let`/`const` loop heads: closures created in `for (let i ...)`, `for (let k in
+  ...)` or `for (const v of ...)` see their own iteration's value (`0,1,2` instead of `3,3,3`). Implemented with a
+  new `COPY_SCOPE` operation that copies the loop's scope object; loops whose bindings live in registers (no
+  closures) are unaffected and pay nothing.
+- Compiled functions now record the language version they were compiled with (`JSDescriptor`); it was always 0.
+- test262: 16 more files pass (`for`, `for-in`, `for-of`, `let`, `block-scope`, and three tests that use such
+  loops); in-scope pass rate 57.6% → 57.7%. Committed before the perf gate could run (see `MONFLABS_PLAN.md`).
+
 ### Performance gate: longer warmup, backup guard (2026-10-07)
 
 - 20 warmup runs instead of 5 (with shorter runs, `PERF_SCALE` 0.2/0.5): with 5, compiled-mode scripts settled in

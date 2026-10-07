@@ -5396,6 +5396,14 @@ public class ScriptRuntime {
         return scope.getParentScope();
     }
 
+    /**
+     * Replaces a loop's let scope with a copy at the start of an iteration, see {@link
+     * Token#COPY_SCOPE}.
+     */
+    public static VarScope copyScope(VarScope scope) {
+        return scope instanceof LocalScope ? ((LocalScope) scope).copy() : scope;
+    }
+
     public static VarScope enterDotQuery(Object value, VarScope scope) {
         if (!(value instanceof XMLObject)) {
             throw notXmlError(value);

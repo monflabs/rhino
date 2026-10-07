@@ -5,6 +5,7 @@
 package org.monflabs.mozilla.javascript.tests;
 
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /** Tests for correct block-scoping of {@code const} and fix of the dead {@code if} guard. */
@@ -42,6 +43,120 @@ class ConstLetScopingTest {
         // var hoists to function scope, so redeclaring in a nested block must be fine
         Utils.assertWithAllModes_ES6(3.0, "(function f(a) { var a; return a; })(3)");
         Utils.assertWithAllModes_ES6(3.0, "(function f(a) { 'use strict'; var a; return a; })(3)");
+    }
+
+    // --- const re-evaluated in a loop body creates a new binding each time ---
+
+    @Test
+    void constInLoopBodyTakesEachIterationsValue() {
+        // function without activation: the const lives in a register
+        Utils.assertWithAllModes_ES6(
+                "0,1,2",
+                "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); }"
+                        + " return r.join(); })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "0,1,2",
+                "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); }"
+                        + " return r.join(); })()");
+        // numeric const in a register
+        Utils.assertWithAllModes_ES6(
+                3.0,
+                "(function () { var s = 0; for (var i = 0; i < 3; i++) { const c = i * 1; s += c; }"
+                        + " return s; })()");
+        // function with activation (nested closure)
+        Utils.assertWithAllModes_ES6(
+                "0,1,2",
+                "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i;"
+                        + " r.push(function () { return c; }); }"
+                        + " return r.map(function (f) { return f(); }).join(); })()");
+        // script top level
+        Utils.assertWithAllModes_ES6(
+                "0,1,2",
+                "var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); } r.join()");
+    }
+
+    @Test
+    void legacyConstKeepsItsFirstValue() {
+        // JavaScript 1.x const is function-scoped and only initialized once
+        Utils.assertWithAllModes(
+                Context.VERSION_1_8,
+                null,
+                "0,0,0",
+                "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); }"
+                        + " return r.join(); })()");
+    }
+
+    // --- per-iteration bindings of let/const loop heads ---
+
+    private static void assertPerIteration(String expected, String script) {
+        Utils.assertWithAllModes_ES6(expected, script);
+        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
+        // the same code inside a function with an activation (it creates closures)
+        Utils.assertWithAllModes_ES6(
+                expected, "(function () { return eval(" + quote(script) + "); })()");
+    }
+
+    private static String quote(String s) {
+        return "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'";
+    }
+
+    private static final String CALL_ALL = "fs.map(function (f) { return f(); }).join()";
+
+    @Test
+    void forLetClosuresCaptureEachIteration() {
+        assertPerIteration(
+                "0,1,2",
+                "var fs = []; for (let i = 0; i < 3; i++) { fs.push(function () { return i; }); } "
+                        + CALL_ALL);
+    }
+
+    @Test
+    void forLetWithContinueStillCopiesBeforeTheIncrement() {
+        assertPerIteration(
+                "0,1,2",
+                "var fs = []; for (let i = 0; i < 3; i++) {"
+                        + " fs.push(function () { return i; }); if (i < 3) { let z = i; continue; } } "
+                        + CALL_ALL);
+    }
+
+    @Test
+    void closureInForLetInitSeesTheFirstIterationsValue() {
+        assertPerIteration(
+                "0",
+                "var g; for (let i = 0, f = function () { return i; }; i < 3; i++) { g = f; } '' + g()");
+    }
+
+    @Test
+    void forInAndForOfLetCreateABindingPerIteration() {
+        assertPerIteration(
+                "a,b,c",
+                "var fs = []; for (let k in {a: 1, b: 2, c: 3}) { fs.push(function () { return k; }); } "
+                        + CALL_ALL);
+        assertPerIteration(
+                "1,2,3",
+                "var fs = []; for (const v of [1, 2, 3]) { fs.push(function () { return v; }); } "
+                        + CALL_ALL);
+    }
+
+    @Test
+    void forLetInFunctionWithoutClosures() {
+        // bindings in registers: no per-iteration copy, but names must still resolve
+        Utils.assertWithAllModes_ES6(
+                4.0,
+                "(function () { var s = 0; for (let i = 0; i < 2; i++) {"
+                        + " for (let j = 0; j < 2; j++) { let r = i + j; s += r; } } return s; })()");
+        Utils.assertWithAllModes_ES6(
+                6.0,
+                "(function () { var s = 0; for (const v of [1, 2, 3]) { let w = v; s += w; }"
+                        + " return s; })()");
+    }
+
+    @Test
+    void varLoopsStillShareOneBinding() {
+        assertPerIteration(
+                "3,3,3",
+                "var fs = []; for (var i = 0; i < 3; i++) { fs.push(function () { return i; }); } "
+                        + CALL_ALL);
     }
 
     // --- single-statement const/let errors in ES6 ---

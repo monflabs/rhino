@@ -758,6 +758,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Token.ENTERWITH] = new DoEnterWith();
         instructionObjs[base + Token.ENTER_SCOPE] = new DoEnterScope();
         instructionObjs[base + Token.LEAVE_SCOPE] = new DoLeaveScope();
+
         instructionObjs[base + Token.CATCH_SCOPE] = new DoCatchScope();
         instructionObjs[base + Token.ENUM_INIT_KEYS] = new DoEnumInit();
         instructionObjs[base + Token.ENUM_INIT_VALUES] = new DoEnumInit();
@@ -775,6 +776,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.SCOPE_SAVE] = new DoScopeSave();
         instructionObjs[base + Icode.SPREAD] = new DoSpread();
         instructionObjs[base + Icode.OBJECT_REST] = new DoObjectRest();
+        instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
         instructionObjs[base + Icode.CLOSURE_STMT] = new DoClosureStatement();
@@ -3085,6 +3087,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
+    /**
+     * Whether a const declaration creates a new binding each time it runs (ES6 block-scoped const,
+     * e.g. in a loop body), rather than being ignored after the first time (JavaScript 1.x const).
+     */
+    private static boolean isBlockScopedConst(CallFrame frame) {
+        return frame.fnOrScript.getDescriptor().getLanguageVersion() >= Context.VERSION_ES6;
+    }
+
     private static class DoSetConstVar1 extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
@@ -3097,7 +3107,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         "msg.var.redecl",
                         frame.fnOrScript.getDescriptor().getParamOrVarName(state.indexReg));
             }
-            if ((varAttributes[state.indexReg] & ScriptableObject.UNINITIALIZED_CONST) != 0) {
+            if ((varAttributes[state.indexReg] & ScriptableObject.UNINITIALIZED_CONST) != 0
+                    || isBlockScopedConst(frame)) {
                 vars[state.indexReg] = frame.stack[frame.stackTop];
                 varAttributes[state.indexReg] &= ~ScriptableObject.UNINITIALIZED_CONST;
                 varDbls[state.indexReg] = frame.doubleStack[frame.stackTop];
@@ -3124,7 +3135,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         "msg.var.redecl",
                         frame.fnOrScript.getDescriptor().getParamOrVarName(state.indexReg));
             }
-            if ((varAttributes[state.indexReg] & ScriptableObject.UNINITIALIZED_CONST) != 0) {
+            if ((varAttributes[state.indexReg] & ScriptableObject.UNINITIALIZED_CONST) != 0
+                    || isBlockScopedConst(frame)) {
                 vars[state.indexReg] = frame.stack[frame.stackTop];
                 varAttributes[state.indexReg] &= ~ScriptableObject.UNINITIALIZED_CONST;
                 varDbls[state.indexReg] = frame.doubleStack[frame.stackTop];
@@ -3396,6 +3408,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             frame.scope = ScriptRuntime.leaveScope(frame.scope);
+            return null;
+        }
+    }
+
+    private static class DoCopyScope extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.scope = ScriptRuntime.copyScope(frame.scope);
             return null;
         }
     }
