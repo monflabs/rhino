@@ -21,7 +21,7 @@ import org.monflabs.mozilla.javascript.ScriptRuntime;
 public class MessageProviderLanguageTest {
 
     // Scottish Gaelic Language- assumption is this language does not have a translation
-    private final Locale NOT_TRANSLATED = new Locale("gd");
+    private final Locale NOT_TRANSLATED = Locale.of("gd");
 
     private final String MESSAGE_ID = "msg.invalid.date";
     private final String BASE_MESSAGE = "Date is invalid.";

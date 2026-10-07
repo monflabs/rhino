@@ -10,8 +10,8 @@ Rhino is licensed under the [MPL 2.0](./LICENSE.txt).
 
 ## Summary
 
-Rhino requires Java 17 or higher to run, and 21 or higher to build. Java
-25 is highly recommended.
+Rhino requires Java 21 or higher to run and to build. Java 25 is highly recommended.
+This fork targets embedding in Java server applications; Android and micro JVMs are not supported.
 
 To build and run a Rhino shell:
 
@@ -104,14 +104,14 @@ an implementation of the "console" object that you may want to use instead.)
 
 ### Requirements
 
-It's recommended to build Rhino using Java 25. However, it will build with Java 17
+It's recommended to build Rhino using Java 25. However, it will build with Java 21
 and up. The "spotless" tool, which enforces code formatting, will not
 run on older Java versions -- it will emit a warning.
 
-Rhino runs on Java 17 and higher. The build tools use the "--release" flag to ensure that only
-features from Java 17 are used in the product.
+Rhino runs on Java 21 and higher. The build tools use the "--release" flag to ensure that only
+features from Java 21 are used in the product.
 
-The CI tools run the Rhino tests on Java 17, 21, and 25. Regardless of what version of Java you are
+The CI tools run the Rhino tests on Java 21 and 25. Regardless of what version of Java you are
 building with, you can test on another Java version using the RHINO_TEST_JAVA_VERSION environment variable.
 
 The "production" builds of Rhino build using Gradle, but on Linux and Mac you can also
@@ -205,7 +205,7 @@ traces for large tests such as `Test262SuiteTest`.
 
 ### Testing on other Java Versions
 
-It is a good idea to test major changes on Java 17 before assuming that they will pass the CI
+It is a good idea to test major changes on Java 21 before assuming that they will pass the CI
 tests. To do this, set the environment variable RHINO_TEST_JAVA_VERSION to the version that you
 want to test. For example:
 
@@ -298,8 +298,9 @@ some time to get back to you.
 If you are adding new capabilities to Rhino, you may be making more test262 tests pass, which is
 a good thing. Please [see the instructions](./tests/testsrc/README.md) on how to update our test262 configuration.
 
-Because of differences between Java and JavaScript, when testing on newer Java versions, many
-Unicode-related test262 tests appear to pass, but they will fail on Java 17. Please ignore these!
+Unicode data (identifiers, case mapping, RegExp property escapes) comes from the JDK the tests run on,
+so test262.properties is generated on the reference JDK, Java 25 (RHINO_TEST_JAVA_VERSION=25).
+On older JDKs some Unicode-related test262 tests fail. Please ignore these!
 
 ### Code Formatting
 
@@ -312,7 +313,7 @@ hundreds of lines of changes to, please try to put the reformatting changes
 alone into a single Git commit so that we can separate reformatting changes
 from more substantive changes.
 
-Currently, you must be building on Java 17 or higher for Spotless to run.
+Currently, you must be building on Java 21 or higher for Spotless to run.
 
 ## More Help
 

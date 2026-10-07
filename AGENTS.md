@@ -1,7 +1,17 @@
 # Rhino
 
-Rhino is an open source (MPL 2.0) JavaScript engine, implemented in Java 17. The build system used is gradle, via the
+Rhino is an open source (MPL 2.0) JavaScript engine, implemented in Java 21. The build system used is gradle, via the
 gradle wrapper (`./gradlew`). There are no external dependencies, except for JUnit for unit tests.
+
+## Target platform
+
+- This fork is meant to be embedded in **Java server applications**. Android and micro/embedded JVMs are not targets;
+  do not constrain the design or the APIs used for them.
+- The code compiles for **Java 21** (`--release 21`); Java 21 APIs may be used freely. The floor moves to Java 25 when
+  it becomes available to us (expected early 2027); until then, Java 25-only APIs must not be used.
+- **Java 25 is the reference JDK for test262**: `test262.properties` is generated on it
+  (`RHINO_TEST_JAVA_VERSION=25`), since Unicode data (identifiers, case mapping, RegExp property escapes) comes from the
+  running JDK.
 
 ## Useful commands
 

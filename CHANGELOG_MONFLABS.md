@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Java 21 minimum, Java 25 reference for test262 (2026-10-07)
+
+- **Breaking for embedders:** the engine now compiles with `--release 21` (was 17) and requires Java 21 or later.
+  This fork targets Java server applications; Android and micro JVMs are no longer supported. The OSGi bundles
+  now require `JavaSE` 21 (they declared 11), and `rhino-kotlin` builds with a Java 21 toolchain.
+- `test262.properties` is now generated on Java 25 (`RHINO_TEST_JAVA_VERSION=25`, enforced by the build and by CI),
+  because Unicode data comes from the running JDK; it was generated on Java 17 before. Regenerating it removed 54
+  expected failures (Unicode 14–16 identifier tests and RegExp `Script`/`General_Category` property escapes): the
+  in-scope baseline is now 24,256 of 42,616 (56.9%).
+
 ### Plan and conformance tooling (2026-10-07)
 
 - `MONFLABS_PLAN.md`: the milestone plan to full ECMAScript 2026 (ECMA-262 17th edition), with the scope, ordering,

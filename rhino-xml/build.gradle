@@ -17,7 +17,7 @@ jar {
             '-exportcontents': 'org.monflabs.mozilla.javascript.xmlimpl',
             'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.xml.XMLLoader;register:=org.monflabs.mozilla.javascript.xmlimpl.XMLLoaderImpl',
             'Require-Capability': [
-                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
+                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=21))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',
             ].join(',')
         )

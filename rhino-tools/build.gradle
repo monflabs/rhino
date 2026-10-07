@@ -51,7 +51,7 @@ jar {
                 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.tools.ConsoleProvider;register:=org.monflabs.mozilla.javascript.tools.shell.JLineConsoleProvider',
             ].join(','),
             'Require-Capability': [
-                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
+                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=21))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.processor)"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',
                 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.tools.ConsoleProvider;cardinality:=multiple',

@@ -21,8 +21,28 @@ existing code and without slowing the engine down.
 | 2026-10-07 | **Ordering = foundations first, then edition by edition** (ES2015 gaps, then ES2016 → ES2026).                                                                                                                                                                   |
 | 2026-10-07 | **Performance guardrail = a port of Nashorn's perf gate** (interleaved base-vs-head measurement, per-metric tolerances, both evaluation modes).                                                                                                                    |
 | 2026-10-07 | **Full ES modules** with a pluggable module-loader API, coexisting with CommonJS `require()`.                                                                                                                                                                    |
+| 2026-10-07 | **Target = Java server applications.** Android and micro JVMs are not targets. Compile for **Java 21** (21 APIs allowed now; the floor moves to Java 25 when available, expected early 2027). **Java 25 is the reference JDK for test262** (`test262.properties` generated with `RHINO_TEST_JAVA_VERSION=25`). |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
+
+## Target platform
+
+The engine is embedded in **Java server applications**; Android and micro/embedded JVMs are not targets and do not
+constrain design or API use. It compiles for **Java 21**, so Java 21 APIs can be used now (virtual threads, sequenced
+collections, pattern matching for `switch`, records, `Math.clamp`, `StringBuilder.repeat`, `Character.isEmoji` and the
+other emoji properties, …). When Java 25 becomes the floor (expected early 2027), these become available and are
+worth revisiting:
+
+- the foreign memory API (`MemorySegment`, final in 22) for `SharedArrayBuffer`/`Atomics` and resizable buffers
+  (aligned atomic access with explicit layout; until then, `VarHandle` views over the existing `ByteBuffer`);
+- `ScopedValue` (final in 25) as a cheaper current-`Context` lookup than `ThreadLocal` (measured with the perf gate);
+- the Class-File API (final in 24), only if replacing Rhino's own `ClassFileWriter` ever pays for itself (Nashorn did
+  it; not planned).
+
+Runtime-level improvements of newer JVMs (compact object headers, GC, AOT cache for startup) benefit any server
+running the engine on them, whatever the compile target. **Unicode data comes from the running JDK**, which is why
+Java 25 (Unicode 16) is the reference for test262; tests needing a newer Unicode than the reference JDK are held out
+and documented, as Nashorn does for Unicode 17.
 
 ## Ground rules
 
@@ -58,7 +78,7 @@ These restate and extend the constraints in `AGENTS.md`.
 - [ ] Implemented in parser/IR as needed, and in **both** backends.
 - [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` (decision asked if unclear).
 - [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
-- [ ] `test262.properties` regenerated on Java 17 (`RHINO_TEST_JAVA_VERSION=17 ./gradlew :tests:test
+- [ ] `test262.properties` regenerated on the reference JDK (`RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test
       --tests '*Test262SuiteTest' -DupdateTest262properties`), diff reviewed: only removals, or justified moves.
 - [ ] `./gradlew check` green (all modules, Mozilla legacy suite included).
 - [ ] Perf gate green, numbers recorded in the changelog entry when relevant.
@@ -96,11 +116,13 @@ when reached).
 
 ## Baseline (2026-10-07)
 
-Measured with `python3 tests/test262-status.py` against the committed `test262.properties` (not a new run).
+Measured with `python3 tests/test262-status.py` against `test262.properties` as regenerated on the reference JDK
+(Java 25). On the Java 17 file it replaced, 54 fewer tests passed (Unicode 14–16 identifiers and RegExp property
+escapes).
 
 | In-scope test files | Pass   | Fail (all modes) | Fail (strict or sloppy only) | Skipped | Pass rate |
 |---------------------|--------|------------------|------------------------------|---------|-----------|
-| 42,616              | 24,202 | 3,386            | 805                          | 14,223  | **56.8%** |
+| 42,616              | 24,256 | 3,332            | 805                          | 14,223  | **56.9%** |
 
 Skipped tests are dominated by `class` (4,738), `async-iteration` (4,968), `async-functions` (705), class fields and
 private members (~5,000), modules (`module` flag, `language/module-code`, `language/import`, `dynamic-import`), and
@@ -174,7 +196,7 @@ rules. *(done with this commit)*
 - `$262` host hooks audit: `createRealm`, `detachArrayBuffer`, `evalScript`, `gc`, `global`, `IsHTMLDDA`, `agent`
   (agent arrives with M3.4);
 - `module` flag support arrives with M1.12 (modules).
-- Re-baseline `test262.properties` on Java 17 after each harness change (tests that were silently skipped now run
+- Re-baseline `test262.properties` on Java 25 after each harness change (tests that were silently skipped now run
   and are listed as failing; that is expected and not a regression).
 
 **0.4 Gating plumbing.** A single, cheap way to test for the latest edition (e.g. a cached boolean on `Context` /
@@ -370,7 +392,7 @@ double `ToPrimitive`. Every optimization keeps test262 green and records its gai
 
 | #    | Feature                                         | Status      | test262 slice before → after | Commit |
 |------|-------------------------------------------------|-------------|------------------------------|--------|
-| 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.8%               | (this) |
+| 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.9% (JDK 25)      | 7ed50a954 |
 | 0.2  | Perf gate                                       | next        |                              |        |
 | 0.3  | test262 harness upgrades                        | todo        |                              |        |
 | 0.4  | Gating plumbing                                 | todo        |                              |        |

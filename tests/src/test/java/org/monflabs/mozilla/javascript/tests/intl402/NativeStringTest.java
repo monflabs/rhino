@@ -27,7 +27,7 @@ public class NativeStringTest {
                 cx -> {
                     TopLevel scope = cx.initStandardObjects();
                     cx.setLanguageVersion(Context.VERSION_ES6);
-                    cx.setLocale(new Locale("en"));
+                    cx.setLocale(Locale.of("en"));
 
                     final Object rep = cx.evaluateString(scope, js, "test.js", 0, null);
                     assertEquals("\u0069\u0307", rep);
@@ -39,7 +39,7 @@ public class NativeStringTest {
                 cx -> {
                     TopLevel scope = cx.initStandardObjects();
                     cx.setLanguageVersion(Context.VERSION_ES6);
-                    cx.setLocale(new Locale("tr"));
+                    cx.setLocale(Locale.of("tr"));
 
                     final Object rep = cx.evaluateString(scope, js, "test.js", 0, null);
                     assertEquals("\u0069", rep);
@@ -79,7 +79,7 @@ public class NativeStringTest {
                 cx -> {
                     TopLevel scope = cx.initStandardObjects();
                     cx.setLanguageVersion(Context.VERSION_ES6);
-                    cx.setLocale(new Locale("en"));
+                    cx.setLocale(Locale.of("en"));
 
                     final Object rep = cx.evaluateString(scope, js, "test.js", 0, null);
                     assertEquals("\u0049", rep);
@@ -91,7 +91,7 @@ public class NativeStringTest {
                 cx -> {
                     TopLevel scope = cx.initStandardObjects();
                     cx.setLanguageVersion(Context.VERSION_ES6);
-                    cx.setLocale(new Locale("tr"));
+                    cx.setLocale(Locale.of("tr"));
 
                     final Object rep = cx.evaluateString(scope, js, "test.js", 0, null);
                     assertEquals("\u0130", rep);

@@ -112,8 +112,8 @@ test {
         systemProperty 'runTest262NonDebug', System.getProperty('runTest262NonDebug')
     }
     if (System.getProperty('updateTest262properties') != null) {
-        if (System.getenv("RHINO_TEST_JAVA_VERSION") != "17") {
-            System.out.println("Test262 properties update is only accurate on Java 17 and you have " + JavaVersion.current())
+        if (System.getenv("RHINO_TEST_JAVA_VERSION") != "25") {
+            System.out.println("Test262 properties update is only accurate on Java 25 and you have " + JavaVersion.current())
             System.out.println("Set RHINO_TEST_JAVA_VERSION in the environment to use this feature")
             throw new Exception("Incorrect Java version for Test 262 properties update")
         }

@@ -20,7 +20,7 @@ jar {
             '-exportcontents': 'org.monflabs.mozilla.kotlin',
             'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.NullabilityDetector;register:=org.monflabs.mozilla.kotlin.KotlinNullabilityDetector',
             'Require-Capability': [
-                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
+                'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=21))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',
             ].join(',')
         )
@@ -28,7 +28,7 @@ jar {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 publishing {
