@@ -56,7 +56,9 @@ These restate and extend the constraints in `AGENTS.md`.
    change the result of existing code (stricter early errors, TDZ, `const` enforcement, block-function semantics,
    enumeration order, `Function.prototype.toString` output, removed legacy behavior, …) is active only under
    `VERSION_ECMASCRIPT`, documented in `CHANGELOG_MONFLABS.md` and in `RELEASE-NOTES.md`, and named in the Javadoc of
-   `Context.VERSION_ECMASCRIPT`. When it is unclear whether a change is breaking, ask (it is a decision).
+   `Context.VERSION_ECMASCRIPT`. When it is unclear whether a change is breaking, ask (it is a decision). Gated code
+   tests `cx.isLatestEcmaScript()` (runtime) or `compilerEnv.isLatestEcmaScript()` (syntax, early errors), and its
+   unit tests use `Utils.assertGatedBehavior(es6Result, ecmaResult, script)`.
 2. **Both backends.** Every language feature works in the interpreter (`CodeGenerator`/`Interpreter`) and in compiled
    mode (`Codegen`). test262 runs both; a milestone is not done until both pass.
 3. **test262 is the acceptance test.** Each feature is validated by its test262 slice (strict and sloppy, interpreted
@@ -79,7 +81,8 @@ These restate and extend the constraints in `AGENTS.md`.
 
 - [ ] Spec sections read in the ES2026 PDF; Nashorn implementation reviewed for approach and pitfalls.
 - [ ] Implemented in parser/IR as needed, and in **both** backends.
-- [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` (decision asked if unclear).
+- [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` via `isLatestEcmaScript()` (decision asked if
+      unclear), listed in the `VERSION_ECMASCRIPT` Javadoc, tested with `Utils.assertGatedBehavior`.
 - [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
 - [ ] `test262.properties` regenerated on the reference JDK (`RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test
       --tests '*Test262SuiteTest' -DupdateTest262properties`), diff reviewed: only removals, or justified moves.
@@ -213,6 +216,13 @@ Unicode-dependent tests are run but not checked.
 `CompilerEnvirons` set from `getLanguageVersion() >= VERSION_ECMASCRIPT`) so that gated checks cost a field read on
 hot paths. Javadoc of `VERSION_ECMASCRIPT` gets a "Behavior changes" list maintained from then on. Unit test helper
 that runs a script under both versions.
+
+*Done 2026-10-07.* The existing idiom (`cx.getLanguageVersion() >= …`, 134 uses) is already a field read and an int
+compare, so no cached flag is needed; the value of the helpers is a single, grep-able name for every gated behavior.
+Rule: runtime behavior follows the version of the context running the code (existing Rhino semantics); syntax and
+early errors follow the version the code was compiled with. Audit result: as of this item, **nothing in the engine
+behaves differently under `VERSION_ECMASCRIPT` than under `VERSION_ES6`** (the old Javadoc mentioned `const` and
+strict-mode enforcement, but no code tested for it); the "Behavior changes" list starts empty.
 
 ### M1 — ES2015 completion
 
@@ -413,8 +423,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.9% (JDK 25)      | 7ed50a954 |
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
-| 0.4  | Gating plumbing                                 | next        |                              |        |
-| 1.1  | Lexical declarations                            | todo        |                              |        |
+| 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
+| 1.1  | Lexical declarations                            | next        |                              |        |
 | 1.2  | Function semantics                              | todo        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |

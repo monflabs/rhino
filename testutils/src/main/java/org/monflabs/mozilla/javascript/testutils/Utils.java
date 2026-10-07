@@ -249,6 +249,34 @@ public class Utils {
     }
 
     /**
+     * Execute the provided script and assert the result. Before the execution the language version
+     * is set to {@link Context#VERSION_ECMASCRIPT}.
+     *
+     * @param expected the expected result
+     * @param script the javascript script to execute
+     */
+    public static void assertWithAllModes_ECMASCRIPT(final Object expected, final String script) {
+        assertWithAllModes(Context.VERSION_ECMASCRIPT, null, expected, script);
+    }
+
+    /**
+     * Execute the provided script in all modes under {@link Context#VERSION_ES6} and {@link
+     * Context#VERSION_ECMASCRIPT}, and assert the result of each. Used to test a behavior change
+     * gated by {@link Context#VERSION_ECMASCRIPT}: the existing behavior must be kept for {@link
+     * Context#VERSION_ES6}.
+     *
+     * @param expectedES6 the expected result under {@link Context#VERSION_ES6}
+     * @param expectedECMASCRIPT the expected result under {@link Context#VERSION_ECMASCRIPT}
+     * @param script the javascript script to execute
+     */
+    public static void assertGatedBehavior(
+            final Object expectedES6, final Object expectedECMASCRIPT, final String script) {
+        assertWithAllModes(Context.VERSION_ES6, "VERSION_ES6", expectedES6, script);
+        assertWithAllModes(
+                Context.VERSION_ECMASCRIPT, "VERSION_ECMASCRIPT", expectedECMASCRIPT, script);
+    }
+
+    /**
      * Execute the provided script and assert the result.
      *
      * @param languageVersion the language version constant from @{@link Context} or -1 to not

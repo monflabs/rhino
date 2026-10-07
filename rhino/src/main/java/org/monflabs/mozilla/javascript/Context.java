@@ -106,9 +106,9 @@ public class Context implements Closeable {
 
     /**
      * ECMAScript 6 and after. This constant refers to the latest version of the language, and is
-     * mostly identical to {@link #VERSION_ECMASCRIPT}. The difference is that features that may
-     * cause existing code to break, such as enforcement of "const" and strict mode checks, are not
-     * enabled.
+     * identical to {@link #VERSION_ECMASCRIPT} except for the behavior changes listed there: new
+     * features that cannot break existing code are enabled for this version too, those that can are
+     * not.
      *
      * <p>As of version 1.8, this is the default language version.
      */
@@ -117,8 +117,15 @@ public class Context implements Closeable {
     /**
      * The current version of JavaScript as defined by ECMAScript. This version will always refer to
      * the latest version of the language that Rhino supports. This will include everything in
-     * {@link #VERSION_ES6}, plus features that may cause backward incompatibility, such as
-     * enforcement of "const" and strict mode checks.
+     * {@link #VERSION_ES6}, plus the behavior changes required by the specification that may break
+     * existing code. Engine code tests for it with {@link #isLatestEcmaScript()} (or {@link
+     * CompilerEnvirons#isLatestEcmaScript()} at compile time).
+     *
+     * <p>Behavior changes compared to {@link #VERSION_ES6}:
+     *
+     * <ul>
+     *   <li>None yet.
+     * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
      * versions, but instead plans to track the ECMAScript specification as it evolves and add new
@@ -680,6 +687,16 @@ public class Context implements Closeable {
      */
     public final int getLanguageVersion() {
         return version;
+    }
+
+    /**
+     * Whether the language version is {@link #VERSION_ECMASCRIPT}, which enables the behavior
+     * changes of the latest ECMAScript edition that may break existing code. Runtime behavior is
+     * gated on the version of the context that runs the code; syntax and early errors are gated at
+     * compile time with {@link CompilerEnvirons#isLatestEcmaScript()}.
+     */
+    public final boolean isLatestEcmaScript() {
+        return version >= VERSION_ECMASCRIPT;
     }
 
     /**

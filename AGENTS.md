@@ -72,11 +72,14 @@ constraints apply to every change made toward that goal:
 - **Breaking changes are gated by `Context.VERSION_ECMASCRIPT`.** This language version always represents the latest
   ECMAScript standard. Any behavior change that can break existing code (e.g. stricter early errors,
   `const`/strict-mode enforcement, changed semantics of legacy extensions, removed non-standard behavior) must only be
-  active when the language version is `VERSION_ECMASCRIPT`, and must be disabled otherwise. Gate on it (e.g.
-  `cx.getLanguageVersion() >= Context.VERSION_ECMASCRIPT`) rather than introducing ad-hoc flags.
+  active when the language version is `VERSION_ECMASCRIPT`, and must be disabled otherwise. Gate on it with
+  `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors (so that
+  `grep isLatestEcmaScript` lists every gated behavior), rather than introducing ad-hoc flags. Test both sides with
+  `Utils.assertGatedBehavior`.
 - **Document every breaking change.** Each change gated by `VERSION_ECMASCRIPT` must be documented (what changes, why
-  the spec requires it, and how to get the old behavior) in [RELEASE-NOTES.md](RELEASE-NOTES.md) and, where relevant,
-  in the Javadoc of `Context.VERSION_ECMASCRIPT`.
+  the spec requires it, and how to get the old behavior) in [RELEASE-NOTES.md](RELEASE-NOTES.md) and
+  [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md), and listed under "Behavior changes" in the Javadoc of
+  `Context.VERSION_ECMASCRIPT`.
 - **test262 is the conformance target.** With `VERSION_ECMASCRIPT`, the engine must pass the full test262 suite. The
   suite already runs with this version (see `Test262SuiteTest`). When a change makes more tests pass, update
   [tests/testsrc/test262.properties](tests/testsrc/test262.properties) as described in

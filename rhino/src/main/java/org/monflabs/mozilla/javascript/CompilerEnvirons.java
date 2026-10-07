@@ -76,6 +76,16 @@ public class CompilerEnvirons {
         return languageVersion;
     }
 
+    /**
+     * Whether the code is compiled for {@link Context#VERSION_ECMASCRIPT}: syntax and early errors
+     * that may break existing code are only enabled then.
+     *
+     * @see Context#isLatestEcmaScript()
+     */
+    public final boolean isLatestEcmaScript() {
+        return languageVersion >= Context.VERSION_ECMASCRIPT;
+    }
+
     public void setLanguageVersion(int languageVersion) {
         Context.checkLanguageVersion(languageVersion);
         this.languageVersion = languageVersion;

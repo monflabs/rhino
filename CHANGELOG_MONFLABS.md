@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Gating plumbing for `VERSION_ECMASCRIPT` (2026-10-07)
+
+- `Context.isLatestEcmaScript()` and `CompilerEnvirons.isLatestEcmaScript()`: the single check for behavior that is
+  only enabled under `Context.VERSION_ECMASCRIPT` (runtime and compile time respectively), so that every gated
+  behavior can be found with one search.
+- The Javadoc of `VERSION_ES6`/`VERSION_ECMASCRIPT` now carries the list of behavior changes. It is empty: the audit
+  found that nothing in the engine currently behaves differently between the two versions (the previous Javadoc
+  mentioned `const` and strict-mode enforcement, but no code tested for it).
+- Test helpers `Utils.assertWithAllModes_ECMASCRIPT` and `Utils.assertGatedBehavior(es6, ecma, script)`.
+- No behavior change.
+
 ### test262 harness upgrades (2026-10-07)
 
 - **A test listed as failing that now passes fails the run** by default, so conformance only moves forward
