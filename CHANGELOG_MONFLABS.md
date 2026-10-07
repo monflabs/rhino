@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Bazel build removed (2026-10-07)
+
+- The optional Bazel build that upstream added in March 2026 (as a faster, cacheable alternative for running the
+  tests) is removed: `MODULE.bazel`, `.bazelrc`, every `BUILD.bazel`, the `bazel/` rules, `maven_install.json`, the
+  Bazel CI workflow, the top-level `rhino-test.config` copy that only Bazel read, and the Bazel-only test support
+  (`testutils` `Sharding` and the Bazel runfiles resolver in `TestSource`). Gradle is the only build.
+
 ### Java 21 minimum, Java 25 reference for test262 (2026-10-07)
 
 - **Breaking for embedders:** the engine now compiles with `--release 21` (was 17) and requires Java 21 or later.

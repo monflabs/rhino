@@ -114,8 +114,7 @@ features from Java 21 are used in the product.
 The CI tools run the Rhino tests on Java 21 and 25. Regardless of what version of Java you are
 building with, you can test on another Java version using the RHINO_TEST_JAVA_VERSION environment variable.
 
-The "production" builds of Rhino build using Gradle, but on Linux and Mac you can also
-build Gradle using Bazel.
+Rhino builds with Gradle.
 
 ### How to Build
 
@@ -138,35 +137,6 @@ And finally, you can extract the classpath and use it in a variety of ways:
 
     export CLASSPATH=$(./gradlew -q printClasspath)
     java org.monflabs.mozilla.javascript.tools.shell.Main
-
-### Optional Bazel Build
-
-Building with Bazel instead of Gradle gives you a few advantages:
-
-* Bazel caches very aggressively which saves time the more you use it
-* You can use a [hosted build service](https://bazel.build/community/remote-execution-services) and run your build in parallell on a few, or a dozen, machines. In this way you can run the tests in only a few minutes.
-
-At the moment, we don't have all the support in Bazel to do everything that the
-Gradle build does so both will remain.
-
-To build with Bazel:
-
-* At the very least you will need a Java 25 JVM to bootstrap all this.
-* [Get Bazel](https://bazel.build/start).
-* Build. Bazel downloads and caches all dependencies.
-
-For example, you can install a wrapper that will download the right version
-of Bazel:
-
-    npm install -g @bazel/bazelisk
-
-You can run all the tests:
-
-    bazel test ...
-
-You can run the shell (or skip the tests and go right here):
-
-    bazel run //:shell
 
 ### JLine-Based Console
 

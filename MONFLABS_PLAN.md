@@ -22,6 +22,7 @@ existing code and without slowing the engine down.
 | 2026-10-07 | **Performance guardrail = a port of Nashorn's perf gate** (interleaved base-vs-head measurement, per-metric tolerances, both evaluation modes).                                                                                                                    |
 | 2026-10-07 | **Full ES modules** with a pluggable module-loader API, coexisting with CommonJS `require()`.                                                                                                                                                                    |
 | 2026-10-07 | **Target = Java server applications.** Android and micro JVMs are not targets. Compile for **Java 21** (21 APIs allowed now; the floor moves to Java 25 when available, expected early 2027). **Java 25 is the reference JDK for test262** (`test262.properties` generated with `RHINO_TEST_JAVA_VERSION=25`). |
+| 2026-10-07 | **Gradle is the only build**: the optional upstream Bazel build is removed. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 

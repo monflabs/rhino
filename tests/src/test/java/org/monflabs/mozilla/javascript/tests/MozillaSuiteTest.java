@@ -23,7 +23,6 @@ import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.drivers.JsTestsBase;
 import org.monflabs.mozilla.javascript.drivers.ShellTest;
 import org.monflabs.mozilla.javascript.drivers.TestUtils;
-import org.monflabs.mozilla.javascript.testutils.Sharding;
 import org.monflabs.mozilla.javascript.testutils.TestSource;
 import org.monflabs.mozilla.javascript.tools.shell.ShellContextFactory;
 
@@ -101,12 +100,9 @@ public class MozillaSuiteTest {
 
         Arrays.sort(tests);
 
-        var shards = Sharding.getSharding();
         ArrayList<File> files = new ArrayList<>();
-        for (int i = 0; i < tests.length; i++) {
-            if (shards == null || i % shards.total == shards.index) {
-                files.add(new File(testDir, tests[i]));
-            }
+        for (String test : tests) {
+            files.add(new File(testDir, test));
         }
         return files;
     }

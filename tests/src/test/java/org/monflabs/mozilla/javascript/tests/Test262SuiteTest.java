@@ -61,7 +61,6 @@ import org.monflabs.mozilla.javascript.debug.DebugFrame;
 import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 import org.monflabs.mozilla.javascript.debug.Debugger;
 import org.monflabs.mozilla.javascript.drivers.TestUtils;
-import org.monflabs.mozilla.javascript.testutils.Sharding;
 import org.monflabs.mozilla.javascript.testutils.TestSource;
 import org.monflabs.mozilla.javascript.tools.SourceReader;
 import org.monflabs.mozilla.javascript.tools.shell.ShellContextFactory;
@@ -638,18 +637,8 @@ public class Test262SuiteTest {
         Map<File, String> failingFiles = new HashMap<File, String>();
         addTestFiles(testFiles, failingFiles);
 
-        var shards = Sharding.getSharding();
-        System.out.println("Sharding: " + shards);
-
-        int i = 0;
         fileLoop:
         for (File testFile : testFiles) {
-            if (shards != null) {
-                if (i++ % shards.total != shards.index) {
-                    continue;
-                }
-            }
-
             String caseShortPath = testDir.toPath().relativize(testFile.toPath()).toString();
             boolean markedAsFailing = failingFiles.containsKey(testFile);
             String comment = markedAsFailing ? failingFiles.get(testFile) : null;
