@@ -24,6 +24,7 @@ existing code and without slowing the engine down.
 | 2026-10-07 | **Target = Java server applications.** Android and micro JVMs are not targets. Compile for **Java 21** (21 APIs allowed now; the floor moves to Java 25 when available, expected early 2027). **Java 25 is the reference JDK for test262** (`test262.properties` generated with `RHINO_TEST_JAVA_VERSION=25`). |
 | 2026-10-07 | **Gradle is the only build**: the optional upstream Bazel build is removed. |
 | 2026-10-07 | The Android integration-test module (`it-android`) and its CI workflow are removed. |
+| 2026-10-07 | A test listed as failing that passes **fails the test262 run** by default (opt out: `-Dtest262.allowUnexpectedPass`). |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -200,6 +201,13 @@ rules. *(done with this commit)*
 - `module` flag support arrives with M1.12 (modules).
 - Re-baseline `test262.properties` on Java 25 after each harness change (tests that were silently skipped now run
   and are listed as failing; that is expected and not a regression).
+
+*Done 2026-10-07.* State after the audit: negative tests were already verified (phase and error name; any
+compile-time `EvaluatorException` is accepted as a `SyntaxError`, a leniency to revisit if a test shows it hides a
+wrong error). `$262` has `createRealm`, `detachArrayBuffer`, `evalScript`, `gc`, `global`; `agent` throws (M3.4) and
+`IsHTMLDDA` is absent (needs a host hook; decision when reached). Unexpected passes fail the run by default
+(decided 2026-10-07, opt out with `-Dtest262.allowUnexpectedPass`). On a JDK other than the reference one, the
+Unicode-dependent tests are run but not checked.
 
 **0.4 Gating plumbing.** A single, cheap way to test for the latest edition (e.g. a cached boolean on `Context` /
 `CompilerEnvirons` set from `getLanguageVersion() >= VERSION_ECMASCRIPT`) so that gated checks cost a field read on
@@ -404,8 +412,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 |------|-------------------------------------------------|-------------|------------------------------|--------|
 | 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.9% (JDK 25)      | 7ed50a954 |
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
-| 0.3  | test262 harness upgrades                        | next        |                              |        |
-| 0.4  | Gating plumbing                                 | todo        |                              |        |
+| 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
+| 0.4  | Gating plumbing                                 | next        |                              |        |
 | 1.1  | Lexical declarations                            | todo        |                              |        |
 | 1.2  | Function semantics                              | todo        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |

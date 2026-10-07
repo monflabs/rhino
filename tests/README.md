@@ -92,6 +92,21 @@ Note: the tests must actually run for the .properties file to be updated. If gra
 changed since the last time the `test` command was run, it won't run the tests. The `--rerun-tasks` argument forces
 gradle to run all tests 
 
+## How the test262 results are checked
+
+- A test listed as failing in test262.properties that now passes **fails the run** (the "executionError"
+  entry in the report lists them), so that conformance only moves forward: regenerate the file in the
+  same change. For an exploratory run, `-Dtest262.allowUnexpectedPass` turns this off. Regenerating the
+  file (`-DupdateTest262properties`) never fails on it.
+- Tests flagged `async` run: `doneprintHandle.js` is loaded, the test's `print` output is captured, the
+  microtask queue is drained after the test, and the test passes only if `$DONE` reported completion.
+- Tests flagged `module` are not run yet.
+- Every test has a time limit (60 seconds; `-Dtest262.timeout=<seconds>`), enforced through the
+  instruction observer, so a test that never terminates fails instead of hanging the run.
+- Unicode data comes from the JDK, and test262.properties is generated on the reference JDK (Java 25).
+  On another JDK, the Unicode-version-dependent tests (`built-ins/RegExp/property-escapes/generated` and
+  `language/identifiers/*-unicode-*`) are run but their outcome is not checked.
+
 ## Running the tests from the official ECMAScript Test Suite (test262) in debug mode
 
 You can run the tests in debug mode by setting the `runTest262Debug` property. By default this disables running the tests outside the debugger, but that can be overridden by setting `runTest262NonDebug`. For example the following will run the tests in debugger mode:

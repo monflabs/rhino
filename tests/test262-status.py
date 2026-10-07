@@ -4,7 +4,7 @@
 Derived from test262 front matter and tests/testsrc/test262.properties, without
 running the suite. A file is counted as: pass, fail (listed as failing), partial
 (failing in strict or non-strict only), skipped (skipped folder, unsupported
-feature, async or module flag) or out-of-scope (see MONFLABS_PLAN.md).
+feature or module flag) or out-of-scope (see MONFLABS_PLAN.md).
 
     python3 tests/test262-status.py [--by-feature] [--by-dir N]
 """
@@ -115,8 +115,7 @@ def main(argv):
             if rel.startswith(OUT_OF_SCOPE_DIRS) or OUT_OF_SCOPE_FEATURES.intersection(feats):
                 out_of_scope += 1
                 continue
-            if (rel.startswith(skipped) or unsupported.intersection(feats)
-                    or "async" in flags or "module" in flags):
+            if rel.startswith(skipped) or unsupported.intersection(feats) or "module" in flags:
                 state = 3
             elif rel in fail_files or rel.startswith(fail_dirs):
                 state = 1

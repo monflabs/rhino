@@ -47,6 +47,7 @@ import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.EvaluatorException;
 import org.monflabs.mozilla.javascript.Kit;
+import org.monflabs.mozilla.javascript.LambdaFunction;
 import org.monflabs.mozilla.javascript.RhinoException;
 import org.monflabs.mozilla.javascript.ScopeObject;
 import org.monflabs.mozilla.javascript.Script;
@@ -83,6 +84,9 @@ public class Test262SuiteTest {
     /** The test must be executed just once--in non-strict mode, only. */
     private static final String FLAG_NO_STRICT = "noStrict";
 
+    /** The test is asynchronous: it reports its result through {@code $DONE}. */
+    private static final String FLAG_ASYNC = "async";
+
     private static final File testDir;
     private static final String testHarnessDir;
     private static final String testProperties;
@@ -99,6 +103,17 @@ public class Test262SuiteTest {
     static final Map<String, Script> HARNESS_SCRIPT_CACHE = new ConcurrentHashMap<>();
     static final Map<Test262Case, TestResultTracker> RESULT_TRACKERS = new LinkedHashMap<>();
 
+    /** The JDK whose Unicode data test262.properties is generated with. */
+    static final int REFERENCE_JDK = 25;
+
+    /** Whether this run is on the reference JDK, see {@link #isUnicodeDependent}. */
+    static final boolean ON_REFERENCE_JDK = Runtime.version().feature() == REFERENCE_JDK;
+
+    /** Per-test time limit, so that a test that never terminates cannot hang the whole run. */
+    private static final long TIMEOUT_NANOS = Long.getLong("test262.timeout", 60) * 1_000_000_000L;
+
+    static final String DEADLINE_KEY = "test262.deadline";
+
     static ShellContextFactory CTX_FACTORY =
             new ShellContextFactory() {
                 protected boolean hasFeature(Context cx, int featureIndex) {
@@ -108,7 +123,28 @@ public class Test262SuiteTest {
 
                     return super.hasFeature(cx, featureIndex);
                 }
+
+                @Override
+                protected void observeInstructionCount(Context cx, int instructionCount) {
+                    Object deadline = cx.getThreadLocal(DEADLINE_KEY);
+                    if (deadline != null && System.nanoTime() - (Long) deadline > 0) {
+                        throw new TestTimeout();
+                    }
+                }
             };
+
+    /** Thrown from the instruction observer; an Error, so that scripts cannot catch it. */
+    static final class TestTimeout extends Error {
+        private static final long serialVersionUID = 1L;
+
+        TestTimeout() {
+            super(
+                    "test timed out after " + TIMEOUT_NANOS / 1_000_000_000L + "s",
+                    null,
+                    false,
+                    false);
+        }
+    }
 
     static final Set<String> UNSUPPORTED_FEATURES =
             new HashSet<>(
@@ -142,7 +178,8 @@ public class Test262SuiteTest {
         String updateProps = System.getProperty("updateTest262properties");
         boolean debug = System.getProperty("runTest262Debug") != null;
         boolean normal = System.getProperty("runTest262NonDebug") != null ? true : !debug;
-        validateTest262Properties = System.getProperty("validateTest262properties") != null;
+        validateTest262Properties =
+                updateProps == null && System.getProperty("test262.allowUnexpectedPass") == null;
 
         if (updateProps != null) {
             updateTest262Properties = true;
@@ -216,11 +253,43 @@ public class Test262SuiteTest {
                 continue;
             }
             TestResultTracker tt = entry.getValue();
+            if (!ON_REFERENCE_JDK && isUnicodeDependent(entry.getKey().file)) {
+                continue;
+            }
             if (tt.expectedFailure && tt.expectationsMet()) {
                 ret.add(entry.getKey().file.toString());
             }
         }
         return ret;
+    }
+
+    /**
+     * Tests whose outcome depends on the JDK's Unicode version: the generated RegExp property
+     * escape tests and the identifier tests for a given Unicode version. test262.properties is
+     * generated on {@link #REFERENCE_JDK}; on another JDK their outcome is not checked.
+     */
+    static boolean isUnicodeDependent(File file) {
+        String path = file.getPath().replace('\\', '/');
+        return path.contains("/built-ins/RegExp/property-escapes/generated/")
+                || path.matches(".*/language/identifiers/(part|start)-unicode-.*");
+    }
+
+    /**
+     * Interprets what an async test printed through {@code $DONE} (doneprintHandle.js): {@code
+     * null} when it completed, otherwise the reason it failed.
+     */
+    static String asyncFailure(String output) {
+        int failure = output.indexOf("Test262:AsyncTestFailure:");
+        if (failure >= 0) {
+            int end = output.indexOf('\n', failure);
+            return output.substring(
+                    failure + "Test262:AsyncTestFailure:".length(),
+                    end < 0 ? output.length() : end);
+        }
+        if (output.contains("Test262:AsyncTestComplete")) {
+            return null;
+        }
+        return "async test did not complete ($DONE was never called)";
     }
 
     /*
@@ -343,8 +412,24 @@ public class Test262SuiteTest {
         }
     }
 
-    private TopLevel buildScope(Context cx, Test262Case testCase, TestMode mode) {
+    private TopLevel buildScope(
+            Context cx, Test262Case testCase, TestMode mode, StringBuilder output) {
         TopLevel scope = cx.initSafeStandardObjects(new TopLevel());
+        ScriptableObject.defineProperty(
+                scope,
+                "print",
+                new LambdaFunction(
+                        scope,
+                        "print",
+                        1,
+                        (lcx, lscope, thisObj, args) -> {
+                            for (int i = 0; i < args.length; i++) {
+                                output.append(i == 0 ? "" : " ").append(Context.toString(args[i]));
+                            }
+                            output.append('\n');
+                            return Undefined.instance;
+                        }),
+                ScriptableObject.DONTENUM);
 
         for (String harnessFile : testCase.harnessFiles) {
             String harnessKey = harnessFile + '-' + mode.keyPart();
@@ -396,12 +481,18 @@ public class Test262SuiteTest {
             // Ensure maximum compatibility, including future strict mode and "const" checks
             cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
             cx.setGeneratingDebug(true);
+            cx.setInstructionObserverThreshold(10_000);
+            cx.putThreadLocal(DEADLINE_KEY, System.nanoTime() + TIMEOUT_NANOS);
 
             testMode.setup(cx);
+            if (!ON_REFERENCE_JDK && isUnicodeDependent(testCase.file)) {
+                markedAsFailing = true;
+            }
 
             boolean failedEarly = false;
             try {
-                TopLevel scope = buildScope(cx, testCase, testMode);
+                StringBuilder output = new StringBuilder();
+                TopLevel scope = buildScope(cx, testCase, testMode, output);
                 String str = testCase.source;
                 int line = 1;
                 if (useStrict) {
@@ -414,6 +505,14 @@ public class Test262SuiteTest {
 
                 failedEarly = false; // not after this line
                 caseScript.exec(cx, scope, scope.getGlobalThis());
+
+                if (testCase.hasFlag(FLAG_ASYNC)) {
+                    cx.processMicrotasks();
+                    String failure = asyncFailure(output.toString());
+                    if (failure != null) {
+                        fail(failure);
+                    }
+                }
 
                 if (testCase.isNegative()) {
                     fail(
@@ -472,6 +571,10 @@ public class Test262SuiteTest {
                 if (markedAsFailing) return;
 
                 throw ex;
+            } catch (TestTimeout ex) {
+                if (markedAsFailing) return;
+
+                fail(ex.getMessage());
             }
         }
     }
@@ -688,7 +791,7 @@ public class Test262SuiteTest {
                 }
             }
             // 2. it runs in an unsupported environment
-            if (testCase.hasFlag("module") || testCase.hasFlag("async")) {
+            if (testCase.hasFlag("module")) {
                 if (includeUnsupported) {
                     TestResultTracker tracker =
                             RESULT_TRACKERS.computeIfAbsent(
@@ -827,6 +930,9 @@ public class Test262SuiteTest {
                 // present by default harness files
                 harnessFiles.add("assert.js");
                 harnessFiles.add("sta.js");
+                if (flags.contains(FLAG_ASYNC)) {
+                    harnessFiles.add("doneprintHandle.js");
+                }
 
                 if (metadata.containsKey("includes")) {
                     harnessFiles.addAll((List<String>) metadata.get("includes"));
@@ -966,10 +1072,6 @@ public class Test262SuiteTest {
 
                 if (tc.hasFlag("module")) {
                     feats.add("module");
-                }
-
-                if (tc.hasFlag("async")) {
-                    feats.add("async");
                 }
 
                 return "{unsupported: " + Arrays.toString(feats.toArray()) + "}";

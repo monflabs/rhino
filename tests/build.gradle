@@ -124,7 +124,7 @@ test {
     }
 
     System.properties.each { k,v->
-        if (k.startsWith("rhino.")) {
+        if (k.startsWith("rhino.") || k.startsWith("test262.")) {
             systemProperty k, v
         }
     }

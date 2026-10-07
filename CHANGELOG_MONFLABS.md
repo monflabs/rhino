@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### test262 harness upgrades (2026-10-07)
+
+- **A test listed as failing that now passes fails the run** by default, so conformance only moves forward
+  (`-Dtest262.allowUnexpectedPass` for exploratory runs). Regenerating `test262.properties` never fails on it.
+- **`async` tests run**: `doneprintHandle.js` is loaded, `print` output is captured per test, the microtask queue is
+  drained after the test, and only a `$DONE` completion passes. 458 tests that were skipped now run: 308 pass, 150
+  fail (mostly tests that use async functions without declaring the feature) and are listed in `test262.properties`.
+- **Per-test time limit** of 60 seconds (`-Dtest262.timeout=<seconds>`), enforced through the instruction observer in
+  both modes; scripts cannot catch it.
+- On a JDK other than the reference one (25), the Unicode-version-dependent tests run but their outcome is not
+  checked, so the Java 21 CI job does not fail on Unicode 15/16 data.
+- `test262.*` system properties now reach the test JVM.
+- In-scope baseline: 24,564 of 42,616 test files pass (57.6%, was 56.9%). No engine change.
+
 ### Performance gate (2026-10-07)
 
 - `buildtools/perf-gate.sh [base-ref]` compares the working tree with a base revision (default: the `perf-baseline`
