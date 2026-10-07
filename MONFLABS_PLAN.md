@@ -248,7 +248,10 @@ Split into separately committed steps:
 - *1.1b (done)* per-iteration bindings: `COPY_SCOPE` (new token/icode) replaces a loop's let scope with a copy after
   the init and before each increment (`for`), or at the start of each iteration (`for-in/of`); only emitted when the
   loop has bindings, and dropped when they live in registers (no closure can observe them).
-- *1.1c* const assignment; *1.1d* TDZ; *1.1e* global lexical scope (gated, see decisions).
+- *1.1c (done)* const assignment: `ScriptRuntime.constAssignment` (TypeError under `VERSION_ECMASCRIPT`) called
+  where an assignment already had no effect: const registers, and read-only slots of scope objects (always consts);
+  block consts in a `LocalScope` are now really read-only. Global consts wait for 1.1e.
+- *1.1d* TDZ; *1.1e* global lexical scope (gated, see decisions).
 
 **1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
 function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
@@ -439,7 +442,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
-| 1.1  | Lexical declarations                            | in progress | 1.1a+b: 57.6% → 57.7%        | (this) |
+| 1.1  | Lexical declarations                            | in progress | 57.6% → 57.7% (1.1a–c)       | (this) |
 | 1.2  | Function semantics                              | todo        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |

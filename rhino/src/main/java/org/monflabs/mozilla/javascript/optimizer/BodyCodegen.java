@@ -3892,6 +3892,17 @@ class BodyCodegen {
                 "addInstructionCount", "(Lorg/monflabs/mozilla/javascript/Context;" + "I)V");
     }
 
+    /**
+     * Assigning to a const register has no effect, or throws, see ScriptRuntime#constAssignment.
+     */
+    private void addConstAssignment(int varIndex) {
+        cfw.addALoad(contextLocal);
+        cfw.addPush(fnCurrent.fnode.getParamOrVarName(varIndex));
+        addScriptRuntimeInvoke(
+                "constAssignment",
+                "(Lorg/monflabs/mozilla/javascript/Context;Ljava/lang/String;)V");
+    }
+
     private void visitIncDec(Node node) {
         int incrDecrMask = node.getExistingIntProp(Node.INCRDECR_PROP);
         Node child = node.getFirstChild();
@@ -3909,6 +3920,7 @@ class BodyCodegen {
                 int reg = varRegisters[varIndex];
                 boolean[] constDeclarations = fnCurrent.fnode.getParamAndVarConst();
                 if (constDeclarations[varIndex]) {
+                    addConstAssignment(varIndex);
                     if (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1) {
                         int offset = varIsDirectCallParameter(varIndex) ? 1 : 0;
                         cfw.addDLoad(reg + offset);
@@ -4609,6 +4621,7 @@ class BodyCodegen {
         int reg = varRegisters[varIndex];
         boolean[] constDeclarations = fnCurrent.fnode.getParamAndVarConst();
         if (constDeclarations[varIndex]) {
+            addConstAssignment(varIndex);
             if (!needValue) {
                 if (isNumber) cfw.add(ByteCode.POP2);
                 else cfw.add(ByteCode.POP);

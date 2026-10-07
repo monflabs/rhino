@@ -5397,6 +5397,16 @@ public class ScriptRuntime {
     }
 
     /**
+     * Called when code assigns to a const binding, which has no effect: under {@link
+     * Context#VERSION_ECMASCRIPT} it is a TypeError, also outside strict mode.
+     */
+    public static void constAssignment(Context cx, String name) {
+        if (cx.isLatestEcmaScript()) {
+            throw typeErrorById("msg.const.assign", name);
+        }
+    }
+
+    /**
      * Replaces a loop's let scope with a copy at the start of an iteration, see {@link
      * Token#COPY_SCOPE}.
      */

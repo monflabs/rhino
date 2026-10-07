@@ -124,7 +124,10 @@ public class Context implements Closeable {
      * <p>Behavior changes compared to {@link #VERSION_ES6}:
      *
      * <ul>
-     *   <li>None yet.
+     *   <li>Assigning to a {@code const} binding ({@code =}, compound assignment, {@code ++}/{@code
+     *       --}, destructuring, a {@code for-in/of} target) throws a TypeError, also outside strict
+     *       mode; under {@link #VERSION_ES6} it has no effect (TypeError in strict mode). Global
+     *       {@code const} declarations are not covered yet.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

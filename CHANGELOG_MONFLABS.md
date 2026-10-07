@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Assignment to a const (2026-10-07, plan 1.1c)
+
+- **Gated, `VERSION_ECMASCRIPT`:** assigning to a `const` binding throws `TypeError: Assignment to constant variable
+  "x".`, also outside strict mode, for every form of assignment (`=`, compound, `++`/`--`, destructuring, `for-in/of`
+  targets) and in both backends. Checked where the assignment already had no effect, so other assignments pay
+  nothing: a const register (both backends), and a read-only slot of a scope object (which is always a const).
+  Global consts (top-level `const` of a script) are covered with 1.1e.
+- **`VERSION_ES6`:** assigning to a block-level `const` used to succeed (its block scope stored it as a plain
+  variable); it now has no effect, like every other const (TypeError in strict mode, as before).
+- Documented in the `VERSION_ECMASCRIPT` Javadoc and `RELEASE-NOTES.md`.
+- test262: 2 more files pass (the other const-assignment tests use a global const, see 1.1e).
+
 ### Lexical declarations in loops (2026-10-07, plan 1.1a/1.1b)
 
 Bug fixes, for every language version from `VERSION_ES6` on (decided 2026-10-07):

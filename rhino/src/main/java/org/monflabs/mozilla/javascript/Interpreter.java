@@ -3095,6 +3095,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         return frame.fnOrScript.getDescriptor().getLanguageVersion() >= Context.VERSION_ES6;
     }
 
+    private static void constAssignment(Context cx, CallFrame frame, int varIndex) {
+        ScriptRuntime.constAssignment(
+                cx, frame.fnOrScript.getDescriptor().getParamOrVarName(varIndex));
+    }
+
     private static class DoSetConstVar1 extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
@@ -3155,6 +3160,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if ((varAttributes[state.indexReg] & ScriptableObject.READONLY) == 0) {
                 vars[state.indexReg] = frame.stack[frame.stackTop];
                 varDbls[state.indexReg] = frame.doubleStack[frame.stackTop];
+            } else {
+                constAssignment(cx, frame, state.indexReg);
             }
             return null;
         }
@@ -3176,6 +3183,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if ((varAttributes[state.indexReg] & ScriptableObject.READONLY) == 0) {
                 vars[state.indexReg] = frame.stack[frame.stackTop];
                 varDbls[state.indexReg] = frame.doubleStack[frame.stackTop];
+            } else {
+                constAssignment(cx, frame, state.indexReg);
             }
             return null;
         }
@@ -3220,6 +3229,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             var vars = frame.varSource.stack;
             var varDbls = frame.varSource.doubleStack;
             // indexReg : varindex
+            if ((varAttributes[state.indexReg] & ScriptableObject.READONLY) != 0) {
+                constAssignment(cx, frame, state.indexReg);
+            }
             ++frame.stackTop;
             int incrDecrMask = frame.compilerData.itsICode[frame.pc];
             Object varValue = vars[state.indexReg];

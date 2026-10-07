@@ -159,6 +159,61 @@ class ConstLetScopingTest {
                         + CALL_ALL);
     }
 
+    // --- assignment to a const: no effect under VERSION_ES6, TypeError under VERSION_ECMASCRIPT
+    // ---
+
+    private static final String[] CONST_ASSIGNMENTS = {
+        "k = 2", "k += 1", "k++", "--k", "[k] = [2]", "({k} = {k: 2})", "for (k of [2]) {}"
+    };
+
+    private static void assertConstAssignment(String wrap) {
+        for (String assignment : CONST_ASSIGNMENTS) {
+            String script =
+                    wrap.replace(
+                            "ASSIGN",
+                            "try { "
+                                    + assignment
+                                    + "; } catch (e) { return e.name; } return 'k=' + k;");
+            Utils.assertGatedBehavior("k=1", "TypeError", script);
+        }
+    }
+
+    @Test
+    void constAssignmentInRegisters() {
+        assertConstAssignment("(function () { const k = 1; ASSIGN })()");
+    }
+
+    @Test
+    void constAssignmentInABlockScope() {
+        assertConstAssignment("(function () { { const k = 1; (function () {}); ASSIGN } })()");
+    }
+
+    @Test
+    void constAssignmentInAnActivation() {
+        assertConstAssignment(
+                "(function () { const k = 1; var f = function () { return k; }; ASSIGN })()");
+    }
+
+    @Test
+    void constAssignmentFromAClosure() {
+        assertConstAssignment(
+                "(function () { const k = 1; return (function () { ASSIGN })(); })()");
+    }
+
+    @Test
+    void constAssignmentInAScriptBlock() {
+        Utils.assertGatedBehavior(
+                "k=1",
+                "TypeError",
+                "var r; { const k = 1; try { k = 2; r = 'k=' + k; } catch (e) { r = e.name; } } r");
+    }
+
+    @Test
+    void assignmentToReadOnlyGlobalsStaysSilent() {
+        Utils.assertGatedBehavior(
+                true, true, "undefined = 1; NaN = 2; undefined === void 0 && isNaN(NaN)");
+    }
+
     // --- single-statement const/let errors in ES6 ---
 
     @Test

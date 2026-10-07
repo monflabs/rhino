@@ -12,9 +12,16 @@ public class LocalScope extends DeclarationScope {
         return true;
     }
 
+    /**
+     * Initializes a const of this block: the binding was created (as undefined) when the block was
+     * entered, and becomes read-only once initialized.
+     */
     @Override
     public void putConst(String name, VarScope start, Object value) {
-        super.put(name, start, value);
+        Slot<VarScope> slot = getMap().modify(this, name, 0, 0);
+        slot.value = value;
+        slot.setAttributes(
+                slot.getAttributes() | ScriptableObject.READONLY | ScriptableObject.PERMANENT);
     }
 
     /**
