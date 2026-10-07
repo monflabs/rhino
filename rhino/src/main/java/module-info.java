@@ -1,27 +1,27 @@
-module org.mozilla.rhino {
-    uses org.mozilla.javascript.NullabilityDetector;
+module org.monflabs.mozilla.rhino {
+    uses org.monflabs.mozilla.javascript.NullabilityDetector;
 
-    exports org.mozilla.classfile;
-    exports org.mozilla.javascript;
-    exports org.mozilla.javascript.annotations;
-    exports org.mozilla.javascript.ast;
-    exports org.mozilla.javascript.commonjs.module;
-    exports org.mozilla.javascript.commonjs.module.provider;
-    exports org.mozilla.javascript.debug;
-    exports org.mozilla.javascript.optimizer;
-    exports org.mozilla.javascript.serialize;
-    exports org.mozilla.javascript.sourcemap;
-    exports org.mozilla.javascript.typedarrays;
-    exports org.mozilla.javascript.xml;
-    exports org.mozilla.javascript.config;
-    exports org.mozilla.javascript.lc.type;
+    exports org.monflabs.mozilla.classfile;
+    exports org.monflabs.mozilla.javascript;
+    exports org.monflabs.mozilla.javascript.annotations;
+    exports org.monflabs.mozilla.javascript.ast;
+    exports org.monflabs.mozilla.javascript.commonjs.module;
+    exports org.monflabs.mozilla.javascript.commonjs.module.provider;
+    exports org.monflabs.mozilla.javascript.debug;
+    exports org.monflabs.mozilla.javascript.optimizer;
+    exports org.monflabs.mozilla.javascript.serialize;
+    exports org.monflabs.mozilla.javascript.sourcemap;
+    exports org.monflabs.mozilla.javascript.typedarrays;
+    exports org.monflabs.mozilla.javascript.xml;
+    exports org.monflabs.mozilla.javascript.config;
+    exports org.monflabs.mozilla.javascript.lc.type;
 
-    uses org.mozilla.javascript.RegExpLoader;
-    uses org.mozilla.javascript.xml.XMLLoader;
-    uses org.mozilla.javascript.config.RhinoPropertiesLoader;
+    uses org.monflabs.mozilla.javascript.RegExpLoader;
+    uses org.monflabs.mozilla.javascript.xml.XMLLoader;
+    uses org.monflabs.mozilla.javascript.config.RhinoPropertiesLoader;
 
-    provides org.mozilla.javascript.RegExpLoader with
-            org.mozilla.javascript.regexp.RegExpLoaderImpl;
+    provides org.monflabs.mozilla.javascript.RegExpLoader with
+            org.monflabs.mozilla.javascript.regexp.RegExpLoaderImpl;
 
     requires java.compiler;
     requires jdk.dynalink;
@@ -29,7 +29,7 @@ module org.mozilla.rhino {
     requires transitive java.desktop;
     requires java.logging;
 
-    exports org.mozilla.javascript.interpreterv2;
-    exports org.mozilla.javascript.interpreterv2.instruction;
-    exports org.mozilla.javascript.interpreterv2.operand;
+    exports org.monflabs.mozilla.javascript.interpreterv2;
+    exports org.monflabs.mozilla.javascript.interpreterv2.instruction;
+    exports org.monflabs.mozilla.javascript.interpreterv2.operand;
 }

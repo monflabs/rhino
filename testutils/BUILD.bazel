@@ -20,7 +20,7 @@ java_junit5_test(
     data = ["//tests:testsrc"],
     javacopts = TEST_OPTS,
     tags = ["no-agent"],
-    test_class = "org.mozilla.javascript.testutils.tests.TestSourceTest",
+    test_class = "org.monflabs.mozilla.javascript.testutils.tests.TestSourceTest",
     deps = [
         ":testutils",
         "@maven//:org_junit_jupiter_junit_jupiter_api",

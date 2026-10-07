@@ -15,7 +15,7 @@
  * > uncaught JavaScript exception: undefined: Cannot find default value for
  * > object. (line 3)
  * >
- * > This is due to a bug in org.mozilla.javascript.NativeCall which doesn't
+ * > This is due to a bug in org.monflabs.mozilla.javascript.NativeCall which doesn't
  * > implement toString or valueOf or override getDefaultValue.
  * > However, even after I hacked in an implementation of getDefaultValue in
  * > NativeCall, Rhino still produces a different result then SpiderMonkey:

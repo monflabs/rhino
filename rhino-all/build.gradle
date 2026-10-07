@@ -24,7 +24,7 @@ shadowJar {
         duplicatesStrategy = DuplicatesStrategy.FAIL // Or FAIL.
     }
     manifest {
-        attributes 'Main-Class': 'org.mozilla.javascript.tools.shell.Main'
+        attributes 'Main-Class': 'org.monflabs.mozilla.javascript.tools.shell.Main'
     }
 }
 

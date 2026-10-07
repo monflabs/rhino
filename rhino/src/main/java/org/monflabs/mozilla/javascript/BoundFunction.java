@@ -1,0 +1,125 @@
+/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.javascript;
+
+import java.io.Serial;
+
+/**
+ * The class for results of the Function.bind() operation EcmaScript 5 spec, 15.3.4.5
+ *
+ * @author Raphael Speyer
+ */
+public class BoundFunction extends BaseFunction {
+
+    @Serial private static final long serialVersionUID = 2118137342826470729L;
+
+    private final Callable targetFunction;
+    private final Scriptable boundThis;
+    private final Object[] boundArgs;
+    private final int length;
+
+    public BoundFunction(
+            Context cx,
+            VarScope scope,
+            Callable targetFunction,
+            Scriptable boundThis,
+            Object[] boundArgs) {
+        super(scope);
+        this.targetFunction = targetFunction;
+        this.boundThis = boundThis;
+        this.boundArgs = boundArgs;
+        if (targetFunction instanceof BaseFunction) {
+            length = Math.max(0, ((BaseFunction) targetFunction).getLength() - boundArgs.length);
+        } else {
+            length = 0;
+        }
+
+        ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, false);
+
+        Function thrower = ScriptRuntime.typeErrorThrower(cx);
+        var throwing = new DescriptorInfo(false, NOT_FOUND, false, thrower, thrower, NOT_FOUND);
+
+        defineOwnProperty(cx, "caller", throwing, false);
+        if (cx.getLanguageVersion() < Context.VERSION_ES6) {
+            defineOwnProperty(cx, "arguments", throwing, false);
+        }
+    }
+
+    @Override
+    Object getArguments() {
+        ScriptRuntime.ThrowTypeError.throwNotAllowed();
+        return null;
+    }
+
+    @Override
+    void setArguments(Object caller) {
+        ScriptRuntime.ThrowTypeError.throwNotAllowed();
+    }
+
+    @Override
+    public Object call(Context cx, Object nt, VarScope scope, Object thisObj, Object[] extraArgs) {
+        return targetFunction.call(cx, scope, getCallThis(), concat(boundArgs, extraArgs));
+    }
+
+    @Override
+    public Scriptable construct(Context cx, Object nt, VarScope scope, Object[] extraArgs) {
+        if (nt == this) {
+            nt = targetFunction;
+        }
+        if (targetFunction instanceof Constructable) {
+            return ((Constructable) targetFunction)
+                    .construct(cx, nt, scope, concat(boundArgs, extraArgs));
+        }
+        throw ScriptRuntime.typeErrorById("msg.not.ctor");
+    }
+
+    @Override
+    public boolean hasInstance(Scriptable instance) {
+        if (targetFunction instanceof Function) {
+            return ((Function) targetFunction).hasInstance(instance);
+        }
+        throw ScriptRuntime.typeErrorById("msg.not.ctor");
+    }
+
+    @Override
+    public int getLength() {
+        return length;
+    }
+
+    @Override
+    public String getFunctionName() {
+        if (targetFunction instanceof BaseFunction) {
+            return "bound " + ((BaseFunction) targetFunction).getFunctionName();
+        }
+        return "";
+    }
+
+    private static Object[] concat(Object[] first, Object[] second) {
+        Object[] args = new Object[first.length + second.length];
+        System.arraycopy(first, 0, args, 0, first.length);
+        System.arraycopy(second, 0, args, first.length, second.length);
+        return args;
+    }
+
+    Callable getTargetFunction() {
+        return targetFunction;
+    }
+
+    Object[] getBoundArgs() {
+        return boundArgs;
+    }
+
+    Scriptable getCallThis() {
+        return boundThis;
+    }
+
+    static boolean equalObjectGraphs(BoundFunction f1, BoundFunction f2, EqualObjectGraphs eq) {
+        return eq.equalGraphs(f1.boundThis, f2.boundThis)
+                && eq.equalGraphs(f1.targetFunction, f2.targetFunction)
+                && eq.equalGraphs(f1.boundArgs, f2.boundArgs);
+    }
+}

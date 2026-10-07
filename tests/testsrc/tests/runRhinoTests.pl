@@ -243,7 +243,7 @@ sub setup_env {
     if ($js_classpath) {
         $shell_command .= " -classpath " . $js_classpath;
     }
-    $shell_command .= " org.mozilla.javascript.tools.shell.Main ";
+    $shell_command .= " org.monflabs.mozilla.javascript.tools.shell.Main ";
 
     # set the output file name.  let's base its name on the date and platform,
     # and give it a sequence number.

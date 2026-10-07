@@ -39,7 +39,7 @@ if (!System.getenv("ANDROID_HOME") && !localProperties.get("sdk.dir")) {
     apply plugin: 'com.android.application'
 
     android {
-        namespace = "org.mozilla.javascript.android"
+        namespace = "org.monflabs.mozilla.javascript.android"
 
         compileSdkVersion 33
         defaultConfig {

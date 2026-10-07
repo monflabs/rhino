@@ -15,15 +15,15 @@ import java.io.OutputStreamWriter;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.List;
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Function;
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.TopLevel;
-import org.mozilla.javascript.VarScope;
-import org.mozilla.javascript.annotations.JSConstructor;
-import org.mozilla.javascript.annotations.JSFunction;
-import org.mozilla.javascript.annotations.JSGetter;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.Scriptable;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.annotations.JSConstructor;
+import org.monflabs.mozilla.javascript.annotations.JSFunction;
+import org.monflabs.mozilla.javascript.annotations.JSGetter;
 
 /**
  * Define a simple JavaScript File object.

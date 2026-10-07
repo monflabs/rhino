@@ -1,8 +1,8 @@
 Rhino is licensed subject to the terms of the Mozilla Public License, v. 2.0.
 See "LICENSE.txt" for the text of the license.
 
-The files in toolsrc/org/mozilla/javascript/tools/debugger/treetable (runtime
-package org.mozilla.javascript.tools.debugger.treetable) are available under
+The files in toolsrc/org/monflabs/mozilla/javascript/tools/debugger/treetable (runtime
+package org.monflabs.mozilla.javascript.tools.debugger.treetable) are available under
 the following license:
 
 ----

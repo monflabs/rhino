@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-package org.mozilla.javascript.tests.commonjs.module.provider;
+package org.monflabs.mozilla.javascript.tests.commonjs.module.provider;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -14,10 +14,10 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.mozilla.javascript.commonjs.module.provider.ModuleSource;
-import org.mozilla.javascript.commonjs.module.provider.ModuleSourceProvider;
-import org.mozilla.javascript.commonjs.module.provider.UrlConnectionExpiryCalculator;
-import org.mozilla.javascript.commonjs.module.provider.UrlModuleSourceProvider;
+import org.monflabs.mozilla.javascript.commonjs.module.provider.ModuleSource;
+import org.monflabs.mozilla.javascript.commonjs.module.provider.ModuleSourceProvider;
+import org.monflabs.mozilla.javascript.commonjs.module.provider.UrlConnectionExpiryCalculator;
+import org.monflabs.mozilla.javascript.commonjs.module.provider.UrlModuleSourceProvider;
 
 public class UrlModuleSourceProviderTest {
 

@@ -1,0 +1,89 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.javascript.commonjs.module;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.net.URI;
+import org.monflabs.mozilla.javascript.Script;
+
+/**
+ * Represents a compiled CommonJS module script. The {@link Require} functions use them and obtain
+ * them through a {@link ModuleScriptProvider}. Instances are immutable.
+ *
+ * @author Attila Szegedi
+ * @version $Id: ModuleScript.java,v 1.3 2011/04/07 20:26:11 hannes%helma.at Exp $
+ */
+public class ModuleScript implements Serializable {
+    @Serial private static final long serialVersionUID = -8287890021565388770L;
+    private final Script script;
+    private final URI uri;
+    private final URI base;
+
+    /**
+     * Creates a new CommonJS module.
+     *
+     * @param script the script representing the code of the module.
+     * @param uri the URI of the module.
+     * @param base the base URI, or null.
+     */
+    public ModuleScript(Script script, URI uri, URI base) {
+        this.script = script;
+        this.uri = uri;
+        this.base = base;
+    }
+
+    /**
+     * Returns the script object representing the code of the module.
+     *
+     * @return the script object representing the code of the module.
+     */
+    public Script getScript() {
+        return script;
+    }
+
+    /**
+     * Returns the URI of the module.
+     *
+     * @return the URI of the module.
+     */
+    public URI getUri() {
+        return uri;
+    }
+
+    /**
+     * Returns the base URI from which this module source was loaded, or null if it was loaded from
+     * an absolute URI.
+     *
+     * @return the base URI, or null.
+     */
+    public URI getBase() {
+        return base;
+    }
+
+    /**
+     * Returns true if this script has a base URI and has a source URI that is contained within that
+     * base URI.
+     *
+     * @return true if this script is contained within its sandbox base URI.
+     */
+    public boolean isSandboxed() {
+        if (base == null || uri == null) {
+            return false;
+        }
+        URI relative = base.relativize(uri);
+        if (relative.isAbsolute()) {
+            return false;
+        }
+        // relativize() only normalises literal dot segments; percent-encoded ones such as
+        // %2e%2e survive it and are decoded again by the URL handler before the file is opened
+        for (String segment : relative.getPath().split("[/\\\\]", -1)) {
+            if ("..".equals(segment)) {
+                return false;
+            }
+        }
+        return true;
+    }
+}

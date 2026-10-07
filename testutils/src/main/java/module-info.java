@@ -1,6 +1,6 @@
-module org.mozilla.rhino.testutils {
-    exports org.mozilla.javascript.testutils;
+module org.monflabs.mozilla.rhino.testutils {
+    exports org.monflabs.mozilla.javascript.testutils;
 
-    requires org.mozilla.rhino;
+    requires org.monflabs.mozilla.rhino;
     requires transitive org.junit.jupiter.api;
 }

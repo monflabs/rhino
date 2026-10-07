@@ -1,0 +1,2 @@
+org.monflabs.mozilla.javascript.tools.shell.BasicConsoleProvider
+org.monflabs.mozilla.javascript.tools.shell.JLineConsoleProvider

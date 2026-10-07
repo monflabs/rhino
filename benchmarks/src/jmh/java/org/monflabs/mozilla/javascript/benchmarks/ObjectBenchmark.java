@@ -1,0 +1,181 @@
+package org.monflabs.mozilla.javascript.benchmarks;
+
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
+import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.Scriptable;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.tools.shell.Global;
+import org.openjdk.jmh.annotations.*;
+
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
+public class ObjectBenchmark {
+    static final Random rand = new Random();
+
+    static final int intKeys = 1000;
+    static final int stringKeys = 1000;
+    // "count" should match "@OperationsPerInvocation" annotations
+    static final int count = 1000;
+
+    static void runCode(Context cx, VarScope scope, String fileName) throws IOException {
+        try (FileReader rdr = new FileReader(fileName)) {
+            cx.evaluateReader(scope, rdr, "test.js", 1, null);
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class FieldTestState {
+        Context cx;
+        TopLevel scope;
+        Scriptable strings;
+        Scriptable ints;
+
+        @Param({"Interpreter", "Compiler"})
+        public EvaluationMethod evalMethod;
+
+        @Setup(Level.Trial)
+        @SuppressWarnings("unused")
+        public void create() throws IOException {
+            cx = Context.enter();
+            cx.setEvaluationMethod(evalMethod);
+            cx.setLanguageVersion(Context.VERSION_ES6);
+
+            scope = new Global(cx);
+            runCode(cx, scope, "testsrc/benchmarks/caliper/fieldTests.js");
+
+            Object[] sarray = new Object[stringKeys];
+            for (int i = 0; i < stringKeys; i++) {
+                int len = rand.nextInt(49) + 1;
+                char[] c = new char[len];
+                for (int cc = 0; cc < len; cc++) {
+                    c[cc] = (char) ('a' + rand.nextInt(25));
+                }
+                sarray[i] = new String(c);
+            }
+            strings = cx.newArray(scope, sarray);
+
+            Object[] iarray = new Object[intKeys];
+            for (int i = 0; i < intKeys; i++) {
+                iarray[i] = rand.nextInt(10000);
+            }
+            ints = cx.newArray(scope, iarray);
+        }
+
+        @TearDown(Level.Trial)
+        @SuppressWarnings("unused")
+        public void close() {
+            Context.exit();
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void createFields(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "createObject");
+        create.call(state.cx, state.scope, null, new Object[] {count, state.strings, state.ints});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void accessFields(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "createObject");
+        Object o =
+                create.call(
+                        state.cx, state.scope, null, new Object[] {1, state.strings, state.ints});
+        Function access = (Function) ScriptableObject.getProperty(state.scope, "accessObject");
+        access.call(
+                state.cx, state.scope, null, new Object[] {count, o, state.strings, state.ints});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void iterateFields(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "createObject");
+        Object o =
+                create.call(
+                        state.cx, state.scope, null, new Object[] {1, state.strings, state.ints});
+        Function iterate = (Function) ScriptableObject.getProperty(state.scope, "iterateObject");
+        iterate.call(state.cx, state.scope, null, new Object[] {count, o});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void ownKeysFields(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "createObject");
+        Object o =
+                create.call(
+                        state.cx, state.scope, null, new Object[] {1, state.strings, state.ints});
+        Function iterate =
+                (Function) ScriptableObject.getProperty(state.scope, "iterateOwnKeysObject");
+        iterate.call(state.cx, state.scope, null, new Object[] {count, o});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void deleteFields(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "createObject");
+        Object o =
+                create.call(
+                        state.cx, state.scope, null, new Object[] {1, state.strings, state.ints});
+        Function delete = (Function) ScriptableObject.getProperty(state.scope, "deleteObject");
+        delete.call(
+                state.cx, state.scope, null, new Object[] {count, o, state.strings, state.ints});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void objectLiteralEmpty(FieldTestState state) {
+        Function create =
+                (Function) ScriptableObject.getProperty(state.scope, "objectLiteralEmpty");
+        create.call(state.cx, state.scope, null, new Object[] {count});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void objectLiteralSimple(FieldTestState state) {
+        Function create =
+                (Function) ScriptableObject.getProperty(state.scope, "objectLiteralSimple");
+        create.call(state.cx, state.scope, null, new Object[] {count});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void objectLiteralComputedProperties(FieldTestState state) {
+        Function create =
+                (Function)
+                        ScriptableObject.getProperty(
+                                state.scope, "objectLiteralComputedProperties");
+        create.call(state.cx, state.scope, null, new Object[] {count});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void objectLiteralGetterSetter(FieldTestState state) {
+        Function create =
+                (Function) ScriptableObject.getProperty(state.scope, "objectLiteralGetterSetter");
+        create.call(state.cx, state.scope, null, new Object[] {count});
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(1000)
+    @SuppressWarnings("unused")
+    public void arrayLiteral(FieldTestState state) {
+        Function create = (Function) ScriptableObject.getProperty(state.scope, "arrayLiteral");
+        create.call(state.cx, state.scope, null, new Object[] {count});
+    }
+}

@@ -186,14 +186,14 @@ var actual = JSON.stringify(obj);
 assertEquals(expected, actual);
 
 // alternative converters
-var cx = org.mozilla.javascript.Context.getCurrentContext();
+var cx = org.monflabs.mozilla.javascript.Context.getCurrentContext();
 var obj = {
     uri: new java.net.URI('test://converter.test'),
     enum: java.time.DayOfWeek.FRIDAY,
     string: "plain string"
 }
 const {STRING, EMPTY_OBJECT, UNDEFINED, THROW_TYPE_ERROR, BEAN} =
-    org.mozilla.javascript.JavaToJSONConverters;
+    org.monflabs.mozilla.javascript.JavaToJSONConverters;
 cx.setJavaToJSONConverter(EMPTY_OBJECT);
 var expected = JSON.stringify({uri: {}, enum: {}, string: "plain string"});
 var actual = JSON.stringify(obj);

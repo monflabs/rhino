@@ -1,12 +1,12 @@
-import org.mozilla.javascript.NullabilityDetector;
-import org.mozilla.kotlin.KotlinNullabilityDetector;
+import org.monflabs.mozilla.javascript.NullabilityDetector;
+import org.monflabs.mozilla.kotlin.KotlinNullabilityDetector;
 
-module org.mozilla.rhino.kotlin {
+module org.monflabs.mozilla.rhino.kotlin {
     requires kotlin.metadata.jvm;
     requires kotlin.stdlib;
-    requires org.mozilla.rhino;
+    requires org.monflabs.mozilla.rhino;
 
-    exports org.mozilla.kotlin;
+    exports org.monflabs.mozilla.kotlin;
 
     provides NullabilityDetector with
             KotlinNullabilityDetector;

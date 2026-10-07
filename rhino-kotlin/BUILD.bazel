@@ -18,7 +18,7 @@ java_library(
 
 java_library(
     name = "rhino-kotlin-java",
-    srcs = ["src/test/java/org/mozilla/kotlin/tests/JavaClass.java"],
+    srcs = ["src/test/java/org/monflabs/mozilla/kotlin/tests/JavaClass.java"],
 )
 
 kt_jvm_library(
@@ -29,9 +29,9 @@ kt_jvm_library(
 java_junit5_test(
     name = "rhino-kotlin_test",
     size = "small",
-    srcs = ["src/test/java/org/mozilla/kotlin/tests/KotlinNullabilityDetectorTest.java"],
+    srcs = ["src/test/java/org/monflabs/mozilla/kotlin/tests/KotlinNullabilityDetectorTest.java"],
     javacopts = TEST_OPTS,
-    test_class = "org.mozilla.kotlin.tests.KotlinNullabilityDetectorTest",
+    test_class = "org.monflabs.mozilla.kotlin.tests.KotlinNullabilityDetectorTest",
     deps = [
         ":rhino-kotlin",
         ":rhino-kotlin-java",

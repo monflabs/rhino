@@ -61,7 +61,7 @@ Information for script builders and embedders:
 
 [Documentation](https://rhino.github.io)
 
-[JavaDoc](https://javadoc.io/doc/org.mozilla/rhino)
+[JavaDoc](https://javadoc.io/doc/org.monflabs.mozilla/rhino)
 
 [List of projects using Rhino](USAGE.md)
 
@@ -137,7 +137,7 @@ Alternately, you can build an all-in-one JAR and run that:
 And finally, you can extract the classpath and use it in a variety of ways:
 
     export CLASSPATH=$(./gradlew -q printClasspath)
-    java org.mozilla.javascript.tools.shell.Main
+    java org.monflabs.mozilla.javascript.tools.shell.Main
 
 ### Optional Bazel Build
 
@@ -285,7 +285,7 @@ To submit a new PR, please use the following process:
 code formatting and style checks and runs the tests.
 * Please write tests for what you fixed, unless you can show us that existing
 tests cover the changes. Use existing tests, such as those in
-"testsrc/org/mozilla/javascript/tests", as a guide.
+"testsrc/org/monflabs/mozilla/javascript/tests", as a guide.
 * If you fixed ECMAScript spec compatibility, take a look at test262.properties and see
 if you can un-disable some tests.
 * Push your change to GitHub and open a pull request.

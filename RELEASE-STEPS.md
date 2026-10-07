@@ -68,11 +68,11 @@ Notes on this process:
 
 To create a file to upload to Sonatype:
 
-* Clean out ~/.m2/repository/org/mozilla
+* Clean out ~/.m2/repository/org/monflabs/mozilla
 * ./gradlew publishToMavenLocal
-* Remove all ".xml" files from org/mozilla (or the publishing portal will choke)
+* Remove all ".xml" files from org/monflabs/mozilla (or the publishing portal will choke)
 * Generate the checksums
-* Use "zip" to make a ZIP file rooted at ~/.m2/repository containing the org/mozilla
+* Use "zip" to make a ZIP file rooted at ~/.m2/repository containing the org/monflabs/mozilla
 * The resulting ZIP file, with multiple modules, should successfully import and be publishable
 
 ## Update Homebrew

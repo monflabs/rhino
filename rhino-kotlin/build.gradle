@@ -14,11 +14,11 @@ dependencies {
 jar {
     bundle {
         bnd(
-            'Bundle-SymbolicName': 'org.mozilla.rhino.kotlin',
+            'Bundle-SymbolicName': 'org.monflabs.mozilla.rhino.kotlin',
             'Bundle-Vendor': 'Mozilla Foundation',
             'Bundle-License': 'https://www.mozilla.org/MPL/2.0/',
-            '-exportcontents': 'org.mozilla.kotlin',
-            'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.mozilla.javascript.NullabilityDetector;register:=org.mozilla.kotlin.KotlinNullabilityDetector',
+            '-exportcontents': 'org.monflabs.mozilla.kotlin',
+            'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.NullabilityDetector;register:=org.monflabs.mozilla.kotlin.KotlinNullabilityDetector',
             'Require-Capability': [
                 'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',

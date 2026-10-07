@@ -35,7 +35,7 @@ java_junit5_test(
     srcs = glob(["**/XMLSecureParserTest.java"]),
     javacopts = TEST_OPTS,
     tags = ["no-agent"],
-    test_class = "org.mozilla.javascript.tests.XMLSecureParserTest",
+    test_class = "org.monflabs.mozilla.javascript.tests.XMLSecureParserTest",
     deps = [
         ":rhino-xml",
         ":rhino-xml-tests",
@@ -51,7 +51,7 @@ java_junit5_test(
     size = "small",
     srcs = glob(["**/E4XBasicTest.java"]),
     javacopts = TEST_OPTS,
-    test_class = "org.mozilla.javascript.xmlimpl.tests.E4XBasicTest",
+    test_class = "org.monflabs.mozilla.javascript.xmlimpl.tests.E4XBasicTest",
     deps = [
         ":rhino-xml",
         ":rhino-xml-tests",
@@ -67,7 +67,7 @@ java_junit5_test(
     size = "small",
     srcs = glob(["**/XmlNonResettableDocumentBuilderTest.java"]),
     javacopts = TEST_OPTS,
-    test_class = "org.mozilla.javascript.xmlimpl.tests.XmlNonResettableDocumentBuilderTest",
+    test_class = "org.monflabs.mozilla.javascript.xmlimpl.tests.XmlNonResettableDocumentBuilderTest",
     deps = [
         ":rhino-xml",
         ":rhino-xml-tests",

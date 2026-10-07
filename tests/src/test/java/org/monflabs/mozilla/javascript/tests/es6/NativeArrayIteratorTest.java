@@ -1,0 +1,59 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.javascript.tests.es6;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.NativeArrayIterator;
+import org.monflabs.mozilla.javascript.NativeArrayIterator.ARRAY_ITERATOR_TYPE;
+import org.monflabs.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.tools.shell.Global;
+
+public class NativeArrayIteratorTest {
+    private Context cx;
+    private VarScope root;
+
+    @BeforeEach
+    public void init() {
+        cx = Context.enter();
+        cx.setLanguageVersion(Context.VERSION_ES6);
+        cx.setGeneratingDebug(true);
+
+        Global global = new Global(cx);
+        root = cx.newVarEnv(global);
+    }
+
+    @AfterEach
+    public void terminate() {
+        Context.exit();
+    }
+
+    /** Test serialization of an empty object. */
+    @Test
+    public void serialization() throws IOException, ClassNotFoundException {
+
+        NativeArrayIterator iter = new NativeArrayIterator(root, null, ARRAY_ITERATOR_TYPE.VALUES);
+
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                ObjectOutputStream oout = new ObjectOutputStream(bos)) {
+            oout.writeObject(iter);
+
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+                    ObjectInputStream oin = new ObjectInputStream(bis)) {
+                NativeArrayIterator result = (NativeArrayIterator) oin.readObject();
+                assertEquals(0, result.getIds().length);
+            }
+        }
+    }
+}

@@ -6,11 +6,11 @@
 
 import java.util.ArrayList;
 import java.util.List;
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.TopLevel;
-import org.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.Scriptable;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.VarScope;
 
 /**
  * Matrix: An example host object class that implements the Scriptable interface.
@@ -42,8 +42,8 @@ import org.mozilla.javascript.VarScope;
  * 2
  * </pre>
  *
- * @see org.mozilla.javascript.Context
- * @see org.mozilla.javascript.Scriptable
+ * @see org.monflabs.mozilla.javascript.Context
+ * @see org.monflabs.mozilla.javascript.Scriptable
  * @author Norris Boyd
  */
 public class Matrix implements Scriptable {

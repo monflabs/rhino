@@ -965,27 +965,27 @@ see Window -> Flight Recorder Template Manager
     <setting name="level">forRemoval</setting>
   </event>
 
-  <event name="org.mozilla.javascript.ClassCompileEvent">
+  <event name="org.monflabs.mozilla.javascript.ClassCompileEvent">
     <setting name="enabled">true</setting>
   </event>
 
-  <event name="org.mozilla.javascript.InterpreterCompileEvent">
+  <event name="org.monflabs.mozilla.javascript.InterpreterCompileEvent">
     <setting name="enabled">true</setting>
   </event>
 
-  <event name="org.mozilla.javascript.ParseEvent">
+  <event name="org.monflabs.mozilla.javascript.ParseEvent">
     <setting name="enabled">true</setting>
   </event>
 
-  <event name="org.mozilla.javascript.ObjectsInitEvent">
+  <event name="org.monflabs.mozilla.javascript.ObjectsInitEvent">
     <setting name="enabled">true</setting>
   </event>
   
-  <event name="org.mozilla.javascript.SafeObjectsInitEvent">
+  <event name="org.monflabs.mozilla.javascript.SafeObjectsInitEvent">
     <setting name="enabled">true</setting>
   </event>
   
-  <event name="org.mozilla.javascript.ScriptExecEvent">
+  <event name="org.monflabs.mozilla.javascript.ScriptExecEvent">
     <setting name="enabled">true</setting>
   </event>
   

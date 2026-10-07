@@ -4,10 +4,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.ContextFactory;
-import org.mozilla.javascript.Script;
-import org.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.ContextFactory;
+import org.monflabs.mozilla.javascript.Script;
+import org.monflabs.mozilla.javascript.TopLevel;
 
 /** Example of controlling the JavaScript with multiple scopes and threads. */
 public class DynamicScopes {

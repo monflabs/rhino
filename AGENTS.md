@@ -34,22 +34,22 @@ README.md for the full list.
 
 Rhino follows a classical architecture:
 
-- [TokenStream](rhino/src/main/java/org/mozilla/javascript/TokenStream.java) is the lexer
-- [Parser](rhino/src/main/java/org/mozilla/javascript/Parser.java) is the parser, which produces an AST modeled by the
-  subclasses of [AstNode](rhino/src/main/java/org/mozilla/javascript/ast/AstNode.java)
-- the [IRFactory](rhino/src/main/java/org/mozilla/javascript/IRFactory.java) will generate a tree IR, modeled
-  by [Node](rhino/src/main/java/org/mozilla/javascript/Node.java)
+- [TokenStream](rhino/src/main/java/org/monflabs/mozilla/javascript/TokenStream.java) is the lexer
+- [Parser](rhino/src/main/java/org/monflabs/mozilla/javascript/Parser.java) is the parser, which produces an AST modeled by the
+  subclasses of [AstNode](rhino/src/main/java/org/monflabs/mozilla/javascript/ast/AstNode.java)
+- the [IRFactory](rhino/src/main/java/org/monflabs/mozilla/javascript/IRFactory.java) will generate a tree IR, modeled
+  by [Node](rhino/src/main/java/org/monflabs/mozilla/javascript/Node.java)
 - there are two backends:
-    - one which generates java classes, in [Codegen](rhino/src/main/java/org/mozilla/javascript/optimizer/Codegen.java);
-    - and one which generates a bytecode for [Interpreter](rhino/src/main/java/org/mozilla/javascript/Interpreter.java),
-      in [CodeGenerator](rhino/src/main/java/org/mozilla/javascript/CodeGenerator.java).
+    - one which generates java classes, in [Codegen](rhino/src/main/java/org/monflabs/mozilla/javascript/optimizer/Codegen.java);
+    - and one which generates a bytecode for [Interpreter](rhino/src/main/java/org/monflabs/mozilla/javascript/Interpreter.java),
+      in [CodeGenerator](rhino/src/main/java/org/monflabs/mozilla/javascript/CodeGenerator.java).
 
-[ScriptRuntime](rhino/src/main/java/org/mozilla/javascript/ScriptRuntime.java) is the main class for all runtime
+[ScriptRuntime](rhino/src/main/java/org/monflabs/mozilla/javascript/ScriptRuntime.java) is the main class for all runtime
 methods, shared between compiled classes and interpreter.
 
 Builtins such as `Object` or `Array` are implemented in
-[NativeObject](rhino/src/main/java/org/mozilla/javascript/NativeObject.java),
-[NativeArray](rhino/src/main/java/org/mozilla/javascript/NativeArray.java), etc.
+[NativeObject](rhino/src/main/java/org/monflabs/mozilla/javascript/NativeObject.java),
+[NativeArray](rhino/src/main/java/org/monflabs/mozilla/javascript/NativeArray.java), etc.
 
 ## Project goal: ECMAScript conformance
 

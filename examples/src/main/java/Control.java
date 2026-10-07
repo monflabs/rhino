@@ -4,11 +4,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Function;
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.Scriptable;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
 
 /**
  * Example of controlling the JavaScript execution engine.

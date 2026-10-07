@@ -1,0 +1,99 @@
+package org.monflabs.mozilla.javascript.benchmarks;
+
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
+import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.ScriptRuntime;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.openjdk.jmh.annotations.*;
+
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
+public class PropertyBenchmark {
+    @State(Scope.Thread)
+    public static class PropertyState {
+        Context cx;
+        TopLevel scope;
+
+        Function create;
+        Function createFieldByField;
+        Function getName;
+        Function check;
+
+        Object object;
+
+        @Param({"Interpreter", "Compiler"})
+        public EvaluationMethod evalMethod;
+
+        @Setup(Level.Trial)
+        public void setup() throws IOException {
+            cx = Context.enter();
+            cx.setEvaluationMethod(evalMethod);
+            cx.setLanguageVersion(Context.VERSION_ES6);
+            scope = cx.initStandardObjects();
+
+            try (FileReader rdr =
+                    new FileReader("testsrc/benchmarks/micro/property-benchmarks.js")) {
+                cx.evaluateReader(scope, rdr, "property-benchmarks.js", 1, null);
+            }
+            create = (Function) ScriptableObject.getProperty(scope, "createObject");
+            createFieldByField =
+                    (Function) ScriptableObject.getProperty(scope, "createObjectFieldByField");
+            getName = (Function) ScriptableObject.getProperty(scope, "getName");
+            check = (Function) ScriptableObject.getProperty(scope, "check");
+
+            object = create.call(cx, scope, null, new Object[] {"testing"});
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDown() {
+            cx.close();
+        }
+    }
+
+    @Benchmark
+    public Object createObject(PropertyBenchmark.PropertyState state) {
+        Object obj = state.create.call(state.cx, state.scope, null, new Object[] {"testing"});
+        String name =
+                ScriptRuntime.toString(
+                        state.getName.call(state.cx, state.scope, null, new Object[] {obj}));
+        if (!"testing".equals(name)) {
+            throw new AssertionError("Expected testing");
+        }
+        return name;
+    }
+
+    @Benchmark
+    public Object createObjectFieldByField(PropertyBenchmark.PropertyState state) {
+        Object obj =
+                state.createFieldByField.call(
+                        state.cx, state.scope, null, new Object[] {"testing"});
+        String name =
+                ScriptRuntime.toString(
+                        state.getName.call(state.cx, state.scope, null, new Object[] {obj}));
+        if (!"testing".equals(name)) {
+            throw new AssertionError("Expected testing");
+        }
+        return name;
+    }
+
+    @Benchmark
+    public Object getOneProperty(PropertyBenchmark.PropertyState state) {
+        String name =
+                ScriptRuntime.toString(
+                        state.getName.call(
+                                state.cx, state.scope, null, new Object[] {state.object}));
+        if (!"testing".equals(name)) {
+            throw new AssertionError("Expected testing");
+        }
+        return name;
+    }
+
+    @Benchmark
+    public Object addTwoProperties(PropertyBenchmark.PropertyState state) {
+        return state.check.call(state.cx, state.scope, null, new Object[] {state.object});
+    }
+}

@@ -6,8 +6,8 @@ package com.netscape.javascript.qa.drivers;
 
 import java.io.*;
 import com.netscape.javascript.*;
-import org.mozilla.javascript.*;
-import org.mozilla.javascript.tools.shell.*;
+import org.monflabs.mozilla.javascript.*;
+import org.monflabs.mozilla.javascript.tools.shell.*;
 
 /**
         This class creates a javax.javascript.Context, which evaluates

@@ -5,10 +5,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import java.io.Serial;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.annotations.JSConstructor;
-import org.mozilla.javascript.annotations.JSFunction;
-import org.mozilla.javascript.annotations.JSGetter;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.annotations.JSConstructor;
+import org.monflabs.mozilla.javascript.annotations.JSFunction;
+import org.monflabs.mozilla.javascript.annotations.JSGetter;
 
 /**
  * A sample counter class that can be used from JavaScript through the Rhino engine. This class

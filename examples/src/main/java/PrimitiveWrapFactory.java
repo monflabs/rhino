@@ -4,10 +4,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.VarScope;
-import org.mozilla.javascript.WrapFactory;
-import org.mozilla.javascript.lc.type.TypeInfo;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.WrapFactory;
+import org.monflabs.mozilla.javascript.lc.type.TypeInfo;
 
 /**
  * An example WrapFactory that can be used to avoid wrapping of Java types that can be converted to

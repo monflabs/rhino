@@ -778,7 +778,7 @@ sub get_rhino_engine_command {
         $retval .= ($opt_rhino_ms ? "/cp:p" : "-classpath") . " $opt_classpath ";
     }
 
-    $retval .= "org.mozilla.javascript.tools.shell.Main";
+    $retval .= "org.monflabs.mozilla.javascript.tools.shell.Main";
 
     if ($opt_rhino_opt) {
         $retval .= " -opt $opt_rhino_opt";

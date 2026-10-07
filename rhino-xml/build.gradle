@@ -11,11 +11,11 @@ dependencies {
 jar {
     bundle {
         bnd(
-            'Bundle-SymbolicName': 'org.mozilla.rhino.xml',
+            'Bundle-SymbolicName': 'org.monflabs.mozilla.rhino.xml',
             'Bundle-Vendor': 'Mozilla Foundation',
             'Bundle-License': 'https://www.mozilla.org/MPL/2.0/',
-            '-exportcontents': 'org.mozilla.javascript.xmlimpl',
-            'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.mozilla.javascript.xml.XMLLoader;register:=org.mozilla.javascript.xmlimpl.XMLLoaderImpl',
+            '-exportcontents': 'org.monflabs.mozilla.javascript.xmlimpl',
+            'Provide-Capability': 'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.xml.XMLLoader;register:=org.monflabs.mozilla.javascript.xmlimpl.XMLLoaderImpl',
             'Require-Capability': [
                 'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',

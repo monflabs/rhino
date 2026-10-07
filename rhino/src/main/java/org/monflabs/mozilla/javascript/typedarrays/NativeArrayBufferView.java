@@ -1,0 +1,68 @@
+/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.javascript.typedarrays;
+
+import java.io.Serial;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.Undefined;
+
+/**
+ * This class is the abstract parent for all views of the array. It shows a view of the underlying
+ * NativeArrayBuffer. Many views may simultaneously share the same buffer, and changes to one will
+ * affect all.
+ */
+public abstract class NativeArrayBufferView extends ScriptableObject {
+    @Serial private static final long serialVersionUID = 6884475582973958419L;
+
+    /** Many view objects can share the same backing array */
+    protected final NativeArrayBuffer arrayBuffer;
+
+    /** The offset, in bytes, from the start of the backing array */
+    protected final int offset;
+
+    /** The length, in bytes, of the portion of the backing array that we use */
+    protected final int byteLength;
+
+    protected final boolean outOfRange;
+
+    public NativeArrayBufferView() {
+        arrayBuffer = new NativeArrayBuffer();
+        offset = 0;
+        byteLength = 0;
+        outOfRange = false;
+    }
+
+    protected NativeArrayBufferView(NativeArrayBuffer ab, int offset, int byteLength) {
+        this.offset = offset;
+        this.byteLength = byteLength;
+        this.arrayBuffer = ab;
+
+        int bufferByteLength = arrayBuffer.getLength();
+        int byteOffsetEnd = offset + byteLength;
+
+        outOfRange = offset > bufferByteLength || byteOffsetEnd > bufferByteLength;
+    }
+
+    /** Return the buffer that backs this view. */
+    public NativeArrayBuffer getBuffer() {
+        return arrayBuffer;
+    }
+
+    /** Return the offset in bytes from the start of the buffer that this view represents. */
+    public int getByteOffset() {
+        return offset;
+    }
+
+    /** Return the length, in bytes, of the part of the buffer that this view represents. */
+    public int getByteLength() {
+        return byteLength;
+    }
+
+    protected static boolean isArg(Object[] args, int i) {
+        return ((args.length > i) && !Undefined.instance.equals(args[i]));
+    }
+}

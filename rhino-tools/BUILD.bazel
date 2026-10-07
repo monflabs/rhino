@@ -18,7 +18,7 @@ java_library(
 java_binary(
     name = "shell",
     javacopts = LIBRARY_OPTS,
-    main_class = "org.mozilla.javascript.tools.shell.Main",
+    main_class = "org.monflabs.mozilla.javascript.tools.shell.Main",
     visibility = ["//visibility:public"],
     runtime_deps = [
         ":rhino-tools",
@@ -34,7 +34,7 @@ java_binary(
 java_binary(
     name = "debugger",
     javacopts = LIBRARY_OPTS,
-    main_class = "org.mozilla.javascript.tools.debugger.Main",
+    main_class = "org.monflabs.mozilla.javascript.tools.debugger.Main",
     visibility = ["//visibility:public"],
     runtime_deps = [
         ":rhino-tools",
@@ -46,7 +46,7 @@ java_binary(
 java_binary(
     name = "jsc",
     javacopts = LIBRARY_OPTS,
-    main_class = "org.mozilla.javascript.tools.jsc.Main",
+    main_class = "org.monflabs.mozilla.javascript.tools.jsc.Main",
     visibility = ["//visibility:public"],
     runtime_deps = [
         ":rhino-tools",

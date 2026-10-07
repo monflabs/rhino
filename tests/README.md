@@ -21,7 +21,7 @@ through the [test262.properties](test262.properties) file, the format of which i
 
 ## Running a specific TestSuite
 ```
-./gradlew test --tests org.mozilla.javascript.tests.Test262SuiteTest
+./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest
 ```
 
 ## test262.properties format
@@ -77,7 +77,7 @@ helpful to make sure that Java 11 is the first JVM in your path before trying th
 very unusual.)
 
 ```
-RHINO_TEST_JAVA_VERSION=11 ./gradlew test --tests org.mozilla.javascript.tests.Test262SuiteTest --rerun-tasks -DupdateTest262properties [-Dtest262properties=testsrc/myOwn.properties]
+RHINO_TEST_JAVA_VERSION=11 ./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest --rerun-tasks -DupdateTest262properties [-Dtest262properties=testsrc/myOwn.properties]
 ```
 The .properties file generation can be parameterized to affect the output:
 - rollup: include only a single line for a subfolder that contains only failing tests
@@ -97,11 +97,11 @@ gradle to run all tests
 
 You can run the tests in debug mode by setting the `runTest262Debug` property. By default this disables running the tests outside the debugger, but that can be overridden by setting `runTest262NonDebug`. For example the following will run the tests in debugger mode:
 ```
-./gradlew test --tests org.mozilla.javascript.tests.Test262SuiteTest -DrunTest262Debug
+./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest -DrunTest262Debug
 ```
 and this will run the tests in all modes
 ```
-./gradlew test --tests org.mozilla.javascript.tests.Test262SuiteTest -DrunTest262Debug -DrunTest262NonDebug
+./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest -DrunTest262Debug -DrunTest262NonDebug
 ```
 
 ## Running specific tests from the official ECMAScript Test Suite (test262)
@@ -109,7 +109,7 @@ The default setup for running the test262 test suite is defined in [test262.prop
 
 Another .properties file to use can be specified using the `test262properties` commandline property
 ```
-./gradlew test --tests org.mozilla.javascript.tests.Test262SuiteTest -Dtest262properties=testsrc/myOwn.properties
+./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest -Dtest262properties=testsrc/myOwn.properties
 ```
 This allows the creation of a custom .properties file containing for example just the tests for one specific feature
 being implemented, which allows for (quickly) running just the tests for that specific feature

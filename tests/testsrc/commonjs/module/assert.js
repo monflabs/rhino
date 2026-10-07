@@ -28,7 +28,7 @@ assert.AssertionError = function (options) {
 
     // this lets us get a stack trace in Rhino
     if (system.engine == "rhino")
-        this.rhinoException = Packages.org.mozilla.javascript.JavaScriptException(this, null, 0);
+        this.rhinoException = Packages.org.monflabs.mozilla.javascript.JavaScriptException(this, null, 0);
 
     // V8 specific
     if (Error.captureStackTrace) {

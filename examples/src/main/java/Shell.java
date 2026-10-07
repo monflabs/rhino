@@ -10,14 +10,14 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Serial;
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.EvaluatorException;
-import org.mozilla.javascript.Function;
-import org.mozilla.javascript.JavaScriptException;
-import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.TopLevel;
-import org.mozilla.javascript.WrappedException;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.EvaluatorException;
+import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.JavaScriptException;
+import org.monflabs.mozilla.javascript.Scriptable;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.WrappedException;
 
 /**
  * The shell program.

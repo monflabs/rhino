@@ -23,7 +23,7 @@ primary original source content at compilation time.
 
 ## Architecture
 
-The classes in `org.mozilla.javascript.sourcemap`:
+The classes in `org.monflabs.mozilla.javascript.sourcemap`:
 
 | Class | Visibility | Role |
 |---|---|---|

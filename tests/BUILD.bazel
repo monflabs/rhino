@@ -16,13 +16,13 @@ filegroup(
 java_library(
     name = "rhino-tests-lib",
     srcs = [
-        "src/test/java/org/mozilla/javascript/testing/TestErrorReporter.java",
-        "src/test/java/org/mozilla/javascript/tests/DoctestsTest.java",
-        "src/test/java/org/mozilla/javascript/tests/ParserTest.java",
+        "src/test/java/org/monflabs/mozilla/javascript/testing/TestErrorReporter.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/DoctestsTest.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/ParserTest.java",
     ] + glob([
-        "src/test/java/org/mozilla/javascript/tests/type_info/**/*.java",
-        "src/test/java/org/mozilla/javascript/tests/commonjs/**/*.java",
-        "src/test/java/org/mozilla/javascript/drivers/**/*.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/type_info/**/*.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/commonjs/**/*.java",
+        "src/test/java/org/monflabs/mozilla/javascript/drivers/**/*.java",
     ]),
     javacopts = TEST_OPTS,
     deps = [
@@ -46,10 +46,10 @@ java_test_suite(
     srcs = glob(
         ["src/test/java/**/*.java"],
         exclude = [
-            "src/test/java/org/mozilla/javascript/tests/MozillaSuiteTest.java",
-            "src/test/java/org/mozilla/javascript/tests/Test262SuiteTest.java",
-            "src/test/java/org/mozilla/javascript/tests/Test262UnexpectedlyPassingTest.java",
-            "src/test/java/org/mozilla/javascript/sourcemap/SourceMapSpecSuiteTest.java",
+            "src/test/java/org/monflabs/mozilla/javascript/tests/MozillaSuiteTest.java",
+            "src/test/java/org/monflabs/mozilla/javascript/tests/Test262SuiteTest.java",
+            "src/test/java/org/monflabs/mozilla/javascript/tests/Test262UnexpectedlyPassingTest.java",
+            "src/test/java/org/monflabs/mozilla/javascript/sourcemap/SourceMapSpecSuiteTest.java",
         ],
     ),
     data = [":testsrc"],
@@ -90,7 +90,7 @@ test_suite(
         name = "MozillaSuiteTest",
         # "small" will result in build timeouts on GitHub Actions runners
         size = "medium",
-        srcs = ["src/test/java/org/mozilla/javascript/tests/MozillaSuiteTest.java"],
+        srcs = ["src/test/java/org/monflabs/mozilla/javascript/tests/MozillaSuiteTest.java"],
         data = [":testsrc"],
         javacopts = TEST_OPTS,
         jvm_flags = [
@@ -101,7 +101,7 @@ test_suite(
         ],
         resources = glob(["src/test/resources/**"]),
         shard_count = 16,
-        test_class = "org.mozilla.javascript.tests.MozillaSuiteTest",
+        test_class = "org.monflabs.mozilla.javascript.tests.MozillaSuiteTest",
         deps = [
             ":rhino-tests-lib",
             "//rhino",
@@ -117,13 +117,13 @@ test_suite(
 java_junit5_test(
     name = "SourceMapSpecSuiteTest",
     size = "small",
-    srcs = ["src/test/java/org/mozilla/javascript/sourcemap/SourceMapSpecSuiteTest.java"],
+    srcs = ["src/test/java/org/monflabs/mozilla/javascript/sourcemap/SourceMapSpecSuiteTest.java"],
     data = ["testsrc/source-map-tests-excludelist.txt"] + glob(["source-map-tests/**"]),
     javacopts = TEST_OPTS,
     jvm_flags = [
         "-Xmx1g",
     ],
-    test_class = "org.mozilla.javascript.sourcemap.SourceMapSpecSuiteTest",
+    test_class = "org.monflabs.mozilla.javascript.sourcemap.SourceMapSpecSuiteTest",
     deps = [
         "//rhino",
         "//testutils",
@@ -137,13 +137,13 @@ test_suite(
         name = "Test262SuiteTest",
         # "small" will result in build timeouts on GitHub Actions runners
         size = "medium",
-        srcs = ["src/test/java/org/mozilla/javascript/tests/Test262SuiteTest.java"],
+        srcs = ["src/test/java/org/monflabs/mozilla/javascript/tests/Test262SuiteTest.java"],
         data = ["testsrc/test262.properties"] + glob(["test262/**"]),
         jvm_flags = [
             "-Xmx1g",
         ],
         shard_count = 32,
-        test_class = "org.mozilla.javascript.tests.Test262SuiteTest",
+        test_class = "org.monflabs.mozilla.javascript.tests.Test262SuiteTest",
         deps = [
             ":rhino-tests-lib",
             "//rhino",
@@ -167,7 +167,7 @@ test_suite(
         name = "Test262SuiteValidationTest",
         # "small" will result in build timeouts on GitHub Actions runners
         size = "medium",
-        srcs = ["src/test/java/org/mozilla/javascript/tests/Test262SuiteTest.java"],
+        srcs = ["src/test/java/org/monflabs/mozilla/javascript/tests/Test262SuiteTest.java"],
         data = ["testsrc/test262.properties"] + glob(["test262/**"]),
         jvm_flags = [
             "-Xmx1g",
@@ -175,7 +175,7 @@ test_suite(
         ],
         shard_count = 32,
         tags = ["manual"],
-        test_class = "org.mozilla.javascript.tests.Test262SuiteTest",
+        test_class = "org.monflabs.mozilla.javascript.tests.Test262SuiteTest",
         deps = [
             ":rhino-tests-lib",
             "//rhino",
@@ -194,14 +194,14 @@ java_junit5_test(
     name = "Test262UnexpectedlyPassingTest",
     size = "small",
     srcs = [
-        "src/test/java/org/mozilla/javascript/tests/Test262SuiteTest.java",
-        "src/test/java/org/mozilla/javascript/tests/Test262UnexpectedlyPassingTest.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/Test262SuiteTest.java",
+        "src/test/java/org/monflabs/mozilla/javascript/tests/Test262UnexpectedlyPassingTest.java",
     ],
     data = [":testsrc"] + glob(["test262/**"]),
     jvm_flags = [
         "-Xmx1g",
     ],
-    test_class = "org.mozilla.javascript.tests.Test262UnexpectedlyPassingTest",
+    test_class = "org.monflabs.mozilla.javascript.tests.Test262UnexpectedlyPassingTest",
     deps = [
         ":rhino-tests-lib",
         "//rhino",

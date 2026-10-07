@@ -5,7 +5,7 @@ plugins {
 }
 
 application {
-    mainClass = 'org.mozilla.javascript.tools.shell.Main'
+    mainClass = 'org.monflabs.mozilla.javascript.tools.shell.Main'
 }
 
 configurations {
@@ -29,14 +29,14 @@ dependencies {
 jar {
     bundle {
         bnd(
-            'Bundle-SymbolicName': 'org.mozilla.rhino.tools',
+            'Bundle-SymbolicName': 'org.monflabs.mozilla.rhino.tools',
             'Bundle-Vendor': 'Mozilla Foundation',
             'Bundle-License': 'https://www.mozilla.org/MPL/2.0/',
             '-exportcontents': [
-                'org.mozilla.javascript.tools',
-                'org.mozilla.javascript.tools.debugger',
-                'org.mozilla.javascript.tools.jsc',
-                'org.mozilla.javascript.tools.shell',
+                'org.monflabs.mozilla.javascript.tools',
+                'org.monflabs.mozilla.javascript.tools.debugger',
+                'org.monflabs.mozilla.javascript.tools.jsc',
+                'org.monflabs.mozilla.javascript.tools.shell',
             ].join(','),
             'Import-Package': [
                 'javax.swing*;resolution:=optional',
@@ -47,14 +47,14 @@ jar {
                 '*',
             ].join(','),
             'Provide-Capability': [
-                'osgi.serviceloader;osgi.serviceloader=org.mozilla.javascript.tools.ConsoleProvider;register:=org.mozilla.javascript.tools.shell.BasicConsoleProvider',
-                'osgi.serviceloader;osgi.serviceloader=org.mozilla.javascript.tools.ConsoleProvider;register:=org.mozilla.javascript.tools.shell.JLineConsoleProvider',
+                'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.tools.ConsoleProvider;register:=org.monflabs.mozilla.javascript.tools.shell.BasicConsoleProvider',
+                'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.tools.ConsoleProvider;register:=org.monflabs.mozilla.javascript.tools.shell.JLineConsoleProvider',
             ].join(','),
             'Require-Capability': [
                 'osgi.ee;filter:="(&(osgi.ee=JavaSE)(version>=11))"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.processor)"',
                 'osgi.extender;filter:="(osgi.extender=osgi.serviceloader.registrar)"',
-                'osgi.serviceloader;osgi.serviceloader=org.mozilla.javascript.tools.ConsoleProvider;cardinality:=multiple',
+                'osgi.serviceloader;osgi.serviceloader=org.monflabs.mozilla.javascript.tools.ConsoleProvider;cardinality:=multiple',
             ].join(',')
         )
     }
@@ -77,14 +77,14 @@ tasks.register('printClassPath') {
 
 // Easy way to launch the debugger
 tasks.register('runDebugger', JavaExec) {
-    mainClass = 'org.mozilla.javascript.tools.debugger.Main'
+    mainClass = 'org.monflabs.mozilla.javascript.tools.debugger.Main'
     classpath = sourceSets.main.runtimeClasspath
 }
 
 // This does the same thing as "gradle run" but adds a bit of usability
 // since we also have a "runDebugger" task
 tasks.register('runCli', JavaExec) {
-    mainClass = 'org.mozilla.javascript.tools.shell.Main'
+    mainClass = 'org.monflabs.mozilla.javascript.tools.shell.Main'
     classpath = sourceSets.main.runtimeClasspath +
             configurations.shellOnly
     standardInput = System.in
