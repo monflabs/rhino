@@ -2660,6 +2660,14 @@ public class Parser {
             vi.setJsDocNode(jsdocNode);
             vi.setLineColumnNumber(lineno, column);
             pn.addVariable(vi);
+            if (name != null && (declType == Token.LET || declType == Token.CONST)) {
+                // the temporal dead zone of the binding ends with its initializer
+                Scope defining = currentScope.getDefiningScope(name.getIdentifier());
+                Symbol symbol = defining == null ? null : defining.getSymbol(name.getIdentifier());
+                if (symbol != null) {
+                    symbol.setNode(vi);
+                }
+            }
 
             if (!matchToken(Token.COMMA, true)) break;
         }

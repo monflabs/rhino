@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Temporal dead zone (2026-10-07, plan 1.1d)
+
+- **Gated, `VERSION_ECMASCRIPT`:** using a `let`/`const` binding before its declaration has run throws
+  `ReferenceError: Cannot access "x" before initialization.` (read, write, `typeof`, `++`/`--`, call), in both
+  backends. The compiler classifies each reference (`NodeTransformer.classifyTdz`): after the declaration in the same
+  function, nothing is checked; textually before it, the reference always throws; otherwise (closures, `with`,
+  `switch` cases) the binding holds `UniqueTag.UNINITIALIZED` until its declaration runs, and the name lookups in
+  `ScriptRuntime` throw on it (one comparison). Bindings in registers never hold it, so their number
+  specialization is unaffected.
+- **All versions from `VERSION_ES6` (bug fix, `BACKWARD_COMPATIBILITY.md` 2.5):** `let x;` in a loop body is
+  `undefined` on each iteration in functions without closures (it kept the previous iteration's value).
+- New tokens/icodes `TDZ_SENTINEL` and `CHECK_TDZ`; symbols now record their declaration (`Symbol.getNode()`), and a
+  block's symbol table is kept after its scope object is created. Only bindings declared by a `let`/`const`
+  statement start uninitialized (parameters, catch parameters and desugared bindings are initialized before their
+  scope runs); destructuring declarations are not covered yet (plan 1.3).
+- test262: 18 more files pass (`let`/`const` before-initialization tests, `for-in`/`for-of` head TDZ); 24,600 of
+  42,616 in-scope files.
+
 ### Backward compatibility document (2026-10-07)
 
 - `BACKWARD_COMPATIBILITY.md` lists every change that makes code or an embedding behave differently from stock

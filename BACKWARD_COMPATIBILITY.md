@@ -13,10 +13,12 @@ decided to apply to every version.
 | # | Change | Applies to | Since |
 |---|--------|-----------|-------|
 | 1.1 | Assignment to a `const` throws a TypeError | `VERSION_ECMASCRIPT` | plan 1.1c, 2026-10-07 |
+| 1.2 | Temporal dead zone: using a `let`/`const` before its declaration throws a ReferenceError | `VERSION_ECMASCRIPT` | plan 1.1d, 2026-10-07 |
 | 2.1 | `const` in a loop body takes each iteration's value | `VERSION_ES6` and later | plan 1.1a, 2026-10-07 |
 | 2.2 | `for (const x of/in …)` initializes `x` | `VERSION_ES6` and later | plan 1.1a, 2026-10-07 |
 | 2.3 | `let`/`const` loop heads create a binding per iteration | `VERSION_ES6` and later | plan 1.1b, 2026-10-07 |
 | 2.4 | Assignment to a block-level `const` has no effect | `VERSION_ES6` | plan 1.1c, 2026-10-07 |
+| 2.5 | `let x;` in a loop body is `undefined` on each iteration | `VERSION_ES6` and later | plan 1.1d, 2026-10-07 |
 | 3.1 | Packages and Maven coordinates renamed | all | 2026-10-07 |
 | 3.2 | Java 21 minimum; Android not supported | all | 2026-10-07 |
 
@@ -44,6 +46,32 @@ k = 2;       // VERSION_ES6: no effect (TypeError in strict mode)
   set S to true").
 - **Not covered yet:** a `const` declared at the top level of a script, which still lives on the global object
   (it will be with plan 1.1e, global lexical declarations).
+
+### 1.2 Temporal dead zone (TDZ)
+
+```js
+function f() {
+  g();             // VERSION_ES6: g returns undefined
+  let x = 1;       // VERSION_ECMASCRIPT: ReferenceError: Cannot access "x" before initialization.
+  function g() { return x; }
+}
+```
+
+- Reading, writing, `typeof`, `++`/`--` or calling a `let`/`const` binding before its declaration has run throws a
+  ReferenceError: textually before the declaration in the same function (`x; let x;`, `let x = x;`,
+  `for (let a of a)`), or from a closure, a `with` statement or `eval` code that runs too early. Under
+  `VERSION_ES6`, such a read gives `undefined` and a write succeeds.
+- **Why:** a lexical binding is created uninitialized and only initialized when its declaration is evaluated
+  (ECMA-262 2026, §9.1.1.1.6 GetBindingValue and §9.1.1.1.5 SetMutableBinding, step 3: "If the binding for N in
+  envRec has not yet been initialized, throw a ReferenceError").
+- **Cost:** none for `VERSION_ES6`. Under `VERSION_ECMASCRIPT`, references that can be proven safe at compile time
+  (in the same function, after the declaration) are not checked; others are checked by one comparison.
+- **Not covered yet:** top-level `let`/`const` of a script (plan 1.1e); bindings of a destructuring declaration
+  (`let [a, b] = …`, plan 1.3); a read that a `switch` case reaches by
+  jumping over a declaration in a function without closures; a write from a closure is checked before its
+  right-hand side is evaluated, not after.
+- **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
+  declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 
 ---
 
@@ -99,6 +127,20 @@ f();   // before: 2 (the assignment succeeded)   now: 1 (no effect; TypeError in
 - Before, a `const` declared in a block of a function with closures (or of a script) was stored as an ordinary
   variable, so assigning to it succeeded; every other `const` ignored the assignment. It is now consistent. Under
   `VERSION_ECMASCRIPT`, the assignment throws (see 1.1).
+
+### 2.5 `let x;` in a loop body is `undefined` on each iteration
+
+```js
+function f() {
+  var r = [];
+  for (var i = 0; i < 2; i++) { let x; if (i == 0) x = 1; r.push(x); }
+  return r.join();
+}
+f();   // before: "1,1" (in functions without closures)   now: "1,"
+```
+
+- **Why:** a `let` declaration without an initializer initializes the binding to `undefined` each time it is
+  evaluated (§14.3.1). A script's top-level `let x;` is not changed (plan 1.1e).
 
 ---
 

@@ -171,8 +171,12 @@ abstract class Icode {
             // Per-iteration copy of a loop's let scope
             COPY_SCOPE = OBJECT_REST - 1,
 
+            // Temporal dead zone of let/const bindings
+            TDZ_SENTINEL = COPY_SCOPE - 1,
+            CHECK_TDZ = TDZ_SENTINEL - 1,
+
             // Last icode
-            MIN_ICODE = COPY_SCOPE;
+            MIN_ICODE = CHECK_TDZ;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -368,6 +372,10 @@ abstract class Icode {
                 return "OBJECT_REST";
             case COPY_SCOPE:
                 return "COPY_SCOPE";
+            case TDZ_SENTINEL:
+                return "TDZ_SENTINEL";
+            case CHECK_TDZ:
+                return "CHECK_TDZ";
         }
 
         // icode without name

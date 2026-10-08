@@ -919,6 +919,16 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 stackChange(-1);
                 break;
 
+            case Token.TDZ_SENTINEL:
+                addIcode(Icode.TDZ_SENTINEL);
+                stackChange(1);
+                break;
+
+            case Token.CHECK_TDZ:
+                visitExpression(child, 0);
+                addStringOp(Icode.CHECK_TDZ, node.getString());
+                break;
+
             case Token.POS:
             case Token.NEG:
             case Token.NOT:

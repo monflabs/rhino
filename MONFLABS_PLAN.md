@@ -255,7 +255,13 @@ Split into separately committed steps:
 - *1.1c (done)* const assignment: `ScriptRuntime.constAssignment` (TypeError under `VERSION_ECMASCRIPT`) called
   where an assignment already had no effect: const registers, and read-only slots of scope objects (always consts);
   block consts in a `LocalScope` are now really read-only. Global consts wait for 1.1e.
-- *1.1d* TDZ; *1.1e* global lexical scope (gated, see decisions).
+- *1.1d (done)* TDZ: compile-time classification of each reference (none / always throws / runtime check);
+  `UniqueTag.UNINITIALIZED` held by bindings in scope objects until their declaration runs, checked by the name
+  lookups; `let x;` initializes. Only bindings declared by a let/const statement start uninitialized (parameters,
+  catch parameters and desugared bindings are initialized before their scope runs). Known gaps: destructuring
+  declarations (to do with 1.3), switch cases in functions without closures, and a closure write is checked before
+  its right-hand side.
+- *1.1e* global lexical scope (gated, see decisions).
 
 **1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
 function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
@@ -446,7 +452,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
-| 1.1  | Lexical declarations                            | in progress | 57.6% → 57.7% (1.1a–c)       | (this) |
+| 1.1  | Lexical declarations                            | in progress | 57.6% → 57.7% (1.1a–d)       | (this) |
 | 1.2  | Function semantics                              | todo        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |

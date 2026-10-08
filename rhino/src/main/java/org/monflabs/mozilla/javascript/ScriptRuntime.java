@@ -2486,6 +2486,7 @@ public class ScriptRuntime {
             }
         }
 
+        checkInitialized(result, name);
         if (asFunctionCall) {
             if (!(result instanceof Callable)) {
                 if (isOptionalChainingCall
@@ -2563,6 +2564,7 @@ public class ScriptRuntime {
             }
         }
 
+        checkInitialized(result, name);
         if (!(result instanceof Callable)) {
             if (isOptionalChainingCall
                     && (result == Scriptable.NOT_FOUND
@@ -3749,7 +3751,7 @@ public class ScriptRuntime {
     public static String typeofName(Context cx, VarScope scope, String id) {
         VarScope val = bind(cx, scope, id);
         if (val == null) return "undefined";
-        return typeof(getObjectProp(val, id, cx));
+        return typeof(checkInitialized(getObjectProp(val, id, cx), id));
     }
 
     public static boolean isObject(Object value) {
@@ -4116,6 +4118,7 @@ public class ScriptRuntime {
             } while (scopeChain != null);
             throw notFoundError(null, id);
         }
+        checkInitialized(value, id);
         return doScopeIncrDecr(target, id, value, incrDecrMask);
     }
 
@@ -5394,6 +5397,18 @@ public class ScriptRuntime {
 
     public static VarScope leaveScope(VarScope scope) {
         return scope.getParentScope();
+    }
+
+    /**
+     * Returns {@code value}, unless it is the value of a let/const binding in its temporal dead
+     * zone ({@link UniqueTag#UNINITIALIZED}, only used under {@link Context#VERSION_ECMASCRIPT}),
+     * in which case it throws a ReferenceError.
+     */
+    public static Object checkInitialized(Object value, String name) {
+        if (value == UniqueTag.UNINITIALIZED) {
+            throw constructError("ReferenceError", getMessageById("msg.uninitialized", name));
+        }
+        return value;
     }
 
     /**

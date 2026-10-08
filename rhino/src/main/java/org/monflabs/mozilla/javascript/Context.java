@@ -129,6 +129,9 @@ public class Context implements Closeable {
      *       --}, destructuring, a {@code for-in/of} target) throws a TypeError, also outside strict
      *       mode; under {@link #VERSION_ES6} it has no effect (TypeError in strict mode). Global
      *       {@code const} declarations are not covered yet.
+     *   <li>Temporal dead zone: using a {@code let}/{@code const} binding before its declaration
+     *       has run throws a ReferenceError; under {@link #VERSION_ES6} a read gives undefined.
+     *       Global declarations are not covered yet.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

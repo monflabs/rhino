@@ -251,7 +251,9 @@ public class Token {
             QUESTION_DOT = NULLISH_COALESCING + 1, // optional chaining operator (?.)
             OBJECT_REST = QUESTION_DOT + 1, // ES6 object rest operation
             COPY_SCOPE = OBJECT_REST + 1, // per-iteration copy of a loop's let scope
-            LAST_TOKEN = COPY_SCOPE + 1;
+            TDZ_SENTINEL = COPY_SCOPE + 1, // value of a let/const binding before its declaration
+            CHECK_TDZ = TDZ_SENTINEL + 1, // ReferenceError if its child is TDZ_SENTINEL's value
+            LAST_TOKEN = CHECK_TDZ + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -610,6 +612,10 @@ public class Token {
                 return "OBJECT_REST";
             case COPY_SCOPE:
                 return "COPY_SCOPE";
+            case TDZ_SENTINEL:
+                return "TDZ_SENTINEL";
+            case CHECK_TDZ:
+                return "CHECK_TDZ";
             case GET:
                 return "GET";
             case SET:

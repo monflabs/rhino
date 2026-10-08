@@ -1314,6 +1314,22 @@ class BodyCodegen {
                 Codegen.pushUndefined(cfw);
                 break;
 
+            case Token.TDZ_SENTINEL:
+                cfw.add(
+                        ByteCode.GETSTATIC,
+                        "org/monflabs/mozilla/javascript/UniqueTag",
+                        "UNINITIALIZED",
+                        "Lorg/monflabs/mozilla/javascript/UniqueTag;");
+                break;
+
+            case Token.CHECK_TDZ:
+                generateExpression(child, node);
+                cfw.addPush(node.getString());
+                addScriptRuntimeInvoke(
+                        "checkInitialized",
+                        "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;");
+                break;
+
             case Token.TYPEOF:
                 generateExpression(child, node);
                 addScriptRuntimeInvoke("typeof", "(Ljava/lang/Object;" + ")Ljava/lang/String;");

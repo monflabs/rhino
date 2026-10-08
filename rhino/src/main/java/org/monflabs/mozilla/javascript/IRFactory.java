@@ -612,6 +612,18 @@ public final class IRFactory {
             AstNode iter = loop.getIterator();
             if (iter instanceof VariableDeclaration) {
                 declType = iter.getType();
+                if (declType == Token.LET || declType == Token.CONST) {
+                    // the binding is in its temporal dead zone while the iterated object is
+                    // evaluated: for (let x of x) is a ReferenceError
+                    for (VariableInitializer vi : ((VariableDeclaration) iter).getVariables()) {
+                        if (vi.getTarget() instanceof Name) {
+                            Symbol symbol = loop.getSymbol(((Name) vi.getTarget()).getIdentifier());
+                            if (symbol != null) {
+                                symbol.setNode(loop.getIteratedObject());
+                            }
+                        }
+                    }
+                }
             }
             Node lhs = transform(iter);
             Node obj = transform(loop.getIteratedObject());

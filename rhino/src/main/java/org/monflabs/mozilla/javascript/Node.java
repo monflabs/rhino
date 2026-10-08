@@ -70,7 +70,10 @@ public class Node implements Iterable<Node> {
             SUPER_PROPERTY_ACCESS = 31,
             NUMBER_OF_SPREAD = 32,
             OBJECT_REST_PROP = 33, // marks a CALL node as object rest operation
-            LAST_PROP = OBJECT_REST_PROP,
+            TDZ_DECLARATION_PROP = 34, // SETNAME initializing a let/const at its declaration
+            TDZ_CHECKED_PROP = 35, // name reference already classified for the TDZ
+            LEXICAL_PROP = 36, // NAME of a block scope that is a let/const binding
+            LAST_PROP = LEXICAL_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     // values of ISNUMBER_PROP to specify
@@ -459,6 +462,12 @@ public class Node implements Iterable<Node> {
                 return "number_of_spread";
             case OBJECT_REST_PROP:
                 return "object_rest_prop";
+            case TDZ_DECLARATION_PROP:
+                return "tdz_declaration_prop";
+            case TDZ_CHECKED_PROP:
+                return "tdz_checked_prop";
+            case LEXICAL_PROP:
+                return "lexical_prop";
 
             default:
                 Kit.codeBug();

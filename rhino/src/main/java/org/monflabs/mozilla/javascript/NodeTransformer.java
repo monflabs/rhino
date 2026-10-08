@@ -10,13 +10,19 @@ import static org.monflabs.mozilla.javascript.Context.reportError;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
+import org.monflabs.mozilla.javascript.ast.AstNode;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.ast.SwitchStatement;
+import org.monflabs.mozilla.javascript.ast.Symbol;
 
 /**
  * This class transforms a tree to a lower-level representation for codegen.
@@ -40,6 +46,7 @@ public class NodeTransformer {
         if ((env.getLanguageVersion() >= Context.VERSION_ES6) && tree.isInStrictMode()) {
             useStrictMode = true;
         }
+        tdz = env.isLatestEcmaScript();
         transformCompilationUnit(tree, useStrictMode);
         for (int i = 0; i != tree.getFunctionCount(); ++i) {
             FunctionNode fn = tree.getFunctionNode(i);
@@ -58,6 +65,9 @@ public class NodeTransformer {
         boolean createScopeObjects =
                 tree.getType() != Token.FUNCTION || ((FunctionNode) tree).requiresActivation();
         tree.flattenSymbolTable(!createScopeObjects);
+        if (tdz && createScopeObjects && tree.getType() == Token.FUNCTION) {
+            initFunctionLexicalsUninitialized(tree);
+        }
 
         // uncomment to print tree before transformation
         if (Token.printTrees) System.out.println(tree.toStringTree(tree));
@@ -89,20 +99,36 @@ public class NodeTransformer {
                     && (type == Token.BLOCK || type == Token.LOOP || type == Token.ARRAYCOMP)
                     && (node instanceof Scope)) {
                 Scope newScope = (Scope) node;
-                if (newScope.getSymbolTable() != null) {
+                if (newScope.getSymbolTable() != null && wrappedScopes.add(newScope)) {
                     // transform to let statement so we get a with statement
                     // created to contain scoped let variables
                     Node let = new Node(type == Token.ARRAYCOMP ? Token.LETEXPR : Token.LET);
                     Node innerLet = new Node(Token.LET);
                     let.addChildToBack(innerLet);
-                    for (String name : newScope.getSymbolTable().keySet()) {
-                        innerLet.addChildToBack(Node.newString(Token.NAME, name));
+                    for (Symbol symbol : newScope.getSymbolTable().values()) {
+                        Node name = Node.newString(Token.NAME, symbol.getName());
+                        if (tdz && isLexical(symbol) && symbol.getNode() != null) {
+                            // starts in its temporal dead zone, see visitLet
+                            name.putIntProp(Node.LEXICAL_PROP, 1);
+                        }
+                        innerLet.addChildToBack(name);
                     }
-                    newScope.setSymbolTable(null); // so we don't transform again
+                    // the symbol table is kept: references in the block are still resolved
+                    // against it (temporal dead zone)
                     Node oldNode = node;
                     node = replaceCurrent(parent, previous, node, let);
                     type = node.getType();
                     let.addChildToBack(oldNode);
+                }
+            }
+
+            if (tdz && node.getIntProp(Node.TDZ_CHECKED_PROP, 0) == 0) {
+                Node replacement =
+                        checkTemporalDeadZone(
+                                tree, parent, previous, node, scope, createScopeObjects);
+                if (replacement != node) {
+                    node = replacement;
+                    type = node.getType();
                 }
             }
 
@@ -304,7 +330,17 @@ public class NodeTransformer {
                             Node n = cursor;
                             cursor = cursor.getNext();
                             if (n.getType() == Token.NAME) {
-                                if (!n.hasChildren()) continue;
+                                if (!n.hasChildren()) {
+                                    if (type != Token.LET
+                                            || !initializesLet(
+                                                    tree, scope, n, createScopeObjects)) {
+                                        continue;
+                                    }
+                                    // "let x;" initializes x to undefined: it may be in its
+                                    // temporal dead zone, or still hold the value of a previous
+                                    // loop iteration when it lives in a register
+                                    n.addChildToBack(new Node(Token.VOID, Node.newNumber(0.0)));
+                                }
                                 Node init = n.getFirstChild();
                                 n.removeChild(init);
                                 n.setType(Token.BINDNAME);
@@ -315,6 +351,7 @@ public class NodeTransformer {
                                                         : Token.SETNAME,
                                                 n,
                                                 init);
+                                n.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
                             } else {
                                 // May be a destructuring assignment already transformed
                                 // to a LETEXPR
@@ -506,7 +543,10 @@ public class NodeTransformer {
                 list.add(ScriptRuntime.getIndexObject(current.getString()));
                 Node init = current.getFirstChild();
                 if (init == null) {
-                    init = new Node(Token.VOID, Node.newNumber(0.0));
+                    init =
+                            current.getIntProp(Node.LEXICAL_PROP, 0) == 1
+                                    ? new Node(Token.TDZ_SENTINEL)
+                                    : new Node(Token.VOID, Node.newNumber(0.0));
                 }
                 newVars.addChildToBack(init);
             }
@@ -604,6 +644,215 @@ public class NodeTransformer {
             parent.replaceChild(current, replacement);
         }
         return replacement;
+    }
+
+    /** Whether the temporal dead zone is checked: code compiled for VERSION_ECMASCRIPT. */
+    private boolean tdz;
+
+    /** Block scopes already wrapped in a LET for their scope object. */
+    private final Set<Scope> wrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    private static final int TDZ_NONE = 0;
+    private static final int TDZ_RUNTIME = 1;
+    private static final int TDZ_THROW = 2;
+
+    private static boolean isLexical(Symbol symbol) {
+        return symbol.getDeclType() == Symbol.Type.LET || symbol.getDeclType() == Symbol.Type.CONST;
+    }
+
+    // Only bindings declared by a let/const statement (their symbol records the declaration) start
+    // uninitialized: parameters, catch parameters and other desugared bindings are let bindings
+    // too,
+    // but are initialized before their scope's statements run.
+
+    /**
+     * A function's own let/const bindings live in its activation (a NativeCall) and start in their
+     * temporal dead zone (storing the marker in a const leaves it to be initialized).
+     */
+    private void initFunctionLexicalsUninitialized(ScriptNode tree) {
+        if (tree.getSymbolTable() == null) {
+            return;
+        }
+        for (Symbol symbol : tree.getSymbolTable().values()) {
+            // only bindings declared by a let statement of the body: destructured parameters are
+            // also let bindings, but are initialized before the body runs
+            if (isLexical(symbol) && symbol.getNode() != null) {
+                boolean isConst = symbol.getDeclType() == Symbol.Type.CONST;
+                Node set =
+                        new Node(
+                                isConst ? Token.SETCONST : Token.SETNAME,
+                                Node.newString(Token.BINDNAME, symbol.getName()),
+                                new Node(Token.TDZ_SENTINEL));
+                set.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+                // the code generators compile the last child, the function body
+                tree.getLastChild().addChildToFront(new Node(Token.EXPR_VOID, set));
+            }
+        }
+    }
+
+    /**
+     * Whether "let x;" must store undefined: always for code compiled for VERSION_ECMASCRIPT (the
+     * binding is uninitialized until then), and for bindings in registers, which keep the value of
+     * a previous loop iteration. A script's own let bindings (global code) are left alone.
+     */
+    private boolean initializesLet(
+            ScriptNode tree, Scope scope, Node name, boolean createScopeObjects) {
+        if (!tdz && createScopeObjects) {
+            return false;
+        }
+        Scope defining = scope.getDefiningScope(name.getString());
+        return !(tree.getType() == Token.SCRIPT && defining == tree);
+    }
+
+    /**
+     * Classifies a reference to a let/const binding for its temporal dead zone (code compiled for
+     * VERSION_ECMASCRIPT): TDZ_THROW when it is in the same function, textually before the end of
+     * the declaration (each execution of it is in the dead zone); TDZ_RUNTIME when it can only be
+     * known at runtime (from a closure, in a with statement, or across switch cases); TDZ_NONE
+     * otherwise. Runtime reads are checked by the name lookups (ScriptRuntime.checkInitialized);
+     * only runtime writes need an explicit check. Bindings in registers never hold the sentinel.
+     */
+    private int classifyTdz(
+            ScriptNode tree, Node reference, Scope scope, boolean createScopeObjects) {
+        if (!(reference instanceof Name)) {
+            return TDZ_NONE; // a name created by the compiler
+        }
+        String name = reference.getString();
+        Scope defining = scope.getDefiningScope(name);
+        if (defining == null) {
+            // scope chains stop at the function: a binding of an enclosing function is found
+            // through the syntax tree
+            defining = enclosingDefiningScope((Name) reference, name);
+            if (defining == null) {
+                return TDZ_NONE;
+            }
+        }
+        Symbol symbol = defining.getSymbol(name);
+        if (symbol == null || !isLexical(symbol)) {
+            return TDZ_NONE;
+        }
+        ScriptNode top = defining instanceof ScriptNode ? (ScriptNode) defining : defining.getTop();
+        if (top.getType() == Token.SCRIPT && defining == top) {
+            return TDZ_NONE; // global lexical bindings live on the global object for now
+        }
+        boolean inWith = false;
+        for (Node loop : loops) {
+            inWith |= loop.getType() == Token.WITH;
+        }
+        if (top != tree || inWith) {
+            return TDZ_RUNTIME;
+        }
+        if (!(symbol.getNode() instanceof AstNode)
+                || !isInSyntaxTree((AstNode) symbol.getNode())
+                || !isInSyntaxTree((Name) reference)) {
+            // no reliable position (e.g. a name the IR factory created for a desugaring)
+            return createScopeObjects ? TDZ_RUNTIME : TDZ_NONE;
+        }
+        AstNode declaration = (AstNode) symbol.getNode();
+        int end = declaration.getAbsolutePosition() + declaration.getLength();
+        if (((Name) reference).getAbsolutePosition() < end) {
+            return TDZ_THROW;
+        }
+        if (defining instanceof SwitchStatement) {
+            return createScopeObjects ? TDZ_RUNTIME : TDZ_NONE;
+        }
+        return TDZ_NONE;
+    }
+
+    /** Whether the node is attached to its script's syntax tree, so its position is meaningful. */
+    private static boolean isInSyntaxTree(AstNode node) {
+        AstNode n = node;
+        while (n.getParent() != null) {
+            n = n.getParent();
+        }
+        return n instanceof ScriptNode && node.getPosition() >= 0;
+    }
+
+    private static Scope enclosingDefiningScope(Name reference, String name) {
+        for (AstNode node = reference.getParent(); node != null; node = node.getParent()) {
+            if (node instanceof Scope) {
+                Scope found = ((Scope) node).getDefiningScope(name);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * An expression that throws the ReferenceError for name, see ScriptRuntime#checkInitialized.
+     */
+    private static Node tdzError(String name) {
+        Node check = Node.newString(Token.CHECK_TDZ, name);
+        check.addChildToBack(new Node(Token.TDZ_SENTINEL));
+        return check;
+    }
+
+    /**
+     * Applies the temporal dead zone rules to a name reference; returns its replacement, if any.
+     */
+    private Node checkTemporalDeadZone(
+            ScriptNode tree,
+            Node parent,
+            Node previous,
+            Node node,
+            Scope scope,
+            boolean createScopeObjects) {
+        switch (node.getType()) {
+            case Token.NAME:
+            case Token.TYPEOFNAME:
+                // a read: a runtime check is done by the name lookup itself
+                if (classifyTdz(tree, node, scope, createScopeObjects) == TDZ_THROW) {
+                    return replaceCurrent(parent, previous, node, tdzError(node.getString()));
+                }
+                return node;
+            case Token.INC:
+            case Token.DEC:
+                {
+                    Node target = node.getFirstChild();
+                    if (target.getType() == Token.NAME
+                            && classifyTdz(tree, target, scope, createScopeObjects) == TDZ_THROW) {
+                        return replaceCurrent(parent, previous, node, tdzError(target.getString()));
+                    }
+                    target.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+                    return node;
+                }
+            case Token.SETNAME:
+            case Token.STRICT_SETNAME:
+                {
+                    if (node.getIntProp(Node.TDZ_DECLARATION_PROP, 0) == 1) {
+                        return node;
+                    }
+                    Node target = node.getFirstChild();
+                    int kind = classifyTdz(tree, target, scope, createScopeObjects);
+                    if (kind == TDZ_THROW) {
+                        // the value is evaluated, then storing it throws
+                        Node value = target.getNext();
+                        node.removeChild(value);
+                        return replaceCurrent(
+                                parent,
+                                previous,
+                                node,
+                                new Node(Token.COMMA, value, tdzError(target.getString())));
+                    }
+                    if (kind == TDZ_RUNTIME) {
+                        Node read = Node.newString(Token.NAME, target.getString());
+                        read.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+                        node.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+                        Node check = Node.newString(Token.CHECK_TDZ, target.getString());
+                        check.addChildToBack(read);
+                        Node comma = new Node(Token.COMMA);
+                        Node result = replaceCurrent(parent, previous, node, comma);
+                        comma.addChildToBack(check);
+                        comma.addChildToBack(node);
+                        return result;
+                    }
+                    return node;
+                }
+            default:
+                return node;
+        }
     }
 
     private Deque<Node> loops;

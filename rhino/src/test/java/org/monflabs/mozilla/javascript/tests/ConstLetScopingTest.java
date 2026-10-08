@@ -214,6 +214,64 @@ class ConstLetScopingTest {
                 true, true, "undefined = 1; NaN = 2; undefined === void 0 && isNaN(NaN)");
     }
 
+    // --- temporal dead zone: ReferenceError under VERSION_ECMASCRIPT, unchanged under VERSION_ES6
+    // ---
+
+    private static void assertTdz(String body) {
+        Utils.assertGatedBehavior(
+                "no TDZ",
+                "ReferenceError",
+                "(function () { try { "
+                        + body
+                        + " } catch (e) { return e.name; } return 'no TDZ'; })()");
+    }
+
+    @Test
+    void tdzInTheSameFunction() {
+        assertTdz("x; let x = 1;");
+        assertTdz("typeof x; let x = 1;");
+        assertTdz("let x = x;");
+        assertTdz("x = 2; let x = 1;");
+        assertTdz("x++; let x = 1;");
+        assertTdz("{ y; let y = 1; }");
+        assertTdz("c; const c = 1;");
+    }
+
+    @Test
+    void tdzInAForOfHead() {
+        // VERSION_ES6 already throws here (a TypeError: the inner a is undefined)
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError",
+                "(function () { var a = [1]; try { for (let a of a) {} } catch (e) { return e.name; } })()");
+    }
+
+    @Test
+    void tdzThroughAClosure() {
+        assertTdz("function f() { return x; } f(); let x = 1;");
+        assertTdz("function f() { x = 3; } f(); let x = 1;");
+        assertTdz("function f() { x++; } f(); let x = 1;");
+        assertTdz("function f() { return typeof x; } f(); let x = 1;");
+        assertTdz("function f() { return c; } f(); const c = 1;");
+        assertTdz("{ let f = function () { return y; }; f(); let y = 1; }");
+    }
+
+    @Test
+    void noTdzOnceInitialized() {
+        Utils.assertGatedBehavior(
+                3.0,
+                3.0,
+                "(function () { let x = 1; function f() { return x; } { let y = 2; x += y; } return f(); })()");
+    }
+
+    @Test
+    void letWithoutInitializerIsUndefinedOnEachIteration() {
+        Utils.assertGatedBehavior(
+                "1,",
+                "1,",
+                "(function () { var r = []; for (var i = 0; i < 2; i++) { let x; if (i == 0) x = 1;"
+                        + " r.push(x); } return r.join(); })()");
+    }
+
     // --- single-statement const/let errors in ES6 ---
 
     @Test

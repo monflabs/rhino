@@ -777,6 +777,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.SPREAD] = new DoSpread();
         instructionObjs[base + Icode.OBJECT_REST] = new DoObjectRest();
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
+        instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
+        instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
         instructionObjs[base + Icode.CLOSURE_STMT] = new DoClosureStatement();
@@ -3428,6 +3430,22 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             frame.scope = ScriptRuntime.copyScope(frame.scope);
+            return null;
+        }
+    }
+
+    private static class DoTdzSentinel extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[++frame.stackTop] = UniqueTag.UNINITIALIZED;
+            return null;
+        }
+    }
+
+    private static class DoCheckTdz extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            ScriptRuntime.checkInitialized(frame.stack[frame.stackTop], state.stringReg);
             return null;
         }
     }
