@@ -278,13 +278,18 @@ files, of which destructured parameters go to 1.3, and async/class syntax to the
 - *1.2b (done)* the `arguments` object: rewritten as the spec's arguments exotic object (own data properties plus a
   parameter map); rest parameters give an unmapped `arguments`. Spread arguments in calls are missing from the
   interpreter: added to 1.4.
-- *1.2c* function early errors and parameter scope (duplicate parameters, `eval`/`arguments`/`yield`, `use strict`
-  with non-simple parameters, default-parameter TDZ, separate parameter/body scopes), the `Function` constructor.
+- *1.2c (done)* function early errors: duplicate parameters, `eval`/`arguments` as names, `use strict` with a
+  non-simple list (checked once the body is parsed), strict `eval =`; the `Function` constructor; the `arguments`
+  accessor; rest parameters with a binding pattern; `arguments` in default values. `yield` as an identifier in
+  sloppy code moves to 1.6 (generators); the parameter scope moves to 1.2f.
 - *1.2d* `Function.prototype.toString` (method/accessor source text, built-ins, proxies).
 - *1.2e* `eval` code (early errors, var/lexical conflicts, `this`, global declarations).
+- *1.2f* parameter environments: default-parameter TDZ (`dflt-params-ref-later`), a separate var scope for the body
+  when parameters have expressions (`scope-paramsbody-var-open`), `eval` in parameters, and the immutable binding of a
+  function expression's name (`named-strict-error-reassign-fn-name-in-body`).
 
 **1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
-nested defaults, holes, rest elements; `IteratorClose` on abrupt completion; evaluation order
+nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` binds `y` to the second element), rest elements; `IteratorClose` on abrupt completion; evaluation order
 (`destructuring-binding`, `destructuring-assignment`, `language/expressions/assignment`,
 `language/statements/for-of`).
 
@@ -299,7 +304,8 @@ spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`M
 
 **1.6 Generators completion.** Generator declarations/expressions/methods, `yield*` delegation with
 `return`/`throw` forwarding, `GeneratorPrototype` details, generator objects as iterables; both backends
-(`generators`, `built-ins/Generator*`). Prerequisite for async functions (M3.1) if they are built on the generator
+(`generators`, `built-ins/Generator*`). `yield` as an identifier outside generators in sloppy code
+(`var yield`, from 1.2c). Prerequisite for async functions (M3.1) if they are built on the generator
 machinery (decision at M3.1).
 
 **1.7 Classes (ES2015).** Declarations and expressions, constructors, `extends` (including `null` and expressions),
@@ -473,7 +479,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.1% (1.2a–b)       | (this) |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.3% (1.2a–c)       | (this) |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

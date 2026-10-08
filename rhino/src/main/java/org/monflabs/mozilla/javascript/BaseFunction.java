@@ -654,30 +654,34 @@ public class BaseFunction extends ScriptableObject implements Function {
         return 0;
     }
 
-    private static Object js_protoArgumentsGetter(Scriptable thisObj) {
-        return LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).getArguments();
-    }
-
-    private static void js_protoArgumentsSetter(Scriptable thisObj, Object value) {
-        LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).setArguments(value);
-    }
-
     /**
-     * Function.prototype.caller: a TypeError for strict functions (ECMA-262 forbids exposing their
-     * caller) and for built-ins; undefined for other functions, whose caller is not tracked.
+     * Function.prototype.arguments and caller are a TypeError for strict functions and for
+     * built-ins (ECMA-262 forbids exposing them); only sloppy functions keep the legacy behavior.
      */
-    private static Object js_protoCallerGetter(Scriptable thisObj) {
-        if (thisObj instanceof JSFunction && !((JSFunction) thisObj).isStrict()) {
-            return Undefined.instance;
-        }
-        ScriptRuntime.ThrowTypeError.throwNotAllowed();
-        return null;
-    }
-
-    private static void js_protoCallerSetter(Scriptable thisObj, Object value) {
+    private static void checkSloppyFunction(Scriptable thisObj) {
         if (!(thisObj instanceof JSFunction && !((JSFunction) thisObj).isStrict())) {
             ScriptRuntime.ThrowTypeError.throwNotAllowed();
         }
+    }
+
+    private static Object js_protoArgumentsGetter(Scriptable thisObj) {
+        checkSloppyFunction(thisObj);
+        return ((BaseFunction) thisObj).getArguments();
+    }
+
+    private static void js_protoArgumentsSetter(Scriptable thisObj, Object value) {
+        checkSloppyFunction(thisObj);
+        ((BaseFunction) thisObj).setArguments(value);
+    }
+
+    /** The caller of a sloppy function is not tracked: undefined. */
+    private static Object js_protoCallerGetter(Scriptable thisObj) {
+        checkSloppyFunction(thisObj);
+        return Undefined.instance;
+    }
+
+    private static void js_protoCallerSetter(Scriptable thisObj, Object value) {
+        checkSloppyFunction(thisObj);
     }
 
     public String getFunctionName() {

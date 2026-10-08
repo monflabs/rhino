@@ -237,8 +237,7 @@ public class ArgumentsTest {
                         + "} catch(e) { res += ' ex'; }\n"
                         + "res";
 
-        // Utils.assertWithAllModes_ES6("ex [object Arguments] ex ex", code);
-        Utils.assertWithAllModes_ES6("null [object Arguments] ex null", code);
+        Utils.assertWithAllModes_ES6("ex [object Arguments] ex ex", code);
         Utils.assertWithAllModes_1_8("null [object Arguments] null null", code);
     }
 
@@ -639,11 +638,13 @@ public class ArgumentsTest {
                         + "    res += ' ' + (arguments === test.arguments);\n"
                         + "  } catch(e) { res += ' ex'; }"
                         + "}\n"
-                        + "res += test.arguments;\n"
+                        + "try {\n"
+                        + "  res += test.arguments;\n"
+                        + "} catch(e) { res += 'ex'; }\n"
                         + "test('hello', 'world');\n"
                         + "res";
 
-        Utils.assertWithAllModes_ES6("null ex ex", code);
+        Utils.assertWithAllModes_ES6("ex ex ex", code);
         Utils.assertWithAllModes_1_8("null false false", code);
     }
 

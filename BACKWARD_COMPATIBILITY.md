@@ -196,6 +196,8 @@ Math.max.caller;                                                // before: undef
 - **Why:** `Function.prototype.caller` is a throwing accessor and strict functions have no own `caller` (§10.2.4
   AddRestrictedFunctionProperties, §17.1 Forbidden Extensions). Non-strict functions still answer `undefined`
   (their caller is not tracked). Bound functions no longer have an own throwing `caller` property (the prototype's applies).
+- The `arguments` accessor of `Function.prototype` follows the same rule (plan 1.2c): reading or writing
+  `f.arguments` is a TypeError when `f` is strict or built-in (before: `null` unless the strict function was running).
 
 ### 2.8 Bound functions
 
@@ -223,6 +225,23 @@ g(1);   // before: 2   now: 1 (a rest parameter makes arguments unmapped)
   `arguments` object.
 - **Why:** ECMA-262 2026, §10.4.4 Arguments Exotic Objects and §10.2.11 FunctionDeclarationInstantiation step 18.
 - **Not covered yet:** destructured parameters (plan 1.3) still produce a mapped `arguments` object.
+
+### 2.10 Early errors of parameter lists
+
+```js
+function f(a = 0, a) {}                 // before: accepted   now: SyntaxError (duplicate in a non-simple list)
+function g(a, a) { "use strict"; }      // before: accepted   now: SyntaxError (the body makes it strict)
+({ m(a, a) {} });                       // before: accepted   now: SyntaxError (methods)
+function eval() { "use strict"; }       // before: accepted   now: SyntaxError
+function h([a]) { "use strict"; }       // before: accepted   now: SyntaxError ("use strict" with a pattern)
+new Function("'use strict'; eval = 1"); // before: InternalError   now: SyntaxError
+```
+
+- A `"use strict"` directive applies to the function's own name and parameter list, which are checked once the body
+  is parsed. Duplicate parameter names stay allowed only in a non-strict function (or generator) with a simple
+  parameter list.
+- **Why:** ECMA-262 2026, §15.2.1 (FunctionDeclaration early errors), §15.4.1 (methods: UniqueFormalParameters) and
+  §13.15.1 (strict assignment to `eval`/`arguments`).
 
 ---
 

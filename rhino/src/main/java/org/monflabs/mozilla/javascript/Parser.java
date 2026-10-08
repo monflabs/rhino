@@ -11,6 +11,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -812,6 +813,9 @@ public class Parser {
                                     if (fnNode.hasRestParameter()) {
                                         reportError("msg.rest.param.use.strict");
                                     }
+                                    if (fnNode.getProp(Node.DESTRUCTURING_PARAMS) != null) {
+                                        reportError("msg.destruct.param.use.strict");
+                                    }
                                     inUseStrictDirective = true;
                                     fnNode.setInStrictMode(true);
                                 }
@@ -857,7 +861,6 @@ public class Parser {
             Map<String, Node> destructuring = null;
             Map<String, AstNode> destructuringDefault = null;
 
-            Set<String> paramNames = new HashSet<>();
             do {
                 int tt = peekToken();
                 if (tt == Token.RP) {
@@ -877,7 +880,7 @@ public class Parser {
 
                     AstNode expr = destructuringAssignExpr();
                     if (destructuring == null) {
-                        destructuring = new HashMap<>();
+                        destructuring = new LinkedHashMap<>();
                     }
 
                     if (expr instanceof Assignment) {
@@ -929,6 +932,20 @@ public class Parser {
                         consumeToken();
                         restStartLineno = lineNumber();
                         restStartColumn = columnNumber();
+                        int next = peekToken();
+                        if (next == Token.LB || next == Token.LC) {
+                            // a binding pattern as rest element: function f(...[a, b])
+                            AstNode pattern = destructuringPrimaryExpr();
+                            markDestructuring(pattern);
+                            fnNode.addParam(pattern);
+                            String pname = currentScriptOrFn.getNextTempName();
+                            defineSymbol(Token.LP, pname, false);
+                            if (destructuring == null) {
+                                destructuring = new LinkedHashMap<>();
+                            }
+                            destructuring.put(pname, pattern);
+                            continue;
+                        }
                     }
 
                     if (matchToken(Token.UNDEFINED, true)
@@ -955,9 +972,6 @@ public class Parser {
                             if ("eval".equals(paramName) || "arguments".equals(paramName)) {
                                 reportError("msg.bad.id.strict", paramName);
                             }
-                            if (paramNames.contains(paramName))
-                                addError("msg.dup.param.strict", paramName);
-                            paramNames.add(paramName);
                         }
 
                         if (matchToken(Token.ASSIGN, true)) {
@@ -1082,6 +1096,7 @@ public class Parser {
             parseFunctionParams(fnNode);
             AstNode body = parseFunctionBody(type, fnNode);
             fnNode.setBody(body);
+            checkParamsAfterBody(fnNode, isMethodDefiniton);
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);
@@ -1158,7 +1173,7 @@ public class Parser {
 
         // Would prefer not to call createDestructuringAssignment until codegen,
         // but the symbol definitions have to happen now, before body is parsed.
-        Map<String, Node> destructuring = new HashMap<>();
+        Map<String, Node> destructuring = new LinkedHashMap<>();
         Map<String, AstNode> destructuringDefault = new HashMap<>();
         Set<String> paramNames = new HashSet<>();
 
@@ -1205,6 +1220,7 @@ public class Parser {
 
             AstNode body = parseFunctionBody(FunctionNode.ARROW_FUNCTION, fnNode);
             fnNode.setBody(body);
+            checkParamsAfterBody(fnNode, false);
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);
@@ -1320,6 +1336,13 @@ public class Parser {
                         reportError("msg.bad.id.strict", paramName);
                     }
                 }
+            } else if (restParam instanceof ArrayLiteral || restParam instanceof ObjectLiteral) {
+                markDestructuring(restParam);
+                fnNode.addParam(restParam);
+                String pname = currentScriptOrFn.getNextTempName();
+                defineSymbol(Token.LP, pname, false);
+                destructuring.put(pname, restParam);
+                collectDestructuringNames(restParam, paramNames);
             } else {
                 reportError("msg.no.parm", restParam.getPosition(), restParam.getLength());
                 fnNode.addParam(makeErrorNode());
@@ -1327,6 +1350,67 @@ public class Parser {
         } else {
             reportError("msg.no.parm", params.getPosition(), params.getLength());
             fnNode.addParam(makeErrorNode());
+        }
+    }
+
+    /**
+     * The early errors of a parameter list that a "use strict" body can trigger after the fact:
+     * eval or arguments as a binding name, and duplicate parameters. Duplicates are also an error
+     * in methods and with a non-simple list (ECMA-262 15.2.1); arrow functions check them while
+     * parsing their parameters.
+     */
+    private void checkParamsAfterBody(FunctionNode fnNode, boolean isMethod) {
+        boolean strict = inUseStrictDirective || fnNode.isInStrictMode();
+        boolean simple =
+                fnNode.getDefaultParams() == null
+                        && !fnNode.hasRestParameter()
+                        && fnNode.getProp(Node.DESTRUCTURING_PARAMS) == null;
+        boolean checkDuplicates =
+                fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION
+                        && (strict || isMethod || !simple);
+        if (!strict && !checkDuplicates) {
+            return;
+        }
+        List<String> names = new ArrayList<>();
+        if (strict && fnNode.getFunctionName() != null) {
+            names.add(fnNode.getFunctionName().getIdentifier());
+        }
+        int firstParam = names.size();
+        for (AstNode param : fnNode.getParams()) {
+            collectBoundNames(param, names);
+        }
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < names.size(); i++) {
+            String name = names.get(i);
+            if (strict && ("eval".equals(name) || "arguments".equals(name))) {
+                reportError("msg.bad.id.strict", name);
+            }
+            if (i >= firstParam && checkDuplicates && !seen.add(name)) {
+                reportError("msg.dup.param.strict", name);
+            }
+        }
+    }
+
+    private static void collectBoundNames(AstNode pattern, List<String> names) {
+        if (pattern instanceof Name) {
+            names.add(((Name) pattern).getIdentifier());
+        } else if (pattern instanceof ArrayLiteral) {
+            for (AstNode elem : ((ArrayLiteral) pattern).getElements()) {
+                collectBoundNames(
+                        elem instanceof Spread ? ((Spread) elem).getExpression() : elem, names);
+            }
+        } else if (pattern instanceof ObjectLiteral) {
+            for (AbstractObjectProperty prop : ((ObjectLiteral) pattern).getElements()) {
+                if (prop instanceof ObjectProperty) {
+                    collectBoundNames(((ObjectProperty) prop).getValue(), names);
+                } else if (prop instanceof SpreadObjectProperty) {
+                    collectBoundNames(((SpreadObjectProperty) prop).getSpreadNode(), names);
+                }
+            }
+        } else if (pattern instanceof Assignment) {
+            collectBoundNames(((Assignment) pattern).getLeft(), names);
+        } else if (pattern instanceof Spread) {
+            collectBoundNames(((Spread) pattern).getExpression(), names);
         }
     }
 
@@ -3036,6 +3120,12 @@ public class Parser {
             int opPos = ts.tokenBeg;
             if (isNotValidSimpleAssignmentTarget(pn))
                 reportError("msg.syntax.invalid.assignment.lhs");
+            if (inUseStrictDirective && pn instanceof Name) {
+                String id = ((Name) pn).getIdentifier();
+                if ("eval".equals(id) || "arguments".equals(id)) {
+                    reportError("msg.bad.id.strict", id);
+                }
+            }
 
             pn = new Assignment(tt, pn, assignExpr(), opPos);
 
@@ -4812,7 +4902,11 @@ public class Parser {
             // If there is a usage of "arguments" we need to initialize it. However,
             // we might not be in a function body, because we could be inside a function's
             // default arguments. So, we do this check first, before the "insideFunctionBody"
-            ((FunctionNode) currentScriptOrFn).setRequiresArgumentObject();
+            FunctionNode fn = (FunctionNode) currentScriptOrFn;
+            fn.setRequiresArgumentObject();
+            if (insideFunctionParams() && fn.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+                fn.setRequiresActivation();
+            }
         }
 
         if (!insideFunctionBody()) {

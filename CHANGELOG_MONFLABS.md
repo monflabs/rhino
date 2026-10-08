@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Function early errors (2026-10-08, plan 1.2c)
+
+All versions (simplest; `BACKWARD_COMPATIBILITY.md` 2.7 and 2.10):
+
+- The parameter list is checked once the body is parsed (`Parser.checkParamsAfterBody`), so a `"use strict"` body
+  applies to it: `eval`/`arguments` as the function's name or a parameter, and duplicate parameters, are SyntaxErrors.
+  Duplicates are also rejected in methods and with a non-simple list (defaults, rest, patterns).
+- `"use strict"` with a destructured parameter is a SyntaxError; a strict `eval = …` / `arguments = …` is reported by
+  the parser (a SyntaxError, also from the `Function` constructor, instead of an `InternalError`).
+- `Function.prototype.arguments`: a TypeError for strict functions and built-ins, like `caller`.
+- Rest parameters with a binding pattern (`...[a, b]`, `...{length}`), in functions and arrows; destructured
+  parameters are bound left to right.
+- `arguments` used only in a default value is available.
+- test262: 83 more files pass (`language/statements|expressions/function`, `arrow-function`, `built-ins/Function`,
+  `rest-parameters`); 24,861 of 42,616 in-scope files (58.3%).
+- Left for 1.2f: default-parameter TDZ, the separate body scope, `eval` in parameters, the immutable name of a
+  function expression. Left for 1.6: `yield` as an identifier in sloppy code.
+
 ### The arguments object (2026-10-08, plan 1.2b)
 
 All versions (simplest; `BACKWARD_COMPATIBILITY.md` 2.9):
