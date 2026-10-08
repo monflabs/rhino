@@ -5,10 +5,11 @@ This fork of Rhino (`org.monflabs.mozilla`) moves the engine toward ECMAScript 2
 differently from **stock Rhino 1.9.0**, so that upgrading is a deliberate, informed step. It is updated with each
 change; [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) has the full history.
 
-The rule (see `AGENTS.md`): a spec behavior that can break existing code is only enabled under the language version
-`Context.VERSION_ECMASCRIPT` (`cx.setLanguageVersion(Context.VERSION_ECMASCRIPT)`, or `-version 250` in the shell).
-The default, `Context.VERSION_ES6`, keeps the previous behavior, except for the bug fixes in section 2, which were
-decided to apply to every version.
+The target is the language version `Context.VERSION_ECMASCRIPT` (`cx.setLanguageVersion(Context.VERSION_ECMASCRIPT)`,
+or `-version 250` in the shell). The plan is to eventually remove the language versions and always behave that way;
+until then, a change incompatible with `VERSION_ES6` behavior is either only active under `VERSION_ECMASCRIPT`
+(section 1) or applied to every version (section 2), whichever was easier to implement. Everything in sections 1 and
+2 is what `VERSION_ES6` code may notice; section 3 lists platform and API changes.
 
 | # | Change | Applies to | Since |
 |---|--------|-----------|-------|
@@ -103,9 +104,9 @@ const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxEr
 
 ## 2. Changes that also apply to `VERSION_ES6`
 
-These fix behavior that contradicted the ECMAScript 2015 specification and every other engine, in code that only
-exists since `let`/`const` (decided 2026-10-07: the old results were plain bugs that no code can sensibly rely on).
-Code compiled for a version before `VERSION_ES6` (JavaScript 1.x) keeps the old behavior.
+These fix behavior that contradicted the ECMAScript specification and every other engine; they apply to every
+version from `VERSION_ES6`. Code compiled for a version before `VERSION_ES6` (JavaScript 1.x) keeps the old behavior
+unless stated otherwise.
 
 ### 2.1 `const` in a loop body takes each iteration's value
 

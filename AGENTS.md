@@ -66,20 +66,15 @@ Builtins such as `Object` or `Array` are implemented in
 The goal is to update Rhino to support the latest ECMAScript standard **without breaking existing code**. The following
 constraints apply to every change made toward that goal:
 
-- **Backward compatibility by default.** Existing scripts and embeddings must keep working unchanged under the default
-  language version (`Context.VERSION_ES6`) and older versions. New spec features that cannot break existing code may be
-  enabled for these versions.
-- **Breaking changes are gated by `Context.VERSION_ECMASCRIPT`.** This language version always represents the latest
-  ECMAScript standard. Any behavior change that can break existing code (e.g. stricter early errors,
-  `const`/strict-mode enforcement, changed semantics of legacy extensions, removed non-standard behavior) must only be
-  active when the language version is `VERSION_ECMASCRIPT`, and must be disabled otherwise. Gate on it with
-  `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors (so that
-  `grep isLatestEcmaScript` lists every gated behavior), rather than introducing ad-hoc flags. Test both sides with
+- **`VERSION_ECMASCRIPT` is the target.** The ultimate goal is to remove the language versions and always behave as
+  `Context.VERSION_ECMASCRIPT` (plan milestone M15). Until then, a behavior change that can break existing code is
+  either gated (only active under `VERSION_ECMASCRIPT`) or applied to every version, whichever is easier to implement.
+  Gate with `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors
+  (so that `grep isLatestEcmaScript` lists every gated behavior), rather than ad-hoc flags, and test both sides with
   `Utils.assertGatedBehavior`.
-- **Document every breaking change** in [BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md): every change that
-  makes code or an embedding behave differently from stock Rhino, whether gated by `VERSION_ECMASCRIPT` (section 1)
-  or applied to `VERSION_ES6` too after a decision (section 2), with a before/after example, the spec section, and
-  how to keep the old behavior. Gated changes are also listed under "Behavior changes" in the Javadoc of
+- **Document every breaking change** in [BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md): every change whose
+  result differs from `VERSION_ES6` behavior, whether gated by `VERSION_ECMASCRIPT` (section 1) or applied to every
+  version (section 2), with a before/after example and the spec section. Gated changes are also listed under "Behavior changes" in the Javadoc of
   `Context.VERSION_ECMASCRIPT`, and every change gets a [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) entry.
 - **test262 is the conformance target.** With `VERSION_ECMASCRIPT`, the engine must pass the full test262 suite. The
   suite already runs with this version (see `Test262SuiteTest`). When a change makes more tests pass, update

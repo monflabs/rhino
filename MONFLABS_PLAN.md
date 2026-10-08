@@ -31,6 +31,8 @@ existing code and without slowing the engine down.
 | 2026-10-07 | 1.1: top-level `let`/`const` in a separate declarative scope with cross-script redeclaration checks (like Nashorn's `Global.LexicalScope`) — **`VERSION_ECMASCRIPT` only**. |
 | 2026-10-07 | 0.4 and the 1.1 loop fixes were committed **before the perf gate ran** (a stuck Time Machine backup blocked it); the gate is run on them together as soon as the machine is idle, and any regression is fixed in a follow-up. |
 | 2026-10-07 | Every change that makes code or an embedding behave differently from stock Rhino (gated or not) is documented in **`BACKWARD_COMPATIBILITY.md`**. |
+| 2026-10-08 | **Ultimate goal: remove the language versions and always behave as `VERSION_ECMASCRIPT`** (M15). Until then, each change is gated or applied to all versions, whichever is easier, without asking; every change incompatible with `VERSION_ES6` behavior is still logged in `BACKWARD_COMPATIBILITY.md`. |
+| 2026-10-08 | 1.2: `typeof this` in a strict function called without a receiver is `"undefined"` — all versions. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -57,16 +59,14 @@ and documented, as Nashorn does for Unicode 17.
 
 These restate and extend the constraints in `AGENTS.md`.
 
-1. **No breaking change outside `VERSION_ECMASCRIPT`.** A new feature that cannot change the behavior of existing
-   code (new syntax that was a `SyntaxError`, a new built-in) is enabled for `VERSION_ES6` too. Anything that can
-   change the result of existing code (stricter early errors, TDZ, `const` enforcement, block-function semantics,
-   enumeration order, `Function.prototype.toString` output, removed legacy behavior, …) is active only under
-   `VERSION_ECMASCRIPT`, documented in `BACKWARD_COMPATIBILITY.md` (before/after example, spec section, how to keep
-   the old behavior), in `CHANGELOG_MONFLABS.md`, and named in the Javadoc of `Context.VERSION_ECMASCRIPT`. A change
-   decided to apply to `VERSION_ES6` too (a plain bug fix) is documented in `BACKWARD_COMPATIBILITY.md` as well.
-   When it is unclear whether a change is breaking, ask (it is a decision). Gated code
-   tests `cx.isLatestEcmaScript()` (runtime) or `compilerEnv.isLatestEcmaScript()` (syntax, early errors), and its
-   unit tests use `Utils.assertGatedBehavior(es6Result, ecmaResult, script)`.
+1. **`VERSION_ECMASCRIPT` is the target; the gate is a convenience.** The ultimate goal (decided 2026-10-08) is to
+   remove the language versions and always behave as `VERSION_ECMASCRIPT` (milestone M15). So what happens under the
+   other versions does not matter in the end: for each change, pick the **easiest** implementation, either gated
+   (`cx.isLatestEcmaScript()` at runtime, `compilerEnv.isLatestEcmaScript()` for syntax and early errors, tested
+   with `Utils.assertGatedBehavior`) or applied to every version. No decision needs to be asked for that choice.
+   Every change whose result differs from `VERSION_ES6` behavior, gated or not, is documented in
+   `BACKWARD_COMPATIBILITY.md` (before/after example, spec section) and `CHANGELOG_MONFLABS.md`; gated ones are also
+   named in the Javadoc of `Context.VERSION_ECMASCRIPT`.
 2. **Both backends.** Every language feature works in the interpreter (`CodeGenerator`/`Interpreter`) and in compiled
    mode (`Codegen`). test262 runs both; a milestone is not done until both pass.
 3. **test262 is the acceptance test.** Each feature is validated by its test262 slice (strict and sloppy, interpreted
@@ -89,9 +89,9 @@ These restate and extend the constraints in `AGENTS.md`.
 
 - [ ] Spec sections read in the ES2026 PDF; Nashorn implementation reviewed for approach and pitfalls.
 - [ ] Implemented in parser/IR as needed, and in **both** backends.
-- [ ] Breaking aspects identified and gated by `VERSION_ECMASCRIPT` via `isLatestEcmaScript()` (decision asked if
-      unclear), listed in the `VERSION_ECMASCRIPT` Javadoc, tested with `Utils.assertGatedBehavior`.
-- [ ] Every behavior change compared to stock Rhino (gated or not) documented in `BACKWARD_COMPATIBILITY.md`.
+- [ ] Behavior changes compared to `VERSION_ES6` identified; each one gated or applied to all versions, whichever is
+      easier; gated ones listed in the `VERSION_ECMASCRIPT` Javadoc and tested with `Utils.assertGatedBehavior`.
+- [ ] Every behavior change compared to `VERSION_ES6` (gated or not) documented in `BACKWARD_COMPATIBILITY.md`.
 - [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
 - [ ] `test262.properties` regenerated on the reference JDK (`RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test
       --tests '*Test262SuiteTest' -DupdateTest262properties`), diff reviewed: only removals, or justified moves.
@@ -428,6 +428,13 @@ Walk the remaining entries of `test262.properties` area by area (`annexB`, `buil
 decisions. Each remaining exception gets a recorded reason in a `doc/CONFORMANCE_MONFLABS.md` (mirrors Nashorn's
 `doc/CONFORMANCE.md`). Then decide whether to flip Rhino's default to stricter test262 expectations.
 
+### M15 — A single language version
+
+Remove the version distinction: the engine always behaves as `VERSION_ECMASCRIPT`. Remove the `isLatestEcmaScript()`
+gates (keeping the `VERSION_ECMASCRIPT` side), make `VERSION_ECMASCRIPT` the default and then the only behavior of
+the ES6+ versions, decide what remains of the JavaScript 1.x versions (a decision when reached), and update
+`BACKWARD_COMPATIBILITY.md` (everything listed there then applies to every embedding).
+
 ### M14 — Performance (continuous, with a final dedicated pass)
 
 Optimizations found along the way are done when obvious and measured. A final pass profiles the V8/SunSpider/perf-gate
@@ -479,3 +486,4 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 12.x | ES2026                                          | todo        |                              |        |
 | 13   | Long tail to zero                               | todo        |                              |        |
 | 14   | Performance pass                                | continuous  |                              |        |
+| 15   | Single language version                         | todo        |                              |        |
