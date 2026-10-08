@@ -275,7 +275,9 @@ because tests depend on it) — *gating* of the `toString` format is a decision.
 Split into separately committed steps (2026-10-08, from a test262 run of the function directories: 621 failing
 files, of which destructured parameters go to 1.3, and async/class syntax to their items):
 - *1.2a (done)* strict function semantics: `this` without a receiver and through `call`/`apply`, `caller`, `bind`.
-- *1.2b* the `arguments` object (mapped arguments with non-writable/non-configurable properties, trailing commas).
+- *1.2b (done)* the `arguments` object: rewritten as the spec's arguments exotic object (own data properties plus a
+  parameter map); rest parameters give an unmapped `arguments`. Spread arguments in calls are missing from the
+  interpreter: added to 1.4.
 - *1.2c* function early errors and parameter scope (duplicate parameters, `eval`/`arguments`/`yield`, `use strict`
   with non-simple parameters, default-parameter TDZ, separate parameter/body scopes), the `Function` constructor.
 - *1.2d* `Function.prototype.toString` (method/accessor source text, built-ins, proxies).
@@ -286,7 +288,7 @@ nested defaults, holes, rest elements; `IteratorClose` on abrupt completion; eva
 (`destructuring-binding`, `destructuring-assignment`, `language/expressions/assignment`,
 `language/statements/for-of`).
 
-**1.4 Iteration protocol.** `GetIterator`/`IteratorStep`/`IteratorClose` as shared runtime helpers used by `for-of`,
+**1.4 Iteration protocol.** Spread arguments in calls (`f(...a)`) in the interpreter (`CodeGenerator`/`Interpreter`; compiled mode has them). `GetIterator`/`IteratorStep`/`IteratorClose` as shared runtime helpers used by `for-of`,
 spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`Map`, `Set`, `WeakMap`, `WeakSet`,
 `Promise.all*`, `%TypedArray%.from`). `%IteratorPrototype%`, `%ArrayIteratorPrototype%` etc. (`Symbol.iterator`,
 `for-of`). Perf: fast path for built-in array iteration in `for-of` (Nashorn did the same).
@@ -471,7 +473,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.1% (1.2a)         | (this) |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.1% (1.2a–b)       | (this) |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

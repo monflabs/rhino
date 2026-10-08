@@ -24,6 +24,7 @@ until then, a change incompatible with `VERSION_ES6` behavior is either only act
 | 2.6 | `this` of strict functions: `typeof this` is `"undefined"` without a receiver; `call`/`apply` pass primitives unboxed | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
 | 2.7 | `caller` of strict functions and built-ins throws a TypeError; non-strict functions' `caller` is `undefined` | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
 | 2.8 | Bound functions: `name` from the target's `name` property; `bind()` without a receiver gives a strict target `this === undefined` | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
+| 2.9 | `arguments`: redefining an index follows the spec (attributes, mapping); rest parameters give an unmapped `arguments` | `VERSION_ES6` and later | plan 1.2b, 2026-10-08 |
 | 3.1 | Packages and Maven coordinates renamed | all | 2026-10-07 |
 | 3.2 | Java 21 minimum; Android not supported | all | 2026-10-07 |
 
@@ -206,6 +207,22 @@ t.bind().name;                                   // before: "bound "   now: "bou
 
 - **Why:** §20.2.3.2 Function.prototype.bind reads the target's `name` property when binding, and a bound `this` of
   `undefined` stays `undefined` for a strict target.
+
+### 2.9 The `arguments` object
+
+```js
+function f(x) { Object.defineProperty(arguments, "0", { configurable: false }); x = 7; return arguments[0]; }
+f(1);   // before: the property became non-writable and non-enumerable, and 1   now: 7 (still mapped)
+function g(x, ...rest) { x = 2; return arguments[0]; }
+g(1);   // before: 2   now: 1 (a rest parameter makes arguments unmapped)
+```
+
+- `Object.defineProperty` on an index keeps the attributes it does not mention; making it non-writable or an
+  accessor, or deleting it, ends its link with the parameter (before, some of these threw "Cannot change the value
+  of attribute" or kept the link). Functions with a rest parameter, like those with default values, get an unmapped
+  `arguments` object.
+- **Why:** ECMA-262 2026, §10.4.4 Arguments Exotic Objects and §10.2.11 FunctionDeclarationInstantiation step 18.
+- **Not covered yet:** destructured parameters (plan 1.3) still produce a mapped `arguments` object.
 
 ---
 

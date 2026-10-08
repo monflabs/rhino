@@ -6,6 +6,22 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### The arguments object (2026-10-08, plan 1.2b)
+
+All versions (simplest; `BACKWARD_COMPATIBILITY.md` 2.9):
+
+- `Arguments` follows the spec's arguments exotic object: the indexed values are ordinary own data properties created
+  with the object, and a separate parameter map links each index to its parameter. `[[Get]]`, `[[Set]]`,
+  `[[GetOwnProperty]]`, `[[DefineOwnProperty]]` and `[[Delete]]` follow ECMA-262 10.4.4 (a redefinition keeps the
+  attributes it does not mention; making an index non-writable or an accessor, or deleting it, unmaps it).
+- Functions with a rest parameter get an unmapped `arguments` object.
+- The indexed values stay in the argument array until an index is redefined or deleted (a call with 2^24
+  arguments must not create 2^24 slots); only that index becomes a slot.
+- test262: 30 more files pass (`language/arguments-object`, `rest-parameters`, `built-ins/Object`); 24,778 of
+  42,616 in-scope files (58.1%).
+- Found while testing, left for plan 1.4: spread arguments in calls (`f(...a)`) are not implemented by the
+  interpreter (compiled mode only).
+
 ### Strict function semantics (2026-10-08, plan 1.2a)
 
 All versions (simplest; documented in `BACKWARD_COMPATIBILITY.md` 2.6–2.8):

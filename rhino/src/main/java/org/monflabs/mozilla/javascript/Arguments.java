@@ -29,9 +29,17 @@ class Arguments extends ScriptableObject {
 
     private NativeCall activation;
 
-    // Initially args holds activation.getOriginalArgs(), but any modification
-    // of its elements triggers creation of a copy. If its element holds NOT_FOUND,
-    // it indicates deleted index, in which case super class is queried.
+    /**
+     * The parameter map of a mapped arguments object (ECMA-262 10.4.4): {@code mapped[i]} is true
+     * while {@code arguments[i]} is an alias of parameter i. Only parameters can be mapped, so it
+     * is no longer than the parameter list.
+     */
+    private final boolean[] mapped;
+
+    // The values of the indexed properties that are not slots yet: an index i with args[i] !=
+    // NOT_FOUND is an ordinary writable, enumerable and configurable data property. It becomes a
+    // slot (and NOT_FOUND here) when it is redefined or deleted, so that a call with many arguments
+    // does not create one slot per argument. Initially activation.originalArgs, copied on write.
     private Object[] args;
 
     public Arguments(NativeCall activation, Context cx) {
@@ -43,6 +51,17 @@ class Arguments extends ScriptableObject {
 
         args = activation.originalArgs;
         lengthObj = Integer.valueOf(args.length);
+        boolean[] map = null;
+        int mappable = Math.min(args.length, activation.function.getParamCount());
+        for (int i = 0; i < mappable; i++) {
+            if (isMappedParameter(activation.function, i)) {
+                if (map == null) {
+                    map = new boolean[mappable];
+                }
+                map[i] = true;
+            }
+        }
+        mapped = map;
 
         JSFunction f = activation.function;
         calleeObj = f;
@@ -88,12 +107,39 @@ class Arguments extends ScriptableObject {
         return CLASS_NAME;
     }
 
-    private Object arg(int index) {
-        if (index < 0 || args.length <= index) return NOT_FOUND;
-        return args[index];
+    /**
+     * Whether arguments[index] starts as an alias of a parameter: in a non-strict function with a
+     * simple parameter list, for a parameter not hidden by a later one of the same name.
+     */
+    private static boolean isMappedParameter(JSFunction f, int index) {
+        if (f == null
+                || f.isStrict()
+                || f.hasDefaultParameters()
+                || f.getDescriptor().hasRestArg()) {
+            return false;
+        }
+        int definedCount = f.getParamCount();
+        if (index >= definedCount) {
+            return false;
+        }
+        String argName = f.getParamOrVarName(index);
+        for (int i = index + 1; i < definedCount; i++) {
+            if (argName.equals(f.getParamOrVarName(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    // the following helper methods assume that 0 < index < args.length
+    private boolean isMapped(int index) {
+        return mapped != null && index >= 0 && index < mapped.length && mapped[index];
+    }
+
+    private void unmap(int index) {
+        if (isMapped(index)) {
+            mapped[index] = false;
+        }
+    }
 
     private void putIntoActivation(int index, Object value) {
         String argName = activation.function.getParamOrVarName(index);
@@ -105,85 +151,54 @@ class Arguments extends ScriptableObject {
         return activation.get(argName, activation);
     }
 
-    private void replaceArg(int index, Object value) {
-        if (sharedWithActivation(index)) {
-            putIntoActivation(index, value);
-        }
-        synchronized (this) {
-            if (args == activation.originalArgs) {
-                args = args.clone();
-            }
-            args[index] = value;
-        }
+    private Object arg(int index) {
+        if (index < 0 || args.length <= index) return NOT_FOUND;
+        return args[index];
     }
 
-    private void removeArg(int index) {
-        synchronized (this) {
-            if (args[index] != NOT_FOUND) {
-                if (args == activation.originalArgs) {
-                    args = args.clone();
-                }
-                args[index] = NOT_FOUND;
-            }
+    private synchronized void setArg(int index, Object value) {
+        if (args == activation.originalArgs) {
+            args = args.clone();
         }
+        args[index] = value;
     }
 
-    // end helpers
+    /**
+     * Turns a lazily held indexed property into a slot with the same value (directly in the slot
+     * map: the property already exists, even if the object is no longer extensible).
+     */
+    private void materialize(int index) {
+        Object value = arg(index);
+        if (value != NOT_FOUND) {
+            Slot<Scriptable> slot = getMap().modify(this, null, index, 0);
+            slot.value = isMapped(index) ? getFromActivation(index) : value;
+            setArg(index, NOT_FOUND);
+        }
+    }
 
     @Override
     public boolean has(int index, Scriptable start) {
-        if (arg(index) != NOT_FOUND) {
-            return true;
-        }
-        return super.has(index, start);
+        return arg(index) != NOT_FOUND || super.has(index, start);
     }
 
     @Override
     public Object get(int index, Scriptable start) {
-        final Object value = arg(index);
-        if (value == NOT_FOUND) {
-            return super.get(index, start);
-        }
-        if (sharedWithActivation(index)) {
+        if (isMapped(index)) {
             return getFromActivation(index);
         }
-        return value;
-    }
-
-    private boolean sharedWithActivation(int index) {
-        JSFunction f = activation.function;
-        if (f.isStrict()) {
-            return false;
-        }
-
-        // Check if default arguments are present
-        if (f == null || f.hasDefaultParameters()) {
-            return false;
-        }
-
-        int definedCount = f.getParamCount();
-        if (index < definedCount) {
-            // Check if argument is not hidden by later argument with the same
-            // name as hidden arguments are not shared with activation
-            if (index < definedCount - 1) {
-                String argName = f.getParamOrVarName(index);
-                for (int i = index + 1; i < definedCount; i++) {
-                    if (argName.equals(f.getParamOrVarName(i))) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
-        return false;
+        Object value = arg(index);
+        return value != NOT_FOUND ? value : super.get(index, start);
     }
 
     @Override
     public void put(int index, Scriptable start, Object value) {
-        if (arg(index) == NOT_FOUND) {
-            super.put(index, start, value);
+        if (start == this && isMapped(index)) {
+            putIntoActivation(index, value);
+        }
+        if (start == this && arg(index) != NOT_FOUND) {
+            setArg(index, value);
         } else {
-            replaceArg(index, value);
+            super.put(index, start, value);
         }
     }
 
@@ -199,111 +214,107 @@ class Arguments extends ScriptableObject {
 
     @Override
     public void delete(int index) {
-        if (0 <= index && index < args.length) {
-            removeArg(index);
+        if (arg(index) != NOT_FOUND) {
+            setArg(index, NOT_FOUND);
+            unmap(index);
+            return;
         }
         super.delete(index);
+        if (!super.has(index, this)) {
+            unmap(index);
+        }
     }
 
     @Override
     Object[] getIds(
             CompoundOperationMap<Scriptable> map, boolean getNonEnumerable, boolean getSymbols) {
         Object[] ids = super.getIds(map, getNonEnumerable, getSymbols);
-        if (args.length != 0) {
-            boolean[] present = new boolean[args.length];
-            int extraCount = args.length;
-            for (int i = 0; i != ids.length; ++i) {
-                Object id = ids[i];
-                if (id instanceof Integer) {
-                    int index = ((Integer) id).intValue();
-                    if (0 <= index && index < args.length) {
-                        if (!present[index]) {
-                            present[index] = true;
-                            extraCount--;
-                        }
-                    }
-                }
-            }
-            if (!getNonEnumerable) { // avoid adding args which were redefined to non-enumerable
-                for (int i = 0; i < present.length; i++) {
-                    if (!present[i] && super.has(i, this)) {
-                        present[i] = true;
-                        extraCount--;
-                    }
-                }
-            }
-            if (extraCount != 0) {
-                Object[] tmp = new Object[extraCount + ids.length];
-                System.arraycopy(ids, 0, tmp, extraCount, ids.length);
-                ids = tmp;
-                int offset = 0;
-                for (int i = 0; i != args.length; ++i) {
-                    if (!present[i]) {
-                        ids[offset] = Integer.valueOf(i);
-                        ++offset;
-                    }
-                }
-                if (offset != extraCount) Kit.codeBug();
-            }
+        int lazy = 0;
+        for (Object arg : args) {
+            if (arg != NOT_FOUND) lazy++;
         }
-        return ids;
+        if (lazy == 0) {
+            return ids;
+        }
+        // integer keys in ascending order, then the other keys in their order
+        java.util.TreeSet<Integer> indexes = new java.util.TreeSet<>();
+        java.util.List<Object> others = new java.util.ArrayList<>();
+        for (int i = 0; i < args.length; i++) {
+            if (args[i] != NOT_FOUND) indexes.add(i);
+        }
+        for (Object id : ids) {
+            if (id instanceof Integer) indexes.add((Integer) id);
+            else others.add(id);
+        }
+        Object[] result = new Object[indexes.size() + others.size()];
+        int n = 0;
+        for (Integer index : indexes) result[n++] = index;
+        for (Object other : others) result[n++] = other;
+        return result;
     }
 
     @Override
     protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
-        if (ScriptRuntime.isSymbol(id) || id instanceof Scriptable) {
-            return super.getOwnPropertyDescriptor(cx, id);
-        }
-
-        double d = ScriptRuntime.toNumber(id);
-        int index = (int) d;
-        if (d != index) {
-            return super.getOwnPropertyDescriptor(cx, id);
-        }
+        int index = arrayIndex(id);
         Object value = arg(index);
-        if (value == NOT_FOUND) {
-            return super.getOwnPropertyDescriptor(cx, id);
+        if (value != NOT_FOUND) {
+            return buildDataDescriptor(isMapped(index) ? getFromActivation(index) : value, EMPTY);
         }
-        if (sharedWithActivation(index)) {
-            value = getFromActivation(index);
+        DescriptorInfo desc = super.getOwnPropertyDescriptor(cx, id);
+        if (desc != null && isMapped(index)) {
+            desc.value = getFromActivation(index);
         }
-        if (super.has(index, this)) { // the descriptor has been redefined
-            DescriptorInfo desc = super.getOwnPropertyDescriptor(cx, id);
-            desc.value = value;
-            return desc;
-        }
-        return buildDataDescriptor(value, EMPTY);
+        return desc;
     }
 
     @Override
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
-        super.defineOwnProperty(cx, id, desc, checkValid);
-        if (ScriptRuntime.isSymbol(id)) {
-            return true;
+        int index = arrayIndex(id);
+        materialize(index);
+        if (!isMapped(index)) {
+            return super.defineOwnProperty(cx, id, desc, checkValid);
         }
-
-        double d = ScriptRuntime.toNumber(id);
-        int index = (int) d;
-        if (d != index) return true;
-
-        Object value = arg(index);
-        if (value == NOT_FOUND) return true;
-
+        // ECMA-262 10.4.4.2 [[DefineOwnProperty]] of a mapped arguments object
+        super.put(index, this, getFromActivation(index));
+        DescriptorInfo newDesc = desc;
+        if (!desc.isAccessorDescriptor()
+                && desc.value == NOT_FOUND
+                && Boolean.FALSE.equals(desc.writable)) {
+            newDesc =
+                    new DescriptorInfo(
+                            desc.enumerable,
+                            desc.writable,
+                            desc.configurable,
+                            NOT_FOUND,
+                            NOT_FOUND,
+                            getFromActivation(index));
+        }
+        boolean allowed = super.defineOwnProperty(cx, id, newDesc, checkValid);
+        if (!allowed) {
+            return false;
+        }
         if (desc.isAccessorDescriptor()) {
-            removeArg(index);
-            return true;
-        }
-
-        Object newValue = desc.value;
-        if (newValue == NOT_FOUND) return true;
-
-        replaceArg(index, newValue);
-
-        if (isFalse(desc.writable)) {
-            removeArg(index);
+            unmap(index);
+        } else {
+            if (desc.value != NOT_FOUND) {
+                putIntoActivation(index, desc.value);
+            }
+            if (Boolean.FALSE.equals(desc.writable)) {
+                unmap(index);
+            }
         }
         return true;
+    }
+
+    /** The index named by a property key, or -1. */
+    private static int arrayIndex(Object id) {
+        if (ScriptRuntime.isSymbol(id) || id instanceof Scriptable) {
+            return -1;
+        }
+        double d = ScriptRuntime.toNumber(id);
+        int index = (int) d;
+        return d == index ? index : -1;
     }
 
     static final class ReadonlyArguments extends Arguments {
