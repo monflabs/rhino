@@ -4485,6 +4485,7 @@ public class Parser {
                 if (afterComma != -1) warnTrailingComma(pos, elems, afterComma);
                 break commaLoop;
             }
+            int propStart = ts.tokenBeg;
             AstNode pname = objliteralProperty();
             if (pname == null) {
                 reportError("msg.bad.prop");
@@ -4559,6 +4560,7 @@ public class Parser {
                         ObjectProperty objectProp =
                                 methodDefinition(
                                         ppos,
+                                        propStart,
                                         pname,
                                         entryKind,
                                         pname instanceof GeneratorMethodDefinition,
@@ -4745,9 +4747,16 @@ public class Parser {
     }
 
     private ObjectProperty methodDefinition(
-            int pos, AstNode propName, int entryKind, boolean isGenerator, boolean isShorthand)
+            int pos,
+            int sourceStart,
+            AstNode propName,
+            int entryKind,
+            boolean isGenerator,
+            boolean isShorthand)
             throws IOException {
         FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
+        // the source text of a method starts with its get/set/* prefix and name
+        fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
         // We've already parsed the function name, so fn should be anonymous.
         Name name = fn.getFunctionName();
         if (name != null && name.length() != 0) {

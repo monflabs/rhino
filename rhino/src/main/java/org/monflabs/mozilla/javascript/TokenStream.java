@@ -585,7 +585,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
         return id & 0xff;
     }
 
-    private static boolean isValidIdentifierName(String str) {
+    static boolean isValidIdentifierName(String str) {
         int i = 0;
         while (i < str.length()) {
             int c = str.codePointAt(i);

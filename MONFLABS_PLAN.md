@@ -282,7 +282,8 @@ files, of which destructured parameters go to 1.3, and async/class syntax to the
   non-simple list (checked once the body is parsed), strict `eval =`; the `Function` constructor; the `arguments`
   accessor; rest parameters with a binding pattern; `arguments` in default values. `yield` as an identifier in
   sloppy code moves to 1.6 (generators); the parameter scope moves to 1.2f.
-- *1.2d* `Function.prototype.toString` (method/accessor source text, built-ins, proxies).
+- *1.2d (done)* `Function.prototype.toString`: method/accessor source text, the `Function` constructor's source,
+  built-ins, proxies. Class members wait for 1.7.
 - *1.2e* `eval` code (early errors, var/lexical conflicts, `this`, global declarations).
 - *1.2f* parameter environments: default-parameter TDZ (`dflt-params-ref-later`), a separate var scope for the body
   when parameters have expressions (`scope-paramsbody-var-open`), `eval` in parameters, and the immutable binding of a
@@ -479,7 +480,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.3% (1.2a–c)       | (this) |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.4% (1.2a–d)       | (this) |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

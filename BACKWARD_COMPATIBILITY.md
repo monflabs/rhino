@@ -243,6 +243,27 @@ new Function("'use strict'; eval = 1"); // before: InternalError   now: SyntaxEr
 - **Why:** ECMA-262 2026, §15.2.1 (FunctionDeclaration early errors), §15.4.1 (methods: UniqueFormalParameters) and
   §13.15.1 (strict assignment to `eval`/`arguments`).
 
+### 2.11 `Function.prototype.toString`
+
+```js
+({ get f() {} }).__lookupGetter__("f").toString();  // before: "f() {}"          now: "get f() {}"
+({ *g() {} }).g.toString();                         // before: "() {}"           now: "*g() {}"
+String(Function("a", "return a"));     // before: "function anonymous(a) {return a\n}"
+                                       // now:    "function anonymous(a\n) {\nreturn a\n}"
+Function.prototype.toString.call(new Proxy(function () {}, {}));   // before: TypeError   now: "function () { [native code] }"
+Object.getOwnPropertySymbols(Map.prototype).length;               // before: 3 (an internal "[Symbol.getSize]")   now: 2
+```
+
+- The source text of a method, getter or setter starts at its key, including `get`, `set`, `*` and computed keys.
+- The `Function` and `GeneratorFunction` constructors build their source as the spec does: a line feed ends the
+  parameters, and the body sits between two line feeds. Line numbers reported for errors in such a function's body
+  are 2 higher than before (the body starts on line 3 of the generated source). The generator prefix is `function*`.
+- A callable proxy gives a NativeFunction string. A built-in whose name is not an identifier (`RegExp`'s `$*`, …)
+  leaves the name out of its source text.
+- `Map.prototype` and `Set.prototype` no longer have an own, internal `[Symbol.getSize]` symbol property.
+- **Why:** ECMA-262 2026, §20.2.3.5 Function.prototype.toString (source text of a MethodDefinition, NativeFunction
+  syntax) and §20.2.1.1.1 CreateDynamicFunction; §24.1.3 (the properties of `Map.prototype`).
+
 ---
 
 ## 3. Platform and embedding

@@ -496,6 +496,9 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (thisObj instanceof NativeProxy && thisObj instanceof Callable) {
+            return "function () {\n\t[native code]\n}\n";
+        }
         BaseFunction realf = realFunction(thisObj, "toString");
         int indent = ScriptRuntime.toInt32(args, 0);
         return realf.decompile(indent, EnumSet.noneOf(DecompilerFlag.class));
@@ -636,7 +639,7 @@ public class BaseFunction extends ScriptableObject implements Function {
         boolean justbody = flags.contains(DecompilerFlag.ONLY_BODY);
         if (!justbody) {
             sb.append("function ");
-            sb.append(getFunctionName());
+            sb.append(nativeFunctionName(getFunctionName()));
             sb.append("() {\n\t");
         }
         sb.append("[native code]\n");
@@ -644,6 +647,21 @@ public class BaseFunction extends ScriptableObject implements Function {
             sb.append("}\n");
         }
         return sb.toString();
+    }
+
+    /**
+     * The name in the NativeFunction syntax of a built-in's source text: an optional get/set, then
+     * an identifier name or a computed [Symbol.x] key; any other name is left out.
+     */
+    private static String nativeFunctionName(String name) {
+        String key = name;
+        if (key.startsWith("get ") || key.startsWith("set ")) {
+            key = key.substring(4);
+        }
+        if (key.isEmpty() || key.startsWith("[") || TokenStream.isValidIdentifierName(key)) {
+            return name;
+        }
+        return name.length() == key.length() ? "" : name.substring(0, 3);
     }
 
     public int getArity() {
@@ -810,11 +828,8 @@ public class BaseFunction extends ScriptableObject implements Function {
         int arglen = args.length;
         StringBuilder sourceBuf = new StringBuilder();
 
-        sourceBuf.append("function ");
-        if (isGeneratorFunction) {
-            sourceBuf.append("* ");
-        }
-        sourceBuf.append("anonymous(");
+        // CreateDynamicFunction: the parameters end with a line feed, the body is between two
+        sourceBuf.append(isGeneratorFunction ? "function* anonymous(" : "function anonymous(");
 
         // Append arguments as coma separated strings
         for (int i = 0; i < arglen - 1; i++) {
@@ -823,11 +838,9 @@ public class BaseFunction extends ScriptableObject implements Function {
             }
             sourceBuf.append(ScriptRuntime.toString(args[i]));
         }
-        sourceBuf.append(") {");
+        sourceBuf.append("\n) {\n");
         if (arglen != 0) {
-            // append function body
-            String funBody = ScriptRuntime.toString(args[arglen - 1]);
-            sourceBuf.append(funBody);
+            sourceBuf.append(ScriptRuntime.toString(args[arglen - 1]));
         }
         sourceBuf.append("\n}");
         String source = sourceBuf.toString();

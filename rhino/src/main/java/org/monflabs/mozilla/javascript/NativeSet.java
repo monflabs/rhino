@@ -18,8 +18,6 @@ public class NativeSet extends ScriptableObject {
     private static final String CLASS_NAME = "Set";
     static final String ITERATOR_TAG = "Set Iterator";
 
-    static final SymbolKey GETSIZE = new SymbolKey("[Symbol.getSize]", Symbol.Kind.REGULAR);
-
     private static final ClassDescriptor DESCRIPTOR;
     private static final ClassDescriptor ITER_DESCRIPTOR =
             ES6Iterator.makeDescriptor(ITERATOR_TAG, ITERATOR_TAG);
@@ -56,12 +54,6 @@ public class NativeSet extends ScriptableObject {
                                 (thisObj) -> realThis(thisObj, "size").js_getSize(),
                                 null,
                                 DONTENUM)
-                        .withProp(
-                                PROTO,
-                                NativeSet.GETSIZE,
-                                (thisObj) -> realThis(thisObj, "size").js_getSize(),
-                                null,
-                                DONTENUM | PERMANENT)
                         .withProp(
                                 PROTO,
                                 SymbolKey.TO_STRING_TAG,

@@ -50,12 +50,6 @@ public class NativeMap extends ScriptableObject {
                                 DONTENUM)
                         .withProp(
                                 PROTO,
-                                NativeSet.GETSIZE,
-                                (thisObj) -> realThis(thisObj, "size").js_getSize(),
-                                null,
-                                DONTENUM | PERMANENT)
-                        .withProp(
-                                PROTO,
                                 SymbolKey.TO_STRING_TAG,
                                 value(CLASS_NAME, DONTENUM | READONLY))
                         .withProp(CTOR, SymbolKey.SPECIES, ScriptRuntimeES6::symbolSpecies)

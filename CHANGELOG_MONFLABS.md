@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Function.prototype.toString (2026-10-08, plan 1.2d)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.11):
+
+- The source text of a method, getter or setter starts at its key (`get f() {}`, `*g() {}`, `[k]() {}`).
+- `Function`/`GeneratorFunction` build their source as CreateDynamicFunction does (`"\n) {\n"` and `"\n}"`),
+  so a `//` comment ending the parameters works; `function*` prefix. Error line numbers in the body move by 2.
+- `Function.prototype.toString` on a callable proxy gives a NativeFunction string; a built-in whose name is not an
+  identifier leaves it out.
+- Removed the unused internal `[Symbol.getSize]` property of `Map.prototype` and `Set.prototype`.
+- test262: 16 more files pass; 24,877 of 42,616 in-scope files (58.4%). Class members wait for 1.7.
+
 ### Function early errors (2026-10-08, plan 1.2c)
 
 All versions (simplest; `BACKWARD_COMPATIBILITY.md` 2.7 and 2.10):
