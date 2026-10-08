@@ -4349,7 +4349,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         return frame;
     }
 
-    private static Scriptable getApplyThis(
+    private static Object getApplyThis(
             Context cx,
             Object[] stack,
             double[] sDbl,
@@ -4369,7 +4369,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         } else {
             obj = null;
         }
-        return ScriptRuntime.getApplyOrCallThis(
+        return ScriptRuntime.getApplyOrCallThisValue(
                 cx, target.getDeclarationScope(), obj, indexReg, target);
     }
 

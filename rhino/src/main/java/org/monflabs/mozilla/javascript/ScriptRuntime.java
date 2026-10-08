@@ -3600,8 +3600,8 @@ public class ScriptRuntime {
         int L = args.length;
         Callable function = getCallable(thisObj);
 
-        Scriptable callThis =
-                getApplyOrCallThis(cx, scope, L == 0 ? null : args[0], L, (Function) function);
+        Object callThis =
+                getApplyOrCallThisValue(cx, scope, L == 0 ? null : args[0], L, (Function) function);
 
         Object[] callArgs;
         if (isApply) {
@@ -3618,6 +3618,24 @@ public class ScriptRuntime {
         }
 
         return function.call(cx, scope, callThis, callArgs);
+    }
+
+    /**
+     * The this value of {@code target.call(arg0, ...)} or {@code target.apply(arg0, ...)}: like
+     * {@link #getApplyOrCallThis}, except that a strict script function gets {@code arg0} unchanged
+     * (a primitive is not converted to an object).
+     */
+    public static Object getApplyOrCallThisValue(
+            Context cx, VarScope scope, Object arg0, int l, Function target) {
+        if (l != 0
+                && arg0 != Undefined.instance
+                && target instanceof JSFunction
+                && ((JSFunction) target).isStrict()
+                && !((JSFunction) target).isBuiltIn()
+                && !cx.hasFeature(Context.FEATURE_OLD_UNDEF_NULL_THIS)) {
+            return arg0;
+        }
+        return getApplyOrCallThis(cx, scope, arg0, l, target);
     }
 
     public static Scriptable getApplyOrCallThis(
@@ -3779,7 +3797,8 @@ public class ScriptRuntime {
     /** The typeof operator */
     public static String typeof(Object value) {
         if (value == null) return "object";
-        if (value == Undefined.instance) return "undefined";
+        if (value == Undefined.instance || value == Undefined.SCRIPTABLE_UNDEFINED)
+            return "undefined";
         if (value instanceof Delegator) return typeof(((Delegator) value).getDelegee());
         if (value instanceof ScriptableObject) return ((ScriptableObject) value).getTypeOf();
         if (value instanceof Scriptable) return (value instanceof Callable) ? "function" : "object";

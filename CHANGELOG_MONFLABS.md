@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Strict function semantics (2026-10-08, plan 1.2a)
+
+All versions (simplest; documented in `BACKWARD_COMPATIBILITY.md` 2.6–2.8):
+
+- `typeof this` in a strict function called without a receiver is `"undefined"` (the internal
+  `Undefined.SCRIPTABLE_UNDEFINED` placeholder was reported as `"object"`).
+- `call`/`apply` pass a primitive `this` unboxed to a strict script function (not to built-ins)
+  (`ScriptRuntime.getApplyOrCallThisValue`), in both backends.
+- `Function.prototype.caller` accessor: a TypeError for strict functions and built-ins, `undefined` for other functions;
+  bound functions no longer have an own `caller`.
+- `bind`: the bound name is `"bound " +` the target's `name` property read at bind time; `bind()` /
+  `bind(undefined)` keep `this` undefined for a strict target.
+- test262: 123 more files pass (`language/function-code`, `built-ins/Function`); 24,748 of 42,616 in-scope files
+  (58.1%).
+- Gaps: getters/methods called on a primitive and `bind` to a primitive still box `this`; `Function.prototype`'s
+  `caller`/`arguments` accessors are not the realm's %ThrowTypeError%; bound `length` beyond `int`.
+
 ### Global lexical declarations (2026-10-07, plan 1.1e)
 
 - **Gated, `VERSION_ECMASCRIPT`:** the top-level `let`/`const` of a script (not of `eval` code) are declared in the

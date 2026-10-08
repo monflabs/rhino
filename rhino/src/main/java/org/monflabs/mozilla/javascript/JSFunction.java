@@ -75,6 +75,11 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         return descriptor.isStrict();
     }
 
+    /** Whether this is a built-in function (built-ins are marked strict, but expect an object). */
+    boolean isBuiltIn() {
+        return descriptor.getSourceProvider() instanceof BuiltInSourceCodeProvider;
+    }
+
     @Override
     public int getArity() {
         return descriptor.getArity();

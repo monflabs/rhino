@@ -272,6 +272,15 @@ when parameters have expressions), rest parameters, duplicate-parameter early er
 because tests depend on it) — *gating* of the `toString` format is a decision. Direct/indirect `eval` semantics
 (`language/eval-code`, `language/function-code`: var hoisting, conflicts with lexical declarations).
 
+Split into separately committed steps (2026-10-08, from a test262 run of the function directories: 621 failing
+files, of which destructured parameters go to 1.3, and async/class syntax to their items):
+- *1.2a (done)* strict function semantics: `this` without a receiver and through `call`/`apply`, `caller`, `bind`.
+- *1.2b* the `arguments` object (mapped arguments with non-writable/non-configurable properties, trailing commas).
+- *1.2c* function early errors and parameter scope (duplicate parameters, `eval`/`arguments`/`yield`, `use strict`
+  with non-simple parameters, default-parameter TDZ, separate parameter/body scopes), the `Function` constructor.
+- *1.2d* `Function.prototype.toString` (method/accessor source text, built-ins, proxies).
+- *1.2e* `eval` code (early errors, var/lexical conflicts, `this`, global declarations).
+
 **1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
 nested defaults, holes, rest elements; `IteratorClose` on abrupt completion; evaluation order
 (`destructuring-binding`, `destructuring-assignment`, `language/expressions/assignment`,
@@ -462,7 +471,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | next        |                              |        |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.1% (1.2a)         | (this) |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

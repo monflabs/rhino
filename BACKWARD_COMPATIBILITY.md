@@ -21,6 +21,9 @@ until then, a change incompatible with `VERSION_ES6` behavior is either only act
 | 2.3 | `let`/`const` loop heads create a binding per iteration | `VERSION_ES6` and later | plan 1.1b, 2026-10-07 |
 | 2.4 | Assignment to a block-level `const` has no effect | `VERSION_ES6` | plan 1.1c, 2026-10-07 |
 | 2.5 | `let x;` in a loop body is `undefined` on each iteration | `VERSION_ES6` and later | plan 1.1d, 2026-10-07 |
+| 2.6 | `this` of strict functions: `typeof this` is `"undefined"` without a receiver; `call`/`apply` pass primitives unboxed | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
+| 2.7 | `caller` of strict functions and built-ins throws a TypeError; non-strict functions' `caller` is `undefined` | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
+| 2.8 | Bound functions: `name` from the target's `name` property; `bind()` without a receiver gives a strict target `this === undefined` | `VERSION_ES6` and later | plan 1.2a, 2026-10-08 |
 | 3.1 | Packages and Maven coordinates renamed | all | 2026-10-07 |
 | 3.2 | Java 21 minimum; Android not supported | all | 2026-10-07 |
 
@@ -168,6 +171,41 @@ f();   // before: "1,1" (in functions without closures)   now: "1,"
 
 - **Why:** a `let` declaration without an initializer initializes the binding to `undefined` each time it is
   evaluated (§14.3.1). A script's top-level `let x;` is unchanged under `VERSION_ES6`.
+
+### 2.6 `this` of strict functions
+
+```js
+"use strict";
+function f() { return typeof this; }
+f();            // before: "object"   now: "undefined" (this === undefined was already true)
+f.call(1);      // before: "object"   now: "number" (call/apply no longer box a primitive this)
+```
+
+- **Why:** in strict code, `this` is not coerced (ECMA-262 2026, §10.2.1.2 OrdinaryCallBindThis). A non-strict
+  function still receives an object. **Not covered yet:** a strict getter or method called on a primitive (`(5).x`,
+  `"s".m()`) still receives the wrapper object; so does a strict function bound to a primitive with `bind`.
+
+### 2.7 `caller` of strict functions throws
+
+```js
+(function () { "use strict"; function s() {} s.caller; })();   // before: undefined   now: TypeError
+Math.max.caller;                                                // before: undefined   now: TypeError
+```
+
+- **Why:** `Function.prototype.caller` is a throwing accessor and strict functions have no own `caller` (§10.2.4
+  AddRestrictedFunctionProperties, §17.1 Forbidden Extensions). Non-strict functions still answer `undefined`
+  (their caller is not tracked). Bound functions no longer have an own throwing `caller` property (the prototype's applies).
+
+### 2.8 Bound functions
+
+```js
+var t = Object.defineProperty(function () {}, "name", { value: "target" });
+t.bind().name;                                   // before: "bound "   now: "bound target"
+(function () { "use strict"; return function () { return this; }.bind()(); })();   // before: null   now: undefined
+```
+
+- **Why:** §20.2.3.2 Function.prototype.bind reads the target's `name` property when binding, and a bound `this` of
+  `undefined` stays `undefined` for a strict target.
 
 ---
 

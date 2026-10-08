@@ -103,6 +103,12 @@ public class BaseFunction extends ScriptableObject implements Function {
                                 BaseFunction::js_protoArgumentsGetter,
                                 BaseFunction::js_protoArgumentsSetter,
                                 DONTENUM | READONLY)
+                        .withProp(
+                                PROTO,
+                                "caller",
+                                BaseFunction::js_protoCallerGetter,
+                                BaseFunction::js_protoCallerSetter,
+                                DONTENUM | READONLY)
                         .build();
 
         APPLY_DESCRIPTOR = DESCRIPTOR.findProtoDesc("apply");
@@ -448,11 +454,14 @@ public class BaseFunction extends ScriptableObject implements Function {
         final Scriptable boundThis;
         final Object[] boundArgs;
         if (argc > 0) {
-            boundThis = ScriptRuntime.toObjectOrNull(cx, args[0], s);
+            boundThis =
+                    Undefined.isUndefined(args[0])
+                            ? Undefined.SCRIPTABLE_UNDEFINED
+                            : ScriptRuntime.toObjectOrNull(cx, args[0], s);
             boundArgs = new Object[argc - 1];
             System.arraycopy(args, 1, boundArgs, 0, argc - 1);
         } else {
-            boundThis = null;
+            boundThis = Undefined.SCRIPTABLE_UNDEFINED;
             boundArgs = ScriptRuntime.emptyArgs;
         }
         return new BoundFunction(cx, s, targetFunction, boundThis, boundArgs);
@@ -651,6 +660,24 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static void js_protoArgumentsSetter(Scriptable thisObj, Object value) {
         LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).setArguments(value);
+    }
+
+    /**
+     * Function.prototype.caller: a TypeError for strict functions (ECMA-262 forbids exposing their
+     * caller) and for built-ins; undefined for other functions, whose caller is not tracked.
+     */
+    private static Object js_protoCallerGetter(Scriptable thisObj) {
+        if (thisObj instanceof JSFunction && !((JSFunction) thisObj).isStrict()) {
+            return Undefined.instance;
+        }
+        ScriptRuntime.ThrowTypeError.throwNotAllowed();
+        return null;
+    }
+
+    private static void js_protoCallerSetter(Scriptable thisObj, Object value) {
+        if (!(thisObj instanceof JSFunction && !((JSFunction) thisObj).isStrict())) {
+            ScriptRuntime.ThrowTypeError.throwNotAllowed();
+        }
     }
 
     public String getFunctionName() {
