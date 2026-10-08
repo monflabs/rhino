@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Global lexical declarations (2026-10-07, plan 1.1e)
+
+- **Gated, `VERSION_ECMASCRIPT`:** the top-level `let`/`const` of a script (not of `eval` code) are declared in the
+  `TopLevel` scope, the declarative record of the global environment, instead of on the global object. A script
+  starts with a `GLOBAL_LEXICALS` operation (new token/icode) that checks them against earlier declarations
+  (`let`/`const`, `var`s and functions, non-configurable globals) and throws a SyntaxError on a collision, then
+  declares them uninitialized (temporal dead zone); `initScript` rejects a `var`/function named like a global
+  `let`/`const`. Global `const` assignment and the global TDZ follow (1.1c, 1.1d). `TopLevel` routes `put`/`putConst`
+  to its own map only once a lexical declaration exists.
+- Documented in `BACKWARD_COMPATIBILITY.md` (1.3).
+- Destructuring with defaults in a `let`/`const` declaration (`let [x = 1] = a`) no longer reads the new binding
+  before assigning it (the desugaring tested `x === undefined`, always true for a new binding): no behavior change
+  under `VERSION_ES6`, and no spurious temporal-dead-zone error under `VERSION_ECMASCRIPT`. Names created by a
+  desugaring are never checked for the temporal dead zone.
+- test262: 25 more files pass (global `let`/`const` declarations and their TDZ, cross-script declarations, global
+  destructuring declarations, destructuring assignments to consts); 24,625 of 42,616 in-scope files (57.8%).
+
 ### Temporal dead zone (2026-10-07, plan 1.1d)
 
 - **Gated, `VERSION_ECMASCRIPT`:** using a `let`/`const` binding before its declaration has run throws

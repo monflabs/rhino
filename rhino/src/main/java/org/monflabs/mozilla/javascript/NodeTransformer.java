@@ -47,6 +47,7 @@ public class NodeTransformer {
             useStrictMode = true;
         }
         tdz = env.isLatestEcmaScript();
+        inEval = env.isInEval();
         transformCompilationUnit(tree, useStrictMode);
         for (int i = 0; i != tree.getFunctionCount(); ++i) {
             FunctionNode fn = tree.getFunctionNode(i);
@@ -67,6 +68,9 @@ public class NodeTransformer {
         tree.flattenSymbolTable(!createScopeObjects);
         if (tdz && createScopeObjects && tree.getType() == Token.FUNCTION) {
             initFunctionLexicalsUninitialized(tree);
+        }
+        if (tdz && tree.getType() == Token.SCRIPT && !inEval) {
+            declareGlobalLexicals(tree);
         }
 
         // uncomment to print tree before transformation
@@ -649,6 +653,37 @@ public class NodeTransformer {
     /** Whether the temporal dead zone is checked: code compiled for VERSION_ECMASCRIPT. */
     private boolean tdz;
 
+    /** Whether eval code is compiled: its top-level let/const are not global declarations. */
+    private boolean inEval;
+
+    /**
+     * The top-level let/const of a script are global lexical declarations: they are not variables
+     * of the script (properties of the global object), and are declared in the global environment's
+     * declarative record when the script starts (ScriptRuntime#declareGlobalLexicals).
+     */
+    private static void declareGlobalLexicals(ScriptNode tree) {
+        if (tree.getSymbolTable() == null) {
+            return;
+        }
+        StringBuilder declarations = new StringBuilder();
+        for (Symbol symbol : tree.getSymbolTable().values()) {
+            if (isLexical(symbol)) {
+                if (declarations.length() > 0) {
+                    declarations.append(',');
+                }
+                declarations
+                        .append(symbol.getDeclType() == Symbol.Type.CONST ? 'C' : 'L')
+                        .append(symbol.getName());
+            }
+        }
+        if (declarations.length() > 0) {
+            tree.removeLexicalVariables();
+            Node declare = Node.newString(Token.GLOBAL_LEXICALS, declarations.toString());
+            declare.setLineColumnNumber(Math.max(tree.getLineno(), 1), 1);
+            tree.addChildToFront(declare);
+        }
+    }
+
     /** Block scopes already wrapped in a LET for their scope object. */
     private final Set<Scope> wrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -697,11 +732,12 @@ public class NodeTransformer {
      */
     private boolean initializesLet(
             ScriptNode tree, Scope scope, Node name, boolean createScopeObjects) {
-        if (!tdz && createScopeObjects) {
-            return false;
-        }
         Scope defining = scope.getDefiningScope(name.getString());
-        return !(tree.getType() == Token.SCRIPT && defining == tree);
+        boolean scriptLevel = tree.getType() == Token.SCRIPT && defining == tree;
+        if (tdz) {
+            return !(scriptLevel && inEval);
+        }
+        return !createScopeObjects && !scriptLevel;
     }
 
     /**
@@ -732,8 +768,8 @@ public class NodeTransformer {
             return TDZ_NONE;
         }
         ScriptNode top = defining instanceof ScriptNode ? (ScriptNode) defining : defining.getTop();
-        if (top.getType() == Token.SCRIPT && defining == top) {
-            return TDZ_NONE; // global lexical bindings live on the global object for now
+        if (top.getType() == Token.SCRIPT && defining == top && inEval) {
+            return TDZ_NONE; // eval code's own let/const are variables of the eval
         }
         boolean inWith = false;
         for (Node loop : loops) {
@@ -742,10 +778,14 @@ public class NodeTransformer {
         if (top != tree || inWith) {
             return TDZ_RUNTIME;
         }
-        if (!(symbol.getNode() instanceof AstNode)
-                || !isInSyntaxTree((AstNode) symbol.getNode())
-                || !isInSyntaxTree((Name) reference)) {
-            // no reliable position (e.g. a name the IR factory created for a desugaring)
+        if (!isInSyntaxTree((Name) reference)) {
+            // a name created by a desugaring (the initialization of a destructuring declaration,
+            // the loop variable of for-in/of, the read of a compound assignment): its writes
+            // initialize, and its reads are checked by the name lookup anyway
+            return TDZ_NONE;
+        }
+        if (!(symbol.getNode() instanceof AstNode) || !isInSyntaxTree((AstNode) symbol.getNode())) {
+            // the declaration's position is unknown (a destructuring declaration)
             return createScopeObjects ? TDZ_RUNTIME : TDZ_NONE;
         }
         AstNode declaration = (AstNode) symbol.getNode();

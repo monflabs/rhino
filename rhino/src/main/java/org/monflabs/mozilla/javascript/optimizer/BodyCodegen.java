@@ -836,6 +836,17 @@ class BodyCodegen {
                 decReferenceWordLocal(variableObjectLocal);
                 break;
 
+            case Token.GLOBAL_LEXICALS:
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                cfw.addPush(node.getString());
+                addScriptRuntimeInvoke(
+                        "declareGlobalLexicals",
+                        "(Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + "Ljava/lang/String;)V");
+                break;
+
             case Token.COPY_SCOPE:
                 cfw.addALoad(variableObjectLocal);
                 addScriptRuntimeInvoke(

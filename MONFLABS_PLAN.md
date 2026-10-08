@@ -261,7 +261,9 @@ Split into separately committed steps:
   catch parameters and desugared bindings are initialized before their scope runs). Known gaps: destructuring
   declarations (to do with 1.3), switch cases in functions without closures, and a closure write is checked before
   its right-hand side.
-- *1.1e* global lexical scope (gated, see decisions).
+- *1.1e (done)* global lexical scope: a `GLOBAL_LEXICALS` operation at the start of a script declares its
+  top-level let/const in `TopLevel`'s own map (GlobalDeclarationInstantiation checks); they are removed from the
+  script's variables. Gap: a script whose `var`s and `let`s conflict may create its `var`s before the SyntaxError.
 
 **1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
 function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
@@ -452,8 +454,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
-| 1.1  | Lexical declarations                            | in progress | 57.6% → 57.7% (1.1a–d)       | (this) |
-| 1.2  | Function semantics                              | todo        |                              |        |
+| 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
+| 1.2  | Function semantics                              | next        |                              |        |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

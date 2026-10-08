@@ -175,8 +175,11 @@ abstract class Icode {
             TDZ_SENTINEL = COPY_SCOPE - 1,
             CHECK_TDZ = TDZ_SENTINEL - 1,
 
+            // Global let/const declarations of a script
+            GLOBAL_LEXICALS = CHECK_TDZ - 1,
+
             // Last icode
-            MIN_ICODE = CHECK_TDZ;
+            MIN_ICODE = GLOBAL_LEXICALS;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -376,6 +379,8 @@ abstract class Icode {
                 return "TDZ_SENTINEL";
             case CHECK_TDZ:
                 return "CHECK_TDZ";
+            case GLOBAL_LEXICALS:
+                return "GLOBAL_LEXICALS";
         }
 
         // icode without name

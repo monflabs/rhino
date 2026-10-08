@@ -5377,15 +5377,19 @@ public class Parser {
                             right,
                             rightElem);
 
+            // A let/const binding is new, so the outer test is always true: leave it out, it would
+            // read the binding in its temporal dead zone
             Node cond =
-                    new Node(
-                            Token.HOOK,
-                            new Node(
-                                    Token.SHEQ,
-                                    new KeywordLiteral().setType(Token.UNDEFINED),
-                                    createName(name)),
-                            cond_inner,
-                            left);
+                    variableType == Token.LET || variableType == Token.CONST
+                            ? cond_inner
+                            : new Node(
+                                    Token.HOOK,
+                                    new Node(
+                                            Token.SHEQ,
+                                            new KeywordLiteral().setType(Token.UNDEFINED),
+                                            createName(name)),
+                                    cond_inner,
+                                    left);
 
             // store it to be transformed later
             if (transformer == null) {

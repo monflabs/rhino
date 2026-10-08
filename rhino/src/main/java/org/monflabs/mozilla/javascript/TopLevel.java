@@ -409,8 +409,38 @@ public class TopLevel extends ScopeObject {
         return ScriptableObject.getProperty(globalThis, name);
     }
 
+    /**
+     * Whether this scope holds global lexical declarations: the top-level let/const of scripts
+     * compiled for {@link Context#VERSION_ECMASCRIPT}, which live in this scope (the declarative
+     * record of the global environment) rather than on the global object.
+     */
+    private boolean hasLexicalDeclarations;
+
+    /** Whether a script declared a global let/const with this name. */
+    public boolean hasLexicalDeclaration(String name) {
+        return hasLexicalDeclarations && super.has(name, this);
+    }
+
+    /**
+     * Declares a global let/const binding, in its temporal dead zone until its declaration runs.
+     *
+     * @see ScriptRuntime#declareGlobalLexicals(Context, VarScope, String)
+     */
+    void declareLexical(String name, boolean isConst) {
+        hasLexicalDeclarations = true;
+        // directly in this scope's own map: defineProperty would go through put(), which forwards
+        // names that are not declared yet to the global object
+        Slot<VarScope> slot = getMap().modify(this, name, 0, 0);
+        slot.value = UniqueTag.UNINITIALIZED;
+        slot.setAttributes(isConst ? ScriptableObject.CONST : ScriptableObject.PERMANENT);
+    }
+
     @Override
     public void put(String name, VarScope start, Object value) {
+        if (hasLexicalDeclaration(name)) {
+            super.put(name, this, value);
+            return;
+        }
         ScriptableObject.putProperty(globalThis, name, value);
     }
 
@@ -421,6 +451,9 @@ public class TopLevel extends ScopeObject {
 
     @Override
     public void delete(String name) {
+        if (hasLexicalDeclaration(name)) {
+            return; // lexical bindings cannot be deleted
+        }
         globalThis.delete(name);
     }
 
@@ -476,6 +509,10 @@ public class TopLevel extends ScopeObject {
 
     @Override
     public void putConst(String name, VarScope start, Object value) {
+        if (hasLexicalDeclaration(name)) {
+            super.putConst(name, this, value);
+            return;
+        }
         globalThis.putConst(name, globalThis, value);
     }
 

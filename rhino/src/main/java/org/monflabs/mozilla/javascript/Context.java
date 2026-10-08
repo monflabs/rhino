@@ -127,11 +127,12 @@ public class Context implements Closeable {
      * <ul>
      *   <li>Assigning to a {@code const} binding ({@code =}, compound assignment, {@code ++}/{@code
      *       --}, destructuring, a {@code for-in/of} target) throws a TypeError, also outside strict
-     *       mode; under {@link #VERSION_ES6} it has no effect (TypeError in strict mode). Global
-     *       {@code const} declarations are not covered yet.
+     *       mode; under {@link #VERSION_ES6} it has no effect (TypeError in strict mode).
      *   <li>Temporal dead zone: using a {@code let}/{@code const} binding before its declaration
      *       has run throws a ReferenceError; under {@link #VERSION_ES6} a read gives undefined.
-     *       Global declarations are not covered yet.
+     *   <li>The top-level {@code let}/{@code const} of a script are global lexical declarations:
+     *       kept in the {@link TopLevel} scope rather than on the global object, and a SyntaxError
+     *       when another script of the same scope declares the same name.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

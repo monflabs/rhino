@@ -14,6 +14,7 @@ decided to apply to every version.
 |---|--------|-----------|-------|
 | 1.1 | Assignment to a `const` throws a TypeError | `VERSION_ECMASCRIPT` | plan 1.1c, 2026-10-07 |
 | 1.2 | Temporal dead zone: using a `let`/`const` before its declaration throws a ReferenceError | `VERSION_ECMASCRIPT` | plan 1.1d, 2026-10-07 |
+| 1.3 | Top-level `let`/`const` are not properties of the global object; redeclaring one in another script is a SyntaxError | `VERSION_ECMASCRIPT` | plan 1.1e, 2026-10-07 |
 | 2.1 | `const` in a loop body takes each iteration's value | `VERSION_ES6` and later | plan 1.1a, 2026-10-07 |
 | 2.2 | `for (const x of/in …)` initializes `x` | `VERSION_ES6` and later | plan 1.1a, 2026-10-07 |
 | 2.3 | `let`/`const` loop heads create a binding per iteration | `VERSION_ES6` and later | plan 1.1b, 2026-10-07 |
@@ -44,8 +45,7 @@ k = 2;       // VERSION_ES6: no effect (TypeError in strict mode)
 - **Why:** a `const` creates a strict immutable binding, so changing it is a TypeError whatever the strictness of
   the code (ECMA-262 2026, §9.1.1.1.5 SetMutableBinding, step 2: "If the binding for N in envRec is a strict binding,
   set S to true").
-- **Not covered yet:** a `const` declared at the top level of a script, which still lives on the global object
-  (it will be with plan 1.1e, global lexical declarations).
+- A `const` declared at the top level of a script is covered too, since it is a global lexical declaration (1.3).
 
 ### 1.2 Temporal dead zone (TDZ)
 
@@ -66,12 +66,38 @@ function f() {
   envRec has not yet been initialized, throw a ReferenceError").
 - **Cost:** none for `VERSION_ES6`. Under `VERSION_ECMASCRIPT`, references that can be proven safe at compile time
   (in the same function, after the declaration) are not checked; others are checked by one comparison.
-- **Not covered yet:** top-level `let`/`const` of a script (plan 1.1e); bindings of a destructuring declaration
+- **Not covered yet:** bindings of a destructuring declaration
   (`let [a, b] = …`, plan 1.3); a read that a `switch` case reaches by
   jumping over a declaration in a function without closures; a write from a closure is checked before its
   right-hand side is evaluated, not after.
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
+
+### 1.3 Global lexical declarations
+
+```js
+// script 1                         // script 2, same scope
+let x = 1;                          let x = 2;   // VERSION_ES6: fine (x becomes 2)
+const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxError: Identifier "x" has
+"x" in globalThis;  // ES6: true                 //   already been declared.
+                    // ECMASCRIPT: false
+```
+
+- The top-level `let`/`const` of a script are bindings of the global environment's declarative record (the
+  `TopLevel` scope), shared by all the scripts run in that scope, and not properties of the global object:
+  `globalThis.x`, `"x" in globalThis` and `Object.keys(globalThis)` do not see them; `x` does.
+- Running a script that declares a `let`/`const` whose name is already a `let`/`const` of an earlier script, a
+  `var` or function of an earlier script, or a non-configurable global (`undefined`, `NaN`, `Infinity`) throws a
+  SyntaxError before the script runs; so does a `var` or function whose name is a global `let`/`const`.
+- Assignment to a global `const` throws (1.1) and the temporal dead zone applies to global bindings (1.2).
+- **Why:** ECMA-262 2026, §9.1.1.4 Global Environment Records and §16.1.7 GlobalDeclarationInstantiation.
+- **Embedding notes:** Java code reads such a binding from the scope (`scope.get("x", scope)`,
+  `ScriptableObject.getProperty(scope, "x")`), not from `scope.getGlobalThis()`. An application that runs the same
+  script twice in one scope (a REPL re-running `let x = …`) gets a SyntaxError the second time. `let`/`const` in
+  `eval` code are not affected (they are local to the eval code, as before). With a custom top scope that is not a
+  `TopLevel`, the declarations are made on that scope as before.
+- **Not covered yet:** if a script declares both `var`s and a conflicting `let`, its `var`s may have been created on
+  the global object before the SyntaxError.
 
 ---
 
@@ -140,7 +166,7 @@ f();   // before: "1,1" (in functions without closures)   now: "1,"
 ```
 
 - **Why:** a `let` declaration without an initializer initializes the binding to `undefined` each time it is
-  evaluated (§14.3.1). A script's top-level `let x;` is not changed (plan 1.1e).
+  evaluated (§14.3.1). A script's top-level `let x;` is unchanged under `VERSION_ES6`.
 
 ---
 

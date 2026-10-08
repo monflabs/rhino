@@ -372,6 +372,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 addIcode(Icode.COPY_SCOPE);
                 break;
 
+            case Token.GLOBAL_LEXICALS:
+                updateLineNumber(node);
+                addStringOp(Icode.GLOBAL_LEXICALS, node.getString());
+                break;
+
             case Token.LOCAL_BLOCK:
                 {
                     int local = allocLocal();

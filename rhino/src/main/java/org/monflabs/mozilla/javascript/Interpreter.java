@@ -779,6 +779,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
         instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
+        instructionObjs[base + Icode.GLOBAL_LEXICALS] = new DoGlobalLexicals();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
         instructionObjs[base + Icode.CLOSURE_STMT] = new DoClosureStatement();
@@ -3446,6 +3447,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             ScriptRuntime.checkInitialized(frame.stack[frame.stackTop], state.stringReg);
+            return null;
+        }
+    }
+
+    private static class DoGlobalLexicals extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            ScriptRuntime.declareGlobalLexicals(cx, frame.scope, state.stringReg);
             return null;
         }
     }

@@ -373,6 +373,19 @@ public class ScriptNode extends Scope {
         }
     }
 
+    /**
+     * Removes the let/const bindings from the variables of a script: under {@link
+     * org.monflabs.mozilla.javascript.Context#VERSION_ECMASCRIPT}, they are global lexical
+     * declarations, not properties of the global object.
+     */
+    public void removeLexicalVariables() {
+        symbols.removeIf(
+                symbol ->
+                        symbol.getDeclType() == Symbol.Type.LET
+                                || symbol.getDeclType() == Symbol.Type.CONST);
+        flattenSymbolTable(true);
+    }
+
     public Object getCompilerData() {
         return compilerData;
     }

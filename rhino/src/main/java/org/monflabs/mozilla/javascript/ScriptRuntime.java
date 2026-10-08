@@ -2580,7 +2580,51 @@ public class ScriptRuntime {
         if (cx.useDynamicScope) {
             scope = checkDynamicScope(cx.topCallScope, scope);
         }
-        return ScriptableObject.getProperty(scope, name);
+        return checkInitialized(ScriptableObject.getProperty(scope, name), name);
+    }
+
+    /**
+     * Declares the top-level let/const bindings of a script compiled for {@link
+     * Context#VERSION_ECMASCRIPT} in the declarative record of the global environment (the {@link
+     * TopLevel} scope), after checking that none of them is already declared (ECMA-262
+     * GlobalDeclarationInstantiation). Each entry of {@code declarations} is "L" (let) or "C"
+     * (const) followed by the name, separated by commas.
+     */
+    public static void declareGlobalLexicals(Context cx, VarScope scope, String declarations) {
+        VarScope top = scope;
+        while (top.getParentScope() != null) {
+            top = top.getParentScope();
+        }
+        String[] entries = declarations.split(",");
+        if (!(top instanceof TopLevel)) {
+            // an embedding with its own top scope: declare them on it, as before
+            for (String entry : entries) {
+                String name = entry.substring(1);
+                if (!top.has(name, top)) {
+                    if (entry.charAt(0) == 'C') {
+                        top.defineConst(name, top);
+                    } else {
+                        ScriptableObject.defineProperty(
+                                top, name, Undefined.instance, ScriptableObject.PERMANENT);
+                    }
+                }
+            }
+            return;
+        }
+        TopLevel topLevel = (TopLevel) top;
+        ScriptableObject global = topLevel.getGlobalThis();
+        for (String entry : entries) {
+            String name = entry.substring(1);
+            if (topLevel.hasLexicalDeclaration(name)
+                    || (global.has(name, global)
+                            && (global.getAttributes(name) & ScriptableObject.PERMANENT) != 0)) {
+                // already a lexical declaration, a var, a function, or a non-configurable global
+                throw constructError("SyntaxError", getMessageById("msg.global.redecl", name));
+            }
+        }
+        for (String entry : entries) {
+            topLevel.declareLexical(entry.substring(1), entry.charAt(0) == 'C');
+        }
     }
 
     /**
@@ -5079,6 +5123,19 @@ public class ScriptRuntime {
             // object. See bug 38590.
             while (varScope.isNestedScope()) {
                 varScope = varScope.getParentScope();
+            }
+
+            if (!evalScript
+                    && varScope instanceof TopLevel
+                    && desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT) {
+                // a var or function may not reuse the name of a global let/const
+                for (int i = 0; i < varCount; i++) {
+                    String name = desc.getParamOrVarName(i);
+                    if (((TopLevel) varScope).hasLexicalDeclaration(name)) {
+                        throw constructError(
+                                "SyntaxError", getMessageById("msg.global.redecl", name));
+                    }
+                }
             }
 
             for (int i = varCount; i-- != 0; ) {

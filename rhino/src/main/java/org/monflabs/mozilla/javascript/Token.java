@@ -253,7 +253,8 @@ public class Token {
             COPY_SCOPE = OBJECT_REST + 1, // per-iteration copy of a loop's let scope
             TDZ_SENTINEL = COPY_SCOPE + 1, // value of a let/const binding before its declaration
             CHECK_TDZ = TDZ_SENTINEL + 1, // ReferenceError if its child is TDZ_SENTINEL's value
-            LAST_TOKEN = CHECK_TDZ + 1;
+            GLOBAL_LEXICALS = CHECK_TDZ + 1, // declares a script's global let/const bindings
+            LAST_TOKEN = GLOBAL_LEXICALS + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -616,6 +617,8 @@ public class Token {
                 return "TDZ_SENTINEL";
             case CHECK_TDZ:
                 return "CHECK_TDZ";
+            case GLOBAL_LEXICALS:
+                return "GLOBAL_LEXICALS";
             case GET:
                 return "GET";
             case SET:
