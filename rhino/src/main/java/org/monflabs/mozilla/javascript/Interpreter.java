@@ -783,6 +783,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.ITER_STEP] = new DoIterator(Icode.ITER_STEP);
         instructionObjs[base + Icode.ITER_REST] = new DoIterator(Icode.ITER_REST);
         instructionObjs[base + Icode.ITER_CLOSE] = new DoIterator(Icode.ITER_CLOSE);
+        instructionObjs[base + Icode.REQUIRE_OBJECT] = new DoIterator(Icode.REQUIRE_OBJECT);
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
         instructionObjs[base + Icode.ITER_GUARD_INIT] = new DoIteratorGuard(Icode.ITER_GUARD_INIT);
@@ -3477,6 +3478,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         case Icode.ITER_OPEN -> ScriptRuntime.iteratorOpen(value, cx, frame.scope);
                         case Icode.ITER_STEP -> ScriptRuntime.iteratorStep(value, cx, frame.scope);
                         case Icode.ITER_REST -> ScriptRuntime.iteratorRest(value, cx, frame.scope);
+                        case Icode.REQUIRE_OBJECT ->
+                                ScriptRuntime.requireObject(value, cx, frame.scope);
                         default -> ScriptRuntime.iteratorClose(value, cx, frame.scope);
                     };
             return null;

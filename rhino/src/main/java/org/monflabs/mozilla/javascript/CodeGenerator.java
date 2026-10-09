@@ -954,10 +954,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:
+            case Token.REQUIRE_OBJECT:
                 visitExpression(child, 0);
                 addIcode(
-                        type == Token.ITER_OPEN
-                                ? Icode.ITER_OPEN
+                        type == Token.REQUIRE_OBJECT
+                                ? Icode.REQUIRE_OBJECT
                                 : type == Token.ITER_STEP
                                         ? Icode.ITER_STEP
                                         : type == Token.ITER_REST

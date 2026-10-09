@@ -267,6 +267,14 @@ public class ScriptNode extends Scope {
     // Overridden in FunctionNode
     public void putDestructuringRvalues(Node left, Node right) {}
 
+    /**
+     * Like {@link #putDestructuringRvalues(Node, Node)}, for the default value of a binding named
+     * {@code name}: an anonymous function gets that name once transformed.
+     */
+    public void putDestructuringRvalues(Node left, Node right, String name) {
+        putDestructuringRvalues(left, right);
+    }
+
     public void addAnnexBFunction(Symbol letSymbol, FunctionNode fn) {
         if (annexBFunctions == null) {
             annexBFunctions = new ArrayList<>(4);

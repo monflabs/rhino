@@ -262,7 +262,8 @@ public class Token {
             // the guard of a statement whose iterators are closed on an abrupt completion
             ITER_GUARD_INIT = ITER_CLOSE + 1,
             ITER_GUARD_CLOSE = ITER_GUARD_INIT + 1,
-            LAST_TOKEN = ITER_GUARD_CLOSE + 1;
+            REQUIRE_OBJECT = ITER_GUARD_CLOSE + 1, // TypeError if its child is null or undefined
+            LAST_TOKEN = REQUIRE_OBJECT + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -637,6 +638,8 @@ public class Token {
                 return "ITER_GUARD_INIT";
             case ITER_GUARD_CLOSE:
                 return "ITER_GUARD_CLOSE";
+            case REQUIRE_OBJECT:
+                return "REQUIRE_OBJECT";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

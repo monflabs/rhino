@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Object patterns and default names (2026-10-09, plan 1.3c)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.14):
+
+- Object patterns start with a new IR operation `Token.REQUIRE_OBJECT` (RequireObjectCoercible, after a parameter's
+  default value): `null`/`undefined` throw a TypeError, also for an empty pattern.
+- An anonymous function given as the default of a binding in a pattern is named after the binding
+  (`Parser.nameAnonymousFunction`, once the function is transformed, so that the name is not a binding inside it).
+- Fixed `for (const x = …; …; …)`: the const initializer was wrapped in an expression statement, which the
+  interpreter's code generator rejected (any such loop crashed at compile time).
+- test262: 328 more files pass; 25,634 of 42,616 in-scope files (60.2%).
+
 ### Iterators of array patterns are closed on abrupt completion (2026-10-08, plan 1.3b)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.13):

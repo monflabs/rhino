@@ -1359,17 +1359,20 @@ class BodyCodegen {
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:
+            case Token.REQUIRE_OBJECT:
                 generateExpression(child, node);
                 cfw.addALoad(contextLocal);
                 cfw.addALoad(variableObjectLocal);
                 addScriptRuntimeInvoke(
-                        type == Token.ITER_OPEN
-                                ? "iteratorOpen"
-                                : type == Token.ITER_STEP
-                                        ? "iteratorStep"
-                                        : type == Token.ITER_REST
-                                                ? "iteratorRest"
-                                                : "iteratorClose",
+                        type == Token.REQUIRE_OBJECT
+                                ? "requireObject"
+                                : type == Token.ITER_OPEN
+                                        ? "iteratorOpen"
+                                        : type == Token.ITER_STEP
+                                                ? "iteratorStep"
+                                                : type == Token.ITER_REST
+                                                        ? "iteratorRest"
+                                                        : "iteratorClose",
                         "(Ljava/lang/Object;"
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"

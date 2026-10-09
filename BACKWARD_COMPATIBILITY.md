@@ -336,6 +336,20 @@ function f([p, , q]) {} f([1, 2, 3]);  // before: q was 2    now: q is 3
 - When a default value or a target throws (or a generator is returned from inside the pattern), the iterator is
   closed too; an error of its `return()` does not replace the error being thrown.
 
+### 2.14 Object patterns and default names
+
+```js
+var {} = null;                       // before: fine           now: TypeError
+var [f = function () {}] = [];       // before: f.name is ""   now: "f"
+```
+
+- An object pattern (from `VERSION_ES6`) throws a TypeError when the value is `null` or `undefined`, also when it
+  is empty or reads no property.
+- An anonymous function, generator or arrow function given as the default value of a binding in a pattern is named
+  after that binding, as `var f = function () {}` already was.
+- **Why:** ECMA-262 2026, §8.6.2 BindingInitialization (RequireObjectCoercible) and §8.6.3 KeyedBindingInitialization
+  (NamedEvaluation of the initializer).
+
 ---
 
 ## 3. Platform and embedding

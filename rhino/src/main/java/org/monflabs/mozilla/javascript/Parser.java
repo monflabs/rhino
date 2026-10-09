@@ -5423,6 +5423,9 @@ public class Parser {
             //          : x
 
             right = (transformer != null) ? transformer.transform(n.getRight()) : n.getRight();
+            if (transformer != null) {
+                nameAnonymousFunction(right, name);
+            }
 
             Node cond_inner =
                     new Node(
@@ -5438,7 +5441,7 @@ public class Parser {
 
             // store it to be transformed later
             if (transformer == null) {
-                currentScriptOrFn.putDestructuringRvalues(cond_inner, right);
+                currentScriptOrFn.putDestructuringRvalues(cond_inner, right, name);
             }
 
             parent.addChildToBack(new Node(setOp, createName(Token.BINDNAME, name, null), cond));
@@ -5477,6 +5480,24 @@ public class Parser {
             } else {
                 reportError("msg.bad.assign.left");
             }
+        }
+    }
+
+    /**
+     * NamedEvaluation of a binding's default value: an anonymous function (function, generator or
+     * arrow expression, possibly parenthesized) is named after the binding. Called once the
+     * function is transformed, so that the name does not become a binding inside it.
+     */
+    void nameAnonymousFunction(Node value, String name) {
+        if (value == null
+                || value.getType() != Token.FUNCTION
+                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+            return;
+        }
+        FunctionNode fn =
+                currentScriptOrFn.getFunctionNode(value.getExistingIntProp(Node.FUNCTION_PROP));
+        if (fn.getFunctionName() == null) {
+            fn.setFunctionName(new Name(fn.getPosition(), name));
         }
     }
 
@@ -5546,6 +5567,16 @@ public class Parser {
         int setOp = variableType == Token.CONST ? Token.SETCONST : Token.SETNAME;
         boolean defaultValuesSetup = false;
         List<Object> extractedKeys = new ArrayList<>(); // store strings or nodes for computed keys
+
+        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+            // RequireObjectCoercible, after the default value of a parameter
+            if (defaultValue != null) {
+                setupDefaultValues(tempName, parent, defaultValue, setOp, transformer);
+                defaultValuesSetup = true;
+            }
+            parent.addChildToBack(new Node(Token.REQUIRE_OBJECT, createName(tempName)));
+            empty = false;
+        }
 
         // Track position to validate rest element is last
         List<AbstractObjectProperty> elements = node.getElements();

@@ -187,8 +187,11 @@ abstract class Icode {
             ITER_GUARD_INIT = ITER_OPEN_GUARDED - 1,
             ITER_GUARD_CLOSE = ITER_GUARD_INIT - 1,
 
+            // RequireObjectCoercible of an object pattern
+            REQUIRE_OBJECT = ITER_GUARD_CLOSE - 1,
+
             // Last icode
-            MIN_ICODE = ITER_GUARD_CLOSE;
+            MIN_ICODE = REQUIRE_OBJECT;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -404,6 +407,8 @@ abstract class Icode {
                 return "ITER_GUARD_INIT";
             case ITER_GUARD_CLOSE:
                 return "ITER_GUARD_CLOSE";
+            case REQUIRE_OBJECT:
+                return "REQUIRE_OBJECT";
         }
 
         // icode without name

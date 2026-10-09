@@ -1,0 +1,58 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.javascript.tests;
+
+import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.testutils.Utils;
+
+/** Object patterns and the names of pattern defaults (plan 1.3c); the same in both versions. */
+class ObjectDestructuringTest {
+
+    private static void assertBoth(Object expected, String script) {
+        Utils.assertWithAllModes_ES6(expected, script);
+        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
+    }
+
+    @Test
+    void nullAndUndefinedCannotBeDestructured() {
+        assertBoth(
+                "TypeError,TypeError,TypeError,TypeError",
+                "var r = []; function t(f) { try { f(); r.push('ok'); } catch (e) { r.push(e.name); } }"
+                        + " t(function () { var {} = null; });"
+                        + " t(function () { let {a} = undefined; });"
+                        + " t(function () { (function ({}) {})(); });"
+                        + " t(function () { (function ({} = null) {})(); });"
+                        + " r.join()");
+    }
+
+    @Test
+    void anonymousFunctionDefaultsAreNamedAfterTheirBinding() {
+        assertBoth(
+                "fn,ar,gn,cv,named,|f,a|g|pq",
+                "var [fn = function () {}, ar = () => 1, gn = function* () {}, cv = (function () {}),"
+                        + "  xn = function named() {}, cm = (0, function () {})] = [];"
+                        + " var r = [[fn.name, ar.name, gn.name, cv.name, xn.name, cm.name].join()];"
+                        + " var { f = function () {}, x: a = () => 1 } = {}; r.push([f.name, a.name].join());"
+                        + " var g; [g = function () {}] = []; r.push(g.name);"
+                        + " r.push((function ([p = function () {}], { q = () => 2 }) { return p.name + q.name; })"
+                        + "   ([], {}));"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void theInferredNameIsNotABinding() {
+        assertBoth(
+                "number", "var [f = function () { return typeof f; }] = []; var o = f; f = 1; o()");
+    }
+
+    @Test
+    void forConstHeads() {
+        assertBoth(
+                "1,3",
+                "function f() { for (const x = 1; ; ) { return x; } }"
+                        + " var r = []; for (const a = 1, b = 2; r.length < 1; ) { r.push(a + b); }"
+                        + " [f(), r[0]].join()");
+    }
+}

@@ -3863,6 +3863,14 @@ public class ScriptRuntime {
         return forbidden;
     }
 
+    /** Object destructuring: RequireObjectCoercible of the value (Token#REQUIRE_OBJECT). */
+    public static Object requireObject(Object value, Context cx, VarScope scope) {
+        if (value == null || Undefined.isUndefined(value)) {
+            throw typeErrorById("msg.destructure.null", toString(value));
+        }
+        return value;
+    }
+
     /** Array destructuring: GetIterator (Token#ITER_OPEN). */
     public static Object iteratorOpen(Object value, Context cx, VarScope scope) {
         return IteratorRecord.open(value, cx, scope);
