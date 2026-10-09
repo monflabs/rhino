@@ -473,6 +473,22 @@ public class Parser {
         return currentToken; // return unflagged token
     }
 
+    /**
+     * A "use strict" directive also applies to the token peeked after it: a name that is reserved
+     * in strict code (public, static, ...) becomes that keyword.
+     */
+    private void applyStrictToPeekedToken() {
+        if (currentFlaggedToken != Token.EOF && currentToken == Token.NAME && !ts.nameHadEscape) {
+            int strictToken =
+                    TokenStream.keywordToken(
+                            ts.getString(), compilerEnv.getLanguageVersion(), true);
+            if (strictToken != Token.EOF && strictToken != Token.NAME) {
+                currentFlaggedToken = strictToken | (currentFlaggedToken & ~CLEAR_TI_MASK);
+                currentToken = strictToken;
+            }
+        }
+    }
+
     private int lineNumber() {
         return lastTokenLineno;
     }
@@ -708,6 +724,7 @@ public class Parser {
                             inDirectivePrologue = false;
                         } else if ("use strict".equals(directive)) {
                             inUseStrictDirective = true;
+                            applyStrictToPeekedToken();
                             root.setInStrictMode(true);
                         }
                     }
@@ -829,6 +846,7 @@ public class Parser {
                                         reportError("msg.destruct.param.use.strict");
                                     }
                                     inUseStrictDirective = true;
+                                    applyStrictToPeekedToken();
                                     fnNode.setInStrictMode(true);
                                 }
                             }
@@ -989,6 +1007,10 @@ public class Parser {
                         }
 
                         if (matchToken(Token.ASSIGN, true)) {
+                            if (wasRest) {
+                                // a rest parameter has no initializer
+                                reportError("msg.parm.after.rest");
+                            }
                             if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
                                 fnNode.putDefaultParams(paramName, assignExpr());
                             } else {
@@ -4502,6 +4524,7 @@ public class Parser {
         }
         Comment objJsdocNode = getAndResetJsDoc();
         boolean objectLiteralDestructuringDefault = false;
+        int protoDefinitions = 0;
         commaLoop:
         for (; ; ) {
             String propertyName = null;
@@ -4518,6 +4541,7 @@ public class Parser {
             }
             int propStart = ts.tokenBeg;
             AstNode pname = objliteralProperty();
+            boolean pnameEscaped = ts != null && ts.nameHadEscape && pname instanceof Name;
             if (pname == null) {
                 reportError("msg.bad.prop");
             } else if (pname instanceof Spread) {
@@ -4570,6 +4594,11 @@ public class Parser {
                     } else if (peeked == Token.LP) {
                         entryKind = METHOD_ENTRY;
                     } else if (pname.getType() == Token.NAME) {
+                        if (pnameEscaped
+                                && ("get".equals(propertyName) || "set".equals(propertyName))) {
+                            // get and set written with escapes are not accessor keywords
+                            reportError("msg.bad.prop");
+                        }
                         if ("get".equals(propertyName)) {
                             entryKind = GET_ENTRY;
                         } else if ("set".equals(propertyName)) {
@@ -4600,6 +4629,11 @@ public class Parser {
                         elems.add(objectProp);
                     }
                 } else {
+                    if (peeked == Token.COLON
+                            && "__proto__".equals(propertyName)
+                            && (pname instanceof Name || pname instanceof StringLiteral)) {
+                        ++protoDefinitions;
+                    }
                     pname.setJsDocNode(jsdocNode);
                     elems.add(plainProperty(pname, tt));
                 }
@@ -4649,7 +4683,11 @@ public class Parser {
 
         mustMatchToken(Token.RC, "msg.no.brace.prop", true);
         ObjectLiteral pn = new ObjectLiteral(pos, ts.tokenEnd - pos);
-        if (objectLiteralDestructuringDefault) {
+        // two __proto__: value definitions are a SyntaxError, unless the literal is a pattern
+        // (ECMA-262 B.3.1)
+        if (objectLiteralDestructuringDefault
+                || (protoDefinitions > 1
+                        && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6)) {
             pn.putIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 1);
         }
         if (objJsdocNode != null) {
@@ -4700,7 +4738,15 @@ public class Parser {
                     nextToken();
                     int lineno = lineNumber();
                     int column = columnNumber();
-                    AstNode expr = assignExpr();
+                    // the in operator is allowed in a computed key, also in a for head
+                    boolean savedInForInit = inForInit;
+                    inForInit = false;
+                    AstNode expr;
+                    try {
+                        expr = assignExpr();
+                    } finally {
+                        inForInit = savedInForInit;
+                    }
                     if (peekToken() != Token.RB) {
                         reportError("msg.bad.prop");
                     }
@@ -4788,6 +4834,15 @@ public class Parser {
         FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
         // the source text of a method starts with its get/set/* prefix and name
         fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
+        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+            // a getter has no parameter, a setter exactly one (not a rest parameter)
+            if (entryKind == GET_ENTRY && !fn.getParams().isEmpty()) {
+                reportError("msg.getter.params");
+            } else if (entryKind == SET_ENTRY
+                    && (fn.getParams().size() != 1 || fn.hasRestParameter())) {
+                reportError("msg.setter.params");
+            }
+        }
         // We've already parsed the function name, so fn should be anonymous.
         Name name = fn.getFunctionName();
         if (name != null && name.length() != 0) {

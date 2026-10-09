@@ -6,6 +6,22 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Early errors of object literals and functions (2026-10-09, plan 1.5a)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.16):
+
+- A getter with parameters, a setter without exactly one (or with a rest parameter), and a rest parameter with an
+  initializer are SyntaxErrors. Escaped `get`/`set` (`TokenStream.nameHadEscape`) are not accessor keywords.
+- Two `__proto__: value` definitions in an object literal are a SyntaxError unless the literal is a pattern (the
+  literal is flagged like `{ x = 1 }`, which is only valid as a pattern).
+- A `"use strict"` directive applies to the token already peeked after it (`Parser.applyStrictToPeekedToken`):
+  `"use strict"; public = 1` is a SyntaxError.
+- `in` is allowed in a computed property name inside a `for` head.
+- test262: 19 more files pass; 25,802 of 42,616 in-scope files (60.5%).
+- Left: shorthand and computed `__proto__` defining an own property (needs a compile-time marker; plan 1.11); the
+  runtime name inference of object literal values names any anonymous function stored in a property
+  (`fn-name-cover`); `with` and `Symbol.unscopables` (1.8); `super` and class tests (1.7).
+
 ### Spread arguments and for-of IteratorClose (2026-10-09, plan 1.4a)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.15):

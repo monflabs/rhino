@@ -79,6 +79,11 @@ class TokenStream implements Parser.CurrentPositionReporter {
         return "";
     }
 
+    /** The keyword token of a name, or Token.EOF. */
+    static int keywordToken(String s, int version, boolean isStrict) {
+        return stringToKeyword(s, version, isStrict);
+    }
+
     static boolean isKeyword(String s, int version, boolean isStrict) {
         return Token.EOF != stringToKeyword(s, version, isStrict);
     }
@@ -831,6 +836,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 }
 
                 this.string = internString(str);
+                nameHadEscape = containsEscape;
                 return Token.NAME;
             }
 
@@ -2497,6 +2503,12 @@ class TokenStream implements Parser.CurrentPositionReporter {
     // string is found.  Fosters one class of error, but saves lots of
     // code.
     private String string = "";
+
+    /**
+     * Whether the last NAME token contained a Unicode escape (it cannot be a contextual keyword).
+     */
+    boolean nameHadEscape;
+
     private double number;
     private BigInteger bigInt;
     private boolean isBinary;

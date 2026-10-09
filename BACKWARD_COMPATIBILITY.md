@@ -366,6 +366,24 @@ for (var x of iterable) break;   // before: iterable's iterator was left open   
   result of `next()` that is not an object is a TypeError (before, it was converted to an object).
 - **Why:** ECMA-262 2026, §14.7.5.7 ForIn/OfBodyEvaluation and §7.4.11 IteratorClose.
 
+### 2.16 Early errors of object literals and functions
+
+```js
+({ get a(x) {} });                 // before: accepted   now: SyntaxError (a getter has no parameters)
+({ set a() {} });                  // before: accepted   now: SyntaxError (a setter has exactly one)
+function f(...rest = []) {}        // before: accepted   now: SyntaxError
+({ __proto__: a, __proto__: b });  // before: accepted   now: SyntaxError (still valid as a pattern)
+({ g\u0065t m() {} });             // before: a getter   now: SyntaxError
+"use strict"; public = 1;          // before: ReferenceError at runtime   now: SyntaxError
+```
+
+- From `VERSION_ES6`. A `"use strict"` directive now also applies to the token right after it, which was read before
+  the directive took effect; words reserved in strict code (`public`, `static`, `implements`, …) are rejected there
+  like everywhere else in strict code.
+- `in` is allowed in a computed property name inside a `for` head (`for (o = { ['x' in y]: 1 }; ; )`).
+- **Why:** ECMA-262 2026, §15.4.1 (MethodDefinition early errors), §15.1.1 (FormalParameters), §B.3.1 (duplicate
+  `__proto__`), §12.7.2 (escaped keywords), §11.2.2 (directive prologues).
+
 ---
 
 ## 3. Platform and embedding

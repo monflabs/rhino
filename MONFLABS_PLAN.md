@@ -326,6 +326,12 @@ Steps:
 `__proto__: ` in literals (Annex B), `super` property access in object methods (`[[HomeObject]]`),
 `language/expressions/object`, `language/expressions/super`.
 
+Steps:
+- *1.5a (done)* early errors: accessor parameters, rest initializer, escaped `get`/`set`, duplicate `__proto__`,
+  strict directive applied to the next token, `in` in computed keys of `for` heads. Remaining in
+  `language/expressions/object`: class/generator/`yield`-identifier tests (1.6, 1.7), parameter scopes (1.2g),
+  `__proto__` own properties (1.11), anonymous-function naming of property values.
+
 **1.6 Generators completion.** Generator declarations/expressions/methods, `yield*` delegation with
 `return`/`throw` forwarding, `GeneratorPrototype` details, generator objects as iterables; both backends
 (`generators`, `built-ins/Generator*`). `yield` as an identifier outside generators in sloppy code
@@ -505,8 +511,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
 | 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f; 1.2g after 1.3) | (this) |
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
-| 1.4  | Iteration protocol                              | in progress | 60.3% → 60.5% (1.4a)         | (this) |
-| 1.5  | Object literal extensions                       | todo        |                              |        |
+| 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
+| 1.5  | Object literal extensions                       | in progress | 60.5% (1.5a)                 | (this) |
 | 1.6  | Generators                                      | todo        |                              |        |
 | 1.7  | Classes                                         | todo        |                              |        |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
