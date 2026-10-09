@@ -69,6 +69,19 @@ class ObjectLiteralSyntaxTest {
     }
 
     @Test
+    void onlyFunctionsDefinedAsAPropertyValueAreNamedAfterIt() {
+        assertBoth(
+                "|b|||[d]|comp||m|get g",
+                "var s = Symbol('d'), k = 'comp'; var f = (0, function () {});"
+                        + " var o = { a: (0, function () {}), b: (function () {}), c: f,"
+                        + "   [s]: function () {}, [k]: () => 1, [k + '2']: (0, function () {}),"
+                        + "   m() {}, get g() { return 1; } };"
+                        + " [o.a.name, o.b.name, o.c.name, f.name, o[s].name, o.comp.name,"
+                        + "  o.comp2.name, o.m.name, Object.getOwnPropertyDescriptor(o, 'g').get.name]"
+                        + ".join('|')");
+    }
+
+    @Test
     void inIsAllowedInAComputedKeyOfAForHead() {
         assertBoth(
                 "g",

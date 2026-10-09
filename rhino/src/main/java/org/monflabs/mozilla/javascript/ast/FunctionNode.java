@@ -83,6 +83,7 @@ public class FunctionNode extends ScriptNode {
     private int rp = -1;
     private boolean hasRestParameter;
     private boolean isShorthand;
+    private boolean namedByLiteral;
 
     @Override
     public List<Object> getDefaultParams() {
@@ -362,6 +363,15 @@ public class FunctionNode extends ScriptNode {
 
     public void setIsShorthand() {
         isShorthand = true;
+    }
+
+    /** Marks a function written as the value of an object literal property (see JSDescriptor). */
+    public void setNamedByLiteral() {
+        namedByLiteral = true;
+    }
+
+    public boolean isNamedByLiteral() {
+        return namedByLiteral;
     }
 
     public void addResumptionPoint(Node target) {

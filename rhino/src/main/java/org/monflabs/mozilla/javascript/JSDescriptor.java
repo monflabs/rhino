@@ -32,6 +32,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private static final int REQUIRES_ARGUMENT_OBJECT_FLAG = 1 << 11;
     private static final int DECLARED_AS_FUNCTION_EXPRESSION_FLAG = 1 << 12;
     private static final int DERIVED_CONSTRUCTOR_FLAG = 1 << 13;
+    private static final int NAMED_BY_LITERAL_FLAG = 1 << 14;
 
     private final JSCode<T> code;
     private final JSCode<T> constructor;
@@ -82,6 +83,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             boolean requiresArgumentObject,
             boolean declaredAsFunctionExpression,
             boolean derivedConstructor,
+            boolean namedByLiteral,
             SecurityController securityController,
             Object securityDomain,
             int functionType) {
@@ -106,6 +108,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         flags = flags | (requiresArgumentObject ? REQUIRES_ARGUMENT_OBJECT_FLAG : 0);
         flags = flags | (declaredAsFunctionExpression ? DECLARED_AS_FUNCTION_EXPRESSION_FLAG : 0);
         flags = flags | (derivedConstructor ? DERIVED_CONSTRUCTOR_FLAG : 0);
+        flags = flags | (namedByLiteral ? NAMED_BY_LITERAL_FLAG : 0);
         this.flags = flags;
 
         this.sourceFile = sourceFile;
@@ -161,6 +164,14 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
 
     public boolean isShorthand() {
         return (flags & IS_SHORTHAND_FLAG) != 0;
+    }
+
+    /**
+     * Whether the function is an anonymous function definition written as the value of an object
+     * literal property, which names it after the property (NamedEvaluation).
+     */
+    public boolean isNamedByLiteral() {
+        return (flags & NAMED_BY_LITERAL_FLAG) != 0;
     }
 
     public boolean hasPrototype() {
@@ -331,6 +342,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean requiresActivationFrame;
         public boolean requiresArgumentObject;
         public boolean declaredAsFunctionExpression;
+        public boolean namedByLiteral;
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
@@ -402,6 +414,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             requiresArgumentObject,
                             declaredAsFunctionExpression,
                             false,
+                            namedByLiteral,
                             securityController,
                             securityDomain,
                             functionType);

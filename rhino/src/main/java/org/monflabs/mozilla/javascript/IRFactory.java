@@ -1197,6 +1197,15 @@ public final class IRFactory {
                                 prop.getKey().getLineno(), prop.getKey().getColumn());
                     }
 
+                    AstNode valueNode = prop.getValue();
+                    while (valueNode instanceof ParenthesizedExpression) {
+                        valueNode = ((ParenthesizedExpression) valueNode).getExpression();
+                    }
+                    if (valueNode instanceof FunctionNode) {
+                        // an anonymous function definition named after its (computed) key at
+                        // runtime
+                        ((FunctionNode) valueNode).setNamedByLiteral();
+                    }
                     Node right = transform(prop.getValue());
                     if (inferrableName != null) {
                         inferNameIfMissing(

@@ -381,6 +381,9 @@ function f(...rest = []) {}        // before: accepted   now: SyntaxError
   the directive took effect; words reserved in strict code (`public`, `static`, `implements`, …) are rejected there
   like everywhere else in strict code.
 - `in` is allowed in a computed property name inside a `for` head (`for (o = { ['x' in y]: 1 }; ; )`).
+- Only an anonymous function written as a property value (`{ k: function () {} }`, also parenthesized) is named after
+  its key; before, any anonymous function used as a value was renamed, e.g. `var f = (0, function () {});
+  ({ x: f }); f.name` gave `"x"`, now `""`.
 - **Why:** ECMA-262 2026, §15.4.1 (MethodDefinition early errors), §15.1.1 (FormalParameters), §B.3.1 (duplicate
   `__proto__`), §12.7.2 (escaped keywords), §11.2.2 (directive prologues).
 

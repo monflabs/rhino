@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Names of object literal values (2026-10-09, plan 1.5b)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.16):
+
+- The runtime name inference of object literals (`NewLiteralStorage`) only names functions marked by `IRFactory` as
+  written directly as a property value (`JSDescriptor.isNamedByLiteral`, also emitted by `ClassCompiler`); other
+  anonymous functions stored in a property keep their name.
+- test262: 1 more file passes (`fn-name-cover`); 25,803 of 42,616 in-scope files (60.5%).
+
 ### Early errors of object literals and functions (2026-10-09, plan 1.5a)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.16):

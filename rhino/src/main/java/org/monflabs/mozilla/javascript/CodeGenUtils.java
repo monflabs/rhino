@@ -58,6 +58,9 @@ public class CodeGenUtils {
         if (fn.isShorthand()) {
             builder.isShorthand = true;
         }
+        if (fn.isNamedByLiteral()) {
+            builder.namedByLiteral = true;
+        }
         fillInCommon(builder, fn);
     }
 

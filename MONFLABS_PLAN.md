@@ -330,7 +330,8 @@ Steps:
 - *1.5a (done)* early errors: accessor parameters, rest initializer, escaped `get`/`set`, duplicate `__proto__`,
   strict directive applied to the next token, `in` in computed keys of `for` heads. Remaining in
   `language/expressions/object`: class/generator/`yield`-identifier tests (1.6, 1.7), parameter scopes (1.2g),
-  `__proto__` own properties (1.11), anonymous-function naming of property values.
+  `__proto__` own properties (1.11).
+- *1.5b (done)* only functions written as a property value are named after the property (`isNamedByLiteral`).
 
 **1.6 Generators completion.** Generator declarations/expressions/methods, `yield*` delegation with
 `return`/`throw` forwarding, `GeneratorPrototype` details, generator objects as iterables; both backends
