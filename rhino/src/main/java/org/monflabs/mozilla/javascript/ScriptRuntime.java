@@ -19,15 +19,19 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import org.monflabs.mozilla.javascript.InstrumentEmitter.Type;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.dtoa.DoubleFormatter;
@@ -3565,10 +3569,17 @@ public class ScriptRuntime {
             return Undefined.instance;
         }
 
-        if (callType == Node.SPECIALCALL_EVAL) {
+        if (callType == Node.SPECIALCALL_EVAL || callType == Node.SPECIALCALL_EVAL_IN_PARAMS) {
             if (thisObj.getParentScope() == null && NativeGlobal.isEvalFunction(fun)) {
                 return evalSpecial(
-                        cx, scope, callerThis, args, filename, lineNumber, cx.isStrictMode());
+                        cx,
+                        scope,
+                        callerThis,
+                        args,
+                        filename,
+                        lineNumber,
+                        cx.isStrictMode(),
+                        callType == Node.SPECIALCALL_EVAL_IN_PARAMS);
             }
         } else {
             throw Kit.codeBug();
@@ -3579,7 +3590,7 @@ public class ScriptRuntime {
 
     public static Object newSpecial(
             Context cx, Object fun, Object[] args, VarScope scope, int callType) {
-        if (callType == Node.SPECIALCALL_EVAL) {
+        if (callType == Node.SPECIALCALL_EVAL || callType == Node.SPECIALCALL_EVAL_IN_PARAMS) {
             if (NativeGlobal.isEvalFunction(fun)) {
                 throw typeErrorById("msg.not.ctor", "eval");
             }
@@ -3721,6 +3732,18 @@ public class ScriptRuntime {
             String filename,
             int lineNumber,
             boolean isStrict) {
+        return evalSpecial(cx, scope, thisArg, args, filename, lineNumber, isStrict, false);
+    }
+
+    private static Object evalSpecial(
+            Context cx,
+            VarScope scope,
+            Object thisArg,
+            Object[] args,
+            String filename,
+            int lineNumber,
+            boolean isStrict,
+            boolean inParameters) {
         if (args.length < 1) return Undefined.instance;
         Object x = args[0];
         if (!(x instanceof CharSequence)) {
@@ -3757,8 +3780,8 @@ public class ScriptRuntime {
         // mode.
         Consumer<CompilerEnvirons> compilerEnvironsProcessor =
                 compilerEnvs -> {
-                    // `eval` propagates strict mode
-                    compilerEnvs.setStrictMode(cx.isStrictMode());
+                    // a direct eval propagates strict mode, an indirect one never does
+                    compilerEnvs.setStrictMode(isStrict);
 
                     // If we are inside a method, we need to allow super. Methods have the home
                     // object set and propagated via the activation (i.e. the NativeCall),
@@ -3769,6 +3792,8 @@ public class ScriptRuntime {
                     compilerEnvs.setAllowSuper(isInsideMethod);
                     compilerEnvs.setInEval(true);
                     compilerEnvs.setHomeObject(homeObject);
+                    compilerEnvs.setEvalForbiddenVarNames(
+                            evalForbiddenVarNames(cx, scope, inParameters));
                 };
 
         Script script =
@@ -3792,6 +3817,50 @@ public class ScriptRuntime {
             evalScope = scope;
         }
         return script.exec(cx, evalScope, thisObject);
+    }
+
+    /**
+     * The names the vars of sloppy eval code may not declare (ECMA-262 19.2.1.3 step 3): in a
+     * parameter list, the parameters and the arguments object, which share the parameters'
+     * environment (10.2.11 step 20); under VERSION_ECMASCRIPT, a let/const of a block between the
+     * eval and its variable scope, or a global lexical declaration. Null when nothing is forbidden.
+     */
+    private static Predicate<String> evalForbiddenVarNames(
+            Context cx, VarScope scope, boolean inParameters) {
+        Predicate<String> forbidden = null;
+        if (inParameters && scope instanceof NativeCall) {
+            JSDescriptor<?> fn = ((NativeCall) scope).function.getDescriptor();
+            Set<String> names = new HashSet<>();
+            names.add("arguments");
+            for (int i = 0; i < fn.getParamCount(); i++) {
+                names.add(fn.getParamOrVarName(i));
+            }
+            forbidden = names::contains;
+        }
+        if (cx.isLatestEcmaScript()) {
+            List<LocalScope> blocks = new ArrayList<>();
+            VarScope varScope = scope;
+            while (varScope.isNestedScope()) {
+                if (varScope instanceof LocalScope) {
+                    blocks.add((LocalScope) varScope);
+                }
+                varScope = varScope.getParentScope();
+            }
+            TopLevel global = varScope instanceof TopLevel ? (TopLevel) varScope : null;
+            if (!blocks.isEmpty() || global != null) {
+                Predicate<String> lexical =
+                        name -> {
+                            for (LocalScope block : blocks) {
+                                if (block.has(name, block)) {
+                                    return true;
+                                }
+                            }
+                            return global != null && global.hasLexicalDeclaration(name);
+                        };
+                forbidden = forbidden == null ? lexical : forbidden.or(lexical);
+            }
+        }
+        return forbidden;
     }
 
     /** The typeof operator */
@@ -5156,6 +5225,11 @@ public class ScriptRuntime {
                     }
                 }
             }
+            if (evalScript
+                    && varScope instanceof TopLevel
+                    && desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT) {
+                checkEvalGlobalDeclarations(desc, ((TopLevel) varScope).getGlobalThis());
+            }
 
             for (int i = varCount; i-- != 0; ) {
                 String name = desc.getParamOrVarName(i);
@@ -5177,6 +5251,44 @@ public class ScriptRuntime {
                 } else {
                     ScriptableObject.redefineProperty(scope, name, isConst);
                 }
+            }
+        }
+    }
+
+    /**
+     * Sloppy eval code declaring global functions and vars checks them all before creating any
+     * (ECMA-262 19.2.1.3 steps 10–11, CanDeclareGlobalFunction and CanDeclareGlobalVar).
+     */
+    private static void checkEvalGlobalDeclarations(JSDescriptor<?> desc, ScriptableObject global) {
+        Set<String> functions = new HashSet<>();
+        for (int i = 0; i < desc.getFunctionCount(); i++) {
+            JSDescriptor<JSFunction> fn = desc.getFunction(i);
+            String name = fn.getFunctionName();
+            if (fn.getFunctionType() == FunctionNode.FUNCTION_STATEMENT
+                    && name != null
+                    && !name.isEmpty()) {
+                functions.add(name);
+                boolean definable;
+                if (!global.has(name, global)) {
+                    definable = global.isExtensible();
+                } else {
+                    int attributes = global.getAttributes(name);
+                    definable =
+                            (attributes & ScriptableObject.PERMANENT) == 0
+                                    || (attributes
+                                                    & (ScriptableObject.READONLY
+                                                            | ScriptableObject.DONTENUM))
+                                            == 0;
+                }
+                if (!definable) {
+                    throw typeErrorById("msg.global.not.definable", name);
+                }
+            }
+        }
+        for (int i = 0; i < desc.getParamAndVarCount(); i++) {
+            String name = desc.getParamOrVarName(i);
+            if (!functions.contains(name) && !global.has(name, global) && !global.isExtensible()) {
+                throw typeErrorById("msg.global.not.definable", name);
             }
         }
     }
@@ -5643,6 +5755,18 @@ public class ScriptRuntime {
                     // function scope outside eval should have DONTDELETE set.
                     ScriptableObject.defineProperty(
                             scope, name, function, ScriptableObject.PERMANENT);
+                } else if (cx.isLatestEcmaScript() && scope instanceof TopLevel) {
+                    // CreateGlobalFunctionBinding: a configurable global is redefined
+                    ScriptableObject global = ((TopLevel) scope).getGlobalThis();
+                    if (global.has(name, global)
+                            && (global.getAttributes(name) & ScriptableObject.PERMANENT) == 0) {
+                        global.delete(name);
+                    }
+                    if (global.has(name, global)) {
+                        global.put(name, global, function);
+                    } else {
+                        global.defineProperty(name, function, ScriptableObject.EMPTY);
+                    }
                 } else {
                     scope.put(name, scope, function);
                 }

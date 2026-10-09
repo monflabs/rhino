@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.monflabs.mozilla.javascript.ast.AbstractObjectProperty;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehension;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehensionLoop;
@@ -140,6 +141,7 @@ public class Parser {
 
     protected int nestingOfFunction;
     protected int nestingOfFunctionParams;
+    private FunctionNode functionOfParams;
     private LabeledStatement currentLabel;
     private boolean inDestructuringAssignment;
     protected boolean inUseStrictDirective;
@@ -722,6 +724,16 @@ public class Parser {
             inUseStrictDirective = savedStrictMode;
         }
 
+        Predicate<String> forbidden = compilerEnv.getEvalForbiddenVarNames();
+        if (forbidden != null && !root.isInStrictMode() && root.getSymbolTable() != null) {
+            for (Symbol symbol : root.getSymbolTable().values()) {
+                Symbol.Type type = symbol.getDeclType();
+                if ((type == Symbol.Type.VAR || type == Symbol.Type.FUNCTION_VAR)
+                        && forbidden.test(symbol.getName())) {
+                    addError("msg.var.redecl", symbol.getName());
+                }
+            }
+        }
         reportErrorsIfExists(baseLineno);
 
         // add comments to root in lexical order
@@ -851,6 +863,8 @@ public class Parser {
 
     private void parseFunctionParams(FunctionNode fnNode) throws IOException {
         ++nestingOfFunctionParams;
+        FunctionNode savedFunctionOfParams = functionOfParams;
+        functionOfParams = fnNode;
         try {
             if (matchToken(Token.RP, true)) {
                 fnNode.setRp(ts.tokenBeg - fnNode.getPosition());
@@ -1011,6 +1025,7 @@ public class Parser {
             }
         } finally {
             --nestingOfFunctionParams;
+            functionOfParams = savedFunctionOfParams;
         }
     }
 
@@ -3667,6 +3682,9 @@ public class Parser {
         checkCallRequiresActivation(pn);
         FunctionCall f = new FunctionCall(pos);
         f.setTarget(pn);
+        if (functionOfParams != null && functionOfParams == currentScriptOrFn) {
+            f.markInParameters();
+        }
         f.setLp(ts.tokenBeg - pos);
         List<AstNode> args = argumentList();
         if (args != null && args.size() > ARGC_LIMIT) reportError("msg.too.many.function.args");

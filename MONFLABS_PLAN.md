@@ -284,10 +284,15 @@ files, of which destructured parameters go to 1.3, and async/class syntax to the
   sloppy code moves to 1.6 (generators); the parameter scope moves to 1.2f.
 - *1.2d (done)* `Function.prototype.toString`: method/accessor source text, the `Function` constructor's source,
   built-ins, proxies. Class members wait for 1.7.
-- *1.2e* `eval` code (early errors, var/lexical conflicts, `this`, global declarations).
+- *1.2e (done)* `eval` code: `var` conflicts with parameters/`arguments` (eval in a parameter list) and with
+  lexical declarations, indirect eval never strict. The eval's own lexical environment (its top-level `let`/`const`
+  stay out of the caller) and `new.target` in eval move to 1.2f; global function definability (CanDeclareGlobalFunction)
+  stays open.
 - *1.2f* parameter environments: default-parameter TDZ (`dflt-params-ref-later`), a separate var scope for the body
   when parameters have expressions (`scope-paramsbody-var-open`), `eval` in parameters, and the immutable binding of a
-  function expression's name (`named-strict-error-reassign-fn-name-in-body`).
+  function expression's name (`named-strict-error-reassign-fn-name-in-body`); the lexical environment of eval code (`lex-env-distinct-*`,
+  `lex-env-no-init-*`), a function's top-level `let` against an eval `var`, `new.target` in eval, and eval in arrow
+  parameters.
 
 **1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
 nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` binds `y` to the second element), rest elements; `IteratorClose` on abrupt completion; evaluation order
@@ -480,7 +485,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.4% (1.2a–d)       | (this) |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.6% (1.2a–e)       | (this) |
 | 1.3  | Destructuring                                   | todo        |                              |        |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |

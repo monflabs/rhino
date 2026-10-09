@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Eval code declarations (2026-10-08, plan 1.2e)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.12):
+
+- A sloppy direct eval in a parameter list may not declare a `var`/function named like a parameter or `arguments`
+  (SyntaxError). The parser marks such calls (`Node.SPECIALCALL_EVAL_IN_PARAMS`); the eval code is compiled with
+  the forbidden names (`CompilerEnvirons.setEvalForbiddenVarNames`), checked against its top-level symbols.
+- An indirect eval is never strict mode code.
+
+Under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.4):
+
+- A `var`/function of sloppy eval code may not reuse the name of a `let`/`const` of an enclosing block or of a
+  global lexical declaration (SyntaxError).
+- Global functions and vars of eval code are checked (CanDeclareGlobalFunction/Var) before any is created; a
+  function over a configurable global redefines it.
+- test262: 113 more files pass (`language/eval-code`); 24,990 of 42,616 in-scope files (58.6%).
+- `indirect/lex-env-distinct-let.js` and `-const.js` now fail in strict mode too: they passed only because indirect
+  eval inherited strictness. Eval code's own lexical environment is plan 1.2f. Async variants wait for M3.
+
 ### Function.prototype.toString (2026-10-08, plan 1.2d)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.11):

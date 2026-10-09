@@ -99,10 +99,30 @@ const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxEr
 - **Embedding notes:** Java code reads such a binding from the scope (`scope.get("x", scope)`,
   `ScriptableObject.getProperty(scope, "x")`), not from `scope.getGlobalThis()`. An application that runs the same
   script twice in one scope (a REPL re-running `let x = …`) gets a SyntaxError the second time. `let`/`const` in
-  `eval` code are not affected (they are local to the eval code, as before). With a custom top scope that is not a
-  `TopLevel`, the declarations are made on that scope as before.
+  `eval` code are not affected (as before, they become variables of the eval's caller; plan 1.2f). With a custom top
+  scope that is not a `TopLevel`, the declarations are made on that scope as before.
 - **Not covered yet:** if a script declares both `var`s and a conflicting `let`, its `var`s may have been created on
   the global object before the SyntaxError.
+
+### 1.4 Declarations of eval code
+
+```js
+let x = 1;
+(0, eval)("var x");                 // VERSION_ES6: fine   VERSION_ECMASCRIPT: SyntaxError
+{ let y; { eval("var y"); } }       // VERSION_ES6: fine   VERSION_ECMASCRIPT: SyntaxError
+```
+
+- Sloppy eval code may not declare a `var` or function whose name is a `let`/`const` of a block between the eval
+  and its variable scope, or (when its variable scope is the global one) a global lexical declaration. A catch
+  parameter or a `with` object does not count.
+- When eval code declares global functions and vars, it checks them all before creating any: a function whose name
+  is a non-configurable global that is read-only or non-enumerable (`NaN`, `undefined`, …), or a new name on a
+  non-extensible global object, throws a TypeError and declares nothing (before, the functions preceding it were
+  created). A function replacing a configurable global property redefines it as writable, enumerable and
+  configurable (before, a read-only one was kept, or threw in strict mode).
+- **Why:** ECMA-262 2026, §19.2.1.3 EvalDeclarationInstantiation steps 3 and 10–11, §9.1.1.4.16
+  CanDeclareGlobalFunction and §9.1.1.4.18 CreateGlobalFunctionBinding.
+- **Not covered yet:** a function's own top-level `let` (`function f() { let x; eval("var x"); }`).
 
 ---
 
@@ -263,6 +283,22 @@ Object.getOwnPropertySymbols(Map.prototype).length;               // before: 3 (
 - `Map.prototype` and `Set.prototype` no longer have an own, internal `[Symbol.getSize]` symbol property.
 - **Why:** ECMA-262 2026, §20.2.3.5 Function.prototype.toString (source text of a MethodDefinition, NativeFunction
   syntax) and §20.2.1.1.1 CreateDynamicFunction; §24.1.3 (the properties of `Map.prototype`).
+
+### 2.12 Eval code
+
+```js
+function f(a = eval("var a = 1")) {}
+f();                                 // before: fine   now: SyntaxError (also "var arguments")
+"use strict";
+(0, eval)("var static = 1");         // before: SyntaxError (strict)   now: fine, a global var
+```
+
+- A sloppy direct eval in a parameter list may not declare a `var` or function named like a parameter or
+  `arguments`: they share the parameters' environment.
+- An indirect eval is never strict mode code, even when called from strict code (before, it inherited the caller's
+  strictness, and its `var`s did not reach the global object).
+- **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 20, §19.2.1.3 EvalDeclarationInstantiation
+  step 3 and §19.2.1.1 PerformEval steps 12–13.
 
 ---
 

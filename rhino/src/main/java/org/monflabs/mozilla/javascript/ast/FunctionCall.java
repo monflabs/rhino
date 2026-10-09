@@ -21,6 +21,7 @@ public class FunctionCall extends AstNode {
     protected int lp = -1;
     protected int rp = -1;
     protected boolean optionalCall = false;
+    private boolean inParameters;
 
     {
         type = Token.CALL;
@@ -133,6 +134,15 @@ public class FunctionCall extends AstNode {
     /** Returns whether the call is preceded by the optional chaining operator ?. */
     public boolean isOptionalCall() {
         return optionalCall;
+    }
+
+    /** Marks a call made in the parameter list of the enclosing function. */
+    public void markInParameters() {
+        this.inParameters = true;
+    }
+
+    public boolean isInParameters() {
+        return inParameters;
     }
 
     @Override

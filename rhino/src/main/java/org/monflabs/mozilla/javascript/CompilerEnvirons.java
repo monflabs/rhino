@@ -7,6 +7,7 @@
 package org.monflabs.mozilla.javascript;
 
 import java.util.Set;
+import java.util.function.Predicate;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.ast.ErrorCollector;
 import org.monflabs.mozilla.javascript.sourcemap.SourceMapper;
@@ -288,6 +289,18 @@ public class CompilerEnvirons {
         return inEval;
     }
 
+    /**
+     * The names the vars and functions of the eval code being compiled may not declare (a
+     * SyntaxError of EvalDeclarationInstantiation), or null.
+     */
+    public void setEvalForbiddenVarNames(Predicate<String> names) {
+        this.evalForbiddenVarNames = names;
+    }
+
+    public Predicate<String> getEvalForbiddenVarNames() {
+        return evalForbiddenVarNames;
+    }
+
     public void setHomeObject(Scriptable homeObject) {
         this.homeObjecgt = homeObject;
     }
@@ -349,6 +362,7 @@ public class CompilerEnvirons {
     private boolean allowSuper;
     Set<String> activationNames;
     private boolean inEval;
+    private Predicate<String> evalForbiddenVarNames;
     private Scriptable homeObjecgt;
     private SecurityController securityController;
     private Object securityDomain;

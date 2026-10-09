@@ -754,6 +754,10 @@ public final class IRFactory {
         try {
             Node transformedTarget = transform(node.getTarget());
             Node call = createCallOrNew(Token.CALL, transformedTarget);
+            if (node.isInParameters()
+                    && call.getIntProp(Node.SPECIALCALL_PROP, 0) == Node.SPECIALCALL_EVAL) {
+                call.putIntProp(Node.SPECIALCALL_PROP, Node.SPECIALCALL_EVAL_IN_PARAMS);
+            }
             call.setLineColumnNumber(node.getLineno(), node.getColumn());
             List<AstNode> args = node.getArguments();
             for (int i = 0; i < args.size(); i++) {
