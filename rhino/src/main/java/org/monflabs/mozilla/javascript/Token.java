@@ -263,7 +263,10 @@ public class Token {
             ITER_GUARD_INIT = ITER_CLOSE + 1,
             ITER_GUARD_CLOSE = ITER_GUARD_INIT + 1,
             REQUIRE_OBJECT = ITER_GUARD_CLOSE + 1, // TypeError if its child is null or undefined
-            LAST_TOKEN = REQUIRE_OBJECT + 1;
+            // IteratorClose of a for-of loop left by a jump, or (abrupt) by a throw
+            ENUM_CLOSE = REQUIRE_OBJECT + 1,
+            ENUM_CLOSE_ABRUPT = ENUM_CLOSE + 1,
+            LAST_TOKEN = ENUM_CLOSE_ABRUPT + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -640,6 +643,10 @@ public class Token {
                 return "ITER_GUARD_CLOSE";
             case REQUIRE_OBJECT:
                 return "REQUIRE_OBJECT";
+            case ENUM_CLOSE:
+                return "ENUM_CLOSE";
+            case ENUM_CLOSE_ABRUPT:
+                return "ENUM_CLOSE_ABRUPT";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

@@ -784,6 +784,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.ITER_REST] = new DoIterator(Icode.ITER_REST);
         instructionObjs[base + Icode.ITER_CLOSE] = new DoIterator(Icode.ITER_CLOSE);
         instructionObjs[base + Icode.REQUIRE_OBJECT] = new DoIterator(Icode.REQUIRE_OBJECT);
+        instructionObjs[base + Icode.CALL_SPREAD] = new DoCallSpread();
+        instructionObjs[base + Icode.CALL_SPREAD_ON_SUPER] = new DoCallSpread();
+        instructionObjs[base + Icode.NEW_SPREAD] = new DoCallSpread();
+        instructionObjs[base + Icode.ENUM_CLOSE] = new DoEnumClose();
+        instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
         instructionObjs[base + Icode.ITER_GUARD_INIT] = new DoIteratorGuard(Icode.ITER_GUARD_INIT);
@@ -3513,6 +3518,42 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                     ScriptRuntime.iteratorGuardClose(guard, cx, frame.scope);
                 }
             }
+            return null;
+        }
+    }
+
+    /**
+     * A call or new with spread arguments: stack: lookup result (or constructor), array -> result.
+     * Unlike other calls, an interpreted callee runs in a nested interpreter loop.
+     */
+    private static class DoCallSpread extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            if (state.instructionCounting) {
+                cx.instructionCount += INVOCATION_COST;
+            }
+            Object[] args = ScriptRuntime.spreadArguments(frame.stack[frame.stackTop]);
+            --frame.stackTop;
+            Object target = frame.stack[frame.stackTop];
+            if (op == Icode.NEW_SPREAD) {
+                frame.stack[frame.stackTop] =
+                        ScriptRuntime.newObject(target, cx, frame.scope, args);
+            } else {
+                ScriptRuntime.LookupResult result = (ScriptRuntime.LookupResult) target;
+                Callable fun = result.getCallable();
+                Object thisObj =
+                        op == Icode.CALL_SPREAD_ON_SUPER ? frame.thisObj : result.getThis();
+                frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
+            }
+            return null;
+        }
+    }
+
+    private static class DoEnumClose extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            int local = state.indexReg + frame.compilerData.maxVars;
+            ScriptRuntime.enumClose(frame.stack[local], cx, op == Icode.ENUM_CLOSE_ABRUPT);
             return null;
         }
     }

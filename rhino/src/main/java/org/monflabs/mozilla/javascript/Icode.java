@@ -190,8 +190,17 @@ abstract class Icode {
             // RequireObjectCoercible of an object pattern
             REQUIRE_OBJECT = ITER_GUARD_CLOSE - 1,
 
+            // Calls with spread arguments: their only argument is the array of the arguments
+            CALL_SPREAD = REQUIRE_OBJECT - 1,
+            CALL_SPREAD_ON_SUPER = CALL_SPREAD - 1,
+            NEW_SPREAD = CALL_SPREAD_ON_SUPER - 1,
+
+            // IteratorClose of a for-of loop
+            ENUM_CLOSE = NEW_SPREAD - 1,
+            ENUM_CLOSE_ABRUPT = ENUM_CLOSE - 1,
+
             // Last icode
-            MIN_ICODE = REQUIRE_OBJECT;
+            MIN_ICODE = ENUM_CLOSE_ABRUPT;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -409,6 +418,16 @@ abstract class Icode {
                 return "ITER_GUARD_CLOSE";
             case REQUIRE_OBJECT:
                 return "REQUIRE_OBJECT";
+            case CALL_SPREAD:
+                return "CALL_SPREAD";
+            case CALL_SPREAD_ON_SUPER:
+                return "CALL_SPREAD_ON_SUPER";
+            case NEW_SPREAD:
+                return "NEW_SPREAD";
+            case ENUM_CLOSE:
+                return "ENUM_CLOSE";
+            case ENUM_CLOSE_ABRUPT:
+                return "ENUM_CLOSE_ABRUPT";
         }
 
         // icode without name

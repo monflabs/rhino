@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Spread arguments and for-of IteratorClose (2026-10-09, plan 1.4a)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.15):
+
+- Spread arguments in calls and `new` (`f(...a)`, `o.m(...a)`, `new F(...a)`) work in both backends (they did not
+  compile in either): `IRFactory` turns the arguments into one array literal and marks the call with
+  `Node.SPREAD_ARGS_PROP`; the interpreter has `Icode.CALL_SPREAD`/`CALL_SPREAD_ON_SUPER`/`NEW_SPREAD`, compiled
+  code builds the argument array with `ScriptRuntime.spreadArguments`. A direct `eval(...args)` is an ordinary call.
+- `for-of` iterates with `IteratorRecord` (array fast path, `next` read once, TypeError for a non-object result) and
+  closes its iterator when left early: `NodeTransformer` emits `Token.ENUM_CLOSE` before a `break`, `continue` or
+  `return` that leaves the loop, and the loop is wrapped in a `try`/`finally` whose `ENUM_CLOSE_ABRUPT` closes it
+  after a throw. Comprehensions are unchanged. Host objects that are not `ScriptableObject`s keep the old checks
+  (no symbol keys, or no `Symbol.iterator`: "is not iterable").
+- test262: 85 more files pass; 25,783 of 42,616 in-scope files (60.5%).
+
 ### Destructuring evaluation order and for heads (2026-10-09, plan 1.3d)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.14):

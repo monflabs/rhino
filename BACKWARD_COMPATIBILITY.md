@@ -354,6 +354,18 @@ var [f = function () {}] = [];       // before: f.name is ""   now: "f"
 - **Why:** ECMA-262 2026, §8.6.2 BindingInitialization (RequireObjectCoercible), §8.6.3 KeyedBindingInitialization
   (NamedEvaluation of the initializer) and §13.15.5 DestructuringAssignmentEvaluation (order of evaluation).
 
+### 2.15 `for-of` closes its iterator
+
+```js
+for (var x of iterable) break;   // before: iterable's iterator was left open   now: its return() is called
+```
+
+- A `for-of` loop left before its iterator is done (`break`, `continue` to an outer loop, `return`, a throw, a
+  generator's `return()`) calls the iterator's `return()`. After a jump, an error of `return()` (or a result that
+  is not an object) propagates; after a throw, the throw wins. `next` is read once, when the loop starts, and a
+  result of `next()` that is not an object is a TypeError (before, it was converted to an object).
+- **Why:** ECMA-262 2026, §14.7.5.7 ForIn/OfBodyEvaluation and §7.4.11 IteratorClose.
+
 ---
 
 ## 3. Platform and embedding

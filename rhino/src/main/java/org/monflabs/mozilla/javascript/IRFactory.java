@@ -896,11 +896,7 @@ public final class IRFactory {
                 call.putIntProp(Node.SPECIALCALL_PROP, Node.SPECIALCALL_EVAL_IN_PARAMS);
             }
             call.setLineColumnNumber(node.getLineno(), node.getColumn());
-            List<AstNode> args = node.getArguments();
-            for (int i = 0; i < args.size(); i++) {
-                AstNode arg = args.get(i);
-                call.addChildToBack(transform(arg));
-            }
+            addArguments(call, node.getArguments());
             if (node.isOptionalCall()) {
                 call.putIntProp(Node.OPTIONAL_CHAINING, 1);
             }
@@ -1122,15 +1118,40 @@ public final class IRFactory {
     private Node transformNewExpr(NewExpression node) {
         Node nx = createCallOrNew(Token.NEW, transform(node.getTarget()));
         nx.setLineColumnNumber(node.getLineno(), node.getColumn());
-        List<AstNode> args = node.getArguments();
-        for (int i = 0; i < args.size(); i++) {
-            AstNode arg = args.get(i);
-            nx.addChildToBack(transform(arg));
-        }
+        addArguments(nx, node.getArguments());
         if (node.getInitializer() != null) {
             nx.addChildToBack(transformObjectLiteral(node.getInitializer()));
         }
         return nx;
+    }
+
+    /**
+     * The arguments of a call or new. With a spread argument, they become a single array literal,
+     * and the node is marked with Node#SPREAD_ARGS_PROP (ECMA-262 13.3.8.1 ArgumentListEvaluation).
+     */
+    private void addArguments(Node call, List<AstNode> args) {
+        boolean spread = false;
+        for (AstNode arg : args) {
+            spread |= arg instanceof Spread;
+        }
+        if (!spread) {
+            for (AstNode arg : args) {
+                call.addChildToBack(transform(arg));
+            }
+            return;
+        }
+        Node array = new Node(Token.ARRAYLIT);
+        for (AstNode arg : args) {
+            array.addChildToBack(transform(arg));
+            if (arg instanceof Spread) {
+                array.putIntProp(
+                        Node.NUMBER_OF_SPREAD, array.getIntProp(Node.NUMBER_OF_SPREAD, 0) + 1);
+            }
+        }
+        call.addChildToBack(array);
+        call.putIntProp(Node.SPREAD_ARGS_PROP, 1);
+        // a direct eval with spread arguments is not supported: it is an ordinary call
+        call.removeProp(Node.SPECIALCALL_PROP);
     }
 
     private Node transformNumber(NumberLiteral node) {
@@ -1992,6 +2013,30 @@ public final class IRFactory {
             newBody.addChildToBack(body);
 
             loop = createLoop((Jump) loop, LOOP_WHILE, newBody, cond, null, null);
+            // for-of statements only: a comprehension is an expression, which cannot hold a try
+            if (isForOf
+                    && ast.getClass() == ForInLoop.class
+                    && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                // IteratorClose: jumps out of the loop close the iterator (NodeTransformer finds
+                // the loop by its LOCAL_BLOCK_PROP), and a throw closes it in the finally
+                loop.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+                loop.addChildToFront(init);
+                if (type == Token.VAR || type == Token.LET) loop.addChildToFront(lhs);
+                // the enumeration is null until GetIterator succeeds (nothing to close before)
+                Node clear = new Node(Token.ITER_GUARD_INIT);
+                clear.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+                localBlock.addChildToBack(clear);
+                Node close = new Node(Token.ENUM_CLOSE_ABRUPT);
+                close.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+                localBlock.addChildToBack(
+                        createTryCatchFinally(
+                                new Node(Token.BLOCK, loop),
+                                new Node(Token.BLOCK),
+                                new Node(Token.BLOCK, close),
+                                ast.getLineno(),
+                                ast.getColumn()));
+                return localBlock;
+            }
             loop.addChildToFront(init);
             if (type == Token.VAR || type == Token.LET) loop.addChildToFront(lhs);
             localBlock.addChildToBack(loop);

@@ -73,7 +73,8 @@ public class Node implements Iterable<Node> {
             TDZ_DECLARATION_PROP = 34, // SETNAME initializing a let/const at its declaration
             TDZ_CHECKED_PROP = 35, // name reference already classified for the TDZ
             LEXICAL_PROP = 36, // NAME of a block scope that is a let/const binding
-            LAST_PROP = LEXICAL_PROP,
+            SPREAD_ARGS_PROP = 37, // CALL or NEW whose only argument is the array of its arguments
+            LAST_PROP = SPREAD_ARGS_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     // values of ISNUMBER_PROP to specify
@@ -468,6 +469,8 @@ public class Node implements Iterable<Node> {
                 return "tdz_declaration_prop";
             case TDZ_CHECKED_PROP:
                 return "tdz_checked_prop";
+            case SPREAD_ARGS_PROP:
+                return "spread_args_prop";
             case LEXICAL_PROP:
                 return "lexical_prop";
 

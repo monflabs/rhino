@@ -317,6 +317,11 @@ spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`M
 `Promise.all*`, `%TypedArray%.from`). `%IteratorPrototype%`, `%ArrayIteratorPrototype%` etc. (`Symbol.iterator`,
 `for-of`). Perf: fast path for built-in array iteration in `for-of` (Nashorn did the same).
 
+Steps:
+- *1.4a (done)* spread arguments in calls and `new` (both backends); `for-of` on `IteratorRecord` with IteratorClose
+  on `break`/`continue`/`return`/throw. Next: iterable built-ins (`Array.from`, `Map`/`Set`/`WeakMap`/`WeakSet`
+  constructors, `Promise.all*`, `%TypedArray%.from`), `yield*`, direct `eval(...args)`.
+
 **1.5 Object literal extensions.** Computed property names (17%), shorthand and concise methods, accessor names,
 `__proto__: ` in literals (Annex B), `super` property access in object methods (`[[HomeObject]]`),
 `language/expressions/object`, `language/expressions/super`.
@@ -499,8 +504,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
 | 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f; 1.2g after 1.3) | (this) |
-| 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | (this) |
-| 1.4  | Iteration protocol                              | todo        |                              |        |
+| 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
+| 1.4  | Iteration protocol                              | in progress | 60.3% → 60.5% (1.4a)         | (this) |
 | 1.5  | Object literal extensions                       | todo        |                              |        |
 | 1.6  | Generators                                      | todo        |                              |        |
 | 1.7  | Classes                                         | todo        |                              |        |

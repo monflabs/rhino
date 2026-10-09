@@ -35,6 +35,12 @@ final class IteratorRecord {
             throw ScriptRuntime.typeErrorById("msg.not.iterable", ScriptRuntime.toString(value));
         }
         Scriptable object = ScriptRuntime.toObject(cx, scope, value);
+        if (!(object instanceof ScriptableObject)
+                && (!(object instanceof SymbolScriptable)
+                        || !ScriptableObject.hasProperty(object, SymbolKey.ITERATOR))) {
+            // a host object that does not implement symbol keys, or has no Symbol.iterator
+            throw ScriptRuntime.typeErrorById("msg.not.iterable", ScriptRuntime.toString(value));
+        }
         Object method = ScriptableObject.getProperty(object, SymbolKey.ITERATOR);
         if (method instanceof JSFunction
                 && ((JSFunction) method).getDescriptor() == NativeArray.VALUES_DESCRIPTOR
@@ -61,6 +67,10 @@ final class IteratorRecord {
         Object next = ScriptableObject.getProperty(prototype, "next");
         return next instanceof JSFunction
                 && ((JSFunction) next).getDescriptor() == NativeArrayIterator.NEXT_DESCRIPTOR;
+    }
+
+    boolean isDone() {
+        return done;
     }
 
     /** IteratorStepValue: the next value, or undefined once the iterator is done. */
@@ -133,7 +143,7 @@ final class IteratorRecord {
      */
     static void closeAll(Object guard, Context cx, VarScope scope) {
         for (IteratorRecord r = (IteratorRecord) guard; r != null; r = r.previous) {
-            if (!r.done) {
+            if (!r.done && r.iterator != null) {
                 r.done = true;
                 try {
                     Object returnMethod =

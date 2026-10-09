@@ -890,6 +890,16 @@ class BodyCodegen {
                 cfw.addAStore(getLocalBlockRegister(node));
                 break;
 
+            case Token.ENUM_CLOSE:
+            case Token.ENUM_CLOSE_ABRUPT:
+                cfw.addALoad(getLocalBlockRegister(node));
+                cfw.addALoad(contextLocal);
+                cfw.addPush(type == Token.ENUM_CLOSE_ABRUPT);
+                addScriptRuntimeInvoke(
+                        "enumClose",
+                        "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/Context;Z)V");
+                break;
+
             case Token.ITER_GUARD_CLOSE:
                 {
                     int guard = getLocalBlockRegister(node);
@@ -3184,6 +3194,12 @@ class BodyCodegen {
     }
 
     private void generateCallArgArray(Node node, Node argChild, boolean directCall) {
+        if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
+            // the arguments are the elements of an array literal
+            generateExpression(argChild, node);
+            addScriptRuntimeInvoke("spreadArguments", "(Ljava/lang/Object;)[Ljava/lang/Object;");
+            return;
+        }
         int argCount = countArguments(argChild);
         // load array object to set arguments
         if (argCount == 1 && itsOneArgArray >= 0) {

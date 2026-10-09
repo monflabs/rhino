@@ -2772,6 +2772,10 @@ public class ScriptRuntime {
         boolean enumNumbers;
 
         Scriptable iterator;
+
+        // for-of: the iterator record and the scope of the loop
+        IteratorRecord record;
+        VarScope scope;
     }
 
     public static Scriptable toIterator(Context cx, Scriptable obj, boolean keyOnly) {
@@ -2824,7 +2828,9 @@ public class ScriptRuntime {
         if (enumType == ENUMERATE_VALUES_IN_ORDER) {
             x.enumType = enumType;
             x.iterator = null;
-            return enumInitInOrder(cx, x);
+            x.record = IteratorRecord.open(value, cx, scope);
+            x.scope = scope;
+            return x;
         }
         if (x.obj == null) {
             // null or undefined do not cause errors but rather lead to empty
@@ -2847,30 +2853,20 @@ public class ScriptRuntime {
         return x;
     }
 
-    private static Object enumInitInOrder(Context cx, IdEnumeration x) {
-        if (!(x.obj instanceof SymbolScriptable)
-                || !ScriptableObject.hasProperty(x.obj, SymbolKey.ITERATOR)) {
-            throw typeErrorById("msg.not.iterable", toString(x.obj));
+    /**
+     * IteratorClose of a for-of loop that is left before its iterator is done (Token#ENUM_CLOSE):
+     * after a break, continue or return, errors of the return method propagate; after a throw, they
+     * are ignored.
+     */
+    public static void enumClose(Object enumObj, Context cx, boolean abrupt) {
+        if (enumObj instanceof IdEnumeration && ((IdEnumeration) enumObj).record != null) {
+            IdEnumeration x = (IdEnumeration) enumObj;
+            if (abrupt) {
+                IteratorRecord.closeAll(x.record, cx, x.scope);
+            } else {
+                x.record.close(cx, x.scope);
+            }
         }
-
-        Object iterator = ScriptableObject.getProperty(x.obj, SymbolKey.ITERATOR);
-        if (!(iterator instanceof Callable)) {
-            throw typeErrorById("msg.not.iterable", toString(x.obj));
-        }
-        Callable f = (Callable) iterator;
-        Object[] args = new Object[] {};
-        VarScope scope;
-        if (f instanceof Function) {
-            scope = ((Function) f).getDeclarationScope();
-        } else {
-            scope = cx.topCallScope;
-        }
-        Object v = f.call(cx, scope, x.obj, args);
-        if (!(v instanceof Scriptable)) {
-            throw typeErrorById("msg.not.iterable", toString(x.obj));
-        }
-        x.iterator = (Scriptable) v;
-        return x;
     }
 
     public static void setEnumNumbers(Object enumObj, boolean enumNumbers) {
@@ -2887,10 +2883,15 @@ public class ScriptRuntime {
 
     public static Boolean enumNext(Object enumObj, Context cx) {
         IdEnumeration x = (IdEnumeration) enumObj;
-        if (x.iterator != null) {
-            if (x.enumType == ENUMERATE_VALUES_IN_ORDER) {
-                return enumNextInOrder(x, cx);
+        if (x.record != null) {
+            Object value = x.record.step(cx, x.scope);
+            if (x.record.isDone()) {
+                return Boolean.FALSE;
             }
+            x.currentId = value;
+            return Boolean.TRUE;
+        }
+        if (x.iterator != null) {
             Object v = ScriptableObject.getProperty(x.iterator, "next");
             if (!(v instanceof Callable)) return Boolean.FALSE;
             Callable f = (Callable) v;
@@ -2938,33 +2939,9 @@ public class ScriptRuntime {
         }
     }
 
-    private static Boolean enumNextInOrder(IdEnumeration enumObj, Context cx) {
-        Object v = ScriptableObject.getProperty(enumObj.iterator, ES6Iterator.NEXT_METHOD);
-        if (!(v instanceof Callable)) {
-            new Error(String.format("%s", v)).printStackTrace();
-            throw notFunctionError(enumObj.iterator, ES6Iterator.NEXT_METHOD);
-        }
-        Callable f = (Callable) v;
-        VarScope scope;
-        if (f instanceof Function) {
-            scope = ((Function) f).getDeclarationScope();
-        } else {
-            scope = cx.topCallScope;
-        }
-        Object r = f.call(cx, scope, enumObj.iterator, emptyArgs);
-        Scriptable iteratorResult = toObject(cx, scope, r);
-        Object done = ScriptableObject.getProperty(iteratorResult, ES6Iterator.DONE_PROPERTY);
-        if (done != Scriptable.NOT_FOUND && toBoolean(done)) {
-            return Boolean.FALSE;
-        }
-        enumObj.currentId =
-                ScriptableObject.getProperty(iteratorResult, ES6Iterator.VALUE_PROPERTY);
-        return Boolean.TRUE;
-    }
-
     public static Object enumId(Object enumObj, Context cx) {
         IdEnumeration x = (IdEnumeration) enumObj;
-        if (x.iterator != null) {
+        if (x.iterator != null || x.record != null) {
             return x.currentId;
         }
         switch (x.enumType) {
@@ -3861,6 +3838,18 @@ public class ScriptRuntime {
             }
         }
         return forbidden;
+    }
+
+    /** The arguments of a call with spread arguments, built as an array (Node#SPREAD_ARGS_PROP). */
+    public static Object[] spreadArguments(Object array) {
+        NativeArray a = (NativeArray) array;
+        long length = a.getLength();
+        Object[] args = new Object[(int) length];
+        for (int i = 0; i < args.length; i++) {
+            Object v = a.get(i, a);
+            args[i] = v == Scriptable.NOT_FOUND ? Undefined.instance : v;
+        }
+        return args;
     }
 
     /** Object destructuring: RequireObjectCoercible of the value (Token#REQUIRE_OBJECT). */

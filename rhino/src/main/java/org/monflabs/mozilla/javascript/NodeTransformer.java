@@ -220,9 +220,12 @@ public class NodeTransformer {
                             int elemtype = n.getType();
                             if (elemtype == Token.TRY
                                     || elemtype == Token.WITH
-                                    || elemtype == Token.SCOPE_BLOCK) {
+                                    || elemtype == Token.SCOPE_BLOCK
+                                    || isForOf(n)) {
                                 Node unwind;
-                                if (elemtype == Token.TRY) {
+                                if (isForOf(n)) {
+                                    unwind = enumClose(n);
+                                } else if (elemtype == Token.TRY) {
                                     Jump jsrnode = new Jump(Token.JSR);
                                     jsrnode.target = ((Jump) n).getFinally();
                                     unwind = jsrnode;
@@ -273,11 +276,17 @@ public class NodeTransformer {
                         // Iterate from the top of the stack (most recently inserted) and down
                         for (Node n : loops) {
                             if (n == jumpStatement) {
+                                if (type == Token.BREAK && isForOf(n)) {
+                                    previous =
+                                            addBeforeCurrent(parent, previous, node, enumClose(n));
+                                }
                                 break;
                             }
 
                             int elemtype = n.getType();
-                            if (elemtype == Token.WITH
+                            if (isForOf(n)) {
+                                previous = addBeforeCurrent(parent, previous, node, enumClose(n));
+                            } else if (elemtype == Token.WITH
                                     || elemtype == Token.SCOPEEXPR
                                     || elemtype == Token.SCOPE_BLOCK) {
                                 Node leave = new Node(Token.LEAVE_SCOPE);
@@ -489,6 +498,19 @@ public class NodeTransformer {
                     createScopeObjects,
                     inStrictMode);
         }
+    }
+
+    /**
+     * A for-of loop, which closes its iterator when a jump leaves it (see IRFactory#createForIn).
+     */
+    private static boolean isForOf(Node loop) {
+        return loop.getType() == Token.LOOP && loop.getProp(Node.LOCAL_BLOCK_PROP) != null;
+    }
+
+    private static Node enumClose(Node forOf) {
+        Node close = new Node(Token.ENUM_CLOSE);
+        close.putProp(Node.LOCAL_BLOCK_PROP, forOf.getProp(Node.LOCAL_BLOCK_PROP));
+        return close;
     }
 
     protected void visitNew(Node node, ScriptNode tree) {}

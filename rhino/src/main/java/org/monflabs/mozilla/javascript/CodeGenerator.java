@@ -590,6 +590,13 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 addIndexOp(Icode.ITER_GUARD_INIT, getLocalBlockRef(node));
                 break;
 
+            case Token.ENUM_CLOSE:
+            case Token.ENUM_CLOSE_ABRUPT:
+                addIndexOp(
+                        type == Token.ENUM_CLOSE ? Icode.ENUM_CLOSE : Icode.ENUM_CLOSE_ABRUPT,
+                        getLocalBlockRef(node));
+                break;
+
             case Token.ITER_GUARD_CLOSE:
                 addIndexOp(Icode.ITER_GUARD_CLOSE, getLocalBlockRef(node));
                 break;
@@ -741,7 +748,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                         ++argCount;
                     }
                     int callType = node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL);
-                    if (type != Token.REF_CALL && callType != Node.NON_SPECIALCALL) {
+                    if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
+                        addIcode(
+                                type == Token.NEW
+                                        ? Icode.NEW_SPREAD
+                                        : node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1
+                                                ? Icode.CALL_SPREAD_ON_SUPER
+                                                : Icode.CALL_SPREAD);
+                    } else if (type != Token.REF_CALL && callType != Node.NON_SPECIALCALL) {
                         // embed line number and source filename
                         addIndexOp(Icode.CALLSPECIAL, argCount);
                         addUint8(callType);
