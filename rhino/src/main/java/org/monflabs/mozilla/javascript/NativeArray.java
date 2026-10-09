@@ -75,6 +75,10 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static final ClassDescriptor DESCRIPTOR;
     public static final JSDescriptor<JSFunction> ITERATOR_DESCRIPTOR;
+
+    /** Array.prototype.values, which is also Array.prototype[Symbol.iterator]. */
+    static final JSDescriptor<JSFunction> VALUES_DESCRIPTOR;
+
     private static final BuiltInSlot.Descriptor<NativeArray> LENGTH_DESCRIPTOR =
             new BuiltInSlot.Descriptor<>(
                     "length",
@@ -170,6 +174,7 @@ public class NativeArray extends ScriptableObject implements List {
                         .withProp(PROTO, SymbolKey.UNSCOPABLES, NativeArray::makeUnscopables)
                         .build();
         ITERATOR_DESCRIPTOR = DESCRIPTOR.findProtoDesc(SymbolKey.ITERATOR);
+        VALUES_DESCRIPTOR = DESCRIPTOR.findProtoDesc("values");
     }
 
     private static BuiltInJSCodeExec<JSFunction> forCtor(BuiltInJSCodeExec<JSFunction> code) {

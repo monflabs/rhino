@@ -314,6 +314,27 @@ f();                                 // before: fine   now: SyntaxError (also "v
 - **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 20, §19.2.1.3 EvalDeclarationInstantiation
   step 3 and §19.2.1.1 PerformEval steps 12–13.
 
+### 2.13 Array destructuring follows the iterator protocol
+
+```js
+var [a] = { 0: 1, length: 1 };    // before: a is 1         now: TypeError (not iterable)
+var [b, , c] = new Set([1, 2, 3]); // before: undefined      now: b is 1, c is 3
+var x = 5; var [x = 1] = [];       // before: x stays 5      now: x is 1
+function f([p, , q]) {} f([1, 2, 3]);  // before: q was 2    now: q is 3
+```
+
+- Array patterns (declarations, assignments, parameters, `catch`, `for` heads) get an iterator from the value,
+  step it once per element or hole, collect the rest for a rest element, and close it (`return()`) when the
+  pattern is done before the iterator. A value that is not iterable is a TypeError. Plain arrays are still read by
+  index when that is not observable (the original `Array.prototype[Symbol.iterator]` and
+  `%ArrayIteratorPrototype%.next`).
+- A default value applies when the element is `undefined`, whatever the target held before.
+- Versions before `VERSION_ES6` keep reading by index.
+- The array iterator (`values()`, `for-of`, spread) reads a hole through the prototype chain, like `a[i]` (before,
+  it gave `undefined` even when `Array.prototype` had that index).
+- **Why:** ECMA-262 2026, §8.6.2 IteratorBindingInitialization and §13.15.5.5 IteratorDestructuringAssignmentEvaluation.
+- **Not covered yet:** closing the iterator when a default value or a target throws (plan 1.3b).
+
 ---
 
 ## 3. Platform and embedding

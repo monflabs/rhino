@@ -779,6 +779,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
         instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
+        instructionObjs[base + Icode.ITER_OPEN] = new DoIterator(Icode.ITER_OPEN);
+        instructionObjs[base + Icode.ITER_STEP] = new DoIterator(Icode.ITER_STEP);
+        instructionObjs[base + Icode.ITER_REST] = new DoIterator(Icode.ITER_REST);
+        instructionObjs[base + Icode.ITER_CLOSE] = new DoIterator(Icode.ITER_CLOSE);
         instructionObjs[base + Icode.GLOBAL_LEXICALS] = new DoGlobalLexicals();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
@@ -3447,6 +3451,29 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             ScriptRuntime.checkInitialized(frame.stack[frame.stackTop], state.stringReg);
+            return null;
+        }
+    }
+
+    private static class DoIterator extends InstructionClass {
+        private final int icode;
+
+        DoIterator(int icode) {
+            this.icode = icode;
+        }
+
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK)
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            frame.stack[frame.stackTop] =
+                    switch (icode) {
+                        case Icode.ITER_OPEN -> ScriptRuntime.iteratorOpen(value, cx, frame.scope);
+                        case Icode.ITER_STEP -> ScriptRuntime.iteratorStep(value, cx, frame.scope);
+                        case Icode.ITER_REST -> ScriptRuntime.iteratorRest(value, cx, frame.scope);
+                        default -> ScriptRuntime.iteratorClose(value, cx, frame.scope);
+                    };
             return null;
         }
     }

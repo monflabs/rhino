@@ -178,8 +178,14 @@ abstract class Icode {
             // Global let/const declarations of a script
             GLOBAL_LEXICALS = CHECK_TDZ - 1,
 
+            // The iterator protocol of array destructuring
+            ITER_OPEN = GLOBAL_LEXICALS - 1,
+            ITER_STEP = ITER_OPEN - 1,
+            ITER_REST = ITER_STEP - 1,
+            ITER_CLOSE = ITER_REST - 1,
+
             // Last icode
-            MIN_ICODE = GLOBAL_LEXICALS;
+            MIN_ICODE = ITER_CLOSE;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -381,6 +387,14 @@ abstract class Icode {
                 return "CHECK_TDZ";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
+            case ITER_OPEN:
+                return "ITER_OPEN";
+            case ITER_STEP:
+                return "ITER_STEP";
+            case ITER_REST:
+                return "ITER_REST";
+            case ITER_CLOSE:
+                return "ITER_CLOSE";
         }
 
         // icode without name

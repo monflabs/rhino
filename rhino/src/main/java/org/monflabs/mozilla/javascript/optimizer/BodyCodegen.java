@@ -1333,6 +1333,27 @@ class BodyCodegen {
                         "Lorg/monflabs/mozilla/javascript/UniqueTag;");
                 break;
 
+            case Token.ITER_OPEN:
+            case Token.ITER_STEP:
+            case Token.ITER_REST:
+            case Token.ITER_CLOSE:
+                generateExpression(child, node);
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                addScriptRuntimeInvoke(
+                        type == Token.ITER_OPEN
+                                ? "iteratorOpen"
+                                : type == Token.ITER_STEP
+                                        ? "iteratorStep"
+                                        : type == Token.ITER_REST
+                                                ? "iteratorRest"
+                                                : "iteratorClose",
+                        "(Ljava/lang/Object;"
+                                + "Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + ")Ljava/lang/Object;");
+                break;
+
             case Token.CHECK_TDZ:
                 generateExpression(child, node);
                 cfw.addPush(node.getString());

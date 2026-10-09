@@ -22,6 +22,13 @@ public final class NativeArrayIterator extends ES6Iterator {
     private static final ClassDescriptor DESCRIPTOR =
             ES6Iterator.makeDescriptor(ITERATOR_TAG, "Array Iterator");
 
+    /** The original %ArrayIteratorPrototype%.next. */
+    static final JSDescriptor<JSFunction> NEXT_DESCRIPTOR = DESCRIPTOR.findCtorDesc("next");
+
+    static Scriptable prototype(VarScope scope) {
+        return (Scriptable) ScriptableObject.getTopScopeValue(scope, ITERATOR_TAG);
+    }
+
     private ARRAY_ITERATOR_TYPE type;
 
     static void init(Context cx, VarScope scope, boolean sealed) {
@@ -63,7 +70,7 @@ public final class NativeArrayIterator extends ES6Iterator {
             return Integer.valueOf(index++);
         }
 
-        Object value = arrayLike.get(index, arrayLike);
+        Object value = ScriptableObject.getProperty(arrayLike, index);
         if (value == Scriptable.NOT_FOUND) {
             value = Undefined.instance;
         }

@@ -302,6 +302,13 @@ nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` bi
 (`destructuring-binding`, `destructuring-assignment`, `language/expressions/assignment`,
 `language/statements/for-of`).
 
+Split into steps (2026-10-08, decision: IR desugaring with new iterator operations, Nashorn-aligned):
+- *1.3a (done)* array patterns follow the iterator protocol (`ITER_OPEN`/`ITER_STEP`/`ITER_REST`/`ITER_CLOSE`,
+  `IteratorRecord`, array fast path), in every context.
+- *1.3b* IteratorClose on abrupt completion (a throwing default or target), with a statement-level guard for
+  expression-position patterns.
+- *1.3c* object patterns: RequireObjectCoercible, function names of anonymous defaults, evaluation order.
+
 **1.4 Iteration protocol.** Spread arguments in calls (`f(...a)`) in the interpreter (`CodeGenerator`/`Interpreter`; compiled mode has them). `GetIterator`/`IteratorStep`/`IteratorClose` as shared runtime helpers used by `for-of`,
 spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`Map`, `Set`, `WeakMap`, `WeakSet`,
 `Promise.all*`, `%TypedArray%.from`). `%IteratorPrototype%`, `%ArrayIteratorPrototype%` etc. (`Symbol.iterator`,
@@ -488,8 +495,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f)       | (this) |
-| 1.3  | Destructuring                                   | todo        |                              |        |
+| 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f; 1.2g after 1.3) | (this) |
+| 1.3  | Destructuring                                   | in progress | 58.7% → 59.4% (1.3a)         | (this) |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |
 | 1.6  | Generators                                      | todo        |                              |        |

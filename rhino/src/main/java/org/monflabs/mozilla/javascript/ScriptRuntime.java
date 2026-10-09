@@ -3863,6 +3863,27 @@ public class ScriptRuntime {
         return forbidden;
     }
 
+    /** Array destructuring: GetIterator (Token#ITER_OPEN). */
+    public static Object iteratorOpen(Object value, Context cx, VarScope scope) {
+        return IteratorRecord.open(value, cx, scope);
+    }
+
+    /** Array destructuring: the next value, or undefined once done (Token#ITER_STEP). */
+    public static Object iteratorStep(Object record, Context cx, VarScope scope) {
+        return ((IteratorRecord) record).step(cx, scope);
+    }
+
+    /** Array destructuring: the remaining values of a rest element (Token#ITER_REST). */
+    public static Object iteratorRest(Object record, Context cx, VarScope scope) {
+        return ((IteratorRecord) record).rest(cx, scope);
+    }
+
+    /** Array destructuring: IteratorClose at the end of a pattern (Token#ITER_CLOSE). */
+    public static Object iteratorClose(Object record, Context cx, VarScope scope) {
+        ((IteratorRecord) record).close(cx, scope);
+        return Undefined.instance;
+    }
+
     /** The typeof operator */
     public static String typeof(Object value) {
         if (value == null) return "object";

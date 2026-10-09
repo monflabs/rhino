@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Array destructuring follows the iterator protocol (2026-10-08, plan 1.3a)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.13):
+
+- Array patterns in every context are desugared to new IR operations `Token.ITER_OPEN`, `ITER_STEP`, `ITER_REST`
+  and `ITER_CLOSE` (both backends; `Icode` and `BodyCodegen`), implemented by `IteratorRecord` (GetIterator,
+  IteratorStepValue, IteratorClose). This replaces index-based access and the separate, partial iterator path of
+  parameters (which skipped holes). Plain arrays with the original `Array.prototype[Symbol.iterator]` and
+  `%ArrayIteratorPrototype%.next` are read by index (no iterator object; no performance change).
+- A default applies when the element is `undefined`; the desugaring no longer reads the target first.
+- test262: 298 more files pass; 25,302 of 42,616 in-scope files (59.4%).
+- `NativeArrayIterator` reads holes through the prototype chain. Found: `NativeArray.ITERATOR_DESCRIPTOR` is null
+  (`Symbol.iterator` is an alias of `values`), so the typed-array constructor's array fast path never runs; left as
+  is (enabling it would change typed-array results for holes).
+- Next: closing the iterator on abrupt completion (1.3b); object patterns (1.3c). Found: `yield` in an array
+  literal swallows the following elements (`[yield 1, b]`), left to 1.6.
+
 ### Temporal dead zone of parameters (2026-10-08, plan 1.2f)
 
 Under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2b):
