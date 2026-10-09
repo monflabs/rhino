@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### yield (2026-10-09, plan 1.6a)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.17):
+
+- The operand of `yield` is an AssignmentExpression (`[yield 1, 2]`); `yield` without operand before `,` and `:`;
+  `yield` after a comma and as an argument (the JavaScript 1.7 "parenthesized" rule stays for older versions); a
+  statement starting with `yield` is an expression statement; `yield*` must be on one line.
+- `yield` is an identifier in non-strict code outside generator functions (`Parser.isYieldAnIdentifier`, applied
+  when the token is peeked); generator methods are marked before their body is parsed; the name of a generator
+  expression may not be `yield`.
+- The `prototype` of a generator function has no `constructor`.
+- `Context.compileImpl` runs a script with generators in the interpreter when the class compiler fails on it (a
+  `yield` with typed values on the operand stack, inside a call or an object literal), as for class size limits.
+- test262: 70 more files pass; 25,873 of 42,616 in-scope files (60.7%).
+
 ### Names of object literal values (2026-10-09, plan 1.5b)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.16):

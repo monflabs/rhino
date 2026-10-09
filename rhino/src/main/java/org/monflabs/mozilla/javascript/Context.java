@@ -31,9 +31,11 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import org.monflabs.mozilla.classfile.ClassFileWriter.ClassFileFormatException;
 import org.monflabs.mozilla.classfile.ClassFileWriter.ClassSizeException;
 import org.monflabs.mozilla.javascript.InstrumentEmitter.Type;
 import org.monflabs.mozilla.javascript.ast.AstRoot;
+import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
 import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 import org.monflabs.mozilla.javascript.debug.Debugger;
@@ -2685,27 +2687,66 @@ public class Context implements Closeable {
     }
 
     protected Script compileScriptImpl(ScriptCompileSpec spec) {
-        Compiled<JSScript> compiled = compileImpl(spec);
-        return compiled.evaluator.createScriptObject(compiled.result, spec.getSecurityDomain());
+        Compiled<JSScript> compiled = compileImpl(spec, false);
+        try {
+            return compiled.evaluator.createScriptObject(compiled.result, spec.getSecurityDomain());
+        } catch (VerifyError e) {
+            if (!compiled.fallsBackToInterpreter()) {
+                throw e;
+            }
+            compiled = compileImpl(spec, true);
+            return compiled.evaluator.createScriptObject(compiled.result, spec.getSecurityDomain());
+        }
     }
 
     protected Function compileFunctionImpl(FunctionCompileSpec spec) {
-        Compiled<JSFunction> compiled = compileImpl(spec);
-        return compiled.evaluator.createFunctionObject(
-                this, spec.getScope(), compiled.result, spec.getSecurityDomain());
+        Compiled<JSFunction> compiled = compileImpl(spec, false);
+        try {
+            return compiled.evaluator.createFunctionObject(
+                    this, spec.getScope(), compiled.result, spec.getSecurityDomain());
+        } catch (VerifyError e) {
+            if (!compiled.fallsBackToInterpreter()) {
+                throw e;
+            }
+            compiled = compileImpl(spec, true);
+            return compiled.evaluator.createFunctionObject(
+                    this, spec.getScope(), compiled.result, spec.getSecurityDomain());
+        }
     }
 
     private static final class Compiled<T extends ScriptOrFn<T>> {
         private final Evaluator evaluator;
         private final CompilationResult<T> result;
+        private final boolean hasGenerators;
 
-        private Compiled(Evaluator evaluator, CompilationResult<T> result) {
+        private Compiled(Evaluator evaluator, CompilationResult<T> result, boolean hasGenerators) {
             this.evaluator = evaluator;
             this.result = result;
+            this.hasGenerators = hasGenerators;
+        }
+
+        /**
+         * Whether code that the class compiler cannot handle runs in the interpreter instead: a
+         * yield inside an expression that keeps typed values on the JVM operand stack (a call, an
+         * object literal) in a generator.
+         */
+        boolean fallsBackToInterpreter() {
+            return hasGenerators && !(evaluator instanceof Interpreter);
         }
     }
 
-    private <T extends ScriptOrFn<T>> Compiled<T> compileImpl(CompileSpec<T> spec) {
+    private static boolean containsGenerators(ScriptNode node) {
+        for (int i = 0; i < node.getFunctionCount(); i++) {
+            FunctionNode fn = node.getFunctionNode(i);
+            if (fn.isES6Generator() || fn.isGenerator() || containsGenerators(fn)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private <T extends ScriptOrFn<T>> Compiled<T> compileImpl(
+            CompileSpec<T> spec, boolean forceInterpreter) {
         String sourceString = spec.getSource();
 
         String sourceName = spec.getSourceName();
@@ -2754,7 +2795,8 @@ public class Context implements Closeable {
                         compilationErrorReporter,
                         returnFunction);
 
-        Evaluator compiler = spec.getCompiler();
+        Evaluator compiler = forceInterpreter ? createInterpreter() : spec.getCompiler();
+        boolean hasGenerators = containsGenerators(tree);
         CompilationResult<T> result;
         try {
             if (compiler == null) {
@@ -2762,7 +2804,12 @@ public class Context implements Closeable {
             }
 
             result = spec.compilationFunction().compile(compiler, compilerEnv, tree, sourceString);
-        } catch (ClassSizeException e) {
+        } catch (ClassFileFormatException | IllegalStateException | IndexOutOfBoundsException e) {
+            if (!(e instanceof ClassSizeException)
+                    && !(hasGenerators && !(compiler instanceof Interpreter))) {
+                // a compiler bug outside generators is reported
+                throw e;
+            }
             // we hit some class file limit, fall back to interpreter or report
 
             // we have to recreate the tree because the compile call might have changed the tree
@@ -2798,7 +2845,7 @@ public class Context implements Closeable {
             }
         }
 
-        return new Compiled<>(compiler, result);
+        return new Compiled<>(compiler, result, hasGenerators);
     }
 
     private ScriptNode parse(

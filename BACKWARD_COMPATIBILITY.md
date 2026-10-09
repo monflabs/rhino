@@ -387,6 +387,24 @@ function f(...rest = []) {}        // before: accepted   now: SyntaxError
 - **Why:** ECMA-262 2026, §15.4.1 (MethodDefinition early errors), §15.1.1 (FormalParameters), §B.3.1 (duplicate
   `__proto__`), §12.7.2 (escaped keywords), §11.2.2 (directive prologues).
 
+### 2.17 `yield`
+
+```js
+var yield = 1;                               // before: SyntaxError   now: fine (non-strict code)
+function f() { yield 1; }                    // before: a JavaScript 1.7 generator   now: SyntaxError
+function* g() { var a = [yield 1, 2]; }      // before: a was [x]   now: [x, 2]
+function* h() { yield\n* 1 }                // before: yield* 1   now: SyntaxError
+```
+
+- From `VERSION_ES6`: outside generator functions, in non-strict code, `yield` is an identifier; a function that is
+  not a `function*` is no longer made a (legacy) generator by a `yield` (versions 1.7 and 1.8 keep them). The
+  operand of `yield` is an AssignmentExpression, so a comma after it ends it; `yield` may be an argument
+  (`f(yield)`) or follow a comma. `yield*` must be on one line. The `prototype` of a generator function has no
+  `constructor`.
+- A script with a generator whose `yield` the class compiler cannot handle (inside a call or an object literal) is
+  run by the interpreter instead (`Context.compileImpl`).
+- **Why:** ECMA-262 2026, §15.5 (Generator Function Definitions), §13.1.1 (`yield` as an IdentifierReference).
+
 ---
 
 ## 3. Platform and embedding

@@ -468,9 +468,23 @@ public class Parser {
             }
         }
 
+        if (tt == Token.YIELD && isYieldAnIdentifier()) {
+            tt = Token.NAME;
+        }
         currentToken = tt;
         currentFlaggedToken = tt | (sawEOL ? TI_AFTER_EOL : 0);
         return currentToken; // return unflagged token
+    }
+
+    /**
+     * yield is an identifier in non-strict code outside generator functions (ECMA-262 13.1.1); in
+     * versions before ES6, a yield makes the function a (legacy) generator.
+     */
+    private boolean isYieldAnIdentifier() {
+        return compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                && !inUseStrictDirective
+                && !(currentScriptOrFn instanceof FunctionNode
+                        && ((FunctionNode) currentScriptOrFn).isES6Generator());
     }
 
     /**
@@ -1056,7 +1070,9 @@ public class Parser {
     }
 
     private FunctionNode function(int type, boolean isMethodDefiniton) throws IOException {
-        boolean isGenerator = false;
+        // a generator method (*m() {}) is known before its body is parsed: yield is a keyword there
+        boolean isGenerator = isMethodDefiniton && methodIsGenerator;
+        methodIsGenerator = false;
         int syntheticType = type;
         int baseLineno = lineNumber(); // line number where source starts
         int functionSourceStart = ts.tokenBeg; // start of "function" kwd
@@ -1103,6 +1119,14 @@ public class Parser {
 
         if (memberExprNode != null) {
             syntheticType = FunctionNode.FUNCTION_EXPRESSION;
+        }
+        if (isGenerator
+                && type == FunctionNode.FUNCTION_EXPRESSION
+                && name != null
+                && "yield".equals(name.getIdentifier())) {
+            // the name of a generator expression is bound in the generator, where yield is a
+            // keyword
+            reportError("msg.syntax");
         }
 
         defineFunctionSymbol(type, syntheticType, name, isGenerator);
@@ -1645,8 +1669,17 @@ public class Parser {
                 if (pn instanceof VariableDeclaration) break;
                 return pn;
 
-            case Token.RETURN:
             case Token.YIELD:
+                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    // an expression statement: yield is an AssignmentExpression (yield a, b)
+                    lineno = ts.getLineno();
+                    column = ts.getTokenColumn();
+                    pn = new ExpressionStatement(expr(false), !insideFunctionBody());
+                    pn.setLineColumnNumber(lineno, column);
+                    break;
+                }
+            // fall through
+            case Token.RETURN:
                 pn = returnOrYield(tt, false);
                 break;
 
@@ -2512,13 +2545,15 @@ public class Parser {
         boolean yieldStar = false;
         if ((tt == Token.YIELD)
                 && (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6)
-                && (peekToken() == Token.MUL)) {
+                && (peekTokenOrEOL() == Token.MUL)) {
             yieldStar = true;
             consumeToken();
         }
 
         AstNode e = null;
         // This is ugly, but we don't want to require a semicolon.
+        boolean es6Yield =
+                tt == Token.YIELD && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
         switch (peekTokenOrEOL()) {
             case Token.SEMI:
             case Token.RC:
@@ -2528,6 +2563,15 @@ public class Parser {
             case Token.EOL:
             case Token.ERROR:
                 break;
+            case Token.COMMA:
+            case Token.COLON:
+                if (es6Yield && !yieldStar) {
+                    // yield without operand: { ...yield, a }, c ? yield : d
+                    break;
+                }
+                e = expr(false);
+                end = getNodeEnd(e);
+                break;
             case Token.YIELD:
                 if (compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
                     // Take extra care to preserve language compatibility
@@ -2535,7 +2579,8 @@ public class Parser {
                 }
             // fallthrough
             default:
-                e = expr(false);
+                // the operand of yield is an AssignmentExpression: [yield 1, 2] has two elements
+                e = es6Yield ? assignExpr() : expr(false);
                 end = getNodeEnd(e);
         }
 
@@ -3133,7 +3178,11 @@ public class Parser {
             int opPos = ts.tokenBeg;
             if (compilerEnv.isStrictMode() && !pn.hasSideEffects())
                 addStrictWarning("msg.no.side.effects", "", pos, nodeEnd(pn) - pos);
-            if (peekToken() == Token.YIELD) reportError("msg.yield.parenthesized");
+            if (peekToken() == Token.YIELD
+                    && compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+                // JavaScript 1.7 rule; in ES6, yield is an AssignmentExpression
+                reportError("msg.yield.parenthesized");
+            }
             if (allowTrailingComma && peekToken() == Token.RP) {
                 pn.putIntProp(Node.TRAILING_COMMA, 1);
                 return pn;
@@ -3545,7 +3594,8 @@ public class Parser {
                     // Quick fix to handle scenario like f1(a,); but not f1(a,b
                     break;
                 }
-                if (peekToken() == Token.YIELD) {
+                if (peekToken() == Token.YIELD
+                        && compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
                     reportError("msg.yield.parenthesized");
                 }
                 AstNode en = assignExpr();
@@ -4831,6 +4881,7 @@ public class Parser {
             boolean isGenerator,
             boolean isShorthand)
             throws IOException {
+        methodIsGenerator = isGenerator && entryKind == METHOD_ENTRY;
         FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
         // the source text of a method starts with its get/set/* prefix and name
         fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
@@ -5530,6 +5581,9 @@ public class Parser {
                 dflt,
                 createName(elemName));
     }
+
+    /** Set by methodDefinition for function(): the method being parsed is a generator. */
+    private boolean methodIsGenerator;
 
     /** How many Token#ITER_OPEN have been created, see IRFactory#guardIterators. */
     int iteratorOpenCount;

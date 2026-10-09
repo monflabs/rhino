@@ -784,7 +784,10 @@ public class BaseFunction extends ScriptableObject implements Function {
             obj.setPrototype(proto);
         }
 
-        obj.defineProperty("constructor", this, DONTENUM);
+        if (!isGeneratorFunction()) {
+            // the prototype of a generator function has no constructor (ECMA-262 15.5.4)
+            obj.defineProperty("constructor", this, DONTENUM);
+        }
         return obj;
     }
 
