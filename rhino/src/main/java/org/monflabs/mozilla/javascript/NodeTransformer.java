@@ -605,7 +605,7 @@ public class NodeTransformer {
                 scopeNode.setType(Token.COMMA);
                 result.addChildToBack(scopeNode);
                 scopeNode.addChildToBack(body);
-                if (body instanceof Scope) {
+                if (body instanceof Scope && ((Scope) body).getParentScope() != scopeNode) {
                     Scope scopeParent = ((Scope) body).getParentScope();
                     ((Scope) body).setParentScope((Scope) scopeNode);
                     ((Scope) scopeNode).setParentScope(scopeParent);
@@ -615,7 +615,7 @@ public class NodeTransformer {
                 scopeNode.setType(Token.BLOCK);
                 result.addChildToBack(scopeNode);
                 scopeNode.addChildrenToBack(body);
-                if (body instanceof Scope) {
+                if (body instanceof Scope && ((Scope) body).getParentScope() != scopeNode) {
                     Scope scopeParent = ((Scope) body).getParentScope();
                     ((Scope) body).setParentScope((Scope) scopeNode);
                     ((Scope) scopeNode).setParentScope(scopeParent);

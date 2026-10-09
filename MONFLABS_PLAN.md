@@ -308,6 +308,9 @@ Split into steps (2026-10-08, decision: IR desugaring with new iterator operatio
 - *1.3b (done)* IteratorClose on abrupt completion (a throwing default or target), with a statement-level guard for
   expression-position patterns.
 - *1.3c (done)* object patterns: RequireObjectCoercible, function names of anonymous defaults (evaluation order: 1.3d).
+- *1.3d (done)* evaluation order of assignment targets and computed keys; for-in/of assignment heads with
+  defaults; names of nested patterns in `for (let …)` heads. Left: generator parameters bound at call time (1.6),
+  `yield` as an identifier (1.6), class patterns (1.7).
 
 **1.4 Iteration protocol.** Spread arguments in calls (`f(...a)`) in the interpreter (`CodeGenerator`/`Interpreter`; compiled mode has them). `GetIterator`/`IteratorStep`/`IteratorClose` as shared runtime helpers used by `for-of`,
 spread, destructuring, `Array.from`, `yield*`, and the iterable constructors (`Map`, `Set`, `WeakMap`, `WeakSet`,
@@ -496,7 +499,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
 | 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f; 1.2g after 1.3) | (this) |
-| 1.3  | Destructuring                                   | in progress | 58.7% → 60.2% (1.3a–c)       | (this) |
+| 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | (this) |
 | 1.4  | Iteration protocol                              | todo        |                              |        |
 | 1.5  | Object literal extensions                       | todo        |                              |        |
 | 1.6  | Generators                                      | todo        |                              |        |

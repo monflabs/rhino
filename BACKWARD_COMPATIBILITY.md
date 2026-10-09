@@ -347,8 +347,12 @@ var [f = function () {}] = [];       // before: f.name is ""   now: "f"
   is empty or reads no property.
 - An anonymous function, generator or arrow function given as the default value of a binding in a pattern is named
   after that binding, as `var f = function () {}` already was.
-- **Why:** ECMA-262 2026, §8.6.2 BindingInitialization (RequireObjectCoercible) and §8.6.3 KeyedBindingInitialization
-  (NamedEvaluation of the initializer).
+- In assignment patterns, a property target (`o.p`, `o[k]`) is evaluated before the value it receives is read (the
+  iterator stepped, the source property read), and computed keys are evaluated in order, each right before its
+  property (before, all computed keys were evaluated first). `[o.p = 1] = …` and `{ a: o.p = 1 } = …` are accepted
+  (before: SyntaxError).
+- **Why:** ECMA-262 2026, §8.6.2 BindingInitialization (RequireObjectCoercible), §8.6.3 KeyedBindingInitialization
+  (NamedEvaluation of the initializer) and §13.15.5 DestructuringAssignmentEvaluation (order of evaluation).
 
 ---
 

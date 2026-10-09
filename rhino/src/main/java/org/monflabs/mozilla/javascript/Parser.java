@@ -2020,6 +2020,10 @@ public class Parser {
                     }
                 }
 
+                if (init.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1) {
+                    // {x = 1} is only valid as a pattern
+                    reportError("msg.syntax");
+                }
                 mustMatchToken(Token.SEMI, "msg.no.semi.for", true);
                 if (peekToken() == Token.SEMI) {
                     // no loop condition
@@ -2122,6 +2126,15 @@ public class Parser {
             } else if (tt == Token.VAR || tt == Token.LET || tt == Token.CONST) {
                 consumeToken();
                 init = variables(tt, ts.tokenBeg, false);
+            } else if (tt == Token.LC || tt == Token.LB) {
+                // may be an assignment pattern of a for-in/of: for ({x = 1} of ...)
+                boolean saved = inDestructuringAssignment;
+                inDestructuringAssignment = true;
+                try {
+                    init = expr(false);
+                } finally {
+                    inDestructuringAssignment = saved;
+                }
             } else {
                 init = expr(false);
             }
@@ -5170,6 +5183,37 @@ public class Parser {
         return createDestructuringAssignment(type, left, right, defaultValue, null, true);
     }
 
+    /**
+     * A pattern nested in another one: its bound names are also names of the enclosing pattern, so
+     * that a let/const declaration declares them all.
+     */
+    private Node nestedDestructuring(
+            List<String> destructuringNames,
+            int variableType,
+            Node left,
+            Node right,
+            String tempName,
+            AstNode defaultValue,
+            Transformer transformer,
+            boolean isFunctionParameter) {
+        Node result =
+                destructuringAssignmentHelper(
+                        variableType,
+                        left,
+                        right,
+                        tempName,
+                        defaultValue,
+                        transformer,
+                        isFunctionParameter);
+        Object names = result.getProp(Node.DESTRUCTURING_NAMES);
+        if (names instanceof List) {
+            for (Object name : (List<?>) names) {
+                destructuringNames.add((String) name);
+            }
+        }
+        return result;
+    }
+
     Node destructuringAssignmentHelper(
             int variableType,
             Node left,
@@ -5212,18 +5256,27 @@ public class Parser {
                 destructuringLet = savedLet;
             }
         } else if (left instanceof ObjectLiteral) {
-            empty =
-                    destructuringObject(
-                            (ObjectLiteral) left,
-                            variableType,
-                            tempName,
-                            comma,
-                            destructuringNames,
-                            defaultValue,
-                            transformer,
-                            isFunctionParameter,
-                            letNode,
-                            result);
+            Scope savedScope = destructuringScope;
+            Node savedLet = destructuringLet;
+            destructuringScope = result;
+            destructuringLet = letNode;
+            try {
+                empty =
+                        destructuringObject(
+                                (ObjectLiteral) left,
+                                variableType,
+                                tempName,
+                                comma,
+                                destructuringNames,
+                                defaultValue,
+                                transformer,
+                                isFunctionParameter,
+                                letNode,
+                                result);
+            } finally {
+                destructuringScope = savedScope;
+                destructuringLet = savedLet;
+            }
         } else if (left.getType() == Token.GETPROP || left.getType() == Token.GETELEM) {
             switch (variableType) {
                 case Token.CONST:
@@ -5304,7 +5357,10 @@ public class Parser {
                                             Node.newString("slice")));
                     restValue.addChildToBack(createNumber(index));
                 }
-                if (restTarget.getType() == Token.NAME) {
+                if (isMemberTarget(restTarget)) {
+                    // the reference is evaluated before the remaining values are collected
+                    parent.addChildToBack(simpleAssignment(restTarget, restValue, transformer));
+                } else if (restTarget.getType() == Token.NAME) {
                     String name = restTarget.getString();
                     parent.addChildToBack(
                             new Node(setOp, createName(Token.BINDNAME, name, null), restValue));
@@ -5315,7 +5371,8 @@ public class Parser {
                 } else {
                     // [...[x, y]] or [...{length}]
                     parent.addChildToBack(
-                            destructuringAssignmentHelper(
+                            nestedDestructuring(
+                                    destructuringNames,
                                     variableType,
                                     restTarget,
                                     restValue,
@@ -5324,6 +5381,20 @@ public class Parser {
                                     transformer,
                                     isFunctionParameter));
                 }
+                index++;
+                empty = false;
+                continue;
+            }
+
+            AstNode target = n.getType() == Token.ASSIGN ? ((Assignment) n).getLeft() : n;
+            if (useIterator && isMemberTarget(target)) {
+                // the reference (object and key) is evaluated before the iterator is stepped
+                Node step = new Node(Token.ITER_STEP, createName(iteratorName));
+                Node value = step;
+                if (n.getType() == Token.ASSIGN) {
+                    value = defaultedValue(step, ((Assignment) n).getRight(), transformer);
+                }
+                parent.addChildToBack(simpleAssignment(target, value, transformer));
                 index++;
                 empty = false;
                 continue;
@@ -5364,7 +5435,8 @@ public class Parser {
                         isFunctionParameter);
             } else {
                 parent.addChildToBack(
-                        destructuringAssignmentHelper(
+                        nestedDestructuring(
+                                destructuringNames,
                                 variableType,
                                 n,
                                 rightElem,
@@ -5380,6 +5452,28 @@ public class Parser {
             parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
         }
         return empty;
+    }
+
+    /** An assignment target that is a property reference: obj.p or obj[k]. */
+    private static boolean isMemberTarget(Node target) {
+        return target instanceof PropertyGet || target instanceof ElementGet;
+    }
+
+    /**
+     * The value of an element with a default, evaluated once: <code>($e = value) === undefined ?
+     * default : $e</code>.
+     */
+    private Node defaultedValue(Node value, AstNode defaultValue, Transformer transformer) {
+        String elemName = defineTemp();
+        Node dflt = transformer != null ? transformer.transform(defaultValue) : defaultValue;
+        return new Node(
+                Token.HOOK,
+                new Node(
+                        Token.SHEQ,
+                        new KeywordLiteral().setType(Token.UNDEFINED),
+                        new Node(Token.SETNAME, createName(Token.BINDNAME, elemName, null), value)),
+                dflt,
+                createName(elemName));
     }
 
     /** How many Token#ITER_OPEN have been created, see IRFactory#guardIterators. */
@@ -5469,7 +5563,8 @@ public class Parser {
                 }
 
                 parent.addChildToBack(
-                        destructuringAssignmentHelper(
+                        nestedDestructuring(
+                                destructuringNames,
                                 variableType,
                                 left,
                                 cond_default,
@@ -5477,6 +5572,13 @@ public class Parser {
                                 null,
                                 transformer,
                                 isFunctionParameter));
+            } else if (isMemberTarget(left) && transformer != null) {
+                // {a: o.p = 1}: the reference is evaluated before the property is read
+                parent.addChildToBack(
+                        simpleAssignment(
+                                left,
+                                defaultedValue(rightElem, n.getRight(), transformer),
+                                transformer));
             } else {
                 reportError("msg.bad.assign.left");
             }
@@ -5623,7 +5725,8 @@ public class Parser {
                     // Pattern: ...{x, y} or ...[length]
                     // Collect rest object into temporary, then destructure
                     parent.addChildToBack(
-                            destructuringAssignmentHelper(
+                            nestedDestructuring(
+                                    destructuringNames,
                                     variableType,
                                     restTarget,
                                     restOp,
@@ -5667,25 +5770,19 @@ public class Parser {
                 // Create a temp variable for the computed key within the LETEXPR scope
                 // to ensure the expression is only evaluated once
                 AstNode computedExpr = ((ComputedPropertyKey) id).getExpression();
-                String keyTempName = currentScriptOrFn.getNextTempName();
-
-                Node tempVar;
-                if (transformer != null) {
-                    Node keyExpr = transformer.transform(computedExpr);
-                    tempVar = createName(Token.NAME, keyTempName, keyExpr);
-                } else {
-                    tempVar = createName(Token.NAME, keyTempName, computedExpr);
-                    currentScriptOrFn.putDestructuringRvalues(tempVar, computedExpr);
+                // evaluated in order, right before the property is read
+                String keyTempName = defineTemp();
+                Node keyExpr =
+                        transformer != null ? transformer.transform(computedExpr) : computedExpr;
+                Node setKey =
+                        new Node(
+                                Token.SETNAME,
+                                createName(Token.BINDNAME, keyTempName, null),
+                                keyExpr);
+                if (transformer == null) {
+                    currentScriptOrFn.putDestructuringRvalues(setKey, computedExpr);
                 }
-                letNode.addChildToBack(tempVar);
-
-                // define the computed property temp
-                pushScope(letExprScope);
-                try {
-                    defineSymbol(Token.LET, keyTempName, true);
-                } finally {
-                    popScope();
-                }
+                parent.addChildToBack(setKey);
 
                 Node keyRef = createName(keyTempName);
                 extractedKeys.add(keyRef);
@@ -5721,7 +5818,8 @@ public class Parser {
                         isFunctionParameter);
             } else {
                 parent.addChildToBack(
-                        destructuringAssignmentHelper(
+                        nestedDestructuring(
+                                destructuringNames,
                                 variableType,
                                 value,
                                 rightElem,

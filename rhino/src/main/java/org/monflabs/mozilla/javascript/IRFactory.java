@@ -1787,6 +1787,9 @@ public final class IRFactory {
             // "let (i=s) { for (; i < N; i++)..." so that "s" is evaluated
             // outside the scope of the for.
             Scope let = Scope.splitScope(loop);
+            // the scopes of the initializer (nested patterns) are in the let scope, where the names
+            // they bind are declared
+            loop.setParentScope(let);
             let.setType(Token.LET);
             let.addChildrenToBack(init);
             // the loop must stay the let's direct child: NodeTransformer.visitLet re-parents it
@@ -1802,6 +1805,18 @@ public final class IRFactory {
             return let;
         }
         return createLoop(loop, LOOP_FOR, body, test, init, incr, false);
+    }
+
+    private static boolean isInside(Node node, Node root) {
+        if (node == root) {
+            return true;
+        }
+        for (Node child = root.getFirstChild(); child != null; child = child.getNext()) {
+            if (isInside(node, child)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -48,6 +48,37 @@ class ObjectDestructuringTest {
     }
 
     @Test
+    void targetsAreEvaluatedBeforeTheirValue() {
+        assertBoth(
+                "key,next,return|key,get,9|k1,get a,k2,get b|5",
+                "var r = [];"
+                        + " var log = []; var it = { [Symbol.iterator]() { return {"
+                        + "   next() { log.push('next'); return {done: false, value: 1}; },"
+                        + "   return() { log.push('return'); return {}; } }; } };"
+                        + " var o = {}; [o[(log.push('key'), 'p')]] = it; r.push(log.join());"
+                        + " log = []; var src = { get a() { log.push('get'); return undefined; } };"
+                        + " ({ a: o[(log.push('key'), 'x')] = 9 } = src); r.push(log.join() + ',' + o.x);"
+                        + " log = []; var x, y; src = { get a() { log.push('get a'); return 1; },"
+                        + "   get b() { log.push('get b'); return 2; } };"
+                        + " ({ [(log.push('k1'), 'a')]: x, [(log.push('k2'), 'b')]: y } = src);"
+                        + " r.push(log.join());"
+                        + " [o.q = 5] = []; r.push(o.q);"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void forHeads() {
+        assertBoth(
+                "1,4,3,undefined",
+                "'use strict'; var r = [];"
+                        + " for (let [{ x }] = [{ x: 1 }]; r.length < 1; ) r.push(x);"
+                        + " var a, b; for ({ a = 1, b } of [{ b: 3 }]) r.push(a + b);"
+                        + " for (let { w: [c, d] } = { w: [1, 2] }; r.length < 3; ) r.push(c + d);"
+                        + " r.push(typeof x);"
+                        + " r.join()");
+    }
+
+    @Test
     void forConstHeads() {
         assertBoth(
                 "1,3",

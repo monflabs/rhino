@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Destructuring evaluation order and for heads (2026-10-09, plan 1.3d)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.14):
+
+- In assignment patterns, a property target (`o.p`, `o[k]`) is evaluated before the iterator is stepped or the
+  source property read; computed keys are evaluated in order, right before their property (they were all
+  evaluated first, in the pattern's `LET`). A property target with a default is accepted (`[o.p = 1] = …`).
+- `for ({ x = 1 } of …)`: an object assignment pattern with defaults is accepted as a for-in/of head (it was a
+  SyntaxError); `for ({ x = 1 }; …)` stays one.
+- `for (let …)` heads: names bound by nested patterns (`for (let [{ x }] = …)`) are declared in the loop's let
+  scope (they were unresolved: a ReferenceError in strict code, a global variable otherwise). `IRFactory.createFor`
+  makes the let scope the loop's parent scope; `NodeTransformer.visitLet` no longer swaps it again (which made
+  the scope its own parent, and name lookups loop forever).
+- test262: 64 more files pass; 25,698 of 42,616 in-scope files (60.3%).
+
 ### Object patterns and default names (2026-10-09, plan 1.3c)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.14):
