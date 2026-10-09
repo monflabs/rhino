@@ -78,6 +78,20 @@ function f() {
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 
+### 1.2b Temporal dead zone of parameters
+
+```js
+function f(x = y, y) { return x; }
+f();          // VERSION_ES6: undefined   VERSION_ECMASCRIPT: ReferenceError
+function g(x = x) {}
+g();          // VERSION_ES6: fine        VERSION_ECMASCRIPT: ReferenceError
+```
+
+- A default value may not read its own parameter or a later one: they are not initialized yet. A closure created in
+  a default value and called later is not affected.
+- **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 26 (IteratorBindingInitialization of the
+  formals, in order).
+
 ### 1.3 Global lexical declarations
 
 ```js
@@ -99,7 +113,7 @@ const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxEr
 - **Embedding notes:** Java code reads such a binding from the scope (`scope.get("x", scope)`,
   `ScriptableObject.getProperty(scope, "x")`), not from `scope.getGlobalThis()`. An application that runs the same
   script twice in one scope (a REPL re-running `let x = …`) gets a SyntaxError the second time. `let`/`const` in
-  `eval` code are not affected (as before, they become variables of the eval's caller; plan 1.2f). With a custom top
+  `eval` code are not affected (as before, they become variables of the eval's caller; plan 1.2g). With a custom top
   scope that is not a `TopLevel`, the declarations are made on that scope as before.
 - **Not covered yet:** if a script declares both `var`s and a conflicting `let`, its `var`s may have been created on
   the global object before the SyntaxError.

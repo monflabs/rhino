@@ -79,6 +79,21 @@ class FunctionEarlyErrorsTest {
     }
 
     @Test
+    void parametersHaveATemporalDeadZone() {
+        Utils.assertGatedBehavior(
+                "undefined,undefined,undefined,2,3",
+                "ReferenceError,ReferenceError,ReferenceError,2,3",
+                "var r = []; var y = 0;"
+                        + " function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(function () { function f(x = y, y) { return x; } return f(); });"
+                        + " t(function () { function f(x = x) { return x; } return f(); });"
+                        + " t(function () { function f(x = typeof y, y) { return x; } return f(); });"
+                        + " t(function () { function f(a, x = a + 1) { return x; } return f(1); });"
+                        + " t(function () { function f(x = () => y, y = 3) { return x(); } return f(); });"
+                        + " r.join()");
+    }
+
+    @Test
     void argumentsInADefaultParameter() {
         assertBoth(
                 "third", "function f(x = arguments[2], z) { return x; } f(undefined, 0, 'third')");

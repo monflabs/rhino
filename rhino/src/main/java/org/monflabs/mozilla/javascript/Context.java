@@ -129,7 +129,8 @@ public class Context implements Closeable {
      *       --}, destructuring, a {@code for-in/of} target) throws a TypeError, also outside strict
      *       mode; under {@link #VERSION_ES6} it has no effect (TypeError in strict mode).
      *   <li>Temporal dead zone: using a {@code let}/{@code const} binding before its declaration
-     *       has run throws a ReferenceError; under {@link #VERSION_ES6} a read gives undefined.
+     *       has run throws a ReferenceError; under {@link #VERSION_ES6} a read gives undefined. So
+     *       does a default parameter value reading its own parameter or a later one.
      *   <li>The top-level {@code let}/{@code const} of a script are global lexical declarations:
      *       kept in the {@link TopLevel} scope rather than on the global object, and a SyntaxError
      *       when another script of the same scope declares the same name.

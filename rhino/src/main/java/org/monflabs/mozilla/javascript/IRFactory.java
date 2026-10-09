@@ -8,9 +8,11 @@ package org.monflabs.mozilla.javascript;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.Set;
 import org.monflabs.mozilla.javascript.ast.AbstractObjectProperty;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehension;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehensionLoop;
@@ -678,6 +680,10 @@ public final class IRFactory {
                             && defaultParams.get(i - 1) instanceof String) {
                         AstNode rhs = (AstNode) defaultParams.get(i);
                         String name = (String) defaultParams.get(i - 1);
+                        Node value = transform(rhs);
+                        if (parser.compilerEnv.isLatestEcmaScript()) {
+                            value = checkParamTdz(value, uninitializedParams(fn, name));
+                        }
                         Node paramInit =
                                 createIf(
                                         createBinary(
@@ -689,7 +695,7 @@ public final class IRFactory {
                                                 createAssignment(
                                                         Token.ASSIGN,
                                                         parser.createName(name),
-                                                        transform(rhs)),
+                                                        value),
                                                 body.getLineno(),
                                                 body.getColumn()),
                                         null,
@@ -747,6 +753,70 @@ public final class IRFactory {
             savedVars.restore();
             outerScopeIsStrict = savedStrict;
         }
+    }
+
+    /**
+     * The parameters still uninitialized while the default value of a parameter is evaluated: that
+     * parameter and the following ones (ECMA-262 10.2.11 IteratorBindingInitialization).
+     */
+    private static Set<String> uninitializedParams(FunctionNode fn, String param) {
+        Set<String> names = new HashSet<>();
+        boolean after = false;
+        for (AstNode p : fn.getParams()) {
+            after |= p instanceof Name && param.equals(((Name) p).getIdentifier());
+            if (after) {
+                collectParamNames(p, names);
+            }
+        }
+        return names;
+    }
+
+    private static void collectParamNames(AstNode pattern, Set<String> names) {
+        if (pattern instanceof Name) {
+            names.add(((Name) pattern).getIdentifier());
+        } else if (pattern instanceof ArrayLiteral) {
+            for (AstNode elem : ((ArrayLiteral) pattern).getElements()) {
+                collectParamNames(elem, names);
+            }
+        } else if (pattern instanceof ObjectLiteral) {
+            for (AbstractObjectProperty prop : ((ObjectLiteral) pattern).getElements()) {
+                if (prop instanceof ObjectProperty) {
+                    collectParamNames(((ObjectProperty) prop).getValue(), names);
+                } else if (prop instanceof SpreadObjectProperty) {
+                    collectParamNames(((SpreadObjectProperty) prop).getSpreadNode(), names);
+                }
+            }
+        } else if (pattern instanceof Assignment) {
+            collectParamNames(((Assignment) pattern).getLeft(), names);
+        } else if (pattern instanceof Spread) {
+            collectParamNames(((Spread) pattern).getExpression(), names);
+        }
+    }
+
+    /**
+     * A default value reading a parameter that is not initialized yet throws a ReferenceError (the
+     * temporal dead zone of parameters); nested functions are left to runtime.
+     */
+    private static Node checkParamTdz(Node node, Set<String> uninitialized) {
+        int type = node.getType();
+        if ((type == Token.NAME || type == Token.TYPEOFNAME)
+                && uninitialized.contains(node.getString())) {
+            Node check = Node.newString(Token.CHECK_TDZ, node.getString());
+            check.addChildToBack(new Node(Token.TDZ_SENTINEL));
+            return check;
+        }
+        if (type == Token.FUNCTION) {
+            return node;
+        }
+        for (Node child = node.getFirstChild(); child != null; ) {
+            Node next = child.getNext();
+            Node replacement = checkParamTdz(child, uninitialized);
+            if (replacement != child) {
+                node.replaceChild(child, replacement);
+            }
+            child = next;
+        }
+        return node;
     }
 
     private Node transformFunctionCall(FunctionCall node) {

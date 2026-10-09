@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Temporal dead zone of parameters (2026-10-08, plan 1.2f)
+
+Under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2b):
+
+- A default parameter value reading its own parameter or a later one throws a ReferenceError (`IRFactory`
+  replaces such reads in the desugared default by the TDZ error node; closures are not affected).
+- test262: 14 more files pass; 25,004 of 42,616 in-scope files (58.7%).
+- The rest of the planned 1.2f (separate parameter/body environments, eval lexical environment, immutable
+  function-expression name, `new.target` in eval) becomes 1.2g, after 1.3.
+
 ### Eval code declarations (2026-10-08, plan 1.2e)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.12):
@@ -23,7 +33,7 @@ Under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.4):
   function over a configurable global redefines it.
 - test262: 113 more files pass (`language/eval-code`); 24,990 of 42,616 in-scope files (58.6%).
 - `indirect/lex-env-distinct-let.js` and `-const.js` now fail in strict mode too: they passed only because indirect
-  eval inherited strictness. Eval code's own lexical environment is plan 1.2f. Async variants wait for M3.
+  eval inherited strictness. Eval code's own lexical environment is plan 1.2g. Async variants wait for M3.
 
 ### Function.prototype.toString (2026-10-08, plan 1.2d)
 
