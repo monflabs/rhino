@@ -333,7 +333,8 @@ function f([p, , q]) {} f([1, 2, 3]);  // before: q was 2    now: q is 3
 - The array iterator (`values()`, `for-of`, spread) reads a hole through the prototype chain, like `a[i]` (before,
   it gave `undefined` even when `Array.prototype` had that index).
 - **Why:** ECMA-262 2026, §8.6.2 IteratorBindingInitialization and §13.15.5.5 IteratorDestructuringAssignmentEvaluation.
-- **Not covered yet:** closing the iterator when a default value or a target throws (plan 1.3b).
+- When a default value or a target throws (or a generator is returned from inside the pattern), the iterator is
+  closed too; an error of its `return()` does not replace the error being thrown.
 
 ---
 

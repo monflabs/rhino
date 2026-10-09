@@ -183,9 +183,12 @@ abstract class Icode {
             ITER_STEP = ITER_OPEN - 1,
             ITER_REST = ITER_STEP - 1,
             ITER_CLOSE = ITER_REST - 1,
+            ITER_OPEN_GUARDED = ITER_CLOSE - 1,
+            ITER_GUARD_INIT = ITER_OPEN_GUARDED - 1,
+            ITER_GUARD_CLOSE = ITER_GUARD_INIT - 1,
 
             // Last icode
-            MIN_ICODE = ITER_CLOSE;
+            MIN_ICODE = ITER_GUARD_CLOSE;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -395,6 +398,12 @@ abstract class Icode {
                 return "ITER_REST";
             case ITER_CLOSE:
                 return "ITER_CLOSE";
+            case ITER_OPEN_GUARDED:
+                return "ITER_OPEN_GUARDED";
+            case ITER_GUARD_INIT:
+                return "ITER_GUARD_INIT";
+            case ITER_GUARD_CLOSE:
+                return "ITER_GUARD_CLOSE";
         }
 
         // icode without name

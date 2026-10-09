@@ -5272,6 +5272,7 @@ public class Parser {
                             Token.SETNAME,
                             createName(Token.BINDNAME, iteratorName, null),
                             new Node(Token.ITER_OPEN, createName(tempName))));
+            ++iteratorOpenCount;
         }
         boolean empty = !useIterator;
         int index = 0;
@@ -5380,6 +5381,9 @@ public class Parser {
         }
         return empty;
     }
+
+    /** How many Token#ITER_OPEN have been created, see IRFactory#guardIterators. */
+    int iteratorOpenCount;
 
     /** The scope of the destructuring being desugared, and its LET, which hold its temporaries. */
     private Scope destructuringScope;

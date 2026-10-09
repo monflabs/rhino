@@ -259,7 +259,10 @@ public class Token {
             ITER_STEP = ITER_OPEN + 1, // the next value of its child's iterator, or undefined
             ITER_REST = ITER_STEP + 1, // the remaining values, as an array
             ITER_CLOSE = ITER_REST + 1, // IteratorClose when not done; undefined
-            LAST_TOKEN = ITER_CLOSE + 1;
+            // the guard of a statement whose iterators are closed on an abrupt completion
+            ITER_GUARD_INIT = ITER_CLOSE + 1,
+            ITER_GUARD_CLOSE = ITER_GUARD_INIT + 1,
+            LAST_TOKEN = ITER_GUARD_CLOSE + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -630,6 +633,10 @@ public class Token {
                 return "ITER_REST";
             case ITER_CLOSE:
                 return "ITER_CLOSE";
+            case ITER_GUARD_INIT:
+                return "ITER_GUARD_INIT";
+            case ITER_GUARD_CLOSE:
+                return "ITER_GUARD_CLOSE";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

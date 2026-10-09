@@ -38,6 +38,28 @@ class ArrayDestructuringTest {
     }
 
     @Test
+    void iteratorsAreClosedWhenADefaultOrATargetThrows() {
+        assertBoth(
+                "d:nr,t:nr,p:nr,r:nr,ok:nrnr,g:nr",
+                "var r = [];"
+                        + " function mk(log, retThrows) { return { [Symbol.iterator]() { return {"
+                        + "   next() { log.push('n'); return {done: false, value: undefined}; },"
+                        + "   return() { log.push('r'); if (retThrows) throw new Error('ret'); return {}; } }; } }; }"
+                        + " function t(f) { var log = []; try { f(log); r.push('ok:' + log.join('')); }"
+                        + "   catch (e) { r.push(e.message + ':' + log.join('')); } }"
+                        + " function thrower(m) { throw new Error(m); }"
+                        + " t(function (log) { var [a = thrower('d')] = mk(log); });"
+                        + " t(function (log) { var o = { set p(v) { thrower('t'); } }; [o.p] = mk(log); });"
+                        + " t(function (log) { (function ([a = thrower('p')]) {})(mk(log)); });"
+                        // an error of return() does not replace the error being thrown
+                        + " t(function (log) { var [a = thrower('r')] = mk(log, true); });"
+                        + " t(function (log) { for (var i = 0; i < 2; i++) { var [a] = mk(log); } });"
+                        + " function* g(log) { var [a = yield 1] = mk(log); }"
+                        + " t(function (log) { var it = g(log); it.next(); it.return(5); thrower('g'); });"
+                        + " r.join()");
+    }
+
+    @Test
     void holesInEveryContext() {
         assertBoth(
                 "1/3,1/3,1/3,1/3",

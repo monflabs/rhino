@@ -20,6 +20,9 @@ final class IteratorRecord {
     private long index;
     private boolean done;
 
+    /** The record opened before this one in the same guarded statement, see #guard. */
+    private IteratorRecord previous;
+
     private IteratorRecord(Scriptable iterator, Object nextMethod, Scriptable array) {
         this.iterator = iterator;
         this.nextMethod = nextMethod;
@@ -106,6 +109,44 @@ final class IteratorRecord {
             values.add(value);
         }
         return cx.newArray(ScriptableObject.getTopLevelScope(scope), values.toArray());
+    }
+
+    /**
+     * Adds a record to the guard of its statement (the head of a list), unless closing it can never
+     * be needed (an array read by index); returns the new head. Records already done are dropped.
+     */
+    static Object guard(IteratorRecord record, Object guard) {
+        IteratorRecord head = (IteratorRecord) guard;
+        while (head != null && head.done) {
+            head = head.previous;
+        }
+        if (record.iterator == null || record.done) {
+            return head;
+        }
+        record.previous = head;
+        return record;
+    }
+
+    /**
+     * IteratorClose after an abrupt completion of the guarded statement, for each record not done:
+     * the error being thrown wins over any error of the return method.
+     */
+    static void closeAll(Object guard, Context cx, VarScope scope) {
+        for (IteratorRecord r = (IteratorRecord) guard; r != null; r = r.previous) {
+            if (!r.done) {
+                r.done = true;
+                try {
+                    Object returnMethod =
+                            ScriptableObject.getProperty(r.iterator, ES6Iterator.RETURN_METHOD);
+                    if (returnMethod instanceof Callable) {
+                        ((Callable) returnMethod)
+                                .call(cx, scope, r.iterator, ScriptRuntime.emptyArgs);
+                    }
+                } catch (RhinoException ignored) {
+                    // the completion that is propagating takes precedence
+                }
+            }
+        }
     }
 
     /** IteratorClose after a normal completion, when the iterator is not done. */

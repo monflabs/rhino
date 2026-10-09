@@ -150,6 +150,65 @@ public final class IRFactory {
     // IR transformation part of the public AST API - desirable?
     // Another possibility:  create AstTransformer interface and adapter.
     private Node transform(AstNode node) {
+        if (node instanceof ExpressionStatement
+                || (node instanceof VariableDeclaration
+                        && ((VariableDeclaration) node).isStatement())
+                || node instanceof ForInLoop
+                || node instanceof ForLoop
+                || node instanceof TryStatement) {
+            int opened = parser.iteratorOpenCount;
+            Node result = transformNode(node);
+            if (parser.iteratorOpenCount != opened) {
+                result = guardIterators(result, node.getLineno(), node.getColumn());
+            }
+            return result;
+        }
+        return transformNode(node);
+    }
+
+    /**
+     * Wraps a statement whose array patterns opened iterators in a guard that closes them when the
+     * statement completes abruptly (IteratorClose in IteratorBindingInitialization and
+     * DestructuringAssignmentEvaluation): <code>LOCAL_BLOCK { ITER_GUARD_INIT; try { statement }
+     * finally { ITER_GUARD_CLOSE } }</code>. The statement's Token#ITER_OPEN record their iterator
+     * in the guard; after a normal completion, they are all done and closing does nothing.
+     */
+    private Node guardIterators(Node statement, int lineno, int column) {
+        Node guard = new Node(Token.LOCAL_BLOCK);
+        if (!tagIteratorOpens(statement, guard)) {
+            return statement;
+        }
+        Node init = new Node(Token.ITER_GUARD_INIT);
+        init.putProp(Node.LOCAL_BLOCK_PROP, guard);
+        Node close = new Node(Token.ITER_GUARD_CLOSE);
+        close.putProp(Node.LOCAL_BLOCK_PROP, guard);
+        Node tryBlock = new Node(Token.BLOCK, statement);
+        Node guarded =
+                createTryCatchFinally(
+                        tryBlock,
+                        new Node(Token.BLOCK),
+                        new Node(Token.BLOCK, close),
+                        lineno,
+                        column);
+        guard.addChildToBack(init);
+        guard.addChildToBack(guarded);
+        return guard;
+    }
+
+    /** Tags the ITER_OPEN of a statement that no inner statement guards yet. */
+    private static boolean tagIteratorOpens(Node node, Node guard) {
+        boolean tagged = false;
+        if (node.getType() == Token.ITER_OPEN && node.getProp(Node.LOCAL_BLOCK_PROP) == null) {
+            node.putProp(Node.LOCAL_BLOCK_PROP, guard);
+            tagged = true;
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            tagged |= tagIteratorOpens(child, guard);
+        }
+        return tagged;
+    }
+
+    private Node transformNode(AstNode node) {
         switch (node.getType()) {
             case Token.ARRAYCOMP:
                 return transformArrayComp((ArrayComprehension) node);
@@ -730,7 +789,11 @@ public final class IRFactory {
             }
 
             if (destructuring != null) {
-                body.addChildToFront(new Node(Token.EXPR_VOID, destructuring, lineno, column));
+                body.addChildToFront(
+                        guardIterators(
+                                new Node(Token.EXPR_VOID, destructuring, lineno, column),
+                                lineno,
+                                column));
             }
 
             int syntheticType = fn.getFunctionType();
@@ -870,7 +933,11 @@ public final class IRFactory {
             Node body = genExprTransformHelper(node);
 
             if (destructuring != null) {
-                body.addChildToFront(new Node(Token.EXPR_VOID, destructuring, lineno, column));
+                body.addChildToFront(
+                        guardIterators(
+                                new Node(Token.EXPR_VOID, destructuring, lineno, column),
+                                lineno,
+                                column));
             }
 
             int syntheticType = fn.getFunctionType();

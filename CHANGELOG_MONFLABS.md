@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Iterators of array patterns are closed on abrupt completion (2026-10-08, plan 1.3b)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.13):
+
+- A statement containing array patterns (expression statement, declaration, loop, `try`, parameter list) is
+  wrapped by `IRFactory.guardIterators` in `LOCAL_BLOCK { ITER_GUARD_INIT; try { … } finally { ITER_GUARD_CLOSE } }`.
+  Its `ITER_OPEN`s link their `IteratorRecord` into the guard local (array fast path excepted); the `finally`
+  closes the records that are not done, ignoring errors of `return()`. After a normal completion all records are
+  done, so the guard costs a `try`/`finally` and no allocation. Statements without array patterns are unchanged.
+- test262: 4 more files pass (most abrupt-completion tests also need 1.3c); 25,306 of 42,616 in-scope files (59.4%).
+
 ### Array destructuring follows the iterator protocol (2026-10-08, plan 1.3a)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.13):

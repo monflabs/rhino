@@ -3868,6 +3868,22 @@ public class ScriptRuntime {
         return IteratorRecord.open(value, cx, scope);
     }
 
+    /**
+     * Array destructuring in a guarded statement: registers the record of an Token#ITER_OPEN in the
+     * guard of the statement, and returns the guard's new value.
+     */
+    public static Object iteratorGuard(Object record, Object guard) {
+        return IteratorRecord.guard((IteratorRecord) record, guard);
+    }
+
+    /**
+     * The end of a guarded statement: closes its iterators that are not done
+     * (Token#ITER_GUARD_CLOSE).
+     */
+    public static void iteratorGuardClose(Object guard, Context cx, VarScope scope) {
+        IteratorRecord.closeAll(guard, cx, scope);
+    }
+
     /** Array destructuring: the next value, or undefined once done (Token#ITER_STEP). */
     public static Object iteratorStep(Object record, Context cx, VarScope scope) {
         return ((IteratorRecord) record).step(cx, scope);

@@ -586,6 +586,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 stackChange(-1);
                 break;
 
+            case Token.ITER_GUARD_INIT:
+                addIndexOp(Icode.ITER_GUARD_INIT, getLocalBlockRef(node));
+                break;
+
+            case Token.ITER_GUARD_CLOSE:
+                addIndexOp(Icode.ITER_GUARD_CLOSE, getLocalBlockRef(node));
+                break;
+
             case Icode.GENERATOR:
                 break;
 
@@ -935,6 +943,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 break;
 
             case Token.ITER_OPEN:
+                visitExpression(child, 0);
+                if (node.getProp(Node.LOCAL_BLOCK_PROP) != null) {
+                    addIndexOp(Icode.ITER_OPEN_GUARDED, getLocalBlockRef(node));
+                } else {
+                    addIcode(Icode.ITER_OPEN);
+                }
+                break;
+
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:

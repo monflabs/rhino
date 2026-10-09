@@ -783,6 +783,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.ITER_STEP] = new DoIterator(Icode.ITER_STEP);
         instructionObjs[base + Icode.ITER_REST] = new DoIterator(Icode.ITER_REST);
         instructionObjs[base + Icode.ITER_CLOSE] = new DoIterator(Icode.ITER_CLOSE);
+        instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
+                new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
+        instructionObjs[base + Icode.ITER_GUARD_INIT] = new DoIteratorGuard(Icode.ITER_GUARD_INIT);
+        instructionObjs[base + Icode.ITER_GUARD_CLOSE] =
+                new DoIteratorGuard(Icode.ITER_GUARD_CLOSE);
         instructionObjs[base + Icode.GLOBAL_LEXICALS] = new DoGlobalLexicals();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
@@ -3474,6 +3479,37 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         case Icode.ITER_REST -> ScriptRuntime.iteratorRest(value, cx, frame.scope);
                         default -> ScriptRuntime.iteratorClose(value, cx, frame.scope);
                     };
+            return null;
+        }
+    }
+
+    /** The guard of a statement's iterators, kept in a local of its LOCAL_BLOCK. */
+    private static class DoIteratorGuard extends InstructionClass {
+        private final int icode;
+
+        DoIteratorGuard(int icode) {
+            this.icode = icode;
+        }
+
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            int local = state.indexReg + frame.compilerData.maxVars;
+            switch (icode) {
+                case Icode.ITER_OPEN_GUARDED -> {
+                    Object value = frame.stack[frame.stackTop];
+                    if (value == DOUBLE_MARK)
+                        value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+                    Object record = ScriptRuntime.iteratorOpen(value, cx, frame.scope);
+                    frame.stack[local] = ScriptRuntime.iteratorGuard(record, frame.stack[local]);
+                    frame.stack[frame.stackTop] = record;
+                }
+                case Icode.ITER_GUARD_INIT -> frame.stack[local] = null;
+                default -> {
+                    Object guard = frame.stack[local];
+                    frame.stack[local] = null;
+                    ScriptRuntime.iteratorGuardClose(guard, cx, frame.scope);
+                }
+            }
             return null;
         }
     }

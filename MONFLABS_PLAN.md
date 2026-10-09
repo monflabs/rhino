@@ -305,7 +305,7 @@ nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` bi
 Split into steps (2026-10-08, decision: IR desugaring with new iterator operations, Nashorn-aligned):
 - *1.3a (done)* array patterns follow the iterator protocol (`ITER_OPEN`/`ITER_STEP`/`ITER_REST`/`ITER_CLOSE`,
   `IteratorRecord`, array fast path), in every context.
-- *1.3b* IteratorClose on abrupt completion (a throwing default or target), with a statement-level guard for
+- *1.3b (done)* IteratorClose on abrupt completion (a throwing default or target), with a statement-level guard for
   expression-position patterns.
 - *1.3c* object patterns: RequireObjectCoercible, function names of anonymous defaults, evaluation order.
 

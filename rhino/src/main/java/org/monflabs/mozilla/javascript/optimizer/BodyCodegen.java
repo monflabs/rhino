@@ -885,6 +885,28 @@ class BodyCodegen {
                 cfw.addAStore(getLocalBlockRegister(node));
                 break;
 
+            case Token.ITER_GUARD_INIT:
+                cfw.add(ByteCode.ACONST_NULL);
+                cfw.addAStore(getLocalBlockRegister(node));
+                break;
+
+            case Token.ITER_GUARD_CLOSE:
+                {
+                    int guard = getLocalBlockRegister(node);
+                    cfw.addALoad(guard);
+                    cfw.addALoad(contextLocal);
+                    cfw.addALoad(variableObjectLocal);
+                    addScriptRuntimeInvoke(
+                            "iteratorGuardClose",
+                            "(Ljava/lang/Object;"
+                                    + "Lorg/monflabs/mozilla/javascript/Context;"
+                                    + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                    + ")V");
+                    cfw.add(ByteCode.ACONST_NULL);
+                    cfw.addAStore(guard);
+                    break;
+                }
+
             case Token.EXPR_VOID:
                 if (child.getType() == Token.SETVAR) {
                     /* special case this so as to avoid unnecessary
@@ -1352,6 +1374,16 @@ class BodyCodegen {
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"
                                 + ")Ljava/lang/Object;");
+                if (type == Token.ITER_OPEN && node.getProp(Node.LOCAL_BLOCK_PROP) != null) {
+                    // record the iterator in the guard of the statement
+                    int guard = getLocalBlockRegister(node);
+                    cfw.add(ByteCode.DUP);
+                    cfw.addALoad(guard);
+                    addScriptRuntimeInvoke(
+                            "iteratorGuard",
+                            "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+                    cfw.addAStore(guard);
+                }
                 break;
 
             case Token.CHECK_TDZ:
