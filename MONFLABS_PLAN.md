@@ -402,7 +402,14 @@ Steps (2026-10-10, from a run of the in-scope built-ins failures: 435 files):
 **1.9 RegExp (ES2015).** `u` flag (code point semantics, `\u{...}`, case folding), `y` sticky, `flags`, the four
 symbol methods (`@@match`, `@@replace`, `@@search`, `@@split`) with observable spec steps, `RegExp` subclassing,
 `lastIndex` handling (`built-ins/RegExp` core). Rhino keeps its own regexp engine (`regexp/NativeRegExp`) — whether
-to extend it or to route some features to `java.util.regex`, as Nashorn did, is a decision at M4.3.
+to extend it or to route some features to `java.util.regex`, as Nashorn did, is a decision at M4.3 (decided
+2026-10-10: extend the own engine).
+
+Steps:
+- *1.9a (done)* `RegExp.prototype` as an ordinary object, flag getters, `flags`, the constructor (IsRegExp,
+  regexp-like objects), `source` escaping, generic `toString`, the symbol methods' RegExpExec/`lastIndex` steps,
+  quantifier bounds, invalid braced quantifiers, format-control characters in literals. Left: the `this` of
+  `RegExp.prototype` methods called on primitives (the primitive-`this` item of 1.8).
 
 **1.10 Template literals and misc syntax residuals.** Tagged template caching (`[[TemplateMap]]`), raw strings,
 `new.target` outside classes, `language/expressions/arrow-function` residuals (82%), `language/literals`,
@@ -562,7 +569,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
-| 1.9  | RegExp ES2015                                   | todo        |                              |        |
+| 1.9  | RegExp ES2015                                   | in progress | 69.5% → 69.7% (1.9a)         | (this) |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |
 | 1.12 | ES modules                                      | todo        |                              |        |

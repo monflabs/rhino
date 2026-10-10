@@ -144,6 +144,8 @@ public class Context implements Closeable {
      *       eval code, not variables of the caller.
      *   <li>The elements of typed arrays are stored little endian ({@link #FEATURE_LITTLE_ENDIAN}
      *       is true by default); under {@link #VERSION_ES6} big endian.
+     *   <li>In a regular expression without the {@code u} flag, {@code \p} and {@code \P} are
+     *       identity escapes; under {@link #VERSION_ES6} they are Unicode property escapes.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

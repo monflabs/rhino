@@ -183,11 +183,7 @@ public class NativeRegExp extends ScriptableObject {
                         .withMethod(PROTO, SymbolKey.SPLIT, 2, NativeRegExp::js_split)
                         .withProp(CTOR, SymbolKey.SPECIES, ScriptRuntimeES6::symbolSpecies)
                         .withProp(
-                                PROTO,
-                                "source",
-                                (c) -> new String(realThis(c, "get source").re.source),
-                                null,
-                                DONTENUM | READONLY)
+                                PROTO, "source", (c) -> sourceGetter(c), null, DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "flags",
@@ -205,50 +201,37 @@ public class NativeRegExp extends ScriptableObject {
                         .withProp(
                                 PROTO,
                                 "global",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "get global").re.flags & JSREG_GLOB)
-                                                        != 0),
+                                (c) -> flagGetter(c, JSREG_GLOB, "global"),
                                 null,
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "ignoreCase",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "").re.flags & JSREG_FOLD) != 0),
+                                (c) -> flagGetter(c, JSREG_FOLD, "ignoreCase"),
                                 null,
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "multiline",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "").re.flags & JSREG_MULTILINE) != 0),
+                                (c) -> flagGetter(c, JSREG_MULTILINE, "multiline"),
                                 null,
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "dotAll",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "").re.flags & JSREG_DOTALL) != 0),
+                                (c) -> flagGetter(c, JSREG_DOTALL, "dotAll"),
                                 null,
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "sticky",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "").re.flags & JSREG_STICKY) != 0),
+                                (c) -> flagGetter(c, JSREG_STICKY, "sticky"),
                                 null,
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
                                 "unicode",
-                                (c) ->
-                                        ScriptRuntime.wrapBoolean(
-                                                (realThis(c, "").re.flags & JSREG_UNICODE) != 0),
+                                (c) -> flagGetter(c, JSREG_UNICODE, "unicode"),
                                 null,
                                 DONTENUM | READONLY)
                         .build();
@@ -256,11 +239,87 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     static Object init(Context cx, VarScope scope, boolean sealed) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // RegExp.prototype is an ordinary object (22.2.6)
+            return DESCRIPTOR.buildConstructor(cx, scope, new RegExpPrototype(), sealed);
+        }
 
         NativeRegExp proto = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
         proto.re = compileRE(cx, "", null, false);
 
         return DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+    }
+
+    /** %RegExp.prototype% from ES6: an ordinary object (22.2.6), marked by its class. */
+    private static final class RegExpPrototype extends NativeObject {
+        private static final long serialVersionUID = 1L;
+    }
+
+    private static boolean isRegExpPrototype(Scriptable obj) {
+        return obj instanceof RegExpPrototype;
+    }
+
+    /** The getters of the flags (22.2.6.4.1 RegExpHasFlag): undefined for RegExp.prototype. */
+    private static Object flagGetter(Scriptable c, int flag, String name) {
+        if (isRegExpPrototype(c)) {
+            return Undefined.instance;
+        }
+        return ScriptRuntime.wrapBoolean((realThis(c, "get " + name).re.flags & flag) != 0);
+    }
+
+    private static Object sourceGetter(Scriptable c) {
+        if (isRegExpPrototype(c)) {
+            return "(?:)";
+        }
+        String source = new String(realThis(c, "get source").re.source);
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6
+                ? escapePattern(source)
+                : source;
+    }
+
+    /**
+     * EscapeRegExpPattern (22.2.6.13.1): a source that reads back as the same pattern in a literal,
+     * "(?:)" for the empty pattern and line terminators escaped.
+     */
+    private static String escapePattern(String source) {
+        if (source.isEmpty()) {
+            return "(?:)";
+        }
+        StringBuilder sb = null;
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+            String escape;
+            switch (c) {
+                case '\n':
+                    escape = "n";
+                    break;
+                case '\r':
+                    escape = "r";
+                    break;
+                case '\u2028':
+                    escape = "u2028";
+                    break;
+                case '\u2029':
+                    escape = "u2029";
+                    break;
+                default:
+                    if (sb != null) sb.append(c);
+                    continue;
+            }
+            if (sb == null) {
+                sb = new StringBuilder(source.length() + 8);
+                sb.append(source, 0, i);
+            }
+            // after an odd number of backslashes, the line terminator is already escaped
+            int backslashes = 0;
+            for (int j = i - 1; j >= 0 && source.charAt(j) == '\\'; j--) backslashes++;
+            if (backslashes % 2 == 0) {
+                sb.append('\\');
+            }
+            sb.append(escape);
+        }
+        return sb == null ? source : sb.toString();
     }
 
     static ClassDescriptor.Builder makeCtorBuilder() {
@@ -357,6 +416,9 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Scriptable js_constructCall(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            return construct(cx, f, f, s, args, true);
+        }
         if (args.length > 0
                 && args[0] instanceof NativeRegExp
                 && (args.length == 1 || args[1] == Undefined.instance)) {
@@ -367,10 +429,81 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Scriptable js_construct(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            return construct(cx, f, nt, s, args, false);
+        }
         NativeRegExp re = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
         re.compile(cx, s, args);
         ScriptRuntime.setBuiltinProtoAndParent(re, f, nt, s, TopLevel.Builtins.RegExp);
         return re;
+    }
+
+    /** RegExp ( pattern, flags ) (22.2.4.1). */
+    private static Scriptable construct(
+            Context cx, JSFunction f, Object newTarget, VarScope s, Object[] args, boolean isCall) {
+        Object pattern = args.length > 0 ? args[0] : Undefined.instance;
+        Object flags = args.length > 1 ? args[1] : Undefined.instance;
+        boolean patternIsRegExp = isRegExp(pattern);
+        if (isCall && patternIsRegExp && Undefined.isUndefined(flags)) {
+            Object patternConstructor =
+                    ScriptableObject.getProperty((Scriptable) pattern, "constructor");
+            if (patternConstructor == newTarget) {
+                return (Scriptable) pattern;
+            }
+        }
+        Object p;
+        Object fl;
+        if (pattern instanceof NativeRegExp) {
+            RECompiled re = ((NativeRegExp) pattern).re;
+            p = new String(re.source);
+            fl = Undefined.isUndefined(flags) ? flagsString(re.flags) : flags;
+        } else if (patternIsRegExp) {
+            p = getValue((Scriptable) pattern, "source");
+            fl = Undefined.isUndefined(flags) ? getValue((Scriptable) pattern, "flags") : flags;
+        } else {
+            p = pattern;
+            fl = flags;
+        }
+        // RegExpAlloc, then RegExpInitialize
+        NativeRegExp obj = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
+        ScriptRuntime.setBuiltinProtoAndParent(obj, f, newTarget, s, TopLevel.Builtins.RegExp);
+        String source =
+                Undefined.isUndefined(p)
+                        ? ""
+                        : (pattern instanceof NativeRegExp ? (String) p : escapeRegExp(p));
+        String flagString = Undefined.isUndefined(fl) ? null : ScriptRuntime.toString(fl);
+        obj.re = compileRE(cx, source, flagString, false);
+        obj.setLastIndex(ScriptRuntime.zeroObj);
+        return obj;
+    }
+
+    /** IsRegExp (7.2.6). */
+    private static boolean isRegExp(Object o) {
+        if (!ScriptRuntime.isObject(o)) {
+            return false;
+        }
+        Object matcher = ScriptableObject.getProperty((Scriptable) o, SymbolKey.MATCH);
+        if (matcher != NOT_FOUND && !Undefined.isUndefined(matcher)) {
+            return ScriptRuntime.toBoolean(matcher);
+        }
+        return o instanceof NativeRegExp;
+    }
+
+    private static Object getValue(Scriptable o, String name) {
+        Object v = ScriptableObject.getProperty(o, name);
+        return v == NOT_FOUND ? Undefined.instance : v;
+    }
+
+    /** The flags of a compiled regexp, in the order of get RegExp.prototype.flags. */
+    private static String flagsString(int flags) {
+        StringBuilder buf = new StringBuilder();
+        if ((flags & JSREG_GLOB) != 0) buf.append('g');
+        if ((flags & JSREG_FOLD) != 0) buf.append('i');
+        if ((flags & JSREG_MULTILINE) != 0) buf.append('m');
+        if ((flags & JSREG_DOTALL) != 0) buf.append('s');
+        if ((flags & JSREG_UNICODE) != 0) buf.append('u');
+        if ((flags & JSREG_STICKY) != 0) buf.append('y');
+        return buf.toString();
     }
 
     /**
@@ -506,19 +639,25 @@ public class NativeRegExp extends ScriptableObject {
         return buf.toString();
     }
 
+    private static final String[][] FLAG_PROPERTIES = {
+        {"hasIndices", "d"},
+        {"global", "g"},
+        {"ignoreCase", "i"},
+        {"multiline", "m"},
+        {"dotAll", "s"},
+        {"unicode", "u"},
+        {"unicodeSets", "v"},
+        {"sticky", "y"}
+    };
+
+    /** get RegExp.prototype.flags (22.2.6.4): each flag property in this order. */
     private static void appendFlags(Scriptable thisObj, StringBuilder buf) {
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "global")))
-            buf.append('g');
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "ignoreCase")))
-            buf.append('i');
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "multiline")))
-            buf.append('m');
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "dotAll")))
-            buf.append('s');
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "sticky")))
-            buf.append('y');
-        if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, "unicode")))
-            buf.append('u');
+        for (String[] flag : FLAG_PROPERTIES) {
+            Object value = ScriptableObject.getProperty(thisObj, flag[0]);
+            if (value != NOT_FOUND && ScriptRuntime.toBoolean(value)) {
+                buf.append(flag[1]);
+            }
+        }
     }
 
     private static RegExpImpl getImpl(Context cx) {
@@ -563,6 +702,10 @@ public class NativeRegExp extends ScriptableObject {
 
         boolean globalOrSticky = (re.flags & JSREG_GLOB) != 0 || (re.flags & JSREG_STICKY) != 0;
         double d = ScriptRuntime.toInteger(lastIndex);
+        if (d < 0 && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // RegExpBuiltinExec: ToLength(lastIndex)
+            d = 0;
+        }
         if (globalOrSticky) {
             if (d < 0 || str.length() < d) {
                 setLastIndex(ScriptRuntime.zeroObj);
@@ -1511,6 +1654,27 @@ public class NativeRegExp extends ScriptableObject {
         state.progLength += 5;
     }
 
+    /** The largest quantifier bound the bytecode holds (above it, a minimum is capped). */
+    private static final int QUANTIFIER_LIMIT = 65534;
+
+    /** The value of a quantifier bound, saturated at Long.MAX_VALUE (no limit from ES6). */
+    private static long getQuantifierBound(char c, CompilerState state) {
+        char[] src = state.cpbegin;
+        long value = c - '0';
+        for (; state.cp != state.cpend; ++state.cp) {
+            c = src[state.cp];
+            if (!isDigit(c)) {
+                break;
+            }
+            if (value < Long.MAX_VALUE / 10) {
+                value = value * 10 + (c - '0');
+            } else {
+                value = Long.MAX_VALUE;
+            }
+        }
+        return value;
+    }
+
     private static int getDecimalValue(char c, CompilerState state, String overflowMessageId) {
         boolean overflow = false;
         int start = state.cp;
@@ -1993,6 +2157,10 @@ public class NativeRegExp extends ScriptableObject {
             case 'p':
             case 'P':
                 state.cp--;
+                if (!params.unicodeMode && Context.getCurrentContext().isLatestEcmaScript()) {
+                    // without the u flag, \p is an identity escape (Annex B.1.2)
+                    return parseIdentityEscape(state, params);
+                }
                 if (!parseUnicodePropertyEscape(state)) {
                     reportError("msg.invalid.property", "");
                 }
@@ -2376,6 +2544,15 @@ public class NativeRegExp extends ScriptableObject {
                     if (params.unicodeMode && (c == ']' || c == '{' || c == '}'))
                         reportError("msg.lone.quantifier.bracket", "");
 
+                    // Annex B.1.2: an InvalidBracedQuantifier (nothing to repeat) is an error
+                    if (c == '{'
+                            && isBracedQuantifier(src, state.cp - 1, state.cpend)
+                            && Context.getCurrentContext().getLanguageVersion()
+                                    >= Context.VERSION_ES6) {
+                        reportError("msg.bad.quant", "{");
+                        return false;
+                    }
+
                     if (params.unicodeMode
                             && Character.isHighSurrogate(c)
                             && state.cp < state.cpend
@@ -2435,17 +2612,43 @@ public class NativeRegExp extends ScriptableObject {
                      * atom next time instead.
                      */
 
+                    boolean anyBound =
+                            Context.getCurrentContext().getLanguageVersion() >= Context.VERSION_ES6;
                     if (++state.cp < src.length && isDigit(c = src[state.cp])) {
                         ++state.cp;
-                        min = getDecimalValue(c, state, "msg.overlarge.min");
+                        long minValue = getQuantifierBound(c, state);
+                        min = anyBound ? (int) Math.min(minValue, QUANTIFIER_LIMIT) : -1;
+                        if (!anyBound) {
+                            state.cp = leftCurl + 2;
+                            min = getDecimalValue(src[leftCurl + 1], state, "msg.overlarge.min");
+                        }
                         if (state.cp < src.length) {
                             c = src[state.cp];
                             if (c == ',' && ++state.cp < src.length) {
                                 c = src[state.cp];
                                 if (isDigit(c) && ++state.cp < src.length) {
-                                    max = getDecimalValue(c, state, "msg.overlarge.max");
+                                    int maxStart = state.cp - 1;
+                                    long maxValue = getQuantifierBound(c, state);
+                                    if (anyBound) {
+                                        if (minValue > maxValue) {
+                                            String msg =
+                                                    ScriptRuntime.getMessageById(
+                                                            "msg.max.lt.min",
+                                                            Long.valueOf(maxValue),
+                                                            Long.valueOf(minValue));
+                                            throw ScriptRuntime.constructError("SyntaxError", msg);
+                                        } else {
+                                            // a bound beyond the bytecode's range repeats freely
+                                            max = maxValue > QUANTIFIER_LIMIT ? -1 : (int) maxValue;
+                                        }
+                                    } else {
+                                        state.cp = maxStart + 1;
+                                        max =
+                                                getDecimalValue(
+                                                        src[maxStart], state, "msg.overlarge.max");
+                                    }
                                     c = src[state.cp];
-                                    if (min > max) {
+                                    if (min > max && max != -1) {
                                         String msg =
                                                 ScriptRuntime.getMessageById(
                                                         "msg.max.lt.min",
@@ -2496,6 +2699,19 @@ public class NativeRegExp extends ScriptableObject {
             state.result.greedy = false;
         } else state.result.greedy = true;
         return true;
+    }
+
+    /** Whether src[pos..] is a braced quantifier: {digits}, {digits,} or {digits,digits}. */
+    private static boolean isBracedQuantifier(char[] src, int pos, int end) {
+        int i = pos + 1;
+        int start = i;
+        while (i < end && isDigit(src[i])) i++;
+        if (i == start || i >= end) return false;
+        if (src[i] == ',') {
+            i++;
+            while (i < end && isDigit(src[i])) i++;
+        }
+        return i < end && src[i] == '}';
     }
 
     private static void resolveForwardJump(byte[] array, int from, int pc) {
@@ -4326,15 +4542,16 @@ public class NativeRegExp extends ScriptableObject {
         throw ScriptRuntime.constructError("SyntaxError", msg);
     }
 
-    private static void setLastIndexOrThrow(ScriptableObject thisObj, Object value) {
-        if ((thisObj.getAttributes("lastIndex") & READONLY) != 0) {
-            throw ScriptRuntime.typeErrorById("msg.modify.readonly", "lastIndex");
-        }
+    private static void setLastIndexOrThrow(Scriptable thisObj, Object value) {
         setLastIndex(thisObj, value);
     }
 
+    /** Set(R, "lastIndex", value, true). */
     private static void setLastIndex(Scriptable thisObj, Object value) {
-        ScriptableObject.putProperty(thisObj, "lastIndex", value);
+        if (!AbstractEcmaObjectOperations.set(
+                Context.getCurrentContext(), thisObj, "lastIndex", value, thisObj)) {
+            throw ScriptRuntime.typeErrorById("msg.modify.readonly", "lastIndex");
+        }
     }
 
     private void setLastIndex(Object value) {
@@ -4351,6 +4568,18 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // 22.2.6.17: generic, from the source and flags properties. A primitive receiver
+            // arrives boxed (or as the global object for undefined) and is rejected as such.
+            if (!ScriptRuntime.isObject(thisObj) || thisObj == s || isBoxedPrimitive(thisObj)) {
+                return realThis(thisObj, f).toString();
+            }
+            Scriptable r = (Scriptable) thisObj;
+            return "/"
+                    + ScriptRuntime.toString(getValue(r, "source"))
+                    + "/"
+                    + ScriptRuntime.toString(getValue(r, "flags"));
+        }
         // thisObj != scope is a strange hack but i had no better idea for the moment
         if (thisObj != s && thisObj instanceof NativeObject) {
             NativeObject realThis = (NativeObject) thisObj;
@@ -4362,6 +4591,18 @@ public class NativeRegExp extends ScriptableObject {
             return "/" + source + "/" + flags;
         }
         return realThis(thisObj, f).toString();
+    }
+
+    private static boolean isBoxedPrimitive(Object o) {
+        if (o instanceof TopLevel) {
+            return true;
+        }
+        String className = ((Scriptable) o).getClassName();
+        return "String".equals(className)
+                || "Number".equals(className)
+                || "Boolean".equals(className)
+                || "Symbol".equals(className)
+                || "BigInt".equals(className);
     }
 
     private static Object js_toSource(
@@ -4414,9 +4655,14 @@ public class NativeRegExp extends ScriptableObject {
 
     public static Object regExpExec(Scriptable regexp, String string, Context cx, VarScope scope) {
         // See ECMAScript spec 22.2.7.1
-        Object execMethod = ScriptRuntime.getObjectProp(regexp, "exec", cx, scope);
+        Object execMethod = ScriptableObject.getProperty(regexp, "exec");
         if (execMethod instanceof Callable) {
-            return ((Callable) execMethod).call(cx, scope, regexp, new Object[] {string});
+            Object result = ((Callable) execMethod).call(cx, scope, regexp, new Object[] {string});
+            if (result != null && !ScriptRuntime.isObject(result)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.arg.not.object", ScriptRuntime.typeof(result));
+            }
+            return result;
         }
         return NativeRegExp.js_exec(cx, scope, regexp, new Object[] {string});
     }
@@ -4464,15 +4710,22 @@ public class NativeRegExp extends ScriptableObject {
         Scriptable realThis = (Scriptable) thisObj;
 
         String string = ScriptRuntime.toString(args.length > 0 ? args[0] : Undefined.instance);
-        long previousLastIndex = getLastIndex(cx, realThis);
-        if (previousLastIndex != 0) {
+        // 22.2.6.12: the raw values of lastIndex, compared with SameValue
+        Object previousLastIndex = ScriptableObject.getProperty(realThis, "lastIndex");
+        if (previousLastIndex == NOT_FOUND) {
+            previousLastIndex = Undefined.instance;
+        }
+        if (!ScriptRuntime.same(previousLastIndex, ScriptRuntime.zeroObj)) {
             setLastIndex(realThis, ScriptRuntime.zeroObj);
         }
 
         Object result = regExpExec(realThis, string, cx, scope);
 
-        long currentLastIndex = getLastIndex(cx, realThis);
-        if (previousLastIndex != currentLastIndex) {
+        Object currentLastIndex = ScriptableObject.getProperty(realThis, "lastIndex");
+        if (currentLastIndex == NOT_FOUND) {
+            currentLastIndex = Undefined.instance;
+        }
+        if (!ScriptRuntime.same(currentLastIndex, previousLastIndex)) {
             setLastIndex(realThis, previousLastIndex);
         }
 
@@ -4553,7 +4806,8 @@ public class NativeRegExp extends ScriptableObject {
 
         RegExpImpl reImpl = getImpl(cx);
         boolean sticky = (re.flags & JSREG_STICKY) != 0;
-        boolean global = (re.flags & JSREG_GLOB) != 0;
+        // 22.2.6.11 step 8: global comes from the flags property
+        boolean global = flags.indexOf('g') != -1;
 
         int[] indexp = {0};
         if (sticky) {

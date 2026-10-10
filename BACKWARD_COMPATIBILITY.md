@@ -166,6 +166,17 @@ new Uint8Array(new Uint16Array([1]).buffer)[0];   // VERSION_ES6: 0   VERSION_EC
 - **Why:** ECMA-262 2026, §25.1.3.17 RawBytesToNumeric and §25.1.3.18 NumericToRawBytes use the platform's
   byte order ([[LittleEndian]] is implementation-defined).
 
+### 1.7 `\p` in a regexp without the `u` flag
+
+```js
+/\p{L}/.test("a");        // VERSION_ES6: true (property escape)   VERSION_ECMASCRIPT: false (matches "p{L}")
+```
+
+- Without the `u` (or `v`) flag, `\p` and `\P` are identity escapes that match the letters `p` and `P`; Rhino
+  read them as Unicode property escapes in every mode.
+- **Why:** ECMA-262 2026, Annex B.1.2 (IdentityEscape) and §22.2.1 (UnicodePropertyValueExpression only with
+  [+UnicodeMode]).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -681,6 +692,24 @@ Float64Array.from([, 1])[0];           // before: 0   now: NaN
   `undefined` converted (NaN in a float array; before, 0).
 - **Why:** ECMA-262 2026, §23.2.5.1 (TypedArray), §23.2.2.1 (%TypedArray%.from), §7.1.13 (ToBigInt), §23.2.3
   (%TypedArray%.prototype).
+
+### 2.34 RegExp.prototype, constructor and patterns
+
+```js
+Object.prototype.toString.call(RegExp.prototype);   // before: "[object RegExp]"   now: "[object Object]"
+RegExp.prototype.global;                            // before: false   now: undefined
+new RegExp("x{1}{1,}");                             // before: a regexp   now: SyntaxError
+new RegExp("").source;                              // before: ""   now: "(?:)"
+```
+
+- From `VERSION_ES6`: `RegExp.prototype` is a plain object, its flag getters give `undefined` and `exec` throws
+  on it; `flags` lists `dgimsuvy` in this order; the constructor uses `Symbol.match` and the `source`/`flags` of
+  regexp-like objects; `toString` is generic; a braced quantifier after a quantifier is a SyntaxError; quantifier
+  bounds above 65535 are accepted; a negative `lastIndex` is 0; `source` escapes line terminators and gives
+  `"(?:)"` for an empty pattern.
+- All versions: format-control characters stay in regexp literals.
+- **Why:** ECMA-262 2026, §22.2.6 (RegExp.prototype), §22.2.4.1 (RegExp), §22.2.6.13.1 (EscapeRegExpPattern),
+  Annex B.1.2 (InvalidBracedQuantifier), §12.1 (format-control characters).
 
 ---
 

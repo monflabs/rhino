@@ -6,6 +6,31 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### RegExp, ES2015 core (2026-10-10, plan 1.9a)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 1.7 and 2.34) unless stated:
+
+- `RegExp.prototype` is an ordinary object: `Object.prototype.toString` gives `[object Object]`, `exec`/`test`
+  throw on it, and the flag getters return `undefined` (`source` gives `"(?:)"`) for it and throw a TypeError for
+  any other non-RegExp.
+- `get flags` reads `hasIndices`, `global`, `ignoreCase`, `multiline`, `dotAll`, `unicode`, `unicodeSets` and
+  `sticky` in this order (a missing property is false); `toString` is generic (`source` and `flags`).
+- The constructor follows 22.2.4.1: IsRegExp (`Symbol.match`), `RegExp(re)` returns `re` only when
+  `re.constructor` is `RegExp`, a regexp-like object gives its `source` and `flags`, and the prototype is taken
+  from `new.target` before the pattern is converted.
+- `source` escapes line terminators and gives `"(?:)"` for an empty pattern (EscapeRegExpPattern), so it reads
+  back as the same literal.
+- Patterns: a quantifier bound may exceed 65535 (larger bounds behave as unbounded); a braced quantifier with
+  nothing to repeat (`x{1}{1,}`) is a SyntaxError.
+- `exec`/`test` treat a negative `lastIndex` as 0 (ToLength). RegExpExec throws a TypeError when a custom `exec`
+  returns neither an object nor null; `@@search` compares `lastIndex` with SameValue and writes it with
+  Set(…, true); `@@replace` takes `global` from the `flags` property.
+- All versions: format-control characters (U+00AD, U+200B, …) belong to a regexp literal instead of being
+  stripped.
+- `VERSION_ECMASCRIPT`: `\p`/`\P` without the `u` flag are identity escapes (Annex B.1.2); before, Rhino read
+  them as property escapes.
+- test262: 58 more files pass; 29,686 of 42,616 in-scope files (69.7%).
+
 ### Built-ins residuals: typed arrays (2026-10-10, plan 1.8c, part 9)
 
 All versions unless stated (`BACKWARD_COMPATIBILITY.md` 1.6 and 2.33):

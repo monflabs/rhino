@@ -1318,8 +1318,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
                 case '/':
                     markCommentStart();
-                    // is it a // comment?
-                    if (matchChar('/')) {
+                    // is it a // comment? (a format-control character after / starts a regexp)
+                    if (matchCharKeepFormat('/')) {
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
                         tokenBeg = cursor - 2;
@@ -1328,7 +1328,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         return Token.COMMENT;
                     }
                     // is it a /* or /** comment?
-                    if (matchChar('*')) {
+                    if (matchCharKeepFormat('*')) {
                         boolean lookForSlash = false;
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
@@ -1539,7 +1539,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
         boolean inCharSet = false; // true if inside a '['..']' pair
         int c;
-        while ((c = getChar()) != '/' || inCharSet) {
+        // the format-control characters (Cf) belong to the literal (ES5 7.1)
+        while ((c = getChar(false)) != '/' || inCharSet) {
             if (c == '\n' || c == EOF_CHAR) {
                 ungetChar(c);
                 tokenEnd = cursor - 1;
@@ -1549,7 +1550,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
             }
             if (c == '\\') {
                 addToString(c);
-                c = getChar();
+                c = getChar(false);
                 if (c == '\n' || c == EOF_CHAR) {
                     ungetChar(c);
                     tokenEnd = cursor - 1;
@@ -2170,6 +2171,16 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
     private boolean matchChar(int test) throws IOException {
         int c = getCharIgnoreLineEnd();
+        if (c == test) {
+            tokenEnd = cursor;
+            return true;
+        }
+        ungetCharIgnoreLineEnd(c);
+        return false;
+    }
+
+    private boolean matchCharKeepFormat(int test) throws IOException {
+        int c = getCharIgnoreLineEnd(false);
         if (c == test) {
             tokenEnd = cursor;
             return true;
