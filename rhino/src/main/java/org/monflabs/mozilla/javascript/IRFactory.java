@@ -793,11 +793,20 @@ public final class IRFactory {
             }
 
             if (destructuring != null) {
-                body.addChildToFront(
-                        guardIterators(
-                                new Node(Token.EXPR_VOID, destructuring, lineno, column),
-                                lineno,
-                                column));
+                Node destructure = new Node(Token.EXPR_VOID, destructuring, lineno, column);
+                if (fn.isES6Generator()) {
+                    // FunctionDeclarationInstantiation binds the parameters when the generator is
+                    // called, before the generator object is created. The prologue of a compiled
+                    // generator cannot hold a try: no guard closes the iterators on a throw.
+                    Node init = fn.getGeneratorParamInitBlock();
+                    if (init == null) {
+                        init = new Node(Token.BLOCK);
+                        fn.setGeneratorParamInitBlock(init);
+                    }
+                    init.addChildToFront(destructure);
+                } else {
+                    body.addChildToFront(guardIterators(destructure, lineno, column));
+                }
             }
 
             int syntheticType = fn.getFunctionType();

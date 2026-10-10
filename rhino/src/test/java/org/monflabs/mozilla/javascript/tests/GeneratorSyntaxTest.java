@@ -52,6 +52,19 @@ class GeneratorSyntaxTest {
     }
 
     @Test
+    void parametersAreBoundWhenTheGeneratorIsCalled() {
+        assertBoth(
+                "TypeError|5|1,2,3|7",
+                "var r = []; function* g([a]) {}"
+                        + " try { g(null); r.push('created'); } catch (e) { r.push(e.name); }"
+                        + " function* h({a}) { return a; } r.push(h({a: 5}).next().value);"
+                        + " function* k([a, b] = [1, 2], c = a + b) { return [a, b, c].join(); }"
+                        + " r.push(k().next().value);"
+                        + " var o = { *m([a]) { return a; } }; r.push(o.m([7]).next().value);"
+                        + " r.join('|')");
+    }
+
+    @Test
     void generatorPrototypeHasNoOwnProperties() {
         assertBoth(0, "function* g() {} Object.getOwnPropertyNames(g.prototype).length");
     }

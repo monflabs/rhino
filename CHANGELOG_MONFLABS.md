@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Generator parameters bound at the call (2026-10-09, plan 1.6b)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.17):
+
+- The destructuring of a generator's parameters joins its default values in the generator's parameter
+  initialization block (`FunctionNode.getGeneratorParamInitBlock`), run by both backends before the generator object
+  is created; `NodeTransformer` now transforms that block too. Without the abrupt-completion guard (no `try` in the
+  prologue of a compiled generator).
+- test262: 156 more files pass; 26,029 of 42,616 in-scope files (61.1%).
+
 ### yield (2026-10-09, plan 1.6a)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.17):

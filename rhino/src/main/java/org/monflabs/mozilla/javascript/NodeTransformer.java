@@ -75,6 +75,13 @@ public class NodeTransformer {
 
         // uncomment to print tree before transformation
         if (Token.printTrees) System.out.println(tree.toStringTree(tree));
+        if (tree.getType() == Token.FUNCTION) {
+            // the parameters of a generator, initialized before its body (see IRFactory)
+            Node paramInit = ((FunctionNode) tree).getGeneratorParamInitBlock();
+            if (paramInit != null) {
+                transformCompilationUnit_r(tree, paramInit, tree, createScopeObjects, inStrictMode);
+            }
+        }
         transformCompilationUnit_r(tree, tree, tree, createScopeObjects, inStrictMode);
     }
 

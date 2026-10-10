@@ -342,7 +342,7 @@ machinery (decision at M3.1).
 Steps:
 - *1.6a (done)* `yield` parsing (AssignmentExpression operand, contextual identifier, `yield*` on one line),
   generator `prototype`, interpreter fallback when the class compiler cannot compile a `yield` in an expression.
-- *1.6b* generator parameters bound when the generator is called (FunctionDeclarationInstantiation before the
+- *1.6b (done)* generator parameters bound when the generator is called (FunctionDeclarationInstantiation before the
   generator object is created; ~110 destructuring tests).
 
 **1.7 Classes (ES2015).** Declarations and expressions, constructors, `extends` (including `null` and expressions),
@@ -520,7 +520,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
-| 1.6  | Generators completion                           | in progress | 60.5% → 60.7% (1.6a)         | (this) |
+| 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–b)       | (this) |
 | 1.7  | Classes                                         | todo        |                              |        |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |

@@ -403,7 +403,11 @@ function* h() { yield\n* 1 }                // before: yield* 1   now: SyntaxErr
   `constructor`.
 - A script with a generator whose `yield` the class compiler cannot handle (inside a call or an object literal) is
   run by the interpreter instead (`Context.compileImpl`).
-- **Why:** ECMA-262 2026, §15.5 (Generator Function Definitions), §13.1.1 (`yield` as an IdentifierReference).
+- The destructured parameters of a generator are bound when it is called, like its default values already were: a
+  pattern that cannot be destructured throws at the call (before, at the first `next()`). Their iterators are not
+  closed when a default or a target throws (the prologue of a compiled generator holds no `try`).
+- **Why:** ECMA-262 2026, §15.5 (Generator Function Definitions), §13.1.1 (`yield` as an IdentifierReference),
+  §10.2.11 FunctionDeclarationInstantiation.
 
 ---
 
