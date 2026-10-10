@@ -7,7 +7,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -852,7 +851,7 @@ public abstract class SlotMapOwner<T extends PropHolder<T>> implements PropHolde
         Context cx = Context.getCurrentContext();
         if ((cx != null) && cx.hasFeature(Context.FEATURE_ENUMERATE_IDS_FIRST)) {
             // Move all the numeric IDs to the front in numeric order
-            Arrays.sort(result, ScriptableObject.KEY_COMPARATOR);
+            ScriptableObject.sortKeys(result);
         }
 
         return result;

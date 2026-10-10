@@ -2992,10 +2992,67 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
         Context cx = Context.getCurrentContext();
         if ((cx != null) && cx.hasFeature(Context.FEATURE_ENUMERATE_IDS_FIRST)) {
             // Move all the numeric IDs to the front in numeric order
-            Arrays.sort(result, KEY_COMPARATOR);
+            sortKeys(result);
         }
 
         return result;
+    }
+
+    /**
+     * Puts keys in the order of OrdinaryOwnPropertyKeys (ECMA-262 10.1.11.1): the array indexes
+     * (also those kept as strings, up to 2**32 - 2) in ascending order, then the other strings and
+     * then the symbols, each in their (creation) order. Keys already in that order are left alone.
+     */
+    static void sortKeys(Object[] ids) {
+        int previousRank = 0;
+        long previousIndex = -1;
+        boolean sorted = true;
+        for (Object id : ids) {
+            int rank = keyRank(id);
+            long index = rank == 0 ? arrayIndex(id) : -1;
+            if (rank < previousRank || (rank == 0 && index < previousIndex)) {
+                sorted = false;
+                break;
+            }
+            previousRank = rank;
+            previousIndex = index;
+        }
+        if (!sorted) {
+            Arrays.sort(ids, KEY_COMPARATOR);
+        }
+    }
+
+    /** 0 for an array index, 1 for another string, 2 for a symbol. */
+    private static int keyRank(Object id) {
+        if (id instanceof Symbol) {
+            return 2;
+        }
+        return arrayIndex(id) >= 0 ? 0 : 1;
+    }
+
+    /** The array index named by a key (an int, or a canonical string below 2**32 - 1), or -1. */
+    private static long arrayIndex(Object id) {
+        if (id instanceof Integer) {
+            int i = (Integer) id;
+            return i >= 0 ? i : -1;
+        }
+        if (!(id instanceof CharSequence)) {
+            return -1;
+        }
+        CharSequence s = (CharSequence) id;
+        int len = s.length();
+        if (len == 0 || len > 10 || (len > 1 && s.charAt(0) == '0')) {
+            return -1;
+        }
+        long value = 0;
+        for (int i = 0; i < len; i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') {
+                return -1;
+            }
+            value = value * 10 + (c - '0');
+        }
+        return value < 4294967295L ? value : -1;
     }
 
     /*
@@ -3180,16 +3237,12 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
 
         @Override
         public int compare(Object o1, Object o2) {
-            if (o1 instanceof Integer) {
-                if (o2 instanceof Integer) {
-                    return ((Integer) o1).compareTo((Integer) o2);
-                }
-                return -1;
+            int r1 = keyRank(o1);
+            int r2 = keyRank(o2);
+            if (r1 != r2) {
+                return r1 - r2;
             }
-            if (o2 instanceof Integer) {
-                return 1;
-            }
-            return 0;
+            return r1 == 0 ? Long.compare(arrayIndex(o1), arrayIndex(o2)) : 0;
         }
     }
 

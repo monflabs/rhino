@@ -652,6 +652,11 @@ class NativeProxy extends ScriptableObject {
      * href="https://262.ecma-international.org/12.0/#sec-proxy-object-internal-methods-and-internal-slots-getownproperty-p">10.5.5
      * [[GetOwnProperty]] (P)</a>
      */
+    /** A property key as passed to a trap: a symbol, or a string (not an index). */
+    private static Object trapKey(Object id) {
+        return ScriptRuntime.isSymbol(id) ? id : ScriptRuntime.toString(id);
+    }
+
     /** CompletePropertyDescriptor (6.2.6.6): the missing fields get their default values. */
     private static void completePropertyDescriptor(DescriptorInfo desc) {
         if (desc.isGenericDescriptor() || desc.isDataDescriptor()) {
@@ -713,7 +718,7 @@ class NativeProxy extends ScriptableObject {
 
         Function trap = getTrap(TRAP_GET_OWN_PROPERTY_DESCRIPTOR);
         if (trap != null) {
-            Object trapResultObj = callTrap(trap, new Object[] {target, id});
+            Object trapResultObj = callTrap(trap, new Object[] {target, trapKey(id)});
             if (!Undefined.isUndefined(trapResultObj)
                     && !(trapResultObj instanceof Scriptable
                             && !ScriptRuntime.isSymbol(trapResultObj))) {
@@ -816,7 +821,9 @@ class NativeProxy extends ScriptableObject {
                             callTrap(
                                     trap,
                                     new Object[] {
-                                        target, id, desc.toObject(trap.getDeclarationScope())
+                                        target,
+                                        trapKey(id),
+                                        desc.toObject(trap.getDeclarationScope())
                                     }));
             if (!booleanTrapResult) {
                 return false;

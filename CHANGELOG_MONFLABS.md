@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: String symbol methods, key order (2026-10-10, plan 1.8c, part 1)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.25):
+
+- `String.prototype.match`, `matchAll`, `replace`, `replaceAll`, `search` and `split` look up the `Symbol.match`
+  (etc.) method of their argument only when it is an object (ES2025): a primitive is converted to a string.
+- OrdinaryOwnPropertyKeys order: the array indexes kept as strings (from 2**31 to 2**32 - 2) are sorted with the
+  other indexes, and symbols come after strings (`ScriptableObject.sortKeys`, which leaves keys already in order
+  untouched).
+- Proxy traps receive property keys as strings (before, an index was passed as a number).
+- test262: 29 more files pass; 29,332 of 42,616 in-scope files (68.8%).
+
 ### [[Delete]], [[DefineOwnProperty]] and [[SetPrototypeOf]] with results (2026-10-10, plan 1.8b, part 2)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.24):

@@ -353,7 +353,7 @@ final class NativeString extends ScriptableObject {
 
         Object separator = args.length > 0 ? args[0] : Undefined.instance;
         Object limit = args.length > 1 ? args[1] : Undefined.instance;
-        if (!Undefined.isUndefined(separator) && separator != null) {
+        if (ScriptRuntime.isObject(separator)) {
             Object splitter = ScriptRuntime.getObjectElem(separator, SymbolKey.SPLIT, cx, s);
             // If method is not undefined, it should be a Callable
             if (splitter != null && !Undefined.isUndefined(splitter)) {
@@ -568,7 +568,7 @@ final class NativeString extends ScriptableObject {
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "match");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
         RegExpProxy regExpProxy = ScriptRuntime.checkRegExpProxy(cx);
-        if (regexp != null && !Undefined.isUndefined(regexp)) {
+        if (ScriptRuntime.isObject(regexp)) {
             Object matcher = ScriptRuntime.getObjectElem(regexp, SymbolKey.MATCH, cx, s);
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
@@ -814,7 +814,7 @@ final class NativeString extends ScriptableObject {
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "search");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
         RegExpProxy regExpProxy = ScriptRuntime.checkRegExpProxy(cx);
-        if (regexp != null && !Undefined.isUndefined(regexp)) {
+        if (ScriptRuntime.isObject(regexp)) {
             Object matcher = ScriptRuntime.getObjectElem(regexp, SymbolKey.SEARCH, cx, s);
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
@@ -862,7 +862,7 @@ final class NativeString extends ScriptableObject {
         Object searchValue = args.length > 0 ? args[0] : Undefined.instance;
         Object replaceValue = args.length > 1 ? args[1] : Undefined.instance;
 
-        if (!Undefined.isUndefined(searchValue) && searchValue != null) {
+        if (ScriptRuntime.isObject(searchValue)) {
             Object replacer = ScriptRuntime.getObjectElem(searchValue, SymbolKey.REPLACE, cx, s);
             // If method is not undefined, it should be a Callable
             if (replacer != null && !Undefined.isUndefined(replacer)) {
@@ -941,7 +941,7 @@ final class NativeString extends ScriptableObject {
         Object searchValue = args.length > 0 ? args[0] : Undefined.instance;
         Object replaceValue = args.length > 1 ? args[1] : Undefined.instance;
 
-        if (searchValue != null && !Undefined.isUndefined(searchValue)) {
+        if (ScriptRuntime.isObject(searchValue)) {
             boolean isRegExp =
                     searchValue instanceof Scriptable
                             && AbstractEcmaObjectOperations.isRegExp(cx, s, searchValue);
@@ -1041,7 +1041,7 @@ final class NativeString extends ScriptableObject {
         // See ECMAScript spec 22.1.3.14
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "matchAll");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
-        if (regexp != null && !Undefined.isUndefined(regexp)) {
+        if (ScriptRuntime.isObject(regexp)) {
             boolean isRegExp = AbstractEcmaObjectOperations.isRegExp(cx, s, regexp);
             if (isRegExp) {
                 Object flags = ScriptRuntime.getObjectProp(regexp, "flags", cx, s);

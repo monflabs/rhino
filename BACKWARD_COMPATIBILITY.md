@@ -530,6 +530,17 @@ Object.getOwnPropertyDescriptor(q, "x");          // before: a descriptor   now:
   trap calls the target's getters with the proxy as `this` (before, the target).
 - **Why:** ECMA-262 2026, §10.1.9 [[Set]], §10.5 (proxy internal methods), §28.1 (Reflect).
 
+### 2.25 String methods and the symbols of primitives
+
+```js
+Number.prototype[Symbol.match] = function () { return "custom"; };
+"a1b".match(1);          // before: "custom"   now: ["1"] (1 is converted to the string "1")
+```
+
+- All versions: `String.prototype.match`, `matchAll`, `replace`, `replaceAll`, `search` and `split` use the
+  `Symbol.match`/`matchAll`/`replace`/`search`/`split` method of their argument only when it is an object.
+- **Why:** ECMA-262 2025 and later, §22.1.3 (the "If regexp is an Object" steps).
+
 ---
 
 ## 3. Platform and embedding
