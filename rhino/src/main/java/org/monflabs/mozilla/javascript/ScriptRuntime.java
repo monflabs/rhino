@@ -2739,6 +2739,9 @@ public class ScriptRuntime {
             // false. In these cases a TypeError exception is thrown (11.13.1).
             // TODO: we used to special-case XMLObject here, but putProperty
             // seems to work for E4X and we should optimize  the common case
+            if (bound instanceof NativeCall && ((NativeCall) bound).isSelfName(id, value)) {
+                throw typeErrorById("msg.fn.name.assign", id);
+            }
             ScriptableObject.putProperty(bound, id, value);
             return value;
         }
@@ -3758,6 +3761,7 @@ public class ScriptRuntime {
         }
 
         var homeObject = scope instanceof NativeCall ? ((NativeCall) scope).getHomeObject() : null;
+        Object newTarget = evalNewTarget(scope);
 
         // Compile with explicit interpreter instance to force interpreter
         // mode.
@@ -3775,6 +3779,7 @@ public class ScriptRuntime {
                     compilerEnvs.setAllowSuper(isInsideMethod);
                     compilerEnvs.setInDerivedConstructor(
                             thisArg instanceof ClassDefinition.DerivedThis);
+                    compilerEnvs.setAllowNewTarget(newTarget != null);
                     compilerEnvs.setInEval(true);
                     compilerEnvs.setHomeObject(homeObject);
                     compilerEnvs.setEvalForbiddenVarNames(
@@ -3799,6 +3804,9 @@ public class ScriptRuntime {
         } else {
             evalScope = scope;
         }
+        if (newTarget != null && script instanceof JSScript) {
+            return ((JSScript) script).exec(cx, evalScope, thisObject, newTarget);
+        }
         return script.exec(cx, evalScope, thisObject);
     }
 
@@ -3814,7 +3822,10 @@ public class ScriptRuntime {
         if (inParameters && scope instanceof NativeCall) {
             JSDescriptor<?> fn = ((NativeCall) scope).function.getDescriptor();
             Set<String> names = new HashSet<>();
-            names.add("arguments");
+            if (!fn.hasLexicalThis()) {
+                // an arrow function has no arguments object
+                names.add("arguments");
+            }
             for (int i = 0; i < fn.getParamCount(); i++) {
                 names.add(fn.getParamOrVarName(i));
             }
@@ -3830,7 +3841,18 @@ public class ScriptRuntime {
                 varScope = varScope.getParentScope();
             }
             TopLevel global = varScope instanceof TopLevel ? (TopLevel) varScope : null;
-            if (!blocks.isEmpty() || global != null) {
+            // the let/const of the top level of a (non-strict) function, see
+            // FunctionDeclarationInstantiation step 30
+            Set<String> fnLexicals = new HashSet<>();
+            if (!inParameters && varScope instanceof NativeCall) {
+                JSDescriptor<?> fn = ((NativeCall) varScope).function.getDescriptor();
+                for (int i = fn.getParamCount(); i < fn.getParamAndVarCount(); i++) {
+                    if (fn.getParamOrVarLexical(i)) {
+                        fnLexicals.add(fn.getParamOrVarName(i));
+                    }
+                }
+            }
+            if (!blocks.isEmpty() || global != null || !fnLexicals.isEmpty()) {
                 Predicate<String> lexical =
                         name -> {
                             for (LocalScope block : blocks) {
@@ -3838,7 +3860,8 @@ public class ScriptRuntime {
                                     return true;
                                 }
                             }
-                            return global != null && global.hasLexicalDeclaration(name);
+                            return fnLexicals.contains(name)
+                                    || (global != null && global.hasLexicalDeclaration(name));
                         };
                 forbidden = forbidden == null ? lexical : forbidden.or(lexical);
             }
@@ -3867,6 +3890,14 @@ public class ScriptRuntime {
                 kind.substring(1),
                 cx,
                 scope);
+    }
+
+    /**
+     * Strict code assigning the immutable binding of a function expression's name
+     * (Token#FN_NAME_ASSIGN); sloppy code ignores the assignment.
+     */
+    public static Object fnNameAssignment(String name) {
+        throw typeErrorById("msg.fn.name.assign", name);
     }
 
     /**
@@ -5404,6 +5435,32 @@ public class ScriptRuntime {
             boolean argsHasRest,
             boolean requiresArgumentObject) {
         return new NativeCall(funObj, cx, scope, args, true, argsHasRest, requiresArgumentObject);
+    }
+
+    /** Records the new.target of a call in its activation, for the eval code it runs. */
+    public static void setActivationNewTarget(VarScope activation, Object newTarget) {
+        ((NativeCall) activation).newTarget = newTarget == null ? Undefined.instance : newTarget;
+    }
+
+    /**
+     * The new.target of a direct eval: that of the closest enclosing call that is not an arrow
+     * function (whose activation records its lexical new.target), or null at the top level, where
+     * new.target is a SyntaxError.
+     */
+    private static Object evalNewTarget(VarScope scope) {
+        for (VarScope s = scope; s != null; s = s.getParentScope()) {
+            if (s instanceof NativeCall) {
+                NativeCall call = (NativeCall) s;
+                // an arrow function's own new.target is that of its enclosing function, if any
+                org.monflabs.mozilla.javascript.debug.DebuggableScript d =
+                        call.function.getDescriptor();
+                while (d instanceof JSDescriptor && ((JSDescriptor<?>) d).hasLexicalThis()) {
+                    d = d.getParent();
+                }
+                return d != null && d.isFunction() ? call.newTarget : null;
+            }
+        }
+        return null;
     }
 
     public static void enterActivationFunction(Context cx, VarScope scope) {

@@ -289,13 +289,18 @@ files, of which destructured parameters go to 1.3, and async/class syntax to the
   eval's own lexical environment and `new.target` in eval move to 1.2g.
 - *1.2f (done)* temporal dead zone of parameters: a default value reading its own or a later parameter
   (`dflt-params-ref-later`, `-ref-self`), gated with the TDZ.
-- *1.2g (after 1.3)* environments: a separate var environment for the body when parameters have expressions
+- *1.2g (done 2026-10-10, partly)* environments: a separate var environment for the body when parameters have expressions
   (`scope-paramsbody-var-open`, `scope-param-elem-var-*`), `eval` in parameters (also arrows), the immutable binding
   of a function expression's name (`named-*-reassign-fn-name-in-body*`, `scope-name-var-open-*`), the lexical
   environment of eval code (`lex-env-distinct-*`, `lex-env-no-init-*`), a function's top-level `let` against an eval
   `var` (`scope-body-lex-distinct`), `new.target` in eval. They need a scope between the function's activation and
   its body (or eval code) in both backends, with hoisted functions closing over it; after 1.3 because destructured
-  parameters go through the same desugaring.
+  parameters go through the same desugaring. Done: immutable function-expression name, eval lexical environment,
+  function top-level `let` vs eval `var`, eval in arrow parameters, `new.target` in eval, unmapped `arguments` with
+  destructured parameters. Deferred (no milestone yet; ~25 tests): the separate var environment for the body
+  (`scope-paramsbody-var-open`, also 12 class tests and the `arrow-fn-body-cntns-arguments-*` eval tests), which
+  needs a second activation created after the parameters in both backends with hoisted functions created after it;
+  the TDZ scope of a for-in/of head (`for-in/scope-body-lex-*`).
 
 **1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
 nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` binds `y` to the second element), rest elements; `IteratorClose` on abrupt completion; evaluation order
@@ -531,12 +536,12 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | in progress | 57.8% → 58.7% (1.2a–f; 1.2g after 1.3) | (this) |
+| 1.2  | Function semantics                              | done        | 57.8% → 58.7% (1.2a–g; parameter/body environments deferred) | (this) |
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
-| 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | (this) |
+| 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |

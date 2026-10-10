@@ -137,8 +137,11 @@ public class Context implements Closeable {
      *       kept in the {@link TopLevel} scope rather than on the global object, and a SyntaxError
      *       when another script of the same scope declares the same name.
      *   <li>A {@code var} or function of sloppy eval code whose name is a {@code let}/{@code const}
-     *       of an enclosing block, or a global lexical declaration, is a SyntaxError; its global
-     *       functions and vars are all checked before any is created (CanDeclareGlobalFunction).
+     *       of an enclosing block, of the top level of the calling function, or a global lexical
+     *       declaration, is a SyntaxError; its global functions and vars are all checked before any
+     *       is created (CanDeclareGlobalFunction).
+     *   <li>The top-level {@code let}/{@code const}/{@code class} of eval code are bindings of the
+     *       eval code, not variables of the caller.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

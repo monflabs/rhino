@@ -86,6 +86,9 @@ public class FunctionNode extends ScriptNode {
     private boolean namedByLiteral;
     private boolean classConstructor;
     private boolean derivedConstructor;
+    private boolean selfNameBinding;
+    private boolean hasDestructuredParams;
+    private boolean compiledByContext;
 
     @Override
     public List<Object> getDefaultParams() {
@@ -383,6 +386,37 @@ public class FunctionNode extends ScriptNode {
 
     public boolean isDerivedConstructor() {
         return derivedConstructor;
+    }
+
+    /** Marks a function expression whose body binds its name (see JSDescriptor). */
+    public void setSelfNameBinding() {
+        selfNameBinding = true;
+    }
+
+    public boolean hasSelfNameBinding() {
+        return selfNameBinding;
+    }
+
+    /**
+     * Marks the function compiled by Context#compileFunction, which keeps the JavaScript 1.x
+     * semantics of its own name (a mutable variable; {@code name = null} stores {@code this.name}),
+     * as event handlers of embeddings rely on them.
+     */
+    public void setCompiledByContext() {
+        compiledByContext = true;
+    }
+
+    public boolean isCompiledByContext() {
+        return compiledByContext;
+    }
+
+    /** Marks a function with a destructuring pattern in its parameter list. */
+    public void setHasDestructuredParams() {
+        hasDestructuredParams = true;
+    }
+
+    public boolean hasDestructuredParams() {
+        return hasDestructuredParams;
     }
 
     /** Marks a function written as the value of an object literal property (see JSDescriptor). */

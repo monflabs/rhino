@@ -124,19 +124,34 @@ const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxEr
 let x = 1;
 (0, eval)("var x");                 // VERSION_ES6: fine   VERSION_ECMASCRIPT: SyntaxError
 { let y; { eval("var y"); } }       // VERSION_ES6: fine   VERSION_ECMASCRIPT: SyntaxError
+function f() { let z; eval("var z"); }   // VERSION_ES6: fine   VERSION_ECMASCRIPT: SyntaxError at the call
 ```
 
 - Sloppy eval code may not declare a `var` or function whose name is a `let`/`const` of a block between the eval
-  and its variable scope, or (when its variable scope is the global one) a global lexical declaration. A catch
-  parameter or a `with` object does not count.
+  and its variable scope, of the top level of the calling function, or (when its variable scope is the global one)
+  a global lexical declaration. A catch parameter or a `with` object does not count.
 - When eval code declares global functions and vars, it checks them all before creating any: a function whose name
   is a non-configurable global that is read-only or non-enumerable (`NaN`, `undefined`, …), or a new name on a
   non-extensible global object, throws a TypeError and declares nothing (before, the functions preceding it were
   created). A function replacing a configurable global property redefines it as writable, enumerable and
   configurable (before, a read-only one was kept, or threw in strict mode).
 - **Why:** ECMA-262 2026, §19.2.1.3 EvalDeclarationInstantiation steps 3 and 10–11, §9.1.1.4.16
-  CanDeclareGlobalFunction and §9.1.1.4.18 CreateGlobalFunctionBinding.
-- **Not covered yet:** a function's own top-level `let` (`function f() { let x; eval("var x"); }`).
+  CanDeclareGlobalFunction and §9.1.1.4.18 CreateGlobalFunctionBinding, §10.2.11 FunctionDeclarationInstantiation
+  step 30 (the separate lexical environment of a non-strict function).
+
+### 1.5 Lexical declarations of eval code
+
+```js
+eval("let a = 1; const b = 2; class C {}");
+typeof a;                           // VERSION_ES6: "number"   VERSION_ECMASCRIPT: "undefined"
+eval("typeof c; let c;");           // VERSION_ES6: "undefined"   VERSION_ECMASCRIPT: ReferenceError
+```
+
+- The top-level `let`, `const` and `class` declarations of eval code (direct or indirect) belong to the eval code:
+  they are in a block of their own, in their temporal dead zone until declared, and gone after the eval; its `var`s
+  and functions still go to the caller's variable scope. Not done when the eval code also declares functions at its
+  top level (they would not see the block), which keep the previous behavior.
+- **Why:** ECMA-262 2026, §19.2.1.1 PerformEval step 16 (a new declarative environment for the lexical declarations).
 
 ---
 
@@ -257,8 +272,8 @@ g(1);   // before: 2   now: 1 (a rest parameter makes arguments unmapped)
   accessor, or deleting it, ends its link with the parameter (before, some of these threw "Cannot change the value
   of attribute" or kept the link). Functions with a rest parameter, like those with default values, get an unmapped
   `arguments` object.
+- A destructured parameter, like a default value or a rest parameter, makes `arguments` unmapped.
 - **Why:** ECMA-262 2026, §10.4.4 Arguments Exotic Objects and §10.2.11 FunctionDeclarationInstantiation step 18.
-- **Not covered yet:** destructured parameters (plan 1.3) still produce a mapped `arguments` object.
 
 ### 2.10 Early errors of parameter lists
 
@@ -308,7 +323,8 @@ f();                                 // before: fine   now: SyntaxError (also "v
 ```
 
 - A sloppy direct eval in a parameter list may not declare a `var` or function named like a parameter or
-  `arguments`: they share the parameters' environment.
+  `arguments` (not `arguments` for an arrow function, which has none): they share the parameters' environment. This
+  now applies to arrow functions too.
 - An indirect eval is never strict mode code, even when called from strict code (before, it inherited the caller's
   strictness, and its `var`s did not reach the global object).
 - **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 20, §19.2.1.3 EvalDeclarationInstantiation
@@ -444,6 +460,35 @@ F.lastMatch;   // before: the last match   now: TypeError
   `leftContext`, `rightContext` and `$1`–`$9` are read (and `input` written) only on `RegExp` itself, not through
   an object inheriting from it, such as a class extending `RegExp`. `RegExp.multiline` (`$*`) is not affected.
 - **Why:** ECMA-262 Annex B proposal "Legacy RegExp features" (GetLegacyRegExpStaticProperty), tested by test262.
+
+### 2.21 The name of a function expression is immutable
+
+```js
+var f = function g() { g = 1; return typeof g; };
+f();   // before: "number"   now: "function" (in strict code: TypeError)
+var h = function k() { return function () { k = null; }; };   // JavaScript 1.x: this.k = null
+```
+
+- From `VERSION_ES6`: inside a named function expression, assigning its name (directly, from a nested function or
+  from eval code) has no effect, and throws a TypeError in strict code. A parameter or a declaration of the same name
+  in the function still makes it an ordinary variable.
+- From `VERSION_ES6`: `name = null` where `name` is the name of an enclosing function is an ordinary assignment
+  (JavaScript 1.x rewrote it as `this.name = null`).
+- A function compiled by `Context.compileFunction` (e.g. an event handler of an embedding) keeps both JavaScript 1.x
+  behaviors: its name is a mutable variable, and `name = null` stores `this.name`.
+- **Why:** ECMA-262 2026, §15.2.5 InstantiateOrdinaryFunctionExpression (CreateImmutableBinding of the name).
+
+### 2.22 `Object.defineProperty` on a non-configurable property
+
+```js
+var o = Object.defineProperty({}, "x", { value: 1, writable: true, enumerable: true });
+Object.defineProperty(o, "x", { value: 2 });   // before: TypeError   now: o.x is 2
+```
+
+- All versions: redefining a non-configurable property with a descriptor that does not mention `enumerable` no
+  longer throws "Cannot change the enumerable attribute".
+- **Why:** ECMA-262 2026, §10.1.6.3 ValidateAndApplyPropertyDescriptor step 5.b (compares [[Enumerable]] only when
+  the descriptor has one).
 
 ---
 

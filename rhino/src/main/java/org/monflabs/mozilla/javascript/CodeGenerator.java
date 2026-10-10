@@ -965,6 +965,13 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 break;
 
+            case Token.FN_NAME_ASSIGN:
+                visitExpression(child, 0);
+                if (node.getIntProp(Node.STRICT_PROP, 0) == 1) {
+                    addStringOp(Icode.FN_NAME_ASSIGN, node.getString());
+                }
+                break;
+
             case Token.CLASS:
                 // constructor, heritage, prototype members, static members
                 for (int i = 0; i < 4; i++) {

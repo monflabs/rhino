@@ -267,7 +267,9 @@ public class Token {
             ENUM_CLOSE = REQUIRE_OBJECT + 1,
             ENUM_CLOSE_ABRUPT = ENUM_CLOSE + 1,
             CLASS = ENUM_CLOSE_ABRUPT + 1, // a class; in the IR: ScriptRuntime.defineClass
-            LAST_TOKEN = CLASS + 1;
+            // strict assignment to the name of a function expression: evaluates, then throws
+            FN_NAME_ASSIGN = CLASS + 1,
+            LAST_TOKEN = FN_NAME_ASSIGN + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -650,6 +652,8 @@ public class Token {
                 return "ENUM_CLOSE_ABRUPT";
             case CLASS:
                 return "CLASS";
+            case FN_NAME_ASSIGN:
+                return "FN_NAME_ASSIGN";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

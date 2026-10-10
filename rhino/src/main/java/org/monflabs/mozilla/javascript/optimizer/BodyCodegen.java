@@ -441,6 +441,16 @@ class BodyCodegen {
                             + "Z"
                             + ")Lorg/monflabs/mozilla/javascript/VarScope;");
             cfw.addAStore(variableObjectLocal);
+            // the new.target of eval code (generators have none)
+            cfw.addALoad(variableObjectLocal);
+            if (isGenerator) {
+                Codegen.pushUndefined(cfw);
+            } else {
+                cfw.addALoad(newTargetLocal);
+            }
+            addScriptRuntimeInvoke(
+                    "setActivationNewTarget",
+                    "(Lorg/monflabs/mozilla/javascript/VarScope;Ljava/lang/Object;)V");
             cfw.addALoad(contextLocal);
             cfw.addALoad(variableObjectLocal);
             addScriptRuntimeInvoke(
@@ -1378,6 +1388,16 @@ class BodyCodegen {
                         "org/monflabs/mozilla/javascript/UniqueTag",
                         "UNINITIALIZED",
                         "Lorg/monflabs/mozilla/javascript/UniqueTag;");
+                break;
+
+            case Token.FN_NAME_ASSIGN:
+                generateExpression(child, node);
+                if (node.getIntProp(Node.STRICT_PROP, 0) == 1) {
+                    cfw.add(ByteCode.POP);
+                    cfw.addPush(node.getString());
+                    addScriptRuntimeInvoke(
+                            "fnNameAssignment", "(Ljava/lang/String;)Ljava/lang/Object;");
+                }
                 break;
 
             case Token.CLASS:

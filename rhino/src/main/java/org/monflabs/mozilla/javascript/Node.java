@@ -76,7 +76,8 @@ public class Node implements Iterable<Node> {
             SPREAD_ARGS_PROP = 37, // CALL or NEW whose only argument is the array of its arguments
             DERIVED_THIS_PROP =
                     38, // THIS of a derived constructor: DERIVED_THIS_VALUE or SUPER_CALLEE
-            LAST_PROP = DERIVED_THIS_PROP,
+            STRICT_PROP = 39, // FN_NAME_ASSIGN in strict code (throws)
+            LAST_PROP = STRICT_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /** Values of DERIVED_THIS_PROP. */
@@ -480,6 +481,8 @@ public class Node implements Iterable<Node> {
                 return "lexical_prop";
             case DERIVED_THIS_PROP:
                 return "derived_this_prop";
+            case STRICT_PROP:
+                return "strict_prop";
 
             default:
                 Kit.codeBug();

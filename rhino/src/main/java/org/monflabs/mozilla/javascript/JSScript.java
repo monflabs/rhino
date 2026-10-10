@@ -32,6 +32,11 @@ public class JSScript implements Script, ScriptOrFn<JSScript> {
 
     @Override
     public Object exec(Context cx, VarScope scope, Object thisObj) {
+        return exec(cx, scope, thisObj, null);
+    }
+
+    /** Runs the script with a new.target: direct eval code in a function. */
+    Object exec(Context cx, VarScope scope, Object thisObj, Object newTarget) {
         Object ret;
         if (!ScriptRuntime.hasTopCall(cx)) {
             // It will go through "call" path. but they are equivalent
@@ -43,7 +48,13 @@ public class JSScript implements Script, ScriptOrFn<JSScript> {
                 ret =
                         descriptor
                                 .getCode()
-                                .execute(cx, this, null, scope, thisObj, ScriptRuntime.emptyArgs);
+                                .execute(
+                                        cx,
+                                        this,
+                                        newTarget,
+                                        scope,
+                                        thisObj,
+                                        ScriptRuntime.emptyArgs);
             } finally {
                 InstrumentEmitter.emitter.endEvent(event, getDescriptor().getSourceName());
             }

@@ -117,6 +117,7 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
                                     desc.hasRestArg(),
                                     desc.requiresArgumentObject());
                 }
+                ScriptRuntime.setActivationNewTarget(scope, newTarget);
             }
         } else {
             scope = callerScope;

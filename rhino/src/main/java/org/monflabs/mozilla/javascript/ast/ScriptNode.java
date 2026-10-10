@@ -38,6 +38,7 @@ public class ScriptNode extends Scope {
     private int paramCount = 0;
     private String[] variableNames;
     private boolean[] isConsts;
+    private boolean[] isLexicals;
 
     private Object compilerData;
     private int tempNumber = 0;
@@ -248,6 +249,12 @@ public class ScriptNode extends Scope {
         return isConsts;
     }
 
+    /** Which variables are let/const bindings (of the top level of the function or script). */
+    public boolean[] getParamAndVarLexical() {
+        if (variableNames == null) codeBug();
+        return isLexicals;
+    }
+
     public boolean hasRestParameter() {
         return false;
     }
@@ -373,10 +380,14 @@ public class ScriptNode extends Scope {
         }
         variableNames = new String[symbols.size()];
         isConsts = new boolean[symbols.size()];
+        isLexicals = new boolean[symbols.size()];
         for (int i = 0; i < symbols.size(); i++) {
             Symbol symbol = symbols.get(i);
             variableNames[i] = symbol.getName();
             isConsts[i] = symbol.getDeclType() == Symbol.Type.CONST;
+            isLexicals[i] =
+                    symbol.getDeclType() == Symbol.Type.CONST
+                            || symbol.getDeclType() == Symbol.Type.LET;
             symbol.setIndex(i);
         }
     }

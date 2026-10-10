@@ -790,6 +790,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.ENUM_CLOSE] = new DoEnumClose();
         instructionObjs[base + Icode.CLASS_DEFINE] = new DoClassDefine();
         instructionObjs[base + Icode.DERIVED_THIS] = new DoDerivedThis();
+        instructionObjs[base + Icode.FN_NAME_ASSIGN] = new DoFnNameAssign();
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
@@ -3554,6 +3555,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                                 : result.getThis();
                 frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
             }
+            return null;
+        }
+    }
+
+    private static class DoFnNameAssign extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] = ScriptRuntime.fnNameAssignment(state.stringReg);
             return null;
         }
     }

@@ -554,16 +554,21 @@ public final class IRFactory {
     }
 
     private AstNode transformAssignmentLeft(Assignment node, AstNode left, AstNode right) {
+        // JavaScript 1.x: "f = null" in a function named f (or nested in it) stores this.f; kept
+        // for a function compiled by Context.compileFunction
         if (right.getType() == Token.NULL
                 && node.getType() == Token.ASSIGN
                 && left instanceof Name
                 && right instanceof KeywordLiteral) {
 
+            boolean legacy = parser.compilerEnv.getLanguageVersion() < Context.VERSION_ES6;
             String identifier = ((Name) left).getIdentifier();
             for (AstNode p = node.getParent(); p != null; p = p.getParent()) {
                 if (p instanceof FunctionNode) {
                     Name functionName = ((FunctionNode) p).getFunctionName();
-                    if (functionName != null && functionName.getIdentifier().equals(identifier)) {
+                    if ((legacy || ((FunctionNode) p).isCompiledByContext())
+                            && functionName != null
+                            && functionName.getIdentifier().equals(identifier)) {
                         PropertyGet propertyGet = new PropertyGet();
                         KeywordLiteral thisKeyword = new KeywordLiteral();
                         thisKeyword.setType(Token.THIS);
@@ -728,6 +733,9 @@ public final class IRFactory {
             // function parsing, we should lump it all into a helper class.
             Node destructuring = (Node) fn.getProp(Node.DESTRUCTURING_PARAMS);
             fn.removeProp(Node.DESTRUCTURING_PARAMS);
+            if (destructuring != null) {
+                fn.setHasDestructuredParams();
+            }
 
             int lineno = fn.getBody().getLineno(), column = fn.getBody().getColumn();
             ++parser.nestingOfFunction; // only for body, not params
@@ -940,6 +948,9 @@ public final class IRFactory {
             // function parsing, we should lump it all into a helper class.
             Node destructuring = (Node) fn.getProp(Node.DESTRUCTURING_PARAMS);
             fn.removeProp(Node.DESTRUCTURING_PARAMS);
+            if (destructuring != null) {
+                fn.setHasDestructuredParams();
+            }
 
             int lineno = node.getLineno(), column = node.getColumn();
             ++parser.nestingOfFunction; // only for body, not params
@@ -1401,9 +1412,59 @@ public final class IRFactory {
 
         Node children = body.getFirstChild();
         if (children != null) {
-            node.addChildrenToBack(children);
+            Scope lexicals = evalLexicalScope(node);
+            if (lexicals != null) {
+                lexicals.addChildrenToBack(children);
+                node.addChildToBack(lexicals);
+            } else {
+                node.addChildrenToBack(children);
+            }
         }
         return node;
+    }
+
+    /**
+     * The lexical environment of eval code (ECMA-262 19.2.1.3 step 16, under VERSION_ECMASCRIPT): a
+     * block around the code holding its top-level let/const/class, so that they do not become
+     * variables of the caller. Not done when the code declares functions, as they are created with
+     * the variable scope and would not see the bindings of the block.
+     */
+    private Scope evalLexicalScope(ScriptNode script) {
+        if (!parser.compilerEnv.isInEval()
+                || !parser.compilerEnv.isLatestEcmaScript()
+                || script.getSymbolTable() == null) {
+            return null;
+        }
+        for (int i = 0; i < script.getFunctionCount(); i++) {
+            if (script.getFunctionNode(i).getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
+                return null;
+            }
+        }
+        List<String> names = new ArrayList<>();
+        for (Symbol symbol : script.getSymbolTable().values()) {
+            if (symbol.getDeclType() == Symbol.Type.LET
+                    || symbol.getDeclType() == Symbol.Type.CONST) {
+                names.add(symbol.getName());
+            }
+        }
+        if (names.isEmpty()) {
+            return null;
+        }
+        Scope block = new Scope(script.getPosition(), script.getLength());
+        block.setType(Token.BLOCK);
+        List<Scope> kids = script.getChildScopes();
+        if (kids != null) {
+            List<Scope> moved = new ArrayList<>(kids);
+            kids.clear();
+            for (Scope kid : moved) {
+                block.addChildScope(kid);
+            }
+        }
+        script.addChildScope(block);
+        for (String name : names) {
+            script.moveSymbol(name, block);
+        }
+        return block;
     }
 
     private Node transformString(StringLiteral node) {
@@ -1841,13 +1902,17 @@ public final class IRFactory {
                 // function doesn't already define a formal parameter, var,
                 // or nested function with the same name.
                 fnNode.putSymbol(new Symbol(Symbol.Type.FUNCTION_VAR, name.getIdentifier()));
-                Node setFn =
+                if (!fnNode.isCompiledByContext()) {
+                    fnNode.setSelfNameBinding();
+                }
+                Node init =
                         new Node(
-                                Token.EXPR_VOID,
-                                new Node(
-                                        Token.SETNAME,
-                                        Node.newString(Token.BINDNAME, name.getIdentifier()),
-                                        new Node(Token.THISFN)));
+                                Token.SETNAME,
+                                Node.newString(Token.BINDNAME, name.getIdentifier()),
+                                new Node(Token.THISFN));
+                // the initialization of the immutable binding, not an assignment
+                init.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+                Node setFn = new Node(Token.EXPR_VOID, init);
                 statements.addChildrenToFront(setFn);
             }
         }

@@ -89,6 +89,31 @@ public final class NativeCall extends DeclarationScope {
                 }
             }
         }
+        if (function.getDescriptor().hasSelfNameBinding()) {
+            // the immutable binding of a function expression's name, already in the parameters
+            defineProperty(function.getFunctionName(), function, PERMANENT);
+            selfNameInitialized = true;
+        }
+    }
+
+    private boolean selfNameInitialized;
+
+    /**
+     * Whether storing value in name assigns the immutable binding of a function expression's name
+     * (its initialization stores the function itself).
+     */
+    boolean isSelfName(String name, Object value) {
+        return selfNameInitialized && value != function && name.equals(function.getFunctionName());
+    }
+
+    @Override
+    protected boolean putOwnProperty(String name, VarScope start, Object value, boolean isThrow) {
+        if (selfNameInitialized && name.equals(function.getFunctionName()) && start == this) {
+            // an assignment to the name of a function expression: ignored (strict code throws,
+            // see ScriptRuntime#strictSetName)
+            return true;
+        }
+        return super.putOwnProperty(name, start, value, isThrow);
     }
 
     public Scriptable getHomeObject() {
@@ -96,6 +121,10 @@ public final class NativeCall extends DeclarationScope {
     }
 
     final JSFunction function;
+
+    /** The new.target of the call, read by eval code. */
+    Object newTarget = Undefined.instance;
+
     final Object[] originalArgs;
 
     transient NativeCall parentActivationCall;

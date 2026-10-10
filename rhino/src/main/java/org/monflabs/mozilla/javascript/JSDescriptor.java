@@ -34,6 +34,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private static final int DERIVED_CONSTRUCTOR_FLAG = 1 << 13;
     private static final int NAMED_BY_LITERAL_FLAG = 1 << 14;
     private static final int CLASS_CONSTRUCTOR_FLAG = 1 << 15;
+    private static final int SELF_NAME_BINDING_FLAG = 1 << 16;
 
     private final JSCode<T> code;
     private final JSCode<T> constructor;
@@ -41,6 +42,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     public List<JSDescriptor<JSFunction>> nestedFunctions;
     private final String[] paramAndVarNames;
     private final boolean[] paramIsConst;
+    private final boolean[] paramIsLexical;
     private final int flags;
     private final String sourceFile;
     private volatile SourceCodeProvider sourceCodeProvider;
@@ -61,6 +63,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             JSDescriptor<?> parent,
             String[] paramAndVarNames,
             boolean[] paramIsConst,
+            boolean[] paramIsLexical,
             boolean isStrict,
             boolean isScript,
             boolean isTopLevel,
@@ -86,6 +89,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             boolean derivedConstructor,
             boolean namedByLiteral,
             boolean classConstructor,
+            boolean selfNameBinding,
             SecurityController securityController,
             Object securityDomain,
             int functionType) {
@@ -94,6 +98,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         this.parent = parent;
         this.paramAndVarNames = paramAndVarNames;
         this.paramIsConst = paramIsConst;
+        this.paramIsLexical = paramIsLexical;
 
         int flags = 0;
         flags = flags | (isStrict ? IS_STRICT_FLAG : 0);
@@ -112,6 +117,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         flags = flags | (derivedConstructor ? DERIVED_CONSTRUCTOR_FLAG : 0);
         flags = flags | (namedByLiteral ? NAMED_BY_LITERAL_FLAG : 0);
         flags = flags | (classConstructor ? CLASS_CONSTRUCTOR_FLAG : 0);
+        flags = flags | (selfNameBinding ? SELF_NAME_BINDING_FLAG : 0);
         this.flags = flags;
 
         this.sourceFile = sourceFile;
@@ -184,6 +190,14 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return (flags & CLASS_CONSTRUCTOR_FLAG) != 0;
     }
 
+    /**
+     * Whether the function is a named function expression with the immutable binding of its name
+     * (not shadowed by a parameter or a declaration of its body).
+     */
+    public boolean hasSelfNameBinding() {
+        return (flags & SELF_NAME_BINDING_FLAG) != 0;
+    }
+
     /** Whether the function is the constructor of a class with an extends clause. */
     public boolean isDerivedConstructor() {
         return (flags & DERIVED_CONSTRUCTOR_FLAG) != 0;
@@ -247,6 +261,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
 
     public boolean getParamOrVarConst(int index) {
         return paramIsConst[index];
+    }
+
+    /** Whether the variable is a let/const binding of the top level of the function or script. */
+    public boolean getParamOrVarLexical(int index) {
+        return paramIsLexical[index];
     }
 
     @Override
@@ -335,6 +354,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public final ArrayList<Builder<JSFunction>> nestedFunctions = new ArrayList<>();
         public String[] paramAndVarNames;
         public boolean[] paramIsConst;
+        public boolean[] paramIsLexical;
         public boolean isStrict;
         public boolean isScript;
         public boolean isTopLevel;
@@ -360,6 +380,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean namedByLiteral;
         public boolean classConstructor;
         public boolean derivedConstructor;
+        public boolean selfNameBinding;
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
@@ -408,6 +429,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             parent,
                             paramAndVarNames,
                             paramIsConst,
+                            paramIsLexical,
                             isStrict,
                             isScript,
                             isTopLevel,
@@ -433,6 +455,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             derivedConstructor,
                             namedByLiteral,
                             classConstructor,
+                            selfNameBinding,
                             securityController,
                             securityDomain,
                             functionType);

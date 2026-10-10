@@ -204,9 +204,11 @@ abstract class Icode {
             // this of a derived constructor, and the super constructor called by super(...)
             DERIVED_THIS = CLASS_DEFINE - 1,
             SUPER_CALLEE = DERIVED_THIS - 1,
+            // see Token#FN_NAME_ASSIGN
+            FN_NAME_ASSIGN = SUPER_CALLEE - 1,
 
             // Last icode
-            MIN_ICODE = SUPER_CALLEE;
+            MIN_ICODE = FN_NAME_ASSIGN;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -440,6 +442,8 @@ abstract class Icode {
                 return "DERIVED_THIS";
             case SUPER_CALLEE:
                 return "SUPER_CALLEE";
+            case FN_NAME_ASSIGN:
+                return "FN_NAME_ASSIGN";
         }
 
         // icode without name

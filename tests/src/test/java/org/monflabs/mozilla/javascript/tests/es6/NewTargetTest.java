@@ -28,11 +28,11 @@ public class NewTargetTest {
     @Test
     public void evalInsideFunction() {
         Utils.assertWithAllModes("function", "function foo() { eval('new.target;') } typeof foo");
-        Utils.assertException(
-                -1,
-                EcmaError.class,
-                "SyntaxError: Invalid use of new.",
-                "function foo() { eval('new.target;') } foo()");
+        // direct eval code in a function sees its new.target
+        Utils.assertWithAllModes(
+                "undefined,true",
+                "var r; function foo() { r = eval('new.target;'); }"
+                        + " foo(); var a = typeof r; new foo(); [a, r === foo].join()");
     }
 
     @Test

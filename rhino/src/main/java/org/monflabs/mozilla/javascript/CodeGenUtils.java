@@ -67,6 +67,9 @@ public class CodeGenUtils {
         if (fn.isDerivedConstructor()) {
             builder.derivedConstructor = true;
         }
+        if (fn.hasSelfNameBinding()) {
+            builder.selfNameBinding = true;
+        }
         fillInCommon(builder, fn);
     }
 
@@ -116,9 +119,14 @@ public class CodeGenUtils {
                 disambiguateNames(scriptOrFn.getParamAndVarNames(), scriptOrFn.getParamCount());
         builder.paramCount = scriptOrFn.getParamCount();
         builder.paramIsConst = scriptOrFn.getParamAndVarConst();
+        builder.paramIsLexical = scriptOrFn.getParamAndVarLexical();
         builder.paramAndVarCount = scriptOrFn.getParamAndVarCount();
         builder.hasRestArg = scriptOrFn.hasRestParameter();
-        builder.hasDefaultParameters = scriptOrFn.getDefaultParams() != null;
+        // a parameter list that is not simple (rest parameters aside): no mapped arguments object
+        builder.hasDefaultParameters =
+                scriptOrFn.getDefaultParams() != null
+                        || (scriptOrFn instanceof FunctionNode
+                                && ((FunctionNode) scriptOrFn).hasDestructuredParams());
 
         // Calculate arity (function.length) - count params before first default
         builder.arity = FunctionNode.calculateFunctionArity(scriptOrFn);

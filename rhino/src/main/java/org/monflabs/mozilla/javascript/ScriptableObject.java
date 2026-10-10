@@ -1963,7 +1963,8 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
             if ((current.getAttributes() & PERMANENT) != 0) {
                 if (isTrue(info.configurable))
                     throw ScriptRuntime.typeErrorById("msg.change.configurable.false.to.true", id);
-                if (((current.getAttributes() & DONTENUM) == 0) != isTrue(info.enumerable))
+                if (info.enumerable != NOT_FOUND
+                        && ((current.getAttributes() & DONTENUM) == 0) != isTrue(info.enumerable))
                     throw ScriptRuntime.typeErrorById(
                             "msg.change.enumerable.with.configurable.false", id);
                 boolean isData = info.isDataDescriptor();

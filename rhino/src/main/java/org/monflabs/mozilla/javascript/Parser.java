@@ -726,6 +726,9 @@ public class Parser {
                                         calledByCompileFunction
                                                 ? FunctionNode.FUNCTION_EXPRESSION
                                                 : FunctionNode.FUNCTION_STATEMENT);
+                        if (calledByCompileFunction) {
+                            ((FunctionNode) n).setCompiledByContext();
+                        }
                     } catch (ParserException e) {
                         break;
                     }
@@ -1269,6 +1272,7 @@ public class Parser {
                 arrowFunctionParams(
                         fnNode, params, destructuring, destructuringDefault, paramNames);
             }
+            markEvalInArrowParams(params);
 
             if (!destructuring.isEmpty()) {
                 Node destructuringNode = new Node(Token.COMMA);
@@ -3660,7 +3664,7 @@ public class Parser {
             if (peekToken() == Token.DOT) {
                 consumeToken(); // consume '.'
 
-                if (nestingOfFunction > 0
+                if ((nestingOfFunction > 0 || compilerEnv.isAllowNewTarget())
                         && matchToken(Token.NAME, true)
                         && "target".equals(ts.getString())) {
                     int end = ts.tokenEnd;
@@ -5112,6 +5116,29 @@ public class Parser {
         if (insideFunctionBody()) {
             ((FunctionNode) currentScriptOrFn).setRequiresActivation();
         }
+    }
+
+    /**
+     * The parameters of an arrow function were parsed as an expression of the enclosing function: a
+     * direct eval in them is a call in the parameters of the arrow (which needs an activation).
+     */
+    private void markEvalInArrowParams(AstNode params) {
+        params.visit(
+                node -> {
+                    if (node instanceof FunctionNode) {
+                        return false;
+                    }
+                    if (node instanceof FunctionCall) {
+                        AstNode target = ((FunctionCall) node).getTarget();
+                        if (target instanceof Name
+                                && "eval".equals(((Name) target).getIdentifier())) {
+                            ((FunctionCall) node).markInParameters();
+                            setRequiresActivation();
+                            setRequiresArgumentObject();
+                        }
+                    }
+                    return true;
+                });
     }
 
     private void checkCallRequiresActivation(AstNode pn) {

@@ -290,6 +290,15 @@ public class CompilerEnvirons {
         return inDerivedConstructor;
     }
 
+    /** Whether the code is a direct eval in a function, where new.target is allowed. */
+    public void setAllowNewTarget(boolean allowNewTarget) {
+        this.allowNewTarget = allowNewTarget;
+    }
+
+    public boolean isAllowNewTarget() {
+        return allowNewTarget;
+    }
+
     public void setInEval(boolean inEval) {
         this.inEval = inEval;
     }
@@ -370,6 +379,7 @@ public class CompilerEnvirons {
     private boolean allowSharpComments;
     private boolean allowSuper;
     private boolean inDerivedConstructor;
+    private boolean allowNewTarget;
     Set<String> activationNames;
     private boolean inEval;
     private Predicate<String> evalForbiddenVarNames;

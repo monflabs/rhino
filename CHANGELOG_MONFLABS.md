@@ -6,6 +6,29 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Environments of functions and eval code (2026-10-10, plan 1.2g)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.9, 2.12, 2.21, 2.22) and under `VERSION_ECMASCRIPT` (1.4, 1.5):
+
+- The name of a named function expression is an immutable binding: an assignment in the function is dropped, or
+  throws in strict code (`Token.FN_NAME_ASSIGN`); from closures and eval code, the activation keeps it
+  (`NativeCall.isSelfName`, `JSDescriptor.hasSelfNameBinding`). JavaScript 1.x's `name = null` → `this.name = null`
+  rewrite is limited to versions before `VERSION_ES6`; a function compiled by `Context.compileFunction` keeps both
+  JavaScript 1.x behaviors (`FunctionNode.isCompiledByContext`, `FunctionNullSetTest`).
+- Updated tests: `NewTargetTest` (`new.target` in eval code of a function is allowed), `LambdaPropertyTest` (a
+  writable non-configurable property may be redefined with a new value).
+- Eval code's top-level `let`/`const`/`class` are in a block of their own (`IRFactory.evalLexicalScope`, under
+  `VERSION_ECMASCRIPT`), unless the eval code declares functions; a `var` of sloppy eval code conflicting with a
+  top-level `let`/`const` of the calling function is a SyntaxError (`JSDescriptor.getParamOrVarLexical`).
+- A direct eval in the parameters of an arrow function is checked like one in a function's parameters (an arrow has
+  no `arguments` binding); `new.target` in direct eval code is that of the enclosing function
+  (`NativeCall.newTarget`).
+- A destructured parameter makes `arguments` unmapped.
+- `Object.defineProperty` of a non-configurable property compares `enumerable` only when the descriptor has it.
+- Not done (see the plan): the separate var environment of a body whose parameters have expressions
+  (`scope-paramsbody-var-open`), the TDZ scope of a for-in/of head, Annex B `skip-early-err-try`.
+- test262: 56 more files pass; 29,172 of 42,616 in-scope files (68.5%).
+
 ### Classes: subclassing built-ins (2026-10-09, plan 1.7c)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.20):

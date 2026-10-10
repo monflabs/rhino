@@ -423,6 +423,20 @@ public class NodeTransformer {
                     }
 
                 case Token.SETNAME:
+                    if (isSelfNameAssignment(tree, node, scope)) {
+                        // the binding of a function expression's name is immutable
+                        Node value = node.getLastChild();
+                        node.removeChild(value);
+                        Node assign =
+                                Node.newString(
+                                        Token.FN_NAME_ASSIGN, node.getFirstChild().getString());
+                        assign.addChildToBack(value);
+                        if (inStrictMode) {
+                            assign.putIntProp(Node.STRICT_PROP, 1);
+                        }
+                        node = replaceCurrent(parent, previous, node, assign);
+                        break;
+                    }
                     if (inStrictMode) {
                         node.setType(Token.STRICT_SETNAME);
                         if (node.getFirstChild().getType() == Token.BINDNAME) {
@@ -505,6 +519,18 @@ public class NodeTransformer {
                     createScopeObjects,
                     inStrictMode);
         }
+    }
+
+    /** An assignment to the name of the function expression being compiled, see IRFactory. */
+    private static boolean isSelfNameAssignment(ScriptNode tree, Node setName, Scope scope) {
+        if (!(tree instanceof FunctionNode)
+                || !((FunctionNode) tree).hasSelfNameBinding()
+                || setName.getIntProp(Node.TDZ_DECLARATION_PROP, 0) == 1
+                || setName.getFirstChild().getType() != Token.BINDNAME) {
+            return false;
+        }
+        String name = setName.getFirstChild().getString();
+        return name.equals(((FunctionNode) tree).getName()) && scope.getDefiningScope(name) == tree;
     }
 
     /**
