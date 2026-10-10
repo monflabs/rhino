@@ -293,14 +293,14 @@ final class NativeReflect extends ScriptableObject {
          */
         ScriptableObject target = checkTarget(args);
 
-        if (args.length > 1) {
-            if (ScriptRuntime.isSymbol(args[1])) {
-                return ScriptableObject.hasProperty(target, (Symbol) args[1]);
-            }
-
-            return ScriptableObject.hasProperty(target, ScriptRuntime.toString(args[1]));
+        Object key = ScriptRuntime.toPropertyKey(args.length > 1 ? args[1] : Undefined.instance);
+        if (key instanceof Symbol) {
+            return ScriptableObject.hasProperty(target, (Symbol) key);
         }
-        return false;
+        ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(key);
+        return soi.stringId == null
+                ? ScriptableObject.hasProperty(target, soi.index)
+                : ScriptableObject.hasProperty(target, soi.stringId);
     }
 
     /**

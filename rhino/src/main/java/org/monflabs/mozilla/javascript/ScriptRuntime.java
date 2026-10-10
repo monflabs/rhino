@@ -1227,6 +1227,9 @@ public class ScriptRuntime {
             if (NativeArray.isArray(obj)) {
                 return "[object Array]";
             }
+            if (obj instanceof NativeProxy) {
+                return obj instanceof Callable ? "[object Function]" : "[object Object]";
+            }
             if (TAGGED_BUILTIN_CLASSES.contains(className)) {
                 return "[object Object]";
             }

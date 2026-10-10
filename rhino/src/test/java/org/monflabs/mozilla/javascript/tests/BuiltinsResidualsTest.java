@@ -110,4 +110,28 @@ class BuiltinsResidualsTest {
                         + " return 7; });"
                         + " r.push(o.a); r.join('|')");
     }
+
+    @Test
+    void arrayMethodsFollowSpecSteps() {
+        assertBoth(
+                "3|true|2,3|1|[object Object]|x|TypeError|TypeError|1,2,3",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => { var n; var a = [1, 2, 3, 4, 5]; a.constructor = {};"
+                        + " a.constructor[Symbol.species] = function (len) { n = len; return []; };"
+                        + " a.slice(1, -1); return n; });"
+                        + " t(() => { var C = function () {}; var a = []; a.constructor = function () {};"
+                        + " a.constructor[Symbol.species] = C;"
+                        + " return Object.getPrototypeOf([].map.call(new Proxy(a, {}), x => x)) === C.prototype; });"
+                        + " t(() => [].flat.call(new Proxy([[2, 3]], {})));"
+                        + " t(() => { var o = { length: 1, 0: 1 }; Array.prototype.splice.call(o); return o.length; });"
+                        + " t(() => Array.prototype.toString.call({ join: null }));"
+                        + " t(() => Array.prototype.toString.call({ join() { return 'x'; } }));"
+                        + " t(() => Array.prototype.push.call({ length: 2 ** 53 - 1 }, 1));"
+                        + " t(() => { 'use strict'; var a = [1, 2, 3];"
+                        + " a.length = { valueOf() { Object.defineProperty(a, 'length', { writable: false });"
+                        + " return 0; } }; });"
+                        + " t(() => { var a = [1, 2, 3]; a.copyWithin(0, { valueOf() { a.length = 3; return 0; } });"
+                        + " return a; });"
+                        + " r.join('|')");
+    }
 }

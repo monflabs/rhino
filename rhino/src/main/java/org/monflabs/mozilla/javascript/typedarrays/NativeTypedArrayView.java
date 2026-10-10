@@ -184,6 +184,11 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     }
 
     @Override
+    protected boolean isTypedArray() {
+        return true;
+    }
+
+    @Override
     public Object get(int index, Scriptable start) {
         return js_get(index);
     }

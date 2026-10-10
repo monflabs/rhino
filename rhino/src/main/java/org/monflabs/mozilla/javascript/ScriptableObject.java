@@ -2497,6 +2497,11 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
         return false;
     }
 
+    /** Whether this is a TypedArray (an integer-indexed exotic object, ECMA-262 10.4.5). */
+    protected boolean isTypedArray() {
+        return false;
+    }
+
     /** See {@link #endsPropertyLookup(String)}. */
     protected boolean endsPropertyLookup(int index) {
         return false;

@@ -587,6 +587,24 @@ Object.assign(Object.freeze({ a: 1 }), { a: 2 });             // before: ignored
 - **Why:** ECMA-262 2026, §25.5.1 (JSON.parse), §25.5.2 (JSON.stringify), §20.1.2.1 (Object.assign), §20.1.2.13
   (Object.hasOwn), §21.4.4.37 (Date.prototype.toJSON).
 
+### 2.29 Array methods and species
+
+```js
+Array.prototype.toString.call({ join() { return "x"; } });   // before: ""   now: "x"
+Array.prototype.push.call({ length: 2 ** 53 - 1 }, 1);       // before: length unchanged   now: TypeError
+Reflect.has([1], "0");                                        // before: false   now: true
+```
+
+- From `VERSION_ES6`: `Array.prototype.toString` calls `this.join` (or Object.prototype.toString); `push` throws a
+  TypeError past 2^53−1; an assignment to an array's `length` converts the value before the writability check;
+  ArraySpeciesCreate sees through proxies; `Object.prototype.toString` of a non-array proxy is `[object Object]` or
+  `[object Function]` (before, the class of the target).
+- All versions: `flat`/`flatMap` no longer write `length` on the result at the end; `splice()` with no argument reads
+  and writes `length`; `reverse`, `splice` and `flat` call HasProperty before Get; typed array iteration skips
+  indexes out of bounds after a resize; `Reflect.has` converts its key (index keys given as strings are found).
+- **Why:** ECMA-262 2026, §23.1.3 (Array.prototype), §10.4.2.3 (ArraySpeciesCreate), §10.4.2.4 (ArraySetLength),
+  §28.1.9 (Reflect.has), §20.1.3.6 (Object.prototype.toString).
+
 ---
 
 ## 3. Platform and embedding

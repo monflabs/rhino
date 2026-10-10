@@ -66,7 +66,7 @@ public class ArrayLikeAbstractOperations {
         }
 
         long length = lengthAccessor.getLength(cx, o);
-        return coercibleIterativeMethod(cx, operation, scope, o, args, length);
+        return coercibleIterativeMethod(cx, operation, scope, o, args, length, isTypedArray(o));
     }
 
     public static Object coercibleIterativeMethod(
@@ -76,6 +76,32 @@ public class ArrayLikeAbstractOperations {
             Object o,
             Object[] args,
             long length) {
+        return coercibleIterativeMethod(cx, operation, scope, o, args, length, false);
+    }
+
+    /**
+     * The Array.prototype methods test HasProperty, which is false for the indexes of a typed array
+     * out of its (shrunk) buffer; the TypedArray.prototype methods do not.
+     */
+    private static boolean isTypedArray(Object o) {
+        return o instanceof ScriptableObject so && so.isTypedArray();
+    }
+
+    private static Object getElemIfPresent(Scriptable o, long index, boolean checkHas) {
+        if (checkHas && index <= Integer.MAX_VALUE && !o.has((int) index, o)) {
+            return NOT_FOUND;
+        }
+        return getRawElem(o, index);
+    }
+
+    private static Object coercibleIterativeMethod(
+            Context cx,
+            IterativeOperation operation,
+            VarScope scope,
+            Object o,
+            Object[] args,
+            long length,
+            boolean checkHas) {
         if (operation == IterativeOperation.MAP && length > Integer.MAX_VALUE) {
             String msg = ScriptRuntime.getMessageById("msg.arraylength.bad");
             throw ScriptRuntime.rangeError(msg);
@@ -115,7 +141,7 @@ public class ArrayLikeAbstractOperations {
                         : +1;
         for (long i = start; i != end; i += increment) {
             Object[] innerArgs = new Object[3];
-            Object elem = getRawElem((Scriptable) o, i);
+            Object elem = getElemIfPresent((Scriptable) o, i, checkHas);
             if (elem == NOT_FOUND) {
                 if (operation == IterativeOperation.FIND
                         || operation == IterativeOperation.FIND_INDEX
@@ -173,8 +199,13 @@ public class ArrayLikeAbstractOperations {
         }
     }
 
-    static Scriptable arraySpeciesCreate(Context cx, VarScope scope, Object o, int length) {
-        if (o instanceof NativeArray) {
+    /** ArraySpeciesCreate (ECMA-262 10.4.2.3). */
+    static Scriptable arraySpeciesCreate(Context cx, VarScope scope, Object o, long length) {
+        boolean isArray =
+                cx.getLanguageVersion() >= Context.VERSION_ES6
+                        ? NativeArray.isArray(o)
+                        : o instanceof NativeArray;
+        if (isArray) {
             Object c = ScriptableObject.getProperty((Scriptable) o, "constructor");
             if (c instanceof Function f && f.isConstructor()) {
                 VarScope ctorScope = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
@@ -186,13 +217,17 @@ public class ArrayLikeAbstractOperations {
 
             if (c instanceof Scriptable) {
                 c = ScriptableObject.getProperty((Scriptable) c, SymbolKey.SPECIES);
-                if (c == null || c == NOT_FOUND) {
+                if (c == null) {
                     c = Undefined.instance;
                 }
             }
+            if (c == NOT_FOUND) {
+                c = Undefined.instance;
+            }
 
             if (!Undefined.isUndefined(c)) {
-                if (c instanceof Constructable) {
+                if (c instanceof Constructable
+                        && (!(c instanceof Function) || ((Function) c).isConstructor())) {
                     return ((Constructable) c)
                             .construct(cx, scope, new Object[] {Double.valueOf(length)});
                 } else {
@@ -200,7 +235,11 @@ public class ArrayLikeAbstractOperations {
                 }
             }
         }
-        return cx.newArray(scope, length);
+        if (length > Integer.MAX_VALUE) {
+            String msg = ScriptRuntime.getMessageById("msg.arraylength.bad");
+            throw ScriptRuntime.rangeError(msg);
+        }
+        return cx.newArray(scope, (int) length);
     }
 
     static Function getCallbackArg(Context cx, Object callbackArg) {
@@ -273,7 +312,7 @@ public class ArrayLikeAbstractOperations {
         Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
 
         long length = getLengthProperty(cx, o);
-        return reduceMethodWithLength(cx, operation, scope, o, args, length);
+        return reduceMethodWithLength(cx, operation, scope, o, args, length, isTypedArray(o));
     }
 
     public static Object reduceMethodWithLength(
@@ -283,6 +322,17 @@ public class ArrayLikeAbstractOperations {
             Object thisObj,
             Object[] args,
             long length) {
+        return reduceMethodWithLength(cx, operation, scope, thisObj, args, length, false);
+    }
+
+    private static Object reduceMethodWithLength(
+            Context cx,
+            ReduceOperation operation,
+            VarScope scope,
+            Object thisObj,
+            Object[] args,
+            long length,
+            boolean checkHas) {
 
         Scriptable o = ScriptRuntime.toObject(scope, thisObj);
         Object callbackArg = args.length > 0 ? args[0] : Undefined.instance;
@@ -296,7 +346,7 @@ public class ArrayLikeAbstractOperations {
         Object value = args.length > 1 ? args[1] : NOT_FOUND;
         for (long i = 0; i < length; i++) {
             long index = movingLeft ? i : (length - 1 - i);
-            Object elem = getRawElem((Scriptable) o, index);
+            Object elem = getElemIfPresent((Scriptable) o, index, checkHas);
             if (elem == NOT_FOUND) {
                 continue;
             }

@@ -6,6 +6,27 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: Array methods (2026-10-10, plan 1.8c, part 5)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.29) unless stated:
+
+- ArraySpeciesCreate uses IsArray (a proxy of an array gets its species, a revoked proxy throws) and passes the
+  length of the result to the species constructor (`slice`, `splice`).
+- `Array.prototype.toString` calls the `join` method of the object, or Object.prototype.toString when it is not
+  callable; `Object.prototype.toString` gives `Object` (or `Function`) for a proxy that is not an array.
+- `push` throws a TypeError when the new length would exceed 2^53−1; assigning `length` converts the value before
+  checking that it is writable (a conversion that freezes the length makes a strict assignment throw).
+- All versions: `flat`/`flatMap` follow FlattenIntoArray (HasProperty then Get, no final `length` write) and
+  `flatMap` reads the length before checking the callback; `reverse` and the elements copied by `splice` use
+  HasProperty then Get; `splice()` without arguments reads and writes `length`; `splice` no longer throws a
+  RangeError for a delete count above 2^31−1 when a species constructor creates the result; `copyWithin` takes the
+  generic path when the conversion of its arguments changed the array; `pop` on a hole reads the prototype.
+- All versions: the Array.prototype iteration methods (`every`, `forEach`, `map`, `reduce`, …) skip the indexes of a typed array
+  that are out of bounds after its buffer shrank; `Reflect.has` converts the key with ToPropertyKey (`"0"` finds
+  index 0).
+- Not yet: the dense fast paths of `push`/`unshift` ignore index setters of `Array.prototype`.
+- test262: 42 more files pass; 29,474 of 42,616 in-scope files (69.2%).
+
 ### Built-ins residuals: JSON, Object.hasOwn, Object.assign (2026-10-10, plan 1.8c, part 4)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.28) unless stated:
