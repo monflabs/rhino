@@ -45,7 +45,8 @@ public class BaseFunction extends ScriptableObject implements Function {
             new BuiltInSlot.Descriptor<>(
                     "name", BaseFunction::nameGetter, BaseFunction::nameSetter);
     private static final BuiltInSlot.Descriptor<BaseFunction> LENGTH_DESCRIPTOR =
-            new BuiltInSlot.Descriptor<>("length", BaseFunction::lengthGetter);
+            new BuiltInSlot.Descriptor<>(
+                    "length", BaseFunction::lengthGetter, BaseFunction::lengthSetter);
     private static final BuiltInSlot.Descriptor<BaseFunction> ARITY_DESCRIPTOR =
             new BuiltInSlot.Descriptor<>("arity", BaseFunction::arityGetter);
     private static final BuiltInSlot.Descriptor<BaseFunction> ARGUMENTS_DESCRIPTOR =
@@ -216,7 +217,17 @@ public class BaseFunction extends ScriptableObject implements Function {
     }
 
     private static Object lengthGetter(BaseFunction function, Scriptable start) {
-        return function.getLength();
+        return function.lengthValue != null ? function.lengthValue : function.getLength();
+    }
+
+    private static boolean lengthSetter(
+            BaseFunction function,
+            Object value,
+            Scriptable owner,
+            Scriptable start,
+            boolean isThrow) {
+        function.lengthValue = value;
+        return true;
     }
 
     private static Object arityGetter(BaseFunction function, Scriptable start) {
@@ -625,8 +636,8 @@ public class BaseFunction extends ScriptableObject implements Function {
     public Scriptable createObject(Context cx, VarScope scope, Object nt) {
         Scriptable newInstance = new NativeObject();
         Object proto;
-        if (nt instanceof JSFunction) {
-            proto = ((JSFunction) nt).getPrototypeProperty();
+        if (nt instanceof JSFunction || nt instanceof ClassDefinition.DefaultConstructor) {
+            proto = ((BaseFunction) nt).getPrototypeProperty();
         } else {
             proto = Undefined.instance;
         }
@@ -919,6 +930,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private Object prototypeProperty;
     private Object argumentsObj = NOT_FOUND;
     private Object nameValue = null;
+    private Object lengthValue = null;
     private boolean isGeneratorFunction = false;
     private Scriptable homeObject = null;
 

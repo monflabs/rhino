@@ -86,6 +86,12 @@ public class BoundFunction extends BaseFunction {
     }
 
     @Override
+    public boolean isConstructor() {
+        return AbstractEcmaObjectOperations.isConstructor(
+                Context.getCurrentContext(), targetFunction);
+    }
+
+    @Override
     public boolean hasInstance(Scriptable instance) {
         if (targetFunction instanceof Function) {
             return ((Function) targetFunction).hasInstance(instance);

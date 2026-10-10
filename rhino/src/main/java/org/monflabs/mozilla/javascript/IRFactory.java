@@ -743,6 +743,7 @@ public final class IRFactory {
                         AstNode rhs = (AstNode) defaultParams.get(i);
                         String name = (String) defaultParams.get(i - 1);
                         Node value = transform(rhs);
+                        parser.nameAnonymousFunction(value, name);
                         if (parser.compilerEnv.isLatestEcmaScript()) {
                             value = checkParamTdz(value, uninitializedParams(fn, name));
                         }
@@ -1213,6 +1214,11 @@ public final class IRFactory {
                     cls.getConstructor() != null
                             ? transform(cls.getConstructor())
                             : new Node(Token.NULL));
+            if (cls.getConstructor() != null && className != null) {
+                // named once transformed: the name is not a binding inside the constructor
+                cls.getConstructor()
+                        .setFunctionName(new Name(cls.getConstructor().getPosition(), name));
+            }
             def.addChildToBack(transformObjectLiteral(cls.getPrototypeMembers()));
             def.addChildToBack(transformObjectLiteral(cls.getStaticMembers()));
             def.setLineColumnNumber(cls.getLineno(), cls.getColumn());
@@ -1224,7 +1230,7 @@ public final class IRFactory {
             // uninitialized (in its temporal dead zone) until the class is defined
             binding.putIntProp(Node.LEXICAL_PROP, 1);
             Node let = new Node(Token.LET, binding);
-            Node init = new Node(Token.SETNAME, Node.newString(Token.BINDNAME, name), def);
+            Node init = new Node(Token.SETCONST, Node.newString(Token.BINDNAME, name), def);
             init.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
             scope.addChildToBack(let);
             scope.addChildToBack(new Node(Token.COMMA, init, Node.newString(Token.NAME, name)));
@@ -2810,6 +2816,13 @@ public final class IRFactory {
             return;
         }
 
+        if (left instanceof Name && right != null && right.type == Token.CLASS) {
+            String name = ((Name) left).getIdentifier();
+            if (!name.equals(NativeObject.PROTO_PROPERTY)) {
+                parser.nameAnonymousClass(right, prefix != null ? prefix + name : name);
+            }
+            return;
+        }
         if (left instanceof Name && right != null && right.type == Token.FUNCTION) {
             Name name = (Name) left;
             if (name.getIdentifier().equals(NativeObject.PROTO_PROPERTY)) {

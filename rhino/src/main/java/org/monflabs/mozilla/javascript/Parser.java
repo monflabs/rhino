@@ -151,6 +151,7 @@ public class Parser {
     // during function parsing.  See PerFunctionVariables class below.
     ScriptNode currentScriptOrFn;
     private boolean insideMethod;
+    private boolean inClassHeritage;
     Scope currentScope;
     private int endFlags;
     private boolean inForInit; // bound temporarily during forStatement()
@@ -3694,7 +3695,7 @@ public class Parser {
             // expression, which will mean a kind of anonymous class built with
             // the JavaAdapter.  the object literal will be passed as an
             // additional argument to the constructor.
-            if (matchToken(Token.LC, true)) {
+            if (!inClassHeritage && matchToken(Token.LC, true)) {
                 ObjectLiteral initializer = objectLiteral();
                 end = getNodeEnd(initializer);
                 nx.setInitializer(initializer);
@@ -4930,10 +4931,17 @@ public class Parser {
             case GET_ENTRY:
                 pn.setIsGetterMethod();
                 fn.setFunctionIsGetterMethod();
+                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    // like a method: no prototype, not a constructor
+                    fn.setIsShorthand();
+                }
                 break;
             case SET_ENTRY:
                 pn.setIsSetterMethod();
                 fn.setFunctionIsSetterMethod();
+                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    fn.setIsShorthand();
+                }
                 break;
             case METHOD_ENTRY:
                 pn.setIsNormalMethod();
@@ -5666,7 +5674,14 @@ public class Parser {
             }
             if (peekToken() == Token.RESERVED && "extends".equals(ts.getString())) {
                 consumeToken();
-                cls.setHeritage(memberExpr(true));
+                // the { after the heritage starts the class body (not a new initializer)
+                boolean savedInClassHeritage = inClassHeritage;
+                inClassHeritage = true;
+                try {
+                    cls.setHeritage(memberExpr(true));
+                } finally {
+                    inClassHeritage = savedInClassHeritage;
+                }
             }
             mustMatchToken(Token.LC, "msg.no.brace.class", true);
 
@@ -5675,8 +5690,10 @@ public class Parser {
             pushScope(scope);
             try {
                 if (cls.getClassName() != null) {
-                    // immutable in the spec; a let here (assigning it does not throw)
-                    defineSymbol(Token.LET, cls.getClassName().getIdentifier(), true);
+                    // immutable: assigning it in the (strict) class code is a TypeError
+                    defineSymbol(Token.CONST, cls.getClassName().getIdentifier(), true);
+                    // in its temporal dead zone until the class is defined (heritage, keys)
+                    scope.getSymbol(cls.getClassName().getIdentifier()).setNode(cls);
                 }
                 classBody(cls, pos);
             } finally {
@@ -5804,10 +5821,6 @@ public class Parser {
                 ctor.setDerivedConstructor();
             }
             ctor.setInStrictMode(true);
-            if (cls.getClassName() != null) {
-                ctor.setFunctionName(
-                        new Name(ctor.getPosition(), cls.getClassName().getIdentifier()));
-            }
             cls.setConstructor(ctor);
             return;
         }
@@ -5935,6 +5948,10 @@ public class Parser {
      * function is transformed, so that the name does not become a binding inside it.
      */
     void nameAnonymousFunction(Node value, String name) {
+        if (value != null && value.getType() == Token.CLASS) {
+            nameAnonymousClass(value, name);
+            return;
+        }
         if (value == null
                 || value.getType() != Token.FUNCTION
                 || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
@@ -5943,6 +5960,23 @@ public class Parser {
         FunctionNode fn =
                 currentScriptOrFn.getFunctionNode(value.getExistingIntProp(Node.FUNCTION_PROP));
         if (fn.getFunctionName() == null) {
+            fn.setFunctionName(new Name(fn.getPosition(), name));
+        }
+    }
+
+    /**
+     * NamedEvaluation of an anonymous class (a CLASS node whose string has no name, see
+     * IRFactory#transformClass): the class and its constructor, if any, are named.
+     */
+    void nameAnonymousClass(Node value, String name) {
+        if (value.getString().length() != 1) {
+            return;
+        }
+        value.setString(value.getString() + name);
+        Node ctor = value.getFirstChild();
+        if (ctor.getType() == Token.FUNCTION) {
+            FunctionNode fn =
+                    currentScriptOrFn.getFunctionNode(ctor.getExistingIntProp(Node.FUNCTION_PROP));
             fn.setFunctionName(new Name(fn.getPosition(), name));
         }
     }

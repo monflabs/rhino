@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Classes: fixes from the class test directories (2026-10-09, plan 1.7)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.18, 2.19):
+
+- Static getters and setters keep their accessor descriptors when copied to the constructor (they became data
+  properties); a static `length` or `name` method replaces the built-in property (function `length` can now be
+  redefined, like `name`).
+- NamedEvaluation of anonymous classes (`var C = class {}`, defaults, properties), and of anonymous functions and
+  classes that are the default value of a parameter (2.18).
+- The inner binding of a class name is immutable (assigning it is a TypeError, the class code being strict) and in
+  its temporal dead zone in the heritage and computed keys (`class C extends C {}`, under `VERSION_ECMASCRIPT`); a
+  constructor no longer has its own binding of the class name. In function code, a `const` register of a scope is
+  initialized with `SETCONSTVAR` (`NodeTransformer.visitLet`).
+- Getters and setters have no `prototype` and are not constructors (2.19).
+- A function bound to a non-constructor is not a constructor (`BoundFunction.isConstructor`); `extends` checks it
+  before reading `prototype`, and its error message does not convert the value (a proxy).
+- An instance created by a plain function for a derived class with a default constructor gets the class
+  `prototype`.
+- `super.x` in a derived constructor before `super()` is a ReferenceError (this binding checked first).
+- The `{` after `extends new F()` starts the class body (not Rhino's `new F() {...}` initializer).
+- test262: 226 more files pass; 29,089 of 42,616 in-scope files (68.3%).
+
 ### Class test directories un-skipped (2026-10-09, plan 1.7)
 
 - `language/expressions/class` and `language/statements/class` were skipped as whole directories (`~`) in

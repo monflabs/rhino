@@ -1205,6 +1205,11 @@ class BodyCodegen {
                 {
                     // See 9.1.1.3.5 GetSuperBase
 
+                    // a super property needs the this binding first (in a derived constructor)
+                    cfw.addALoad(thisObjLocal);
+                    addScriptRuntimeInvoke("derivedThis", "(Ljava/lang/Object;)Ljava/lang/Object;");
+                    cfw.add(ByteCode.POP);
+
                     // Read home object from activation, which we know we'll always have because we
                     // set "requiresActivation" to any function that mentions "super" in IRFactory
                     cfw.addALoad(variableObjectLocal);

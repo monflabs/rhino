@@ -627,7 +627,11 @@ public class NodeTransformer {
                 if (init == null) {
                     init = new Node(Token.VOID, Node.newNumber(0.0));
                 }
-                newVars.addChildToBack(new Node(Token.SETVAR, stringNode, init));
+                // a const register is initialized, not assigned (e.g. the name of a class)
+                Symbol symbol = ((Scope) scopeNode).getSymbol(current.getString());
+                boolean isConst = symbol != null && symbol.getDeclType() == Symbol.Type.CONST;
+                newVars.addChildToBack(
+                        new Node(isConst ? Token.SETCONSTVAR : Token.SETVAR, stringNode, init));
             }
             if (isExpression) {
                 result.addChildToBack(newVars);

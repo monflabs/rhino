@@ -3364,6 +3364,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             // part of the
             // activation frame to propagate it correctly for nested
             // functions.
+            // a super property needs the this binding first (in a derived constructor)
+            ScriptRuntime.derivedThis(frame.thisObj);
             Scriptable homeObject = frame.fnOrScript.getHomeObject();
             if (homeObject == null) {
                 // This if is specified in the spec, but I cannot imagine

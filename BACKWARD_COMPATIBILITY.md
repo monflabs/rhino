@@ -409,6 +409,30 @@ function* h() { yield\n* 1 }                // before: yield* 1   now: SyntaxErr
 - **Why:** ECMA-262 2026, §15.5 (Generator Function Definitions), §13.1.1 (`yield` as an IdentifierReference),
   §10.2.11 FunctionDeclarationInstantiation.
 
+### 2.18 Names of functions and classes in default values
+
+```js
+function f(g = function () {}) { return g.name; }   // before: ""   now: "g"
+var [h = () => 1] = []; h.name;                      // before: ""   now: "h"
+```
+
+- From `VERSION_ES6`: an anonymous function, arrow function, generator or class that is the default value of a
+  parameter or of a destructuring target is named after the binding, like one assigned to a variable already was.
+- **Why:** ECMA-262 2026, §8.6.3 (IsAnonymousFunctionDefinition, NamedEvaluation in SingleNameBinding and
+  AssignmentElement initializers).
+
+### 2.19 Getters and setters are not constructors
+
+```js
+var d = Object.getOwnPropertyDescriptor({ get a() { return 1; } }, "a");
+"prototype" in d.get;   // before: true   now: false
+new d.get();            // before: an object   now: TypeError
+```
+
+- From `VERSION_ES6`: the getters and setters of object literals (and classes) are method definitions: they have
+  no `prototype` property and are not constructors, like the methods of an object literal already were.
+- **Why:** ECMA-262 2026, §15.4.4 (MethodDefinition: DefineMethodProperty without MakeConstructor).
+
 ---
 
 ## 3. Platform and embedding

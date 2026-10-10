@@ -87,4 +87,46 @@ class ClassSyntaxTest {
                         + " class D { get ['constructor']() { return 2; } }"
                         + " [C !== C.prototype.constructor, new C().constructor(), new D().constructor].join()");
     }
+
+    @Test
+    void staticAccessorsAndOverriddenBuiltins() {
+        assertBoth(
+                "g,s|function,function|false,false",
+                "var r = [], v; class C { static get ['a']() { return 'g'; } static set ['a'](x) { v = x; } }"
+                        + " C.a = 's'; r.push(C.a + ',' + v);"
+                        + " class D { static length() {} static name() {} } r.push(typeof D.length + ',' + typeof D.name);"
+                        + " var d = Object.getOwnPropertyDescriptor(class { get a() {} }.prototype, 'a');"
+                        + " var o = Object.getOwnPropertyDescriptor({ set b(x) {} }, 'b');"
+                        + " r.push(['prototype' in d.get, 'prototype' in o.set].join()); r.join('|')");
+    }
+
+    @Test
+    void namedEvaluation() {
+        assertBoth(
+                "a,b,c,d,e,f",
+                "var a = class {}; let b = class { constructor() {} }; var o = { c: class {} };"
+                        + " var [d = class {}] = []; function g(e = class {}) { return e; } var f; f = class {};"
+                        + " [a.name, b.name, o.c.name, d.name, g().name, f.name].join()");
+    }
+
+    @Test
+    void innerNameIsImmutable() {
+        assertBoth(
+                "TypeError,TypeError,2",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(function () { class C { constructor() { C = 1; } } new C(); });"
+                        + " t(function () { class C { m() { C = 1; } } new C().m(); });"
+                        + " t(function () { class C {} C = 2; return C; }); r.join()");
+    }
+
+    @Test
+    void heritageChecks() {
+        assertBoth(
+                "TypeError,TypeError,1",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(function () { class A extends (() => {}).bind() {} });"
+                        + " t(function () { class A extends new Proxy(() => {}, { get() { throw 1; } }) {} });"
+                        + " t(function () { function B() {} B.prototype = { set m(v) { throw 2; } };"
+                        + " class C extends B { m() { return 1; } } return new C().m(); }); r.join()");
+    }
 }

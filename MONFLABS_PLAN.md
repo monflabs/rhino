@@ -532,7 +532,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
-| 1.7  | Classes                                         | in progress | 61.1% → 67.7% (1.7a–b)       | (this) |
+| 1.7  | Classes                                         | in progress | 61.1% → 68.3% (1.7a–b)       | (this) |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |

@@ -30,8 +30,7 @@ final class ClassDefinition {
             if (heritage == null) {
                 protoParent = null;
             } else if (!(heritage instanceof Constructable) || !isConstructor(heritage)) {
-                throw ScriptRuntime.typeErrorById(
-                        "msg.class.heritage", ScriptRuntime.toString(heritage));
+                throw ScriptRuntime.typeErrorById("msg.class.heritage", describe(heritage));
             } else {
                 Object parentProto =
                         ScriptableObject.getProperty((Scriptable) heritage, "prototype");
@@ -40,8 +39,7 @@ final class ClassDefinition {
                 } else if (parentProto instanceof Scriptable) {
                     protoParent = (Scriptable) parentProto;
                 } else {
-                    throw ScriptRuntime.typeErrorById(
-                            "msg.class.heritage", ScriptRuntime.toString(heritage));
+                    throw ScriptRuntime.typeErrorById("msg.class.heritage", describe(heritage));
                 }
                 constructorParent = (Scriptable) heritage;
             }
@@ -78,8 +76,15 @@ final class ClassDefinition {
 
         ScriptableObject statics = (ScriptableObject) staticMembers;
         for (Object id : ownKeys(statics)) {
-            ScriptableObject.DescriptorInfo desc = statics.getOwnPropertyDescriptor(cx, id);
-            desc.enumerable = Boolean.FALSE;
+            ScriptableObject.DescriptorInfo own = statics.getOwnPropertyDescriptor(cx, id);
+            var desc =
+                    new ScriptableObject.DescriptorInfo(
+                            Boolean.FALSE,
+                            own.writable,
+                            own.configurable,
+                            own.getter,
+                            own.setter,
+                            own.value);
             // the home object of a static method is the constructor
             for (Object method : new Object[] {desc.value, desc.getter, desc.setter}) {
                 if (method instanceof JSFunction
@@ -92,6 +97,13 @@ final class ClassDefinition {
         return f;
     }
 
+    /** The heritage in an error message: an object is not converted (it may be a proxy). */
+    private static String describe(Object heritage) {
+        return heritage instanceof Scriptable
+                ? ScriptRuntime.typeof(heritage)
+                : ScriptRuntime.toString(heritage);
+    }
+
     private static Object[] ownKeys(ScriptableObject obj) {
         try (var map = obj.startCompoundOp(false)) {
             return obj.getIds(map, true, true);
@@ -99,10 +111,7 @@ final class ClassDefinition {
     }
 
     private static boolean isConstructor(Object value) {
-        if (value instanceof BaseFunction) {
-            return ((BaseFunction) value).isConstructor();
-        }
-        return value instanceof Function;
+        return AbstractEcmaObjectOperations.isConstructor(Context.getCurrentContext(), value);
     }
 
     private static void makeNonEnumerable(ScriptableObject obj) {
