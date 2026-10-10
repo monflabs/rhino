@@ -14,7 +14,8 @@ var bigIntTypes = [BigInt64Array, BigUint64Array];
 		assertEquals("1,2,3", arr.toString());
 		assertFalse(arr === res);
 		assertSame(Object.getPrototypeOf(arr), Object.getPrototypeOf(res));
-		assertEquals("0,2,3", res.toString());
+		// the value is undefined: NaN, 0 in the integer arrays
+		assertEquals(new type([NaN, 2, 3]).toString(), res.toString());
 	}
 })();
 
@@ -23,7 +24,7 @@ var bigIntTypes = [BigInt64Array, BigUint64Array];
 		var type = types[t];
 		var arr = new type([1, 2, 3]);
 		var res = arr.with(1);
-		assertEquals("1,0,3", res.toString());
+		assertEquals(new type([1, NaN, 3]).toString(), res.toString());
 	}
 })();
 

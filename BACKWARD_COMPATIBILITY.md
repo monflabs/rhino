@@ -153,6 +153,19 @@ eval("typeof c; let c;");           // VERSION_ES6: "undefined"   VERSION_ECMASC
   top level (they would not see the block), which keep the previous behavior.
 - **Why:** ECMA-262 2026, §19.2.1.1 PerformEval step 16 (a new declarative environment for the lexical declarations).
 
+### 1.6 Byte order of typed arrays
+
+```js
+new Uint8Array(new Uint16Array([1]).buffer)[0];   // VERSION_ES6: 0   VERSION_ECMASCRIPT: 1
+```
+
+- `Context.FEATURE_LITTLE_ENDIAN` is true by default under `VERSION_ECMASCRIPT`: the elements of typed arrays are
+  stored little endian, the byte order of the platforms ECMAScript code is written for (and that test262 expects).
+  A `ContextFactory` that overrides `hasFeature` still decides; `DataView` keeps its explicit `littleEndian`
+  argument.
+- **Why:** ECMA-262 2026, §25.1.3.17 RawBytesToNumeric and §25.1.3.18 NumericToRawBytes use the platform's
+  byte order ([[LittleEndian]] is implementation-defined).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -653,6 +666,21 @@ Object.prototype.toString.call(TypeError.prototype);    // before: "[object Erro
   `[[ErrorData]]`); `Date.prototype[Symbol.toPrimitive]` is read-only.
 - **Why:** ECMA-262 2026, §24.2.4 (Set.prototype), §21.2.2.1 (BigInt.asIntN), §20.5.6.3 (NativeError
   prototypes), §21.4.4.45 (Date.prototype[@@toPrimitive]).
+
+### 2.33 Typed array constructors and conversions
+
+```js
+new Int8Array(-1);                     // before: Error "invalid argument"   now: RangeError
+new BigInt64Array([1]);                // before: BigInt64Array [1n]   now: TypeError (1 is a Number)
+Float64Array.from([, 1])[0];           // before: 0   now: NaN
+```
+
+- All versions: the typed array constructors use ToIndex for a primitive length; BigInt typed arrays and DataView's
+  BigInt setters reject Numbers; `%TypedArray%.from` uses the iterator of arrays too; `set` accepts a primitive
+  source (ToObject); `toReversed`/`toSorted`/`with` throw for a detached array; `with(i)` without a value stores
+  `undefined` converted (NaN in a float array; before, 0).
+- **Why:** ECMA-262 2026, §23.2.5.1 (TypedArray), §23.2.2.1 (%TypedArray%.from), §7.1.13 (ToBigInt), §23.2.3
+  (%TypedArray%.prototype).
 
 ---
 

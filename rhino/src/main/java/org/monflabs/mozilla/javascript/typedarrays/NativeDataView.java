@@ -507,7 +507,8 @@ public class NativeDataView extends NativeArrayBufferView {
     private void js_setBigInt(Object[] args) {
         int pos = ScriptRuntime.toIndex(isArg(args, 0) ? args[0] : Undefined.instance);
 
-        BigInteger val = ScriptRuntime.toBigInt(isArg(args, 1) ? args[1] : Undefined.instance);
+        BigInteger val =
+                ScriptRuntime.toBigIntStrict(isArg(args, 1) ? args[1] : Undefined.instance);
 
         if (isDataViewOutOfBounds()) {
             throw ScriptRuntime.typeErrorById("msg.dataview.bounds");

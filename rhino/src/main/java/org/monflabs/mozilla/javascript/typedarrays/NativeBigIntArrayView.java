@@ -15,6 +15,6 @@ public abstract class NativeBigIntArrayView extends NativeTypedArrayView<BigInte
 
     @Override
     protected Object toNumeric(Object num) {
-        return ScriptRuntime.toBigInt(num);
+        return ScriptRuntime.toBigIntStrict(num);
     }
 }

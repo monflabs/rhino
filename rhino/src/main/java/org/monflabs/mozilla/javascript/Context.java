@@ -142,6 +142,8 @@ public class Context implements Closeable {
      *       is created (CanDeclareGlobalFunction).
      *   <li>The top-level {@code let}/{@code const}/{@code class} of eval code are bindings of the
      *       eval code, not variables of the caller.
+     *   <li>The elements of typed arrays are stored little endian ({@link #FEATURE_LITTLE_ENDIAN}
+     *       is true by default); under {@link #VERSION_ES6} big endian.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
@@ -330,7 +332,7 @@ public class Context implements Closeable {
 
     /**
      * TypedArray buffer uses little/big endian depending on the platform. The default is big endian
-     * for Rhino.
+     * for Rhino, and little endian with {@link #VERSION_ECMASCRIPT}.
      *
      * @since 1.7 Release 11
      */

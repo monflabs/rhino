@@ -260,7 +260,8 @@ public class ContextFactory {
                 return false;
 
             case Context.FEATURE_LITTLE_ENDIAN:
-                return false;
+                // the byte order of the platforms ECMAScript code targets (ECMA-262 25.1.3.17)
+                return cx.isLatestEcmaScript();
 
             case Context.FEATURE_ENABLE_XML_SECURE_PARSING:
                 return true;

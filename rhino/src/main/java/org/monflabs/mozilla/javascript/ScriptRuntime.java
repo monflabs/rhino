@@ -780,6 +780,15 @@ public class ScriptRuntime {
     }
 
     /** Convert the value to a BigInt. */
+    /** ToBigInt (7.1.13): unlike {@link #toBigInt(Object)}, a Number is a TypeError. */
+    public static BigInteger toBigIntStrict(Object val) {
+        Object prim = toPrimitive(val, NumberClass);
+        if (prim instanceof Number && !(prim instanceof BigInteger)) {
+            throw typeErrorById("msg.cant.convert.to.bigint", toString(prim));
+        }
+        return toBigInt(prim);
+    }
+
     public static BigInteger toBigInt(Object val) {
         val = toPrimitive(val, NumberClass);
         if (val instanceof BigInteger) {
@@ -1635,10 +1644,10 @@ public class ScriptRuntime {
 
     public static double toIntegerOrInfinity(double d) {
         // NaN and -0 are +0 (7.1.5)
-        if (Double.isNaN(d) || d == 0) {
+        if (Double.isNaN(d)) {
             return 0;
         }
-        return DoubleConversion.truncate(d);
+        return DoubleConversion.truncate(d) + 0.0;
     }
 
     /**

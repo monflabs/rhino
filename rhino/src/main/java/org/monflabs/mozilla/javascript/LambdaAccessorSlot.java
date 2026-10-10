@@ -129,13 +129,22 @@ public class LambdaAccessorSlot extends StandardSlot<Scriptable> {
         return super.getValue(owner);
     }
 
+    /** The name of the accessor functions: a symbol key is named [description] (10.2.9). */
+    private String functionName() {
+        Object name = super.getName();
+        if (name instanceof SymbolKey) {
+            return "[" + ((SymbolKey) name).getName() + "]";
+        }
+        return String.valueOf(name);
+    }
+
     public void setGetter(VarScope scope, ScriptableObject.LambdaGetterFunction getter) {
         this.getter = getter;
         if (getter != null) {
             this.getterFunction =
                     new LambdaFunction(
                             scope,
-                            "get " + super.getName(),
+                            "get " + functionName(),
                             0,
                             (cx1, scope1, thisObj, args) -> getter.apply((Scriptable) thisObj),
                             false);
@@ -148,7 +157,7 @@ public class LambdaAccessorSlot extends StandardSlot<Scriptable> {
             this.setterFunction =
                     new LambdaFunction(
                             scope,
-                            "set " + super.getName(),
+                            "set " + functionName(),
                             1,
                             (cx1, scope1, thisObj, args) -> {
                                 setter.accept(

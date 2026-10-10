@@ -96,7 +96,7 @@ public class NativeBigInt64Array extends NativeBigIntArrayView {
 
     @Override
     protected Object js_set(int index, Object c) {
-        var val = ScriptRuntime.toBigInt(c);
+        var val = ScriptRuntime.toBigIntStrict(c);
         if (checkIndex(index)) {
             return Undefined.instance;
         }

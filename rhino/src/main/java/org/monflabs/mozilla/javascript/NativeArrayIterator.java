@@ -55,13 +55,18 @@ public final class NativeArrayIterator extends ES6Iterator {
 
     @Override
     protected boolean isDone(Context cx, VarScope scope) {
+        if (exhausted) {
+            // once done, the iterator no longer looks at its array (23.1.5.1)
+            return true;
+        }
         if (arrayLike instanceof NativeTypedArrayView) {
             NativeTypedArrayView<?> typedArray = (NativeTypedArrayView<?>) arrayLike;
             if (typedArray.isTypedArrayOutOfBounds()) {
                 throw ScriptRuntime.typeErrorById("msg.typed.array.out.of.bounds");
             }
         }
-        return index >= NativeArray.getLengthProperty(cx, arrayLike);
+        exhausted = index >= NativeArray.getLengthProperty(cx, arrayLike);
+        return exhausted;
     }
 
     @Override
@@ -90,4 +95,5 @@ public final class NativeArrayIterator extends ES6Iterator {
 
     private Scriptable arrayLike;
     private int index;
+    private boolean exhausted;
 }

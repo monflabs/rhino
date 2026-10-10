@@ -6,6 +6,7 @@
 
 package org.monflabs.mozilla.javascript.typedarrays;
 
+import static org.monflabs.mozilla.javascript.ClassDescriptor.Builder.alias;
 import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.CTOR;
 import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.PROTO;
 import static org.monflabs.mozilla.javascript.Symbol.Kind.REGULAR;
@@ -39,6 +40,7 @@ import org.monflabs.mozilla.javascript.NativeArrayIterator;
 import org.monflabs.mozilla.javascript.NativeArrayIterator.ARRAY_ITERATOR_TYPE;
 import org.monflabs.mozilla.javascript.NativeObject;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
+import org.monflabs.mozilla.javascript.ScriptRuntimeES6;
 import org.monflabs.mozilla.javascript.Scriptable;
 import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.SymbolKey;
@@ -120,7 +122,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
                         .withMethod(PROTO, "toString", 0, NativeTypedArrayView::js_toString)
                         .withMethod(PROTO, "values", 0, NativeTypedArrayView::js_values)
                         .withMethod(PROTO, "with", 2, NativeTypedArrayView::js_with)
-                        .withMethod(PROTO, SymbolKey.ITERATOR, 0, NativeTypedArrayView::js_iterator)
+                        .withProp(PROTO, SymbolKey.ITERATOR, alias("values", DONTENUM))
+                        .withProp(CTOR, SymbolKey.SPECIES, ScriptRuntimeES6::symbolSpecies)
                         .withMethod(CTOR, "from", 1, NativeTypedArrayView::js_from)
                         .withMethod(CTOR, "of", 0, NativeTypedArrayView::js_of)
                         .build();
@@ -292,6 +295,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         DescriptorInfo existing = getOwnPropertyDescriptorInfo(receiver, cx, key);
         if (existing != null) {
             if (existing.isAccessorDescriptor() || Boolean.FALSE.equals(existing.writable)) {
+                failedSet(cx, key);
                 return;
             }
             receiver.defineOwnProperty(
@@ -300,6 +304,15 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
                     new DescriptorInfo(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, val));
         } else if (receiver.isExtensible()) {
             receiver.defineOwnProperty(cx, key, new DescriptorInfo(true, true, true, val));
+        } else {
+            failedSet(cx, key);
+        }
+    }
+
+    /** A [[Set]] that returned false: a TypeError in strict mode (PutValue). */
+    private static void failedSet(Context cx, Object key) {
+        if (cx != null && cx.isStrictMode()) {
+            throw ScriptRuntime.typeErrorById("msg.modify.readonly", ScriptRuntime.toString(key));
         }
     }
 
@@ -425,24 +438,22 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         return true;
     }
 
-    /**
-     * To aid in parsing: Return a positive (or zero) integer if the double is a valid array index,
-     * and -1 if not.
-     */
-    private static int toIndex(double num) {
-        int ix = (int) num;
-        if (ix == num && ix >= 0) {
-            return ix;
-        }
-        return -1;
-    }
-
     // Actual functions
 
     static JSFunction init(Context cx, VarScope scope, boolean sealed) {
         var res = scope.get(TYPED_ARRAY, scope);
         if (res == NOT_FOUND) {
             res = DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), false);
+            // %TypedArray%.prototype.toString is %Array.prototype.toString% (23.2.3.32)
+            Scriptable arrayProto = ScriptableObject.getArrayPrototype(scope);
+            Object toString =
+                    arrayProto == null
+                            ? NOT_FOUND
+                            : ScriptableObject.getProperty(arrayProto, "toString");
+            if (toString instanceof Callable) {
+                ((ScriptableObject) ((JSFunction) res).getPrototypeProperty())
+                        .defineProperty("toString", toString, DONTENUM);
+            }
         }
         return (JSFunction) res;
     }
@@ -544,9 +555,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             return constructable.construct(new NativeArrayBuffer(), 0, 0);
         }
 
-        if ((arg0 instanceof Number) || (arg0 instanceof String)) {
-            // Create a zeroed-out array of a certain length
-            int length = ScriptRuntime.toInt32(arg0);
+        if (!ScriptRuntime.isObject(arg0)) {
+            // Create a zeroed-out array of a certain length: ToIndex (23.2.5.1 step 6)
+            int length = ScriptRuntime.toIndex(arg0);
             NativeArrayBuffer buffer = makeArrayBuffer(cx, scope, length, bytesPerElement);
             return constructable.construct(buffer, 0, length);
         }
@@ -663,7 +674,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
             final Object[] arrayElements;
 
-            if ((iter != Scriptable.NOT_FOUND) && !Undefined.isUndefined(iter)) {
+            if ((iter != Scriptable.NOT_FOUND) && iter != null && !Undefined.isUndefined(iter)) {
                 final Object iterator = ScriptRuntime.callIterator(obj, cx, scope);
                 if (!Undefined.isUndefined(iterator)) {
                     final ArrayList<Object> elems = new ArrayList<>();
@@ -874,7 +885,11 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     }
 
     private Object getElemForToString(Context cx, VarScope scope, int index, boolean useLocale) {
-        var elem = js_get(index);
+        // Get: an index out of a buffer that shrank meanwhile is undefined (23.2.3.31)
+        Object elem = ScriptableObject.getProperty(this, index);
+        if (elem == NOT_FOUND || Undefined.isUndefined(elem)) {
+            return "";
+        }
         if (useLocale) {
             var toLocaleString = ScriptRuntime.getPropAndThis(elem, "toLocaleString", cx, scope);
             return toLocaleString.call(cx, scope, ScriptRuntime.emptyArgs);
@@ -1014,11 +1029,6 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             }
         }
         return -1;
-    }
-
-    private static Object js_iterator(
-            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return js_values(cx, f, nt, s, thisObj, args);
     }
 
     private static Object js_keys(
@@ -1350,7 +1360,11 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             NativeTypedArrayView<?> nativeView = (NativeTypedArrayView<?>) args[0];
             self.setRange(nativeView, offset);
         } else {
-            self.setRange(cx, s, ScriptableObject.ensureScriptable(args[0]), offset);
+            self.setRange(
+                    cx,
+                    s,
+                    ScriptRuntime.toObject(cx, s, isArg(args, 0) ? args[0] : Undefined.instance),
+                    offset);
         }
 
         return Undefined.instance;
@@ -1371,8 +1385,12 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             srcLength = self.getLength();
         }
 
-        int start = isArg(args, 0) ? ScriptRuntime.toInt32(args[0]) : 0;
-        start = start < 0 ? Math.max(srcLength + start, 0) : Math.min(start, srcLength);
+        double relStart = isArg(args, 0) ? ScriptRuntime.toIntegerOrInfinity(args[0]) : 0;
+        int start =
+                (int)
+                        (relStart < 0
+                                ? Math.max(srcLength + relStart, 0)
+                                : Math.min(relStart, srcLength));
         int beginOffset = self.getByteOffset() + (start * self.getBytesPerElement());
 
         Object[] constructorArgs;
@@ -1380,8 +1398,12 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         if (!hasEnd && self.isAutoLength) {
             constructorArgs = new Object[] {self.arrayBuffer, beginOffset};
         } else {
-            int end = hasEnd ? ScriptRuntime.toInt32(args[1]) : srcLength;
-            end = end < 0 ? Math.max(srcLength + end, 0) : Math.min(end, srcLength);
+            double relEnd = hasEnd ? ScriptRuntime.toIntegerOrInfinity(args[1]) : srcLength;
+            int end =
+                    (int)
+                            (relEnd < 0
+                                    ? Math.max(srcLength + relEnd, 0)
+                                    : Math.min(relEnd, srcLength));
             int newLen = Math.max(end - start, 0);
             constructorArgs = new Object[] {self.arrayBuffer, beginOffset, newLen};
         }
@@ -1435,7 +1457,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     private static Object js_toReversed(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeTypedArrayView<?> self = realThis(thisObj);
-        int len = self.getLength();
+        int len = (int) self.validateAndGetLength();
 
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
@@ -1456,7 +1478,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     private static Object js_toSorted(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeTypedArrayView<?> self = realThis(thisObj);
-        int len = self.getLength();
+        int len = (int) self.validateAndGetLength();
 
         Object[] working = self.sortTemporaryArray(cx, s, args);
 
@@ -1476,15 +1498,16 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     private static Object js_with(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        // 23.2.3.36
         NativeTypedArrayView<?> self = realThis(thisObj);
+        int len = (int) self.validateAndGetLength();
 
-        long relativeIndex = args.length > 0 ? (int) ScriptRuntime.toInteger(args[0]) : 0;
-        long actualIndex = relativeIndex >= 0 ? relativeIndex : self.length + relativeIndex;
+        double relativeIndex =
+                ScriptRuntime.toIntegerOrInfinity(args.length > 0 ? args[0] : Undefined.instance);
+        double actualIndex = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
 
-        Object argsValue = args.length > 1 ? ScriptRuntime.toNumeric(args[1]) : 0.0;
-        int len = self.getLength();
-
-        if (actualIndex < 0 || actualIndex >= len) {
+        Object numericValue = self.toNumeric(args.length > 1 ? args[1] : Undefined.instance);
+        if (!self.isValidIntegerIndex(actualIndex)) {
             String msg =
                     ScriptRuntime.getMessageById(
                             "msg.typed.array.index.out.of.bounds",
@@ -1502,7 +1525,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
                         new Object[] {newBuffer, 0, len, self.getBytesPerElement()});
 
         for (int k = 0; k < len; ++k) {
-            Object fromValue = (k == actualIndex) ? argsValue : self.js_get(k);
+            Object fromValue =
+                    (k == actualIndex) ? numericValue : ScriptableObject.getProperty(self, k);
             result.put(k, result, fromValue);
         }
 
@@ -1543,13 +1567,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
         List<Object> listFromIterator = null;
         Object iteratorProp = ScriptableObject.getProperty(items, SymbolKey.ITERATOR);
-        // Optimization: When items is an instance of java.util.List and also have an iterator,
-        // we don't use the iterator to avoid copying the contents to determine the length.
-        // However, with this the test262 test
-        // built-ins/TypedArray/from/iterated-array-changed-by-tonumber.js
-        // doesn't pass.
-        if (!(iteratorProp == Scriptable.NOT_FOUND)
-                && !(items instanceof List) // NativeArray and NativeTypedArrayView
+        // GetMethod(source, @@iterator): the values are collected before any conversion
+        if (iteratorProp != Scriptable.NOT_FOUND
+                && iteratorProp != null
                 && !Undefined.isUndefined(iteratorProp)) {
             final Object iterator = ScriptRuntime.callIterator(items, cx, s);
             if (!Undefined.isUndefined(iterator)) {
@@ -1592,12 +1612,6 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             Object temp;
             if (listFromIterator != null) {
                 temp = listFromIterator.get(k);
-            } else if (items instanceof List<?>) {
-                try {
-                    temp = ((List<?>) items).get(k);
-                } catch (IndexOutOfBoundsException e) {
-                    temp = Undefined.instance;
-                }
             } else {
                 temp = ScriptRuntime.getObjectIndex(items, k, cx, s);
             }

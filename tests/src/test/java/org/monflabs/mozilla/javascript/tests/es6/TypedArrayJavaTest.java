@@ -17,7 +17,7 @@ public class TypedArrayJavaTest {
      */
     @Test
     public void subarrayWithoutParams() throws Exception {
-        String script = "var ta = new §§type§§([1, 2]);\n" + "'' + ta.subarray();";
+        String script = "var ta = new §§type§§([1, 2].map(§§conv§§));\n" + "'' + ta.subarray();";
 
         allTypes(script, "1,2");
     }
@@ -85,7 +85,7 @@ public class TypedArrayJavaTest {
     private static void subarrayFromSubarray(int from, int to, int from2, int to2, String expected)
             throws Exception {
         String script =
-                "var arr = new §§type§§([1, 2, 3, 4, 5, 6, 7]);\n"
+                "var arr = new §§type§§([1, 2, 3, 4, 5, 6, 7].map(§§conv§§));\n"
                         + "var sub1 = arr.subarray("
                         + from
                         + (Integer.MIN_VALUE != to ? (", " + to) : "")
@@ -121,7 +121,12 @@ public class TypedArrayJavaTest {
                     TopLevel scope = cx.initStandardObjects();
 
                     for (String type : allNativeTypes) {
-                        String scr = script.replace("§§type§§", type);
+                        // the BigInt arrays take BigInts (ToBigInt rejects Numbers)
+                        String scr =
+                                script.replace("§§type§§", type)
+                                        .replace(
+                                                "§§conv§§",
+                                                type.startsWith("Big") ? "BigInt" : "Number");
                         Object obj = cx.evaluateString(scope, scr, "", 1, null);
                         assertEquals(expected, obj);
                     }

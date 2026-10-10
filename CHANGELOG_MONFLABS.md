@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: typed arrays (2026-10-10, plan 1.8c, part 9)
+
+All versions unless stated (`BACKWARD_COMPATIBILITY.md` 1.6 and 2.33):
+
+- `VERSION_ECMASCRIPT`: typed arrays store their elements little endian (`FEATURE_LITTLE_ENDIAN` defaults to
+  true), as test262 and the web expect.
+- The constructors apply ToIndex to a primitive argument (a negative or infinite length is a RangeError, a symbol a
+  TypeError; before, ToInt32 or an Error); BigInt typed arrays, `DataView.prototype.setBigInt64`/`setBigUint64`
+  and `BigInt.asIntN` use ToBigInt (a Number is a TypeError).
+- `%TypedArray%.from` iterates any source with a `Symbol.iterator` method (arrays included, so the values are
+  read before they are converted and holes become `undefined`); a `null` iterator method is ignored, also in the
+  constructors. `%TypedArray%[Symbol.species]` exists; `%TypedArray%.prototype.toString` is
+  `Array.prototype.toString` and `[Symbol.iterator]` is `values`.
+- `set` converts a primitive source with ToObject; `subarray` and `with` use ToIntegerOrInfinity (Infinity and
+  -0.5 work); `with` converts the value before checking the index against the current length; `toReversed`,
+  `toSorted` and `with` throw on a detached or out-of-bounds array; `toLocaleString` reads the elements with Get.
+- An array iterator that is done stays done, even when its typed array then goes out of bounds.
+- A strict assignment through a typed array in the prototype chain throws when the receiver cannot be written.
+- The getters of symbol-keyed built-in accessors are named `get [Symbol.toStringTag]` (before, `get
+  Symbol(Symbol.toStringTag)`); ToIntegerOrInfinity gives +0 for values in (-1, 0).
+- test262: 36 more files pass; 29,628 of 42,616 in-scope files (69.5%).
+
 ### Built-ins residuals: Set methods, Date, BigInt, Error (2026-10-10, plan 1.8c, part 8)
 
 All versions unless stated (`BACKWARD_COMPATIBILITY.md` 2.32):

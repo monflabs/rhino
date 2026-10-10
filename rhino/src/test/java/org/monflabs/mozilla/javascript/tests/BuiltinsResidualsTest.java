@@ -243,4 +243,27 @@ class BuiltinsResidualsTest {
                         + " t(() => Object.prototype.toString.call(TypeError.prototype));"
                         + " r.join('|')");
     }
+
+    @Test
+    void typedArrayResiduals() {
+        assertBoth(
+                "RangeError|TypeError|TypeError|true|true|get [Symbol.toStringTag]|3,4|1,9|NaN",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => new Int8Array(-1));"
+                        + " t(() => new Int8Array(Symbol()));"
+                        + " t(() => new BigInt64Array([1]));"
+                        + " var TA = Object.getPrototypeOf(Int8Array);"
+                        + " t(() => TA.prototype.toString === Array.prototype.toString);"
+                        + " t(() => TA.prototype[Symbol.iterator] === TA.prototype.values);"
+                        + " t(() => Object.getOwnPropertyDescriptor(TA.prototype, Symbol.toStringTag).get.name);"
+                        + " t(() => new Int8Array([1, 2, 3, 4]).subarray(-Infinity).subarray(2, Infinity));"
+                        + " t(() => new Int8Array([1, 2]).with(-1, 9));"
+                        + " t(() => Float64Array.from([, 1])[0]);"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void typedArrayByteOrder() {
+        Utils.assertGatedBehavior(0, 1, "new Uint8Array(new Uint16Array([1]).buffer)[0]");
+    }
 }
