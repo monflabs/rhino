@@ -149,6 +149,11 @@ public class Context implements Closeable {
      *   <li>Completion values of scripts and eval code: {@code if}, loops, {@code switch}, {@code
      *       try} and {@code with} give undefined when their body produces no value, and a {@code
      *       finally} block that completes normally does not change the value.
+     *   <li>A destructuring pattern in a {@code for-in} head destructures the key; under {@link
+     *       #VERSION_ES6} an array pattern reads [key, value] (JavaScript 1.7).
+     *   <li>{@code let} is an identifier in sloppy code where it does not start a declaration
+     *       ({@code var let}, {@code if (a) let} followed by a line break); under {@link
+     *       #VERSION_ES6} it is always a keyword.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

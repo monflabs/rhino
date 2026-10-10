@@ -705,4 +705,28 @@ public class AbstractEcmaObjectOperations {
         }
         return keys;
     }
+
+    /**
+     * The keys CopyDataProperties (7.3.25) copies from a proxy: [[OwnPropertyKeys]], then
+     * [[GetOwnProperty]] of each key that is not excluded, kept when enumerable.
+     */
+    static List<Object> proxyCopyKeys(
+            Context cx, NativeProxy proxy, java.util.function.Predicate<Object> excluded) {
+        List<Object> keys = new ArrayList<>();
+        Object[] ids;
+        try (var map = proxy.startCompoundOp(false)) {
+            ids = proxy.getIds(map, true, true);
+        }
+        for (Object id : ids) {
+            Object key = id instanceof Symbol ? id : ScriptRuntime.toString(id);
+            if (excluded.test(id)) {
+                continue;
+            }
+            DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, key);
+            if (desc != null && Boolean.TRUE.equals(desc.enumerable)) {
+                keys.add(id);
+            }
+        }
+        return keys;
+    }
 }

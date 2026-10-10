@@ -107,7 +107,12 @@ public abstract class NewLiteralStorage {
         if (source != null && !Undefined.isUndefined(source)) {
             Scriptable src = ScriptRuntime.toObject(cx, scope, source);
             Object[] ids;
-            if (src instanceof ScriptableObject) {
+            if (src instanceof NativeProxy) {
+                ids =
+                        AbstractEcmaObjectOperations.proxyCopyKeys(
+                                        cx, (NativeProxy) src, k -> false)
+                                .toArray();
+            } else if (src instanceof ScriptableObject) {
                 var scriptable = (ScriptableObject) src;
                 try (var map = scriptable.startCompoundOp(false)) {
                     ids = scriptable.getIds(map, false, true);

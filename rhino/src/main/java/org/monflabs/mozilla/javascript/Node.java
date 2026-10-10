@@ -77,7 +77,9 @@ public class Node implements Iterable<Node> {
             DERIVED_THIS_PROP =
                     38, // THIS of a derived constructor: DERIVED_THIS_VALUE or SUPER_CALLEE
             STRICT_PROP = 39, // FN_NAME_ASSIGN in strict code (throws)
-            LAST_PROP = STRICT_PROP,
+            // SETNAME of a destructuring assignment target (subject to the TDZ of its binding)
+            DESTRUCTURING_TARGET_PROP = 40,
+            LAST_PROP = DESTRUCTURING_TARGET_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /** Values of DERIVED_THIS_PROP. */
@@ -483,6 +485,8 @@ public class Node implements Iterable<Node> {
                 return "derived_this_prop";
             case STRICT_PROP:
                 return "strict_prop";
+            case DESTRUCTURING_TARGET_PROP:
+                return "destructuring_target_prop";
 
             default:
                 Kit.codeBug();

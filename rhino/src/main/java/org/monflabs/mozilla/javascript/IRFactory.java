@@ -1246,8 +1246,10 @@ public final class IRFactory {
         }
         call.addChildToBack(array);
         call.putIntProp(Node.SPREAD_ARGS_PROP, 1);
-        // a direct eval with spread arguments is not supported: it is an ordinary call
-        call.removeProp(Node.SPECIALCALL_PROP);
+        if (call.getType() != Token.CALL) {
+            // a direct eval with spread arguments is a call only (eval(...args))
+            call.removeProp(Node.SPECIALCALL_PROP);
+        }
     }
 
     /**
@@ -2186,12 +2188,19 @@ public final class IRFactory {
             }
 
             Node localBlock = new Node(Token.LOCAL_BLOCK);
+            // a pattern in a for-in head destructures the key (14.7.5); JavaScript 1.7 read
+            // [key, value] from it
+            boolean keyPattern =
+                    destructuring != -1
+                            && !isForEach
+                            && !isForOf
+                            && parser.compilerEnv.isLatestEcmaScript();
             int initType =
                     isForEach
                             ? Token.ENUM_INIT_VALUES
                             : isForOf
                                     ? Token.ENUM_INIT_VALUES_IN_ORDER
-                                    : (destructuring != -1
+                                    : (destructuring != -1 && !keyPattern
                                             ? Token.ENUM_INIT_ARRAY
                                             : Token.ENUM_INIT_KEYS);
             Node init = new Node(initType, obj);
@@ -2208,6 +2217,7 @@ public final class IRFactory {
                         parser.createDestructuringAssignment(declType, lvalue, id, this::transform);
                 if (!isForEach
                         && !isForOf
+                        && !keyPattern
                         && (destructuring == Token.OBJECTLIT || destructuringLen != 2)) {
                     // destructuring assignment is only allowed in for..each or
                     // with an array type of length 2 (to hold key and value)

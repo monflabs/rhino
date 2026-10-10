@@ -801,6 +801,14 @@ class TokenStream implements Parser.CurrentPositionReporter {
                                     str,
                                     parser.compilerEnv.getLanguageVersion(),
                                     parser.inUseStrictDirective());
+                    if (result == Token.LET
+                            && containsEscape
+                            && parser.compilerEnv.isLatestEcmaScript()
+                            && !parser.inUseStrictDirective()) {
+                        // l\u0065t is an identifier, never the start of a let declaration
+                        this.string = internString(str);
+                        return Token.NAME;
+                    }
                     if (result != Token.EOF) {
                         if ((result == Token.LET || result == Token.YIELD)
                                 && parser.compilerEnv.getLanguageVersion() < Context.VERSION_1_7) {
@@ -1339,12 +1347,18 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         } else {
                             commentType = Token.CommentType.BLOCK_COMMENT;
                         }
+                        commentHasLineTerminator = false;
                         for (; ; ) {
                             c = getChar();
                             if (c == EOF_CHAR) {
                                 tokenEnd = cursor - 1;
                                 parser.addError("msg.unterminated.comment");
                                 return Token.COMMENT;
+                            } else if (c == '\n') {
+                                // getChar maps every line terminator to \n
+                                commentHasLineTerminator = true;
+                                lookForSlash = false;
+                                tokenEnd = cursor;
                             } else if (c == '*') {
                                 lookForSlash = true;
                             } else if (c == '/') {
@@ -2506,6 +2520,68 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
     // stuff other than whitespace since start of line
     private boolean dirtyLine;
+
+    /**
+     * The source text after the current token, without consuming it: the next significant character
+     * (whitespace and comments skipped), the identifier starting there, and whether a line
+     * terminator came before it. Used to tell a let declaration from let as an identifier (14.3.1,
+     * 14.7.5). Returns null when the text is not buffered (a pending unget, a reader).
+     */
+    LookAhead lookAhead() {
+        if (sourceString == null || ungetCursor > 1) {
+            return null;
+        }
+        String src = sourceString;
+        // the character after the token may have been read then pushed back
+        int i = sourceCursor - ungetCursor;
+        boolean lineBreak = false;
+        while (i < sourceEnd) {
+            char c = src.charAt(i);
+            if (c == '\n' || c == '\r' || c == 0x2028 || c == 0x2029) {
+                lineBreak = true;
+                i++;
+            } else if (c == '/' && i + 1 < sourceEnd && src.charAt(i + 1) == '/') {
+                while (i < sourceEnd && src.charAt(i) != '\n' && src.charAt(i) != '\r') i++;
+            } else if (c == '/' && i + 1 < sourceEnd && src.charAt(i + 1) == '*') {
+                int end = src.indexOf("*/", i + 2);
+                if (end < 0) {
+                    return null;
+                }
+                for (int j = i + 2; j < end; j++) {
+                    char d = src.charAt(j);
+                    if (d == '\n' || d == '\r' || d == 0x2028 || d == 0x2029) lineBreak = true;
+                }
+                i = end + 2;
+            } else if (isJSSpace(c) || c == 0xFEFF) {
+                i++;
+            } else {
+                int start = i;
+                while (i < sourceEnd && Character.isJavaIdentifierPart(src.charAt(i))) i++;
+                String word = src.substring(start, i);
+                return new LookAhead(c, word, lineBreak);
+            }
+        }
+        return new LookAhead((char) 0, "", lineBreak);
+    }
+
+    static final class LookAhead {
+        final char next;
+        final String word;
+        final boolean lineBreak;
+
+        LookAhead(char next, String word, boolean lineBreak) {
+            this.next = next;
+            this.word = word;
+            this.lineBreak = lineBreak;
+        }
+
+        boolean startsIdentifier() {
+            return next == '\\' || Character.isJavaIdentifierStart(next);
+        }
+    }
+
+    /** Whether the last multi-line comment contained a line terminator (it then acts as one). */
+    boolean commentHasLineTerminator;
 
     String regExpFlags;
 

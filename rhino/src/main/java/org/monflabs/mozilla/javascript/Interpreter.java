@@ -2604,7 +2604,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 cx.instructionCount += INVOCATION_COST;
             }
             int callType = iCode[frame.pc] & 0xFF;
-            boolean isNew = (iCode[frame.pc + 1] != 0);
+            boolean isNew = (iCode[frame.pc + 1] & 1) != 0;
+            boolean spread = (iCode[frame.pc + 1] & 2) != 0;
             int sourceLine = getIndex(iCode, frame.pc + 2);
 
             // indexReg: number of arguments
@@ -2626,7 +2627,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 // is ... Callable Scriptable
                 ScriptRuntime.LookupResult result =
                         (ScriptRuntime.LookupResult) stack[frame.stackTop];
-                Object[] outArgs = getArgsArray(stack, sDbl, frame.stackTop + 1, state.indexReg);
+                Object[] outArgs =
+                        spread
+                                ? ScriptRuntime.spreadArguments(stack[frame.stackTop + 1])
+                                : getArgsArray(stack, sDbl, frame.stackTop + 1, state.indexReg);
                 Callable function = result.getCallable();
                 stack[frame.stackTop] =
                         ScriptRuntime.callSpecial(
@@ -2648,7 +2652,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         void dumpICode(int op, String tname, ICodeDumpContext ctx) {
             int callType = ctx.compilerData.itsICode[ctx.pc] & 0xFF;
-            boolean isNew = (ctx.compilerData.itsICode[ctx.pc + 1] != 0);
+            boolean isNew = (ctx.compilerData.itsICode[ctx.pc + 1] & 1) != 0;
             int line = ctx.getIndex(ctx.pc + 2);
             ctx.out.println(tname + " " + callType + " " + isNew + " " + ctx.indexReg + " " + line);
             ctx.pc += 4;
@@ -4027,7 +4031,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 if (computedKey == DOUBLE_MARK) {
                     computedKey = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
                 }
-                excludeKeys[staticKeyCount + i] = ScriptRuntime.toString(computedKey);
+                excludeKeys[staticKeyCount + i] = ScriptRuntime.toPropertyKey(computedKey);
                 frame.stackTop--;
             }
 

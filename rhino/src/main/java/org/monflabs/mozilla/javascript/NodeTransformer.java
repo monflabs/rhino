@@ -807,6 +807,28 @@ public class NodeTransformer {
      * otherwise. Runtime reads are checked by the name lookups (ScriptRuntime.checkInitialized);
      * only runtime writes need an explicit check. Bindings in registers never hold the sentinel.
      */
+    /** Whether name resolves, in the syntax tree, to a let, const or class binding. */
+    private static boolean isLexicalName(String name, Scope scope) {
+        if (scope == null) {
+            return false;
+        }
+        Scope defining = scope.getDefiningScope(name);
+        if (defining == null) {
+            // beyond the function, through the syntax tree
+            for (AstNode node = scope.getTop(); node != null && defining == null; ) {
+                node = node.getParent();
+                if (node instanceof Scope) {
+                    defining = ((Scope) node).getDefiningScope(name);
+                }
+            }
+        }
+        if (defining == null) {
+            return false;
+        }
+        Symbol symbol = defining.getSymbol(name);
+        return symbol != null && isLexical(symbol);
+    }
+
     private int classifyTdz(
             ScriptNode tree, Node reference, Scope scope, boolean createScopeObjects) {
         if (!(reference instanceof Name)) {
@@ -925,6 +947,12 @@ public class NodeTransformer {
                     }
                     Node target = node.getFirstChild();
                     int kind = classifyTdz(tree, target, scope, createScopeObjects);
+                    if (kind == TDZ_NONE
+                            && node.getIntProp(Node.DESTRUCTURING_TARGET_PROP, 0) == 1
+                            && isLexicalName(target.getString(), scope)) {
+                        // a destructuring assignment target: checked when it is stored
+                        kind = TDZ_RUNTIME;
+                    }
                     if (kind == TDZ_THROW) {
                         // the value is evaluated, then storing it throws
                         Node value = target.getNext();

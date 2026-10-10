@@ -189,6 +189,30 @@ eval("6; try { 7; } finally { 8; }");      // VERSION_ES6: 8   VERSION_ECMASCRIP
   completes normally no longer replaces the value. Function code is not affected.
 - **Why:** ECMA-262 2026, §14 (UpdateEmpty in the evaluation of each statement), the ES2015 completion reform.
 
+### 1.9 Destructuring in a `for-in` head
+
+```js
+for (var [k, v] in { ab: 1 }) print(k, v);   // VERSION_ES6: ab 1   VERSION_ECMASCRIPT: a b
+```
+
+- The pattern destructures the key, a string, like any other value; the JavaScript 1.7 `[key, value]` reading is
+  kept for `VERSION_ES6` (`for each` and `for-of` are not affected).
+- **Why:** ECMA-262 2026, §14.7.5 (ForIn/OfBodyEvaluation with a ForDeclaration or AssignmentPattern).
+
+### 1.10 `let` as an identifier
+
+```js
+var let = 1;              // VERSION_ES6: SyntaxError   VERSION_ECMASCRIPT: a variable named let
+if (a) let
+x = 1;                    // VERSION_ES6: SyntaxError (let declaration)   VERSION_ECMASCRIPT: let; x = 1;
+```
+
+- In sloppy code, `let` is a keyword only where it starts a lexical declaration; elsewhere it is an identifier,
+  and in a single-statement position (the body of `if`, loops, `with`, a label) a line terminator after `let` ends
+  the statement. An escaped `l\u0065t` is always an identifier.
+- **Why:** ECMA-262 2026, §14.3.1 (LexicalDeclaration), §14.5 (ExpressionStatement lookahead), §13.1
+  (`let` is not a reserved word).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -738,6 +762,21 @@ with ({ v: 1, [Symbol.unscopables]: { v: true } }) v;   // before: 1   now: the 
   deleted global binding throw a ReferenceError; `with` honors `Symbol.unscopables`.
 - **Why:** ECMA-262 2026, §13.15.2 (assignment operators), §10.1.9.2 (OrdinarySetWithOwnDescriptor), §9.1.1.2
   (Object Environment Records).
+
+### 2.36 `instanceof`, arrow covers, `eval(...)`
+
+```js
+1 instanceof Math;                          // before: false   now: TypeError (not callable, no @@hasInstance)
+0 instanceof { [Symbol.hasInstance]: v => v === 0 };   // before: false   now: true
+var f = ({ x = 1 }) => x;                   // before: SyntaxError   now: an arrow function
+```
+
+- All versions: arrow parameters may use CoverInitializedName; `eval(...args)` is a direct eval; a multi-line
+  comment with a line terminator ends a statement for ASI.
+- From `VERSION_ES6`: `instanceof` calls `Symbol.hasInstance` for primitives too and rejects a right operand that
+  is not callable and has no `Symbol.hasInstance`.
+- **Why:** ECMA-262 2026, §13.10.2 (InstanceofOperator), §15.3 (ArrowParameters cover grammar), §19.2.1.1
+  (direct eval), §12.4 (comments).
 
 ---
 

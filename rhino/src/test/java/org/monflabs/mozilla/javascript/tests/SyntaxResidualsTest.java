@@ -67,4 +67,41 @@ class SyntaxResidualsTest {
                         + " try { o.p = 2; r.push('no'); } catch (e) { r.push(e.name); } })();"
                         + " r.join('|')");
     }
+
+    @Test
+    void arrowCoverAndCommentsAndEval() {
+        assertBoth(
+                "1|SyntaxError|2|1|local",
+                "var r = [];"
+                        + " var af = ({ x = 1 }) => x; r.push(af({}));"
+                        + " try { eval('({ x = 1 })'); r.push('no'); } catch (e) { r.push(e.name); }"
+                        + " r.push(eval(\"1/*\\n*/\\n2\"));"
+                        + " var x = 'global';"
+                        + " (function () { var x = 'local'; eval(...['x = 1']); r.push(x); })();"
+                        + " r.push((function () { var x = 'local'; eval(...['1']); return x; })());"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void instanceofAndRestWithProxies() {
+        assertBoth(
+                "true|false|TypeError|a,1",
+                "var r = [];"
+                        + " var F = { [Symbol.hasInstance](v) { return v === 0; } }; r.push(0 instanceof F);"
+                        + " r.push(1 instanceof function () {});"
+                        + " try { 1 instanceof Math; } catch (e) { r.push(e.name); }"
+                        + " var log = []; var p = new Proxy({ 0: 1, a: 2 }, { getOwnPropertyDescriptor(t, k) {"
+                        + " log.push(k); return Reflect.getOwnPropertyDescriptor(t, k); } });"
+                        + " var { 0: z, ...rest } = p; r.push(Object.keys(rest).concat(z).join());"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void letAsIdentifier() {
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "1|2|3",
+                "try { eval('var let = 1; var r = [let]; let = 2; r.push(let);"
+                        + " var o = { let }; r.push(o.let + 1); r.join(\"|\")'); } catch (e) { e.name }");
+    }
 }

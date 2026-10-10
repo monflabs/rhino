@@ -6,6 +6,33 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Language residuals: arrow covers, eval spread, instanceof, rest, `let` (2026-10-10, plan 1.10b–c)
+
+All versions unless stated (`BACKWARD_COMPATIBILITY.md` 1.9 and 2.36):
+
+- An object literal with a CoverInitializedName in parentheses (`({ x = 1 }) => x`) is accepted when an arrow
+  follows (before, a SyntaxError); without the arrow, it stays a SyntaxError.
+- A multi-line comment that contains a line terminator counts as one for automatic semicolon insertion.
+- `eval(...args)` is a direct eval (both backends; before, an indirect call).
+- From `VERSION_ES6`: `instanceof` follows InstanceofOperator: `Symbol.hasInstance` is called for any left
+  operand (a primitive included), a non-callable `Symbol.hasInstance` or a right operand that is neither callable
+  nor has one is a TypeError (`1 instanceof Math`); Function.prototype[@@hasInstance] returns false for a
+  primitive without reading `prototype`.
+- Object rest and spread with a proxy source use CopyDataProperties ([[GetOwnPropertyDescriptor]] for each key
+  that is not excluded); numeric keys of a rest pattern (`{ 0: a, ...r }`) are excluded; a symbol computed key is
+  excluded in interpreted mode too.
+- `in` is allowed inside brackets and braces of a `for` head (`for ([x = "a" in o] of …)`).
+- From `VERSION_ES6`: destructuring assignment to a `let`/`const` binding in its temporal dead zone throws a
+  ReferenceError (with `VERSION_ECMASCRIPT`, which has the TDZ).
+- `VERSION_ECMASCRIPT`: a pattern in a `for-in` head destructures the key (`for ([a] in o)` takes the first
+  character); JavaScript 1.7 read `[key, value]` from it, which `VERSION_ES6` keeps.
+- In strict code, `eval` and `arguments` as targets of a destructuring assignment are an early SyntaxError.
+- `VERSION_ECMASCRIPT`: `let` is an identifier in sloppy code where it does not start a declaration (`var let`,
+  `let = 1`, `{ let }`, `for (let in o)`, `if (a) let ⏎ x` — a line terminator after `let` in a single-statement
+  position ends the expression statement `let`); `l\u0065t` is always an identifier. `let [` and `let` followed by
+  an identifier or `{` still declare.
+- test262: 66 more files pass; 29,923 of 42,616 in-scope files (70.2%).
+
 ### Language residuals: completion values, assignments, `with` (2026-10-10, plan 1.10a)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 1.8 and 2.35) unless stated:

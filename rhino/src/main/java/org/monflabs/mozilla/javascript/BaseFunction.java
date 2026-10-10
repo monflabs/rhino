@@ -39,6 +39,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static final ClassDescriptor ES6_DESCRIPTOR;
     private static final ClassDescriptor GENERATOR_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> APPLY_DESCRIPTOR;
+    private static final JSDescriptor<JSFunction> HAS_INSTANCE_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> CALL_DESCRIPTOR;
 
     private static final BuiltInSlot.Descriptor<BaseFunction> NAME_DESCRIPTOR =
@@ -113,6 +114,7 @@ public class BaseFunction extends ScriptableObject implements Function {
                         .build();
 
         APPLY_DESCRIPTOR = DESCRIPTOR.findProtoDesc("apply");
+        HAS_INSTANCE_DESCRIPTOR = DESCRIPTOR.findProtoDesc(SymbolKey.HAS_INSTANCE);
         CALL_DESCRIPTOR = DESCRIPTOR.findProtoDesc("call");
 
         GENERATOR_DESCRIPTOR =
@@ -414,6 +416,12 @@ public class BaseFunction extends ScriptableObject implements Function {
             Id_arguments = 5,
             MAX_INSTANCE_ID = 5;
 
+    /** Whether f is %Function.prototype%[@@hasInstance]. */
+    static boolean isHasInstanceIntrinsic(Object f) {
+        return f instanceof JSFunction
+                && ((JSFunction) f).getDescriptor() == HAS_INSTANCE_DESCRIPTOR;
+    }
+
     static boolean isApply(Callable f) {
         if (f instanceof KnownBuiltInFunction kf) {
             var tag = kf.getTag();
@@ -441,6 +449,12 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static Object js_hasInstance(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         if (!(thisObj instanceof Callable && thisObj instanceof Scriptable)) {
+            return false;
+        }
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6
+                && !(thisObj instanceof BoundFunction)
+                && (args.length == 0 || ScriptRuntime.isPrimitive(args[0]))) {
+            // OrdinaryHasInstance (7.3.21) step 4: a primitive is not an instance
             return false;
         }
         Object protoProp = null;

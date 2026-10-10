@@ -145,6 +145,18 @@ public class Parser {
     private FunctionNode functionOfParams;
     private LabeledStatement currentLabel;
     private boolean inDestructuringAssignment;
+
+    /**
+     * Inside a parenthesized expression, which may turn out to be arrow parameters: an object
+     * literal with a CoverInitializedName ({x = 1}) is only an error if no => follows.
+     */
+    private boolean inParenthesizedCover;
+
+    private int pendingCoverInitializedNames;
+
+    /** The next statement is the body of a with or labeled statement (no declaration allowed). */
+    private boolean letInSingleStatement;
+
     protected boolean inUseStrictDirective;
 
     // The following are per function variables and should be saved/restored
@@ -461,6 +473,11 @@ public class Parser {
                 sawEOL = true;
                 tt = ts.getToken();
             } else {
+                // a multi-line comment with a line terminator is a LineTerminator (12.4)
+                if (ts.commentHasLineTerminator) {
+                    ts.commentHasLineTerminator = false;
+                    sawEOL = true;
+                }
                 if (compilerEnv.isRecordingComments()) {
                     String comment = ts.getAndResetCurrentComment();
                     recordComment(ts.getTokenStartLineno(), ts.getTokenColumn(), comment);
@@ -1686,6 +1703,17 @@ public class Parser {
                 break;
 
             case Token.LET:
+                boolean letSingle = inSingleStatementContext || letInSingleStatement;
+                letInSingleStatement = false;
+                if (letIsIdentifier(letSingle)) {
+                    // an expression statement starting with the identifier let
+                    letAsName();
+                    lineno = ts.getLineno();
+                    column = ts.getTokenColumn();
+                    pn = new ExpressionStatement(expr(false), !insideFunctionBody());
+                    pn.setLineColumnNumber(lineno, column);
+                    break;
+                }
                 pn = letStatement();
                 if (pn instanceof VariableDeclaration) break;
                 return pn;
@@ -2199,6 +2227,10 @@ public class Parser {
                 init = new EmptyExpression(ts.tokenBeg, 1);
                 // We haven't consumed the token, so we need the CURRENT lexer position
                 init.setLineColumnNumber(ts.getLineno(), ts.getTokenColumn());
+            } else if (tt == Token.LET && letIsIdentifier(false)) {
+                // for (let in o), for (let.p of …): let is an identifier
+                letAsName();
+                init = expr(false);
             } else if (tt == Token.VAR || tt == Token.LET || tt == Token.CONST) {
                 consumeToken();
                 init = variables(tt, ts.tokenBeg, false);
@@ -2518,7 +2550,9 @@ public class Parser {
             if (peekToken() == Token.RESERVED && isClassKeyword()) {
                 reportError("msg.class.not.statement");
             }
+            letInSingleStatement = true;
             AstNode body = getNextStatementAfterInlineComments(pn);
+            letInSingleStatement = false;
 
             pn.setLength(getNodeEnd(body) - pos);
             pn.setJsDocNode(withComment);
@@ -2531,6 +2565,38 @@ public class Parser {
         }
 
         return pn;
+    }
+
+    /**
+     * Whether the peeked let token is an identifier (VERSION_ECMASCRIPT, sloppy code): it is a
+     * declaration when followed by [, or by an identifier or { (unless a line terminator follows
+     * let where only a statement is allowed: if (a) let \n x is the expression let, then x).
+     */
+    private boolean letIsIdentifier(boolean singleStatement) throws IOException {
+        if (!compilerEnv.isLatestEcmaScript() || inUseStrictDirective || peekToken() != Token.LET) {
+            return false;
+        }
+        TokenStream.LookAhead next = ts.lookAhead();
+        if (next == null || next.next == '[') {
+            return false;
+        }
+        if (next.startsIdentifier()) {
+            if ("in".equals(next.word) || "instanceof".equals(next.word)) {
+                return true;
+            }
+            return singleStatement && next.lineBreak;
+        }
+        if (next.next == '{') {
+            return singleStatement && next.lineBreak;
+        }
+        return true;
+    }
+
+    /** The peeked let token becomes an identifier. */
+    private void letAsName() {
+        currentToken = Token.NAME;
+        currentFlaggedToken = (currentFlaggedToken & ~CLEAR_TI_MASK) | Token.NAME;
+        saveNameTokenData(ts.tokenBeg, "let", ts.getLineno(), ts.getTokenColumn());
     }
 
     private AstNode letStatement() throws IOException {
@@ -2762,7 +2828,9 @@ public class Parser {
                 if (peekToken() == Token.RESERVED && isClassKeyword()) {
                     reportError("msg.class.not.statement");
                 }
+                letInSingleStatement = true;
                 stmt = statementHelper();
+                letInSingleStatement = false;
                 int ntt = peekToken();
                 if (ntt == Token.COMMENT
                         && stmt.getLineno()
@@ -2828,6 +2896,13 @@ public class Parser {
             } else {
                 // Simple variable name
                 if (tt == Token.UNDEFINED) {
+                    consumeToken();
+                } else if (tt == Token.LET
+                        && declType == Token.VAR
+                        && compilerEnv.isLatestEcmaScript()
+                        && !inUseStrictDirective) {
+                    // var let: let is an identifier in sloppy code
+                    letAsName();
                     consumeToken();
                 } else {
                     mustMatchToken(Token.NAME, "msg.bad.var", true);
@@ -3270,7 +3345,11 @@ public class Parser {
             pn = arrowFunction(pn, startLine, startColumn);
         } else if (pn.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
                 && !inDestructuringAssignment) {
-            reportError("msg.syntax");
+            if (inParenthesizedCover) {
+                pendingCoverInitializedNames++;
+            } else {
+                reportError("msg.syntax");
+            }
         }
         return pn;
     }
@@ -4129,6 +4208,12 @@ public class Parser {
                 return objectLiteral();
 
             case Token.LET:
+                if (compilerEnv.isLatestEcmaScript() && !inUseStrictDirective) {
+                    // let is an identifier in sloppy code
+                    letAsName();
+                    consumeToken();
+                    return createNameNode(true, Token.NAME);
+                }
                 consumeToken();
                 return let(false, ts.tokenBeg);
 
@@ -4272,7 +4357,17 @@ public class Parser {
             Comment jsdocNode = getAndResetJsDoc();
             int lineno = lineNumber(), column = columnNumber();
             int begin = ts.tokenBeg;
-            AstNode e = (peekToken() == Token.RP ? new EmptyExpression(begin) : expr(true));
+            boolean wasInCover = inParenthesizedCover;
+            int pendingBefore = pendingCoverInitializedNames;
+            AstNode e;
+            inParenthesizedCover = true;
+            try {
+                e = (peekToken() == Token.RP ? new EmptyExpression(begin) : expr(true));
+            } finally {
+                inParenthesizedCover = wasInCover;
+            }
+            boolean hasCoverInitializedName = pendingCoverInitializedNames != pendingBefore;
+            pendingCoverInitializedNames = pendingBefore;
             if (peekToken() == Token.FOR) {
                 return generatorExpression(e, begin);
             }
@@ -4281,7 +4376,8 @@ public class Parser {
             int length = ts.tokenEnd - begin;
 
             boolean hasObjectLiteralDestructuring =
-                    e.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1;
+                    e.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
+                            || hasCoverInitializedName;
             boolean hasTrailingComma = e.getIntProp(Node.TRAILING_COMMA, 0) == 1;
             if ((hasTrailingComma || hasObjectLiteralDestructuring || e.getType() == Token.EMPTY)
                     && peekToken() != Token.ARROW) {
@@ -4330,6 +4426,17 @@ public class Parser {
 
     /** May return an {@link ArrayLiteral} or {@link ArrayComprehension}. */
     private AstNode arrayLiteral() throws IOException {
+        // the in operator is allowed inside brackets, also in a for head
+        boolean wasInForInit = inForInit;
+        inForInit = false;
+        try {
+            return arrayLiteralImpl();
+        } finally {
+            inForInit = wasInForInit;
+        }
+    }
+
+    private AstNode arrayLiteralImpl() throws IOException {
         if (currentToken != Token.LB) codeBug();
         int pos = ts.tokenBeg, end = ts.tokenEnd, lineno = lineNumber(), column = columnNumber();
         List<AstNode> elements = new ArrayList<>();
@@ -4594,6 +4701,16 @@ public class Parser {
     private static final int METHOD_ENTRY = 8;
 
     private ObjectLiteral objectLiteral() throws IOException {
+        boolean wasInForInit = inForInit;
+        inForInit = false;
+        try {
+            return objectLiteralImpl();
+        } finally {
+            inForInit = wasInForInit;
+        }
+    }
+
+    private ObjectLiteral objectLiteralImpl() throws IOException {
         int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
         int afterComma = -1;
         List<AbstractObjectProperty> elems = new ArrayList<>();
@@ -4879,7 +4996,10 @@ public class Parser {
         // for |var {x: x, y: y} = o|, as implemented in spidermonkey JS 1.8.
         int tt = peekToken();
         if ((tt == Token.COMMA || tt == Token.RC)
-                && ptt == Token.NAME
+                && (ptt == Token.NAME
+                        || (ptt == Token.LET
+                                && compilerEnv.isLatestEcmaScript()
+                                && !inUseStrictDirective))
                 && compilerEnv.getLanguageVersion() >= Context.VERSION_1_8) {
             if (!inDestructuringAssignment
                     && compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
@@ -5529,8 +5649,7 @@ public class Parser {
                     parent.addChildToBack(simpleAssignment(restTarget, restValue, transformer));
                 } else if (restTarget.getType() == Token.NAME) {
                     String name = restTarget.getString();
-                    parent.addChildToBack(
-                            new Node(setOp, createName(Token.BINDNAME, name, null), restValue));
+                    parent.addChildToBack(destructuringSet(setOp, name, restValue, variableType));
                     if (variableType != -1) {
                         defineSymbol(variableType, name, true);
                         destructuringNames.add(name);
@@ -5583,8 +5702,7 @@ public class Parser {
             if (n.getType() == Token.NAME) {
                 /* [x] = [1] */
                 String name = n.getString();
-                parent.addChildToBack(
-                        new Node(setOp, createName(Token.BINDNAME, name, null), rightElem));
+                parent.addChildToBack(destructuringSet(setOp, name, rightElem, variableType));
                 if (variableType != -1) {
                     defineSymbol(variableType, name, true);
                     destructuringNames.add(name);
@@ -5619,6 +5737,22 @@ public class Parser {
             parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
         }
         return empty;
+    }
+
+    /**
+     * The store of a destructuring target name; in a destructuring assignment (variableType -1), it
+     * is subject to the temporal dead zone of the binding it resolves to.
+     */
+    private Node destructuringSet(int setOp, String name, Node value, int variableType) {
+        Node set = new Node(setOp, createName(Token.BINDNAME, name, null), value);
+        if (variableType == -1) {
+            set.putIntProp(Node.DESTRUCTURING_TARGET_PROP, 1);
+            if (inUseStrictDirective && ("eval".equals(name) || "arguments".equals(name))) {
+                // 13.15.5.1: an assignment target must not be eval or arguments in strict code
+                reportError("msg.bad.id.strict", name);
+            }
+        }
+        return set;
     }
 
     /** An assignment target that is a property reference: obj.p or obj[k]. */
@@ -5922,7 +6056,7 @@ public class Parser {
                 currentScriptOrFn.putDestructuringRvalues(cond_inner, right, name);
             }
 
-            parent.addChildToBack(new Node(setOp, createName(Token.BINDNAME, name, null), cond));
+            parent.addChildToBack(destructuringSet(setOp, name, cond, variableType));
             if (variableType != -1) {
                 defineSymbol(variableType, name, true);
                 destructuringNames.add(name);
@@ -6121,8 +6255,7 @@ public class Parser {
                     // Simple name: {...rest}
                     String restName = ((Name) restTarget).getIdentifier();
 
-                    parent.addChildToBack(
-                            new Node(setOp, createName(Token.BINDNAME, restName, null), restOp));
+                    parent.addChildToBack(destructuringSet(setOp, restName, restOp, variableType));
 
                     if (variableType != -1) {
                         defineSymbol(variableType, restName, true);
@@ -6170,11 +6303,16 @@ public class Parser {
                 rightElem = new Node(Token.GETPROP, createName(tempName), s);
                 extractedKeys.add(keyName);
             } else if (id instanceof NumberLiteral) {
-                Node s = createNumber((int) ((NumberLiteral) id).getNumber());
+                // the key is the number's string ({1.5: x} reads "1.5")
+                String key = ScriptRuntime.toString(((NumberLiteral) id).getNumber());
+                Node s = Node.newString(key);
                 rightElem = new Node(Token.GETELEM, createName(tempName), s);
+                extractedKeys.add(key);
             } else if (id instanceof BigIntLiteral) {
-                Node s = Node.newString(((BigIntLiteral) id).getBigInt().toString());
+                String key = ((BigIntLiteral) id).getBigInt().toString();
+                Node s = Node.newString(key);
                 rightElem = new Node(Token.GETELEM, createName(tempName), s);
+                extractedKeys.add(key);
             } else if (id instanceof ComputedPropertyKey) {
                 // handle computed property key: [...key]
                 // Create a temp variable for the computed key within the LETEXPR scope
@@ -6210,8 +6348,7 @@ public class Parser {
             AstNode value = prop.getValue();
             if (value.getType() == Token.NAME) {
                 String name = ((Name) value).getIdentifier();
-                parent.addChildToBack(
-                        new Node(setOp, createName(Token.BINDNAME, name, null), rightElem));
+                parent.addChildToBack(destructuringSet(setOp, name, rightElem, variableType));
                 if (variableType != -1) {
                     defineSymbol(variableType, name, true);
                     destructuringNames.add(name);

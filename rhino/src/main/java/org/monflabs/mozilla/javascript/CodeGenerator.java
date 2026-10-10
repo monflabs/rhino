@@ -748,7 +748,15 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                         ++argCount;
                     }
                     int callType = node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL);
-                    if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
+                    if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1
+                            && type == Token.CALL
+                            && callType != Node.NON_SPECIALCALL) {
+                        // a direct eval with spread arguments: the array of arguments, flag 2
+                        addIndexOp(Icode.CALLSPECIAL, argCount);
+                        addUint8(callType);
+                        addUint8(2);
+                        addUint16(lineNumber & 0xFFFF);
+                    } else if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
                         addIcode(
                                 type == Token.NEW
                                         ? Icode.NEW_SPREAD

@@ -1005,7 +1005,17 @@ public class ScriptRuntime {
             }
         }
 
-        if (sourceObj instanceof ScriptableObject) {
+        if (sourceObj instanceof NativeProxy) {
+            for (Object id :
+                    AbstractEcmaObjectOperations.proxyCopyKeys(
+                            cx,
+                            (NativeProxy) sourceObj,
+                            k ->
+                                    shouldExcludeProperty(
+                                            k, excludeStrings, excludeIntegers, excludeSymbols))) {
+                copyProperty(sourceObj, result, id, cx, scope);
+            }
+        } else if (sourceObj instanceof ScriptableObject) {
             ScriptableObject so = (ScriptableObject) sourceObj;
             try (var map = so.startCompoundOp(false)) {
                 // Get all enumerable properties (regular + symbols) in one call
@@ -1038,7 +1048,12 @@ public class ScriptRuntime {
             java.util.Set<Integer> excludeIntegers,
             java.util.Set<Symbol> excludeSymbols) {
         if (id instanceof String) {
-            return excludeStrings.contains((String) id);
+            if (excludeStrings.contains((String) id)) {
+                return true;
+            }
+            // an index key given as an integer
+            StringIdOrIndex soi = toStringIdOrIndex(id);
+            return soi.stringId == null && excludeIntegers.contains(soi.index);
         } else if (id instanceof Integer) {
             return excludeIntegers.contains((Integer) id) || excludeStrings.contains(id.toString());
         } else if (id instanceof Symbol) {
@@ -1052,6 +1067,13 @@ public class ScriptRuntime {
             Scriptable source, Scriptable result, Object id, Context cx, VarScope scope) {
         Object value;
 
+        if (id instanceof String) {
+            // an index key from [[OwnPropertyKeys]] (a proxy) is a string
+            StringIdOrIndex soi = toStringIdOrIndex(id);
+            if (soi.stringId == null) {
+                id = Integer.valueOf(soi.index);
+            }
+        }
         if (id instanceof Integer) {
             int index = (Integer) id;
             value = getObjectIndex(source, index, cx);
@@ -5146,6 +5168,29 @@ public class ScriptRuntime {
         // Check RHS is an object
         if (!(b instanceof Scriptable)) {
             throw typeErrorById("msg.instanceof.not.object");
+        }
+
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6 && isObject(b)) {
+            // InstanceofOperator (13.10.2): the @@hasInstance method, for any left-hand value
+            Scriptable target = (Scriptable) b;
+            Object handler = ScriptableObject.getProperty(target, SymbolKey.HAS_INSTANCE);
+            if (handler != Scriptable.NOT_FOUND
+                    && handler != null
+                    && !Undefined.isUndefined(handler)) {
+                if (!(handler instanceof Callable)) {
+                    throw typeErrorById("msg.instanceof.bad.target");
+                }
+                if (BaseFunction.isHasInstanceIntrinsic(handler) && a instanceof Scriptable) {
+                    // OrdinaryHasInstance, with the overrides of the host objects (E4X, Java)
+                    return target.hasInstance((Scriptable) a);
+                }
+                return toBoolean(
+                        ((Callable) handler)
+                                .call(cx, getTopCallScope(cx), target, new Object[] {a}));
+            }
+            if (!(b instanceof Callable)) {
+                throw typeErrorById("msg.instanceof.bad.target");
+            }
         }
 
         // for primitive values on LHS, return false
