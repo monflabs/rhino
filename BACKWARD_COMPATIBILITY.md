@@ -570,6 +570,23 @@ Object.prototype.toString.call(new Proxy([], {}));                  // before: "
   `Symbol.toStringTag` was removed (before, its class name) and `Array` for a proxy of an array.
 - **Why:** ECMA-262 2026, §21.4.4 (Date setters), §20.1.3 (Object.prototype), Annex B.2.2.
 
+### 2.28 JSON revivers and replacers, Object.hasOwn, Object.assign
+
+```js
+JSON.parse("[1]", function (k, v) { return typeof k; });     // before: "string" for "", "number" for 0   now: "string"
+JSON.stringify([1], (k, v) => typeof k === "number" ? 2 : v); // before: "[2]"   now: "[1]"
+Object.assign(Object.freeze({ a: 1 }), { a: 2 });             // before: ignored   now: TypeError
+```
+
+- From `VERSION_ES6`: the keys passed to a `JSON.parse` reviver and a `JSON.stringify` replacer are always strings;
+  a revived value is defined with CreateDataProperty (it replaces a read-only configurable property, before ignored);
+  the replacer gets `undefined` for a property deleted while serializing; `Object.assign` throws a TypeError when a
+  target property cannot be written; `Object.hasOwn` converts its first argument before the key.
+- All versions: `JSON.stringify` treats a proxy of an array as an array; `Date.prototype.toJSON` no longer throws when
+  `toISOString` returns an object.
+- **Why:** ECMA-262 2026, §25.5.1 (JSON.parse), §25.5.2 (JSON.stringify), §20.1.2.1 (Object.assign), §20.1.2.13
+  (Object.hasOwn), §21.4.4.37 (Date.prototype.toJSON).
+
 ---
 
 ## 3. Platform and embedding

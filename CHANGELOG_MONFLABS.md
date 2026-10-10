@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: JSON, Object.hasOwn, Object.assign (2026-10-10, plan 1.8c, part 4)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.28) unless stated:
+
+- `JSON.parse` revivers follow InternalizeJSONProperty: IsArray (a proxy of an array is walked by its `length`),
+  EnumerableOwnProperties for objects (the `ownKeys` and `getOwnPropertyDescriptor` traps of a proxy), string keys
+  (`"0"`, not `0`), and the revived value is written with CreateDataProperty (a read-only but configurable property
+  is replaced; a refused definition is ignored) and removed with [[Delete]].
+- `JSON.stringify` passes string keys to the replacer function and `undefined` for a property deleted during the
+  serialization. All versions: a proxy of an array is serialized, and accepted as a replacer, as an array (IsArray,
+  LengthOfArrayLike, Get); a proxy object is serialized with its enumerable own keys.
+- `Object.hasOwn` converts the object before the key, consults a proxy's `getOwnPropertyDescriptor` trap, and has
+  length 2; `Object.assign` writes with Set(…, true) (a TypeError for a read-only target property) and reads the keys
+  of a proxy source through its traps.
+- All versions: `Date.prototype.toJSON` returns the result of `toISOString` as is.
+- Not yet: the reviver `context` argument (JSON source access, plan 12.6), `toJSON` of a BigInt called with the
+  primitive as `this`.
+- test262: 27 more files pass; 29,432 of 42,616 in-scope files (69.1%).
+
 ### Built-ins residuals: Date setters, Object.prototype methods (2026-10-10, plan 1.8c, part 3)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.27) unless stated:

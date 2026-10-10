@@ -51,6 +51,12 @@ public class AbstractEcmaObjectOperations {
      */
     static boolean hasOwnProperty(Context cx, Object o, Object property) {
         Scriptable obj = ScriptableObject.ensureScriptable(o);
+        if (obj instanceof NativeProxy) {
+            // HasOwnProperty uses [[GetOwnProperty]] (its trap), not [[HasProperty]]
+            Object key =
+                    ScriptRuntime.isSymbol(property) ? property : ScriptRuntime.toString(property);
+            return ((NativeProxy) obj).getOwnPropertyDescriptor(cx, key) != null;
+        }
 
         // using instanceof is correct here
         // (see org.monflabs.mozilla.javascript.tests.es6.Symbol3Test.hasOwnProperty)

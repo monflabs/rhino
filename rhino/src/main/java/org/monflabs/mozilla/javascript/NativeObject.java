@@ -85,7 +85,7 @@ public class NativeObject extends ScriptableObject implements Map {
                         .withMethod(CTOR, "entries", 1, NativeObject::js_entries)
                         .withMethod(CTOR, "fromEntries", 1, NativeObject::js_fromEntries)
                         .withMethod(CTOR, "values", 1, NativeObject::js_values)
-                        .withMethod(CTOR, "hasOwn", 1, NativeObject::js_hasOwn)
+                        .withMethod(CTOR, "hasOwn", 2, NativeObject::js_hasOwn)
                         .withProp(
                                 PROTO,
                                 PROTO_PROPERTY,
@@ -563,6 +563,12 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Object propertyName = args.length < 2 ? Undefined.instance : args[1];
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // ToObject, then ToPropertyKey (20.1.2.13)
+            Scriptable o = ScriptRuntime.toObject(cx, s, arg);
+            return AbstractEcmaObjectOperations.hasOwnProperty(
+                    cx, o, ScriptRuntime.toPropertyKey(propertyName));
+        }
         return AbstractEcmaObjectOperations.hasOwnProperty(cx, arg, propertyName);
     }
 
@@ -759,6 +765,20 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_assign(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() < Context.VERSION_ES6) {
+            return assign(cx, s, args);
+        }
+        // Set(to, key, value, true): a write that fails throws (20.1.2.1)
+        boolean wasStrict = cx.isStrictMode();
+        cx.setIsStrictMode(true);
+        try {
+            return assign(cx, s, args);
+        } finally {
+            cx.setIsStrictMode(wasStrict);
+        }
+    }
+
+    private static Object assign(Context cx, VarScope s, Object[] args) {
         Scriptable targetObj;
         if (args.length > 0) {
             targetObj = ScriptRuntime.toObject(cx, s, args[0]);
@@ -770,6 +790,29 @@ public class NativeObject extends ScriptableObject implements Map {
                 continue;
             }
             Scriptable sourceObj = ScriptRuntime.toObject(cx, s, args[i]);
+            if (sourceObj instanceof NativeProxy) {
+                // [[OwnPropertyKeys]], then [[GetOwnProperty]] and [[Get]] of each key (traps)
+                NativeProxy proxy = (NativeProxy) sourceObj;
+                Object[] keys;
+                try (var map = proxy.startCompoundOp(false)) {
+                    keys = proxy.getIds(map, true, true);
+                }
+                for (Object key : keys) {
+                    Object k = ScriptRuntime.isSymbol(key) ? key : ScriptRuntime.toString(key);
+                    DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, k);
+                    if (desc == null || !desc.isEnumerable(true)) {
+                        continue;
+                    }
+                    if (k instanceof Symbol) {
+                        Object val = ScriptableObject.getProperty(proxy, (Symbol) k);
+                        ScriptableObject.putProperty(targetObj, (Symbol) k, val);
+                    } else {
+                        Object val = ScriptableObject.getProperty(proxy, (String) k);
+                        ScriptableObject.putProperty(targetObj, (String) k, val);
+                    }
+                }
+                continue;
+            }
             Object[] ids;
             if (sourceObj instanceof ScriptableObject) {
                 var scriptable = (ScriptableObject) sourceObj;

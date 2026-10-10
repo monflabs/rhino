@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import org.monflabs.mozilla.javascript.json.JsonParser;
 import org.monflabs.mozilla.javascript.xml.XMLObject;
@@ -99,7 +100,87 @@ public final class NativeJSON extends ScriptableObject {
         Object unfiltered = parse(cx, scope, jtext);
         Scriptable root = cx.newObject(scope);
         root.put("", root, unfiltered);
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            return internalize(cx, scope, reviver, root, "");
+        }
         return walk(cx, scope, reviver, root, "");
+    }
+
+    /** InternalizeJSONProperty (ECMA-262 25.5.1.1). */
+    private static Object internalize(
+            Context cx, VarScope scope, Callable reviver, Scriptable holder, String name) {
+        Object val = getKey(holder, name);
+        if (val instanceof Scriptable) {
+            Scriptable obj = (Scriptable) val;
+            if (NativeArray.isArray(obj)) {
+                long len = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, obj);
+                for (long i = 0; i < len; i++) {
+                    reviveKey(cx, scope, reviver, obj, Long.toString(i));
+                }
+            } else {
+                for (String key : enumerableOwnKeys(cx, obj)) {
+                    reviveKey(cx, scope, reviver, obj, key);
+                }
+            }
+        }
+        return reviver.call(cx, scope, holder, new Object[] {name, val});
+    }
+
+    private static void reviveKey(
+            Context cx, VarScope scope, Callable reviver, Scriptable obj, String key) {
+        Object newElement = internalize(cx, scope, reviver, obj, key);
+        if (obj instanceof ScriptableObject) {
+            ScriptableObject so = (ScriptableObject) obj;
+            if (newElement == Undefined.instance) {
+                so.delete(cx, key);
+            } else {
+                AbstractEcmaObjectOperations.defineOwn(
+                        cx, so, key, new DescriptorInfo(true, true, true, newElement));
+            }
+        } else {
+            ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(key);
+            if (newElement == Undefined.instance) {
+                if (soi.stringId == null) obj.delete(soi.index);
+                else obj.delete(soi.stringId);
+            } else {
+                if (soi.stringId == null) obj.put(soi.index, obj, newElement);
+                else obj.put(soi.stringId, obj, newElement);
+            }
+        }
+    }
+
+    private static Object getKey(Scriptable obj, String key) {
+        ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(key);
+        Object v =
+                soi.stringId == null
+                        ? ScriptableObject.getProperty(obj, soi.index)
+                        : ScriptableObject.getProperty(obj, soi.stringId);
+        return v == Scriptable.NOT_FOUND ? Undefined.instance : v;
+    }
+
+    /** EnumerableOwnProperties(obj, key) (ECMA-262 7.3.23). */
+    private static List<String> enumerableOwnKeys(Context cx, Scriptable obj) {
+        List<String> keys = new ArrayList<>();
+        if (obj instanceof NativeProxy) {
+            NativeProxy proxy = (NativeProxy) obj;
+            for (Object id : proxy.getAllIds()) {
+                if (id instanceof Symbol) {
+                    continue;
+                }
+                String key = ScriptRuntime.toString(id);
+                DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, key);
+                if (desc != null && Boolean.TRUE.equals(desc.enumerable)) {
+                    keys.add(key);
+                }
+            }
+        } else {
+            for (Object id : obj.getIds()) {
+                if (!(id instanceof Symbol)) {
+                    keys.add(ScriptRuntime.toString(id));
+                }
+            }
+        }
+        return keys;
     }
 
     private static Object walk(
@@ -196,11 +277,12 @@ public final class NativeJSON extends ScriptableObject {
 
         if (replacer instanceof Callable) {
             replacerFunction = (Callable) replacer;
-        } else if (replacer instanceof NativeArray) {
+        } else if (NativeArray.isArray(replacer)) {
             LinkedHashSet<Object> propertySet = new LinkedHashSet<>();
-            NativeArray replacerArray = (NativeArray) replacer;
-            for (int i : replacerArray.getIndexIds()) {
-                Object v = replacerArray.get(i, replacerArray);
+            Scriptable replacerArray = (Scriptable) replacer;
+            long len = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, replacerArray);
+            for (long i = 0; i < len; i++) {
+                Object v = getKey(replacerArray, Long.toString(i));
                 if (v instanceof String) {
                     propertySet.add(v);
                 } else if (v instanceof Number
@@ -263,6 +345,10 @@ public final class NativeJSON extends ScriptableObject {
             keyInt = ((Number) key).intValue();
             value = getProperty(holder, keyInt);
         }
+        boolean es6 = state.cx.getLanguageVersion() >= Context.VERSION_ES6;
+        if (es6 && value == Scriptable.NOT_FOUND) {
+            value = Undefined.instance;
+        }
 
         if (value instanceof Scriptable && hasProperty((Scriptable) value, "toJSON")) {
             Object toJSON = getProperty((Scriptable) value, "toJSON");
@@ -294,7 +380,10 @@ public final class NativeJSON extends ScriptableObject {
         }
 
         if (state.replacer != null) {
-            value = state.replacer.call(state.cx, state.scope, holder, new Object[] {key, value});
+            Object replacerKey = es6 && keyString == null ? Integer.toString(keyInt) : key;
+            value =
+                    state.replacer.call(
+                            state.cx, state.scope, holder, new Object[] {replacerKey, value});
         }
 
         if (ScriptRuntime.isSymbol(value)) return Undefined.instance;
@@ -414,6 +503,8 @@ public final class NativeJSON extends ScriptableObject {
         Object[] k = null;
         if (state.propertyList != null) {
             k = state.propertyList;
+        } else if (value instanceof NativeProxy) {
+            k = enumerableOwnKeys(state.cx, value).toArray();
         } else {
             k = value.getIds();
         }
@@ -486,7 +577,7 @@ public final class NativeJSON extends ScriptableObject {
             }
         }
 
-        long len = ((NativeArray) value).getLength();
+        long len = AbstractEcmaObjectOperations.lengthOfArrayLike(state.cx, value);
 
         for (long index = 0; index < len; index++) {
             Object strP;
@@ -594,7 +685,7 @@ public final class NativeJSON extends ScriptableObject {
     }
 
     private static boolean isObjectArrayLike(Object o) {
-        if (o instanceof NativeArray) {
+        if (NativeArray.isArray(o)) {
             return true;
         }
         if (o instanceof NativeJavaObject) {

@@ -188,12 +188,8 @@ final class NativeDate extends ScriptableObject {
                     ScriptRuntime.toString(o),
                     ScriptRuntime.toString(toISO));
         }
-        Object result = ((Callable) toISO).call(cx, s, o, ScriptRuntime.emptyArgs);
-        if (!ScriptRuntime.isPrimitive(result)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.toisostring.must.return.primitive", ScriptRuntime.toString(result));
-        }
-        return result;
+        // the result of toISOString, whatever it is (21.4.4.37)
+        return ((Callable) toISO).call(cx, s, o, ScriptRuntime.emptyArgs);
     }
 
     private static Object js_toPrimitive(

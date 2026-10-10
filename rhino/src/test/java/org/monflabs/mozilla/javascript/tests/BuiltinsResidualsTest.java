@@ -78,4 +78,36 @@ class BuiltinsResidualsTest {
                         + " r.push(String(Object.getOwnPropertyDescriptor(class { get a() {} }.prototype, 'a').get));"
                         + " r.join('|')");
     }
+
+    @Test
+    void objectHasOwnAssignAndToJSON() {
+        assertBoth(
+                "TypeError|true|2|TypeError|x",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => Object.hasOwn(null, { toString() { throw new Error('key'); } }));"
+                        + " t(() => Object.hasOwn(new Proxy({}, { getOwnPropertyDescriptor() {"
+                        + " return { value: 1, configurable: true }; } }), 'a'));"
+                        + " t(() => Object.hasOwn.length);"
+                        + " t(() => Object.assign(Object.freeze({ a: 1 }), { a: 2 }));"
+                        + " t(() => Date.prototype.toJSON.call({ toISOString() { return 'x'; } }));"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void jsonWithProxiesAndRevivers() {
+        assertBoth(
+                "[1,2]|{\"a\":1}|{\"b\":2}|string,string|0,1,|7",
+                "var r = [];"
+                        + " r.push(JSON.stringify(new Proxy([1, 2], {})));"
+                        + " r.push(JSON.stringify({ a: 1, b: 2 }, new Proxy(['a'], {})));"
+                        + " r.push(JSON.stringify(new Proxy({ a: 1, b: 2 }, { ownKeys() { return ['b']; } })));"
+                        + " var types = []; JSON.stringify([1], (k, v) => { types.push(typeof k); return v; });"
+                        + " r.push(types.join());"
+                        + " var keys = []; JSON.parse('[1, 2]', function (k, v) { keys.push(k); return v; });"
+                        + " r.push(keys.join());"
+                        + " var o = JSON.parse('{\"a\": 1}', function (k, v) {"
+                        + " if (k === '') { return v; } Object.defineProperty(this, 'a', { value: 0, writable: false });"
+                        + " return 7; });"
+                        + " r.push(o.a); r.join('|')");
+    }
 }
