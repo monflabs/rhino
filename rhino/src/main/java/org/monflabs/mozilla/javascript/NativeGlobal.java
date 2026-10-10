@@ -107,7 +107,7 @@ public class NativeGlobal implements Serializable {
         for (var e : ERROR_DESCRIPTORS.entrySet()) {
             var name = e.getKey().name();
             var desc = e.getValue();
-            var errorProto = NativeError.makeProto(scope, builtinErrorCtor);
+            var errorProto = NativeError.makeProto(cx, scope, builtinErrorCtor);
             desc.buildConstructor(
                     cx,
                     scope,

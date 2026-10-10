@@ -100,10 +100,14 @@ final class NativeError extends ScriptableObject {
                 0);
     }
 
-    static NativeError makeProto(VarScope scope, Function ctorObj) {
+    static ScriptableObject makeProto(Context cx, VarScope scope, Function ctorObj) {
         Scriptable proto = (Scriptable) ctorObj.get("prototype", ctorObj);
 
-        NativeError obj = new NativeError();
+        // from ES6, the prototypes of the NativeError constructors are ordinary objects (20.5.6.3)
+        ScriptableObject obj =
+                cx.getLanguageVersion() >= Context.VERSION_ES6
+                        ? new NativeObject()
+                        : new NativeError();
         obj.setPrototype(proto);
         obj.setParentScope(scope);
         return obj;
@@ -126,8 +130,8 @@ final class NativeError extends ScriptableObject {
                 obj.setAttributes("message", DONTENUM);
             }
             if (arglen >= 2) {
-                if (args[1] instanceof NativeObject) {
-                    installCause((NativeObject) args[1], obj);
+                if (isErrorOptions(args[1])) {
+                    installCause((Scriptable) args[1], obj);
                 } else {
                     ScriptableObject.putProperty(obj, "fileName", ScriptRuntime.toString(args[1]));
                     if (arglen >= 3) {
@@ -157,8 +161,8 @@ final class NativeError extends ScriptableObject {
                 }
 
                 if (arglen >= 3) {
-                    if (args[2] instanceof NativeObject) {
-                        installCause((NativeObject) args[2], obj);
+                    if (isErrorOptions(args[2])) {
+                        installCause((Scriptable) args[2], obj);
                     } else {
                         ScriptableObject.putProperty(
                                 obj, "fileName", ScriptRuntime.toString(args[2]));
@@ -189,9 +193,25 @@ final class NativeError extends ScriptableObject {
         return obj;
     }
 
-    static void installCause(NativeObject options, NativeError obj) {
+    /** The options argument of the Error constructors: any object from ES6 (a proxy included). */
+    private static boolean isErrorOptions(Object arg) {
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            return ScriptRuntime.isObject(arg) && arg instanceof Scriptable;
+        }
+        return arg instanceof NativeObject;
+    }
+
+    /** InstallErrorCause (20.5.8.1): HasProperty, then Get. */
+    static void installCause(Scriptable options, NativeError obj) {
+        if (!ScriptableObject.hasProperty(options, "cause")) {
+            return;
+        }
         Object cause = ScriptableObject.getProperty(options, "cause");
-        if (cause != NOT_FOUND) {
+        if (cause == NOT_FOUND) {
+            cause = Undefined.instance;
+        }
+        {
             ScriptableObject.putProperty(obj, "cause", cause);
             obj.setAttributes("cause", DONTENUM);
         }

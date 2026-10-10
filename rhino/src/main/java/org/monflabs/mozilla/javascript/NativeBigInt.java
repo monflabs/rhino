@@ -103,7 +103,15 @@ final class NativeBigInt extends ScriptableObject {
 
     private static Object js_asIntOrUintN(boolean isSigned, Object[] args) {
         int bits = ScriptRuntime.toIndex(args.length < 1 ? Undefined.instance : args[0]);
-        BigInteger bigInt = ScriptRuntime.toBigInt(args.length < 2 ? Undefined.instance : args[1]);
+        // ToBigInt (7.1.13): a Number is a TypeError, unlike in the BigInt function
+        Object prim =
+                ScriptRuntime.toPrimitive(
+                        args.length < 2 ? Undefined.instance : args[1], ScriptRuntime.NumberClass);
+        if (prim instanceof Number && !(prim instanceof BigInteger)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.cant.convert.to.bigint", ScriptRuntime.toString(prim));
+        }
+        BigInteger bigInt = ScriptRuntime.toBigInt(prim);
 
         if (bits == 0) {
             return BigInteger.ZERO;

@@ -221,4 +221,26 @@ class BuiltinsResidualsTest {
                         + " { ownKeys() { return ['length', '1']; } })); return tg[1]; });"
                         + " r.join('|')");
     }
+
+    @Test
+    void setDateBigIntErrorResiduals() {
+        assertBoth(
+                "size,ToNumber,has,keys|1,3|0|NaN|false|TypeError|c|[object Object]",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => { var log = []; new Set([1]).union({"
+                        + " get size() { log.push('size'); return { valueOf() { log.push('ToNumber'); return 1; } }; },"
+                        + " get has() { log.push('has'); return () => true; },"
+                        + " get keys() { log.push('keys'); return () => ({ next() { return { done: true }; } }); } });"
+                        + " return log; });"
+                        + " t(() => [...new Set([1, 2]).symmetricDifference({ size: 2, has() { throw 0; },"
+                        + " keys() { var a = [2, 3]; return { next() { return a.length"
+                        + " ? { value: a.shift(), done: false } : { done: true }; } }; } })]);"
+                        + " t(() => Object.is(new Date(-0.5).valueOf(), 0) ? 0 : -1);"
+                        + " t(() => Date.parse('-000000-01-01T00:00:00Z'));"
+                        + " t(() => Object.getOwnPropertyDescriptor(Date.prototype, Symbol.toPrimitive).writable);"
+                        + " t(() => BigInt.asIntN(8, 1));"
+                        + " t(() => new Error('m', new Proxy({ cause: 'c' }, {})).cause);"
+                        + " t(() => Object.prototype.toString.call(TypeError.prototype));"
+                        + " r.join('|')");
+    }
 }

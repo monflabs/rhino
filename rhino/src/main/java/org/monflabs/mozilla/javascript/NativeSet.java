@@ -233,417 +233,244 @@ public class NativeSet extends ScriptableObject {
         return ns;
     }
 
-    // ES2025 Set Methods Implementation
+    // Set methods (ES2025, 24.2.4)
 
-    private static Object js_intersection(
-            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "intersection").js_intersection(cx, s, args);
+    /** Set Record (24.2.1.2). */
+    private static final class SetRecord {
+        final Scriptable set;
+        final double size;
+        final Callable has;
+        final Callable keys;
+
+        SetRecord(Scriptable set, double size, Callable has, Callable keys) {
+            this.set = set;
+            this.size = size;
+            this.has = has;
+            this.keys = keys;
+        }
     }
 
-    private Object js_intersection(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
-        result.instanceOfSet = true;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        return js_intersectionSetLike(cx, scope, otherObj, result, sizeVal, hasVal, keysVal);
-    }
-
-    private Object js_intersectionSetLike(
-            Context cx,
-            VarScope scope,
-            Object otherObj,
-            NativeSet result,
-            Object sizeVal,
-            Object hasVal,
-            Object keysVal) {
-        // Validate has and keys are callable
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+    /** GetSetRecord (24.2.1.3). */
+    private static SetRecord getSetRecord(Object obj) {
+        if (!(obj instanceof Scriptable) || !ScriptRuntime.isObject(obj)) {
+            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(obj));
         }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        Scriptable o = (Scriptable) obj;
+        Object rawSize = getValue(o, "size");
+        if (Undefined.isUndefined(rawSize)) {
+            throw ScriptRuntime.typeError("Set-like object must have a 'size' property");
         }
-
-        Callable hasMethod = (Callable) hasVal;
-        Callable keysMethod = (Callable) keysVal;
-
-        // ES2025: Compare sizes to determine iteration strategy
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
+        double numSize = ScriptRuntime.toNumber(rawSize);
+        if (Double.isNaN(numSize)) {
             throw ScriptRuntime.typeError("size is not a number");
         }
-        int otherSize =
-                Double.isInfinite(otherSizeDouble)
-                        ? Integer.MAX_VALUE
-                        : (int) Math.floor(otherSizeDouble);
-        int thisSize = entries.size();
+        double intSize = ScriptRuntime.toIntegerOrInfinity(numSize);
+        if (intSize < 0) {
+            throw ScriptRuntime.rangeError("size is negative");
+        }
+        Object has = getValue(o, "has");
+        if (!(has instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(has));
+        }
+        Object keys = getValue(o, "keys");
+        if (!(keys instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keys));
+        }
+        return new SetRecord(o, intSize, (Callable) has, (Callable) keys);
+    }
 
-        if (thisSize <= otherSize) {
-            // When this.size <= other.size: iterate through this, call other.has()
-            for (Hashtable.Entry entry : entries) {
-                Object key = entry.key;
-                Object inOther = callHas(cx, scope, otherObj, hasMethod, key);
-                if (ScriptRuntime.toBoolean(inOther)) {
-                    result.js_add(key);
-                }
+    private static Object getValue(Scriptable o, String name) {
+        Object v = ScriptableObject.getProperty(o, name);
+        return v == NOT_FOUND ? Undefined.instance : v;
+    }
+
+    /** The iterator of GetIteratorFromMethod(set, keys), with IteratorStepValue (7.4). */
+    private static final class KeysIterator {
+        private final Context cx;
+        private final VarScope scope;
+        private final Scriptable iterator;
+        private final Callable next;
+        Object value;
+
+        KeysIterator(Context cx, VarScope scope, SetRecord rec) {
+            this.cx = cx;
+            this.scope = scope;
+            Object it = rec.keys.call(cx, scope, rec.set, ScriptRuntime.emptyArgs);
+            if (!ScriptRuntime.isObject(it)) {
+                throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(it));
             }
-        } else {
-            // When this.size > other.size: iterate through other.keys(), call this.has()
-            Object iterator =
-                    ScriptRuntime.callIterator(
-                            keysMethod.call(
-                                    cx,
-                                    scope,
-                                    ScriptableObject.ensureScriptable(otherObj),
-                                    ScriptRuntime.emptyArgs),
-                            cx,
-                            scope);
-            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-                for (Object key : it) {
-                    if (js_has(key) == Boolean.TRUE) {
-                        result.js_add(key);
-                    }
-                }
+            iterator = (Scriptable) it;
+            Object n = getValue(iterator, "next");
+            if (!(n instanceof Callable)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.isnt.function", "next", ScriptRuntime.typeof(n));
             }
+            next = (Callable) n;
         }
 
+        /** IteratorStepValue; -0 becomes +0 (the set methods all do so). */
+        boolean step() {
+            Object result = next.call(cx, scope, iterator, ScriptRuntime.emptyArgs);
+            if (!ScriptRuntime.isObject(result)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.arg.not.object", ScriptRuntime.typeof(result));
+            }
+            Scriptable r = (Scriptable) result;
+            if (ScriptRuntime.toBoolean(getValue(r, "done"))) {
+                return false;
+            }
+            value = getValue(r, "value");
+            if (value instanceof Number && ((Number) value).doubleValue() == 0) {
+                value = ScriptRuntime.zeroObj;
+            }
+            return true;
+        }
+
+        /** IteratorClose with a normal completion (7.4.11). */
+        void close() {
+            Object ret = getValue(iterator, "return");
+            if (ret == null || Undefined.isUndefined(ret)) {
+                return;
+            }
+            if (!(ret instanceof Callable)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.isnt.function", "return", ScriptRuntime.typeof(ret));
+            }
+            Object result = ((Callable) ret).call(cx, scope, iterator, ScriptRuntime.emptyArgs);
+            if (!ScriptRuntime.isObject(result)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.arg.not.object", ScriptRuntime.typeof(result));
+            }
+        }
+    }
+
+    private NativeSet newSet(Context cx, VarScope scope) {
+        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
+        result.instanceOfSet = true;
         return result;
+    }
+
+    private NativeSet copySet(Context cx, VarScope scope) {
+        NativeSet result = newSet(cx, scope);
+        for (Hashtable.Entry entry : entries) {
+            result.js_add(entry.key);
+        }
+        return result;
+    }
+
+    private boolean contains(Object key) {
+        return js_has(key) == Boolean.TRUE;
+    }
+
+    private static boolean callHas(Context cx, VarScope scope, SetRecord rec, Object key) {
+        return ScriptRuntime.toBoolean(rec.has.call(cx, scope, rec.set, new Object[] {key}));
     }
 
     private static Object js_union(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "union").js_union(cx, s, args);
+        NativeSet o = realThis(thisObj, "union");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        KeysIterator keys = new KeysIterator(cx, s, rec);
+        NativeSet result = o.copySet(cx, s);
+        while (keys.step()) {
+            result.js_add(keys.value);
+        }
+        return result;
     }
 
-    private Object js_union(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
-        result.instanceOfSet = true;
-
-        // Add all elements from this set
-        for (Hashtable.Entry entry : entries) {
-            result.js_add(entry.key);
-        }
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        // Validate size is a number (required by GetSetRecord)
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
-        }
-
-        // Validate has and keys are callable (GetSetRecord requires both even if union only uses
-        // keys)
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        // Set-like object - use keys method
-        Callable keysMethod = (Callable) keysVal;
-        Object iterator =
-                ScriptRuntime.callIterator(
-                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
-        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-            for (Object key : it) {
-                result.js_add(key);
+    private static Object js_intersection(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeSet o = realThis(thisObj, "intersection");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        NativeSet result = o.newSet(cx, s);
+        if (o.entries.size() <= rec.size) {
+            for (Hashtable.Entry entry : o.entries) {
+                Object e = entry.key;
+                if (callHas(cx, s, rec, e)) {
+                    result.js_add(e);
+                }
+            }
+        } else {
+            KeysIterator keys = new KeysIterator(cx, s, rec);
+            while (keys.step()) {
+                if (o.contains(keys.value)) {
+                    result.js_add(keys.value);
+                }
             }
         }
-
         return result;
     }
 
     private static Object js_difference(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "difference").js_difference(cx, s, args);
-    }
-
-    private Object js_difference(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
-        result.instanceOfSet = true;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        return js_differenceSetLike(cx, scope, otherObj, result, sizeVal, hasVal, keysVal);
-    }
-
-    private Object js_differenceSetLike(
-            Context cx,
-            VarScope scope,
-            Object otherObj,
-            NativeSet result,
-            Object sizeVal,
-            Object hasVal,
-            Object keysVal) {
-        // Validate has and keys are callable
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        Callable hasMethod = (Callable) hasVal;
-        Callable keysMethod = (Callable) keysVal;
-
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
-        }
-        int otherSize =
-                Double.isInfinite(otherSizeDouble)
-                        ? Integer.MAX_VALUE
-                        : (int) Math.floor(otherSizeDouble);
-        int thisSize = entries.size();
-
-        // According to the spec and test converts-negative-zero.js:
-        // When this.size > other.size, we should iterate through other.keys()
-        // and remove matching elements, NOT call other.has()
-        if (thisSize > otherSize) {
-
-            // First, add all elements from this set
-            for (Hashtable.Entry entry : entries) {
-                result.js_add(entry.key);
-            }
-
-            // Then iterate through other and remove matching elements
-            Object iterator =
-                    ScriptRuntime.callIterator(
-                            keysMethod.call(
-                                    cx,
-                                    scope,
-                                    ScriptableObject.ensureScriptable(otherObj),
-                                    ScriptRuntime.emptyArgs),
-                            cx,
-                            scope);
-            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-                for (Object key : it) {
-                    // Convert -0 to +0 as the spec requires
-                    if (key instanceof Number
-                            && ((Number) key).doubleValue() == ScriptRuntime.negativeZero) {
-                        result.js_delete(ScriptRuntime.zeroObj);
-                    } else {
-                        result.js_delete(key);
-                    }
+        NativeSet o = realThis(thisObj, "difference");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        NativeSet result = o.copySet(cx, s);
+        if (o.entries.size() <= rec.size) {
+            for (Hashtable.Entry entry : result.entries) {
+                Object e = entry.key;
+                if (callHas(cx, s, rec, e)) {
+                    result.js_delete(e);
                 }
             }
         } else {
-            // When this.size <= other.size, iterate through this and check with has()
-
-            for (Hashtable.Entry entry : entries) {
-                Object key = entry.key;
-                Object inOther = callHas(cx, scope, otherObj, hasMethod, key);
-                if (!ScriptRuntime.toBoolean(inOther)) {
-                    result.js_add(key);
-                }
+            KeysIterator keys = new KeysIterator(cx, s, rec);
+            while (keys.step()) {
+                result.js_delete(keys.value);
             }
         }
-
         return result;
     }
 
     private static Object js_symmetricDifference(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "symmetricDifference").js_symmetricDifference(cx, s, args);
-    }
-
-    private Object js_symmetricDifference(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
-        result.instanceOfSet = true;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        // Validate size is a number (required by GetSetRecord)
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
-        }
-
-        // Validate has and keys are callable
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        // Set-like object path
-        Callable hasMethod = (Callable) hasVal;
-        Callable keysMethod = (Callable) keysVal;
-
-        // Add elements from this that are not in other
-        for (Hashtable.Entry entry : entries) {
-            Object key = entry.key;
-            Object inOther = callHas(cx, scope, otherObj, hasMethod, key);
-            if (!ScriptRuntime.toBoolean(inOther)) {
-                result.js_add(key);
-            }
-        }
-
-        // Add elements from other that are not in this
-        Object iterator =
-                ScriptRuntime.callIterator(
-                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
-        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-            for (Object key : it) {
-                if (js_has(key) != Boolean.TRUE) {
-                    result.js_add(key);
+        NativeSet o = realThis(thisObj, "symmetricDifference");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        KeysIterator keys = new KeysIterator(cx, s, rec);
+        NativeSet result = o.copySet(cx, s);
+        while (keys.step()) {
+            Object next = keys.value;
+            boolean inResult = result.contains(next);
+            if (o.contains(next)) {
+                if (inResult) {
+                    result.js_delete(next);
                 }
+            } else if (!inResult) {
+                result.js_add(next);
             }
         }
-
         return result;
     }
 
     private static Object js_isSubsetOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "isSubsetOf").js_isSubsetOf(cx, s, args);
-    }
-
-    private Object js_isSubsetOf(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        // Validate has and keys are callable (even though isSubsetOf only uses has)
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        // Set-like object - use has method for efficiency
-        Callable hasMethod = (Callable) hasVal;
-
-        // Check size optimization
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
-        }
-        int otherSize =
-                Double.isInfinite(otherSizeDouble)
-                        ? Integer.MAX_VALUE
-                        : (int) Math.floor(otherSizeDouble);
-        int thisSize = entries.size();
-
-        // If this set is larger than other, it cannot be a subset
-        if (thisSize > otherSize) {
+        NativeSet o = realThis(thisObj, "isSubsetOf");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        if (o.entries.size() > rec.size) {
             return Boolean.FALSE;
         }
-
-        // Check if all elements of this are in other
-        for (Hashtable.Entry entry : entries) {
-            Object key = entry.key;
-            Object inOther = callHas(cx, scope, otherObj, hasMethod, key);
-            if (!ScriptRuntime.toBoolean(inOther)) {
+        for (Hashtable.Entry entry : o.entries) {
+            if (!callHas(cx, s, rec, entry.key)) {
                 return Boolean.FALSE;
             }
         }
-
         return Boolean.TRUE;
     }
 
     private static Object js_isSupersetOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "isSupersetOf").js_isSupersetOf(cx, s, args);
-    }
-
-    private Object js_isSupersetOf(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        // Validate size is a number (required by GetSetRecord)
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
+        NativeSet o = realThis(thisObj, "isSupersetOf");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        if (o.entries.size() < rec.size) {
+            return Boolean.FALSE;
         }
-
-        // Validate has and keys are callable (GetSetRecord requires both even if isSupersetOf only
-        // uses keys)
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        // Iterate through other.keys() and check if all elements are in this
-        Callable keysMethod = (Callable) keysVal;
-        Object iterator =
-                ScriptRuntime.callIterator(
-                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
-        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-            for (Object value : it) {
-                if (js_has(value) != Boolean.TRUE) {
-                    return Boolean.FALSE;
-                }
+        KeysIterator keys = new KeysIterator(cx, s, rec);
+        while (keys.step()) {
+            if (!o.contains(keys.value)) {
+                keys.close();
+                return Boolean.FALSE;
             }
         }
         return Boolean.TRUE;
@@ -651,90 +478,23 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_isDisjointFrom(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, "isDisjointFrom").js_isDisjointFrom(cx, s, args);
-    }
-
-    private Object js_isDisjointFrom(Context cx, VarScope scope, Object[] args) {
-        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
-
-        // ES2025: GetSetRecord requires size, has, and keys properties
-        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
-        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
-        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
-        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
-
-        // Validate all required properties exist
-        validateSetLike(sizeVal, hasVal, keysVal);
-
-        // Validate has and keys are callable
-        if (!(hasVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
-        }
-        if (!(keysVal instanceof Callable)) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
-        }
-
-        // Set-like object with size optimization
-        Callable hasMethod = (Callable) hasVal;
-        Callable keysMethod = (Callable) keysVal;
-
-        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
-        if (Double.isNaN(otherSizeDouble)) {
-            throw ScriptRuntime.typeError("size is not a number");
-        }
-        int otherSize =
-                Double.isInfinite(otherSizeDouble)
-                        ? Integer.MAX_VALUE
-                        : (int) Math.floor(otherSizeDouble);
-        int thisSize = entries.size();
-
-        if (thisSize <= otherSize) {
-            // Iterate through this set
-            for (Hashtable.Entry entry : entries) {
-                Object key = entry.key;
-                Object inOther = callHas(cx, scope, otherObj, hasMethod, key);
-                if (ScriptRuntime.toBoolean(inOther)) {
+        NativeSet o = realThis(thisObj, "isDisjointFrom");
+        SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
+        if (o.entries.size() <= rec.size) {
+            for (Hashtable.Entry entry : o.entries) {
+                if (callHas(cx, s, rec, entry.key)) {
                     return Boolean.FALSE;
                 }
             }
         } else {
-            // Iterate through other
-            Object iterator =
-                    ScriptRuntime.callIterator(
-                            keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs),
-                            cx,
-                            scope);
-            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-                for (Object key : it) {
-                    if (js_has(key) == Boolean.TRUE) {
-                        return Boolean.FALSE;
-                    }
+            KeysIterator keys = new KeysIterator(cx, s, rec);
+            while (keys.step()) {
+                if (o.contains(keys.value)) {
+                    keys.close();
+                    return Boolean.FALSE;
                 }
             }
         }
-
         return Boolean.TRUE;
-    }
-
-    // Helper methods for Set operations
-
-    private static Object callHas(
-            Context cx, VarScope scope, Object obj, Object hasMethod, Object key) {
-        return ((Callable) hasMethod)
-                .call(cx, scope, ScriptableObject.ensureScriptable(obj), new Object[] {key});
-    }
-
-    private static void validateSetLike(Object sizeVal, Object hasVal, Object keysVal) {
-        if (sizeVal == Scriptable.NOT_FOUND) {
-            throw ScriptRuntime.typeError("Set-like object must have a 'size' property");
-        }
-        if (hasVal == Scriptable.NOT_FOUND) {
-            throw ScriptRuntime.typeError("Set-like object must have a 'has' method");
-        }
-        if (keysVal == Scriptable.NOT_FOUND) {
-            throw ScriptRuntime.typeError("Set-like object must have a 'keys' method");
-        }
     }
 }

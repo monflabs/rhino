@@ -639,6 +639,21 @@ Object.setPrototypeOf(Object.prototype, {}); // before: allowed   now: TypeError
 - **Why:** ECMA-262 2026, §10.4.2 (Array exotic objects), §10.4.7 (immutable prototype exotic objects), §10.4.3
   (String exotic objects), §20.1.2.1 (Object.assign), §20.1.3.8.1 (`__proto__`).
 
+### 2.32 Set methods, BigInt.asIntN, Error prototypes
+
+```js
+new Set([1]).symmetricDifference({ size: 1, has() { throw 0; }, keys() { /* ... */ } });  // before: throws 0
+BigInt.asIntN(8, 1);                                    // before: 1n   now: TypeError
+Object.prototype.toString.call(TypeError.prototype);    // before: "[object Error]"   now: "[object Object]"
+```
+
+- All versions: the Set methods read `size`, `has` and `keys` in the spec's order, use the `keys()` iterator
+  directly and no longer call `has` in `symmetricDifference`; `BigInt.asIntN`/`asUintN` reject Numbers.
+- From `VERSION_ES6`: `TypeError.prototype` and the other NativeError prototypes are plain objects (no
+  `[[ErrorData]]`); `Date.prototype[Symbol.toPrimitive]` is read-only.
+- **Why:** ECMA-262 2026, §24.2.4 (Set.prototype), §21.2.2.1 (BigInt.asIntN), §20.5.6.3 (NativeError
+  prototypes), §21.4.4.45 (Date.prototype[@@toPrimitive]).
+
 ---
 
 ## 3. Platform and embedding

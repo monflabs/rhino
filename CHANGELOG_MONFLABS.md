@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: Set methods, Date, BigInt, Error (2026-10-10, plan 1.8c, part 8)
+
+All versions unless stated (`BACKWARD_COMPATIBILITY.md` 2.32):
+
+- The Set methods (`union`, `intersection`, `difference`, `symmetricDifference`, `isSubsetOf`, `isSupersetOf`,
+  `isDisjointFrom`) follow the spec: GetSetRecord reads and converts `size` (a negative size is a RangeError)
+  before reading `has` and `keys`; the iterator returned by `keys()` is used through its `next` method (not
+  `Symbol.iterator`) and closed when `isSupersetOf`/`isDisjointFrom` return early; `symmetricDifference` does not
+  call `has`; `isSupersetOf` returns false without iterating when the argument is larger.
+- Date: TimeClip gives +0 for -0 (`new Date(-0.5)`), MakeTime adds its products in the spec's order, the year
+  `-000000` is rejected by the ISO format; from `VERSION_ES6`, `Date.prototype[Symbol.toPrimitive]` is read-only
+  and throws for a primitive receiver.
+- `BigInt.asIntN`/`asUintN` throw a TypeError for a Number (ToBigInt).
+- From `VERSION_ES6`: the options of the Error constructors may be any object (a proxy included), and `cause` is
+  read with HasProperty then Get; the prototypes of TypeError, RangeError, … are ordinary objects
+  (`Object.prototype.toString` gives `[object Object]`).
+- test262: 32 more files pass; 29,589 of 42,616 in-scope files (69.4%).
+
 ### Built-ins residuals: Object, array length (2026-10-10, plan 1.8c, part 7)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.31) unless stated:
