@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: Promise, String, conversions (2026-10-10, plan 1.8c, part 6)
+
+All versions unless stated (`BACKWARD_COMPATIBILITY.md` 2.30):
+
+- `Promise.all`/`allSettled`/`any`/`race` get `C.resolve` (GetPromiseResolve) before the iterator, and a TypeError
+  when it is not callable rejects the promise; when the iteration fails, the error of the iterator's `return`
+  method is ignored (IteratorClose with a throw completion). `allSettled` reports `"rejected"` (before,
+  `" rejected"`). An abrupt Get of `then` in a promise resolution rejects the promise instead of throwing.
+- Iterators used by the built-ins (`IteratorLikeIterable`) read their `return` method when they are closed, not
+  when the iteration starts.
+- From `VERSION_ES6`: `startsWith`, `endsWith` and `includes` use IsRegExp (`Symbol.match`) before converting the
+  argument; a `valueOf`/`toString` that returns `null` gives `null` to ToPrimitive (before, the other method was
+  tried).
+- The TypeError of a non-callable `Symbol.match`/`replace`/`search`/`split`/`matchAll` method no longer converts
+  the argument to a string; `Function.prototype.toString` of a function no longer calls its `valueOf`.
+- Interpreted mode: a rest parameter receives the bound arguments of a call through `apply` or a bound function
+  (before, `f.bind(null, 7)(0, 1)` gave `[0, 1, 1]` to `...args`).
+- From `VERSION_ES6`: the `length` of a bound function comes from the target's own `length` property (Infinity, or
+  above 2^31−1, is kept); ToIntegerOrInfinity maps NaN and -0 to +0 (`TypedArray.prototype.subarray`).
+- Constructing through a revoked proxy whose `prototype` is not an object throws a TypeError (GetFunctionRealm).
+- test262: 44 more files pass; 29,518 of 42,616 in-scope files (69.3%).
+
 ### Built-ins residuals: Array methods (2026-10-10, plan 1.8c, part 5)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.29) unless stated:

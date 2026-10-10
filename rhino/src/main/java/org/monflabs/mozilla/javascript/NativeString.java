@@ -291,7 +291,7 @@ final class NativeString extends ScriptableObject {
         String target =
                 ScriptRuntime.toString(
                         requireObjectCoercible(cx, thisObj, CLASS_NAME, "startsWith"));
-        checkValidRegex(cx, args, 0, "startsWith");
+        checkValidRegex(cx, s, args, 0, "startsWith");
         String searchStr = ScriptRuntime.toString(args, 0);
         double position = ScriptRuntime.toInteger(args, 1);
         if (position < 0) position = 0;
@@ -303,7 +303,7 @@ final class NativeString extends ScriptableObject {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         String target =
                 ScriptRuntime.toString(requireObjectCoercible(cx, thisObj, CLASS_NAME, "endsWith"));
-        checkValidRegex(cx, args, 0, "endsWith");
+        checkValidRegex(cx, s, args, 0, "endsWith");
         String searchStr = ScriptRuntime.toString(args, 0);
         double position = ScriptRuntime.toInteger(args, 1);
         if (position < 0) position = 0;
@@ -318,13 +318,32 @@ final class NativeString extends ScriptableObject {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         String target =
                 ScriptRuntime.toString(requireObjectCoercible(cx, thisObj, CLASS_NAME, "includes"));
+        checkValidRegex(cx, s, args, 0, "includes");
         String searchStr = ScriptRuntime.toString(args, 0);
-        checkValidRegex(cx, args, 0, "includes");
         int position = (int) ScriptRuntime.toInteger(args, 1);
         return target.indexOf(searchStr, position) != -1;
     }
 
-    private static void checkValidRegex(Context cx, Object[] args, int pos, String functionName) {
+    /** The TypeError of GetMethod (7.3.10), without converting the receiver to a string. */
+    private static RuntimeException notCallableMethod(Object obj, Object method, SymbolKey key) {
+        String objName =
+                obj instanceof Scriptable
+                        ? "[object " + ((Scriptable) obj).getClassName() + "]"
+                        : String.valueOf(obj);
+        return ScriptRuntime.typeErrorById(
+                "msg.isnt.function.in", key.getName(), objName, ScriptRuntime.typeof(method));
+    }
+
+    private static void checkValidRegex(
+            Context cx, VarScope s, Object[] args, int pos, String functionName) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // IsRegExp (7.2.6), before the conversion of the argument
+            if (args.length > pos && AbstractEcmaObjectOperations.isRegExp(cx, s, args[pos])) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.first.arg.not.regexp", CLASS_NAME, functionName);
+            }
+            return;
+        }
         if (args.length > pos && args[pos] instanceof Scriptable) {
             RegExpProxy reProxy = ScriptRuntime.getRegExpProxy(cx);
             if (reProxy != null) {
@@ -358,8 +377,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (splitter != null && !Undefined.isUndefined(splitter)) {
                 if (!(splitter instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            separator, splitter, SymbolKey.SPLIT.getName());
+                    throw notCallableMethod(separator, splitter, SymbolKey.SPLIT);
                 }
                 return ((Callable) splitter)
                         .call(
@@ -573,8 +591,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
                 if (!(matcher instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            regexp, matcher, SymbolKey.MATCH.getName());
+                    throw notCallableMethod(regexp, matcher, SymbolKey.MATCH);
                 }
                 return ((Callable) matcher)
                         .call(cx, s, ScriptRuntime.toObject(s, regexp), new Object[] {o});
@@ -819,8 +836,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
                 if (!(matcher instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            regexp, matcher, SymbolKey.SEARCH.getName());
+                    throw notCallableMethod(regexp, matcher, SymbolKey.SEARCH);
                 }
                 return ((Callable) matcher)
                         .call(cx, s, ScriptRuntime.toObject(s, regexp), new Object[] {o});
@@ -867,8 +883,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (replacer != null && !Undefined.isUndefined(replacer)) {
                 if (!(replacer instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            searchValue, replacer, SymbolKey.REPLACE.getName());
+                    throw notCallableMethod(searchValue, replacer, SymbolKey.REPLACE);
                 }
                 return ((Callable) replacer)
                         .call(
@@ -958,8 +973,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
                 if (!(matcher instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            searchValue, matcher, SymbolKey.REPLACE.getName());
+                    throw notCallableMethod(searchValue, matcher, SymbolKey.REPLACE);
                 }
                 return ((Callable) matcher)
                         .call(
@@ -1056,8 +1070,7 @@ final class NativeString extends ScriptableObject {
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
                 if (!(matcher instanceof Callable)) {
-                    throw ScriptRuntime.notFunctionError(
-                            regexp, matcher, SymbolKey.MATCH_ALL.getName());
+                    throw notCallableMethod(regexp, matcher, SymbolKey.MATCH_ALL);
                 }
                 return ((Callable) matcher)
                         .call(cx, s, ScriptRuntime.toObject(s, regexp), new Object[] {o});

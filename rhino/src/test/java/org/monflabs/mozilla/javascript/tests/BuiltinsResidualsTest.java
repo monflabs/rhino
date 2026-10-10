@@ -4,7 +4,10 @@
 
 package org.monflabs.mozilla.javascript.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /** Residuals of the built-ins (plan 1.8c). */
@@ -132,6 +135,64 @@ class BuiltinsResidualsTest {
                         + " return 0; } }; });"
                         + " t(() => { var a = [1, 2, 3]; a.copyWithin(0, { valueOf() { a.length = 3; return 0; } });"
                         + " return a; });"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void stringAndConversionResiduals() {
+        assertBoth(
+                "2|x|TypeError|TypeError|TypeError",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => '__null__'.indexOf({ valueOf() { return null; }, toString: null }));"
+                        + " t(() => { function g() {} g.valueOf = function () { return 'xy'; };"
+                        + " return String.prototype.substring.call(g, 0, 1) === 'f' ? 'x' : 'bad'; });"
+                        + " t(() => 'a'.startsWith({ [Symbol.match]: true }));"
+                        + " t(() => 'a'.replaceAll({ [Symbol.match]: false, [Symbol.replace]: {},"
+                        + " toString() { throw new Error('converted'); } }, ''));"
+                        + " t(() => ''.includes({ get [Symbol.match]() { throw new TypeError(); } }));"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void promiseCombinatorsFollowSpecSteps() {
+        String script =
+                "var r = [];"
+                        + " Promise.allSettled([Promise.reject(1)]).then(v => r.push(v[0].status));"
+                        + " class C extends Promise { static get resolve() { throw 'resolve'; } }"
+                        + " Promise.all.call(C, { [Symbol.iterator]() { throw 'iterator'; } }).catch(e => r.push(e));"
+                        + " class B { constructor(ex) { ex(() => {}, e => r.push(e)); }"
+                        + " static resolve() { throw 'bad'; } }"
+                        + " Promise.race.call(B, { [Symbol.iterator]() { return this; },"
+                        + " next() { return { done: false }; }, return: 1 });"
+                        + " Promise.resolve({ get then() { throw 'then'; } }).catch(e => r.push(e));";
+        for (int version : new int[] {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT}) {
+            Utils.runWithAllModes(
+                    cx -> {
+                        cx.setLanguageVersion(version);
+                        var scope = cx.initStandardObjects();
+                        cx.evaluateString(scope, script, "test", 1, null);
+                        cx.processMicrotasks();
+                        assertEquals(
+                                "bad|resolve|then|rejected",
+                                cx.evaluateString(scope, "r.join('|')", "test", 1, null));
+                        return null;
+                    });
+        }
+    }
+
+    @Test
+    void functionResiduals() {
+        assertBoth(
+                "0,1,2|7,0,1|Infinity|0|2147483648|TypeError",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " function rest(...a) { return a; }"
+                        + " t(() => rest.apply(null, [0, 1, 2]));"
+                        + " t(() => rest.bind(null, 7)(0, 1));"
+                        + " function len(l) { var f = function () {};"
+                        + " Object.defineProperty(f, 'length', { value: l }); return f.bind().length; }"
+                        + " t(() => len(Infinity)); t(() => len(NaN)); t(() => len(2 ** 31));"
+                        + " t(() => { var h = Proxy.revocable(function () {}, { get() { h.revoke(); } });"
+                        + " return new h.proxy(); });"
                         + " r.join('|')");
     }
 }

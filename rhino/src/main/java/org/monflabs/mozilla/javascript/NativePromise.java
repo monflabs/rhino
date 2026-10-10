@@ -144,8 +144,10 @@ public class NativePromise extends ScriptableObject {
         Capability cap = new Capability(cx, scope, thisObj);
         Object arg = (args.length > 0 ? args[0] : Undefined.instance);
 
+        Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
+            promiseResolve = getPromiseResolve(thisObj);
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, scope);
             iterable = new IteratorLikeIterable(cx, scope, maybeIterable);
         } catch (RhinoException re) {
@@ -160,13 +162,13 @@ public class NativePromise extends ScriptableObject {
         IteratorLikeIterable.Itr iterator = iterable.iterator();
         try {
             PromiseAllResolver resolver =
-                    new PromiseAllResolver(iterator, (Scriptable) thisObj, cap, failFast);
+                    new PromiseAllResolver(
+                            iterator, (Scriptable) thisObj, promiseResolve, cap, failFast);
             try {
                 return resolver.resolve(cx, scope);
-            } finally {
-                if (!iterator.isDone()) {
-                    iterable.close();
-                }
+            } catch (RhinoException re) {
+                closeIterator(iterable, iterator);
+                throw re;
             }
         } catch (RhinoException re) {
             cap.reject.call(
@@ -197,8 +199,10 @@ public class NativePromise extends ScriptableObject {
         Capability cap = new Capability(cx, fscope, thisObj);
         Object arg = (args.length > 0 ? args[0] : Undefined.instance);
 
+        Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
+            promiseResolve = getPromiseResolve(thisObj);
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, f.getDeclarationScope());
             iterable = new IteratorLikeIterable(cx, fscope, maybeIterable);
         } catch (RhinoException re) {
@@ -213,11 +217,10 @@ public class NativePromise extends ScriptableObject {
         IteratorLikeIterable.Itr iterator = iterable.iterator();
         try {
             try {
-                return performRace(cx, fscope, iterator, thisObj, cap);
-            } finally {
-                if (!iterator.isDone()) {
-                    iterable.close();
-                }
+                return performRace(cx, fscope, iterator, thisObj, promiseResolve, cap);
+            } catch (RhinoException re) {
+                closeIterator(iterable, iterator);
+                throw re;
             }
         } catch (RhinoException re) {
             cap.reject.call(
@@ -234,8 +237,8 @@ public class NativePromise extends ScriptableObject {
             VarScope scope,
             IteratorLikeIterable.Itr iterator,
             Object thisObj,
+            Callable resolve,
             Capability cap) {
-        var resolve = ScriptRuntime.getPropAndThis(thisObj, "resolve", cx, scope);
 
         // Manually iterate for exception handling purposes
         while (true) {
@@ -259,7 +262,8 @@ public class NativePromise extends ScriptableObject {
             }
 
             // Call "resolve" to get the next promise in the chain
-            Object nextPromise = resolve.call(cx, scope, new Object[] {nextVal});
+            Object nextPromise =
+                    resolve.call(cx, scope, (Scriptable) thisObj, new Object[] {nextVal});
 
             // And then call "then" on it.
             // Logic in the resolution function ensures we don't deliver duplicate results
@@ -274,8 +278,10 @@ public class NativePromise extends ScriptableObject {
         Capability cap = new Capability(cx, fscope, thisObj);
         Object arg = (args.length > 0 ? args[0] : Undefined.instance);
 
+        Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
+            promiseResolve = getPromiseResolve(thisObj);
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, fscope);
             iterable = new IteratorLikeIterable(cx, fscope, maybeIterable);
         } catch (RhinoException re) {
@@ -290,13 +296,12 @@ public class NativePromise extends ScriptableObject {
         IteratorLikeIterable.Itr iterator = iterable.iterator();
         try {
             PromiseAnyRejector rejector =
-                    new PromiseAnyRejector(iterator, (Scriptable) thisObj, cap);
+                    new PromiseAnyRejector(iterator, (Scriptable) thisObj, promiseResolve, cap);
             try {
                 return rejector.reject(cx, fscope);
-            } finally {
-                if (!iterator.isDone()) {
-                    iterable.close();
-                }
+            } catch (RhinoException re) {
+                closeIterator(iterable, iterator);
+                throw re;
             }
         } catch (RhinoException re) {
             cap.reject.call(
@@ -305,6 +310,27 @@ public class NativePromise extends ScriptableObject {
                     Undefined.SCRIPTABLE_UNDEFINED,
                     new Object[] {getErrorObject(cx, fscope, re)});
             return cap.promise;
+        }
+    }
+
+    /** GetPromiseResolve (27.2.4.1.1). */
+    private static Callable getPromiseResolve(Object c) {
+        Object resolve = ScriptableObject.getProperty((Scriptable) c, "resolve");
+        if (!(resolve instanceof Callable)) {
+            throw ScriptRuntime.notFunctionError(resolve, "resolve");
+        }
+        return (Callable) resolve;
+    }
+
+    /** IteratorClose with a throw completion: the error of the iterator's return is ignored. */
+    private static void closeIterator(
+            IteratorLikeIterable iterable, IteratorLikeIterable.Itr iterator) {
+        if (!iterator.isDone()) {
+            try {
+                iterable.close();
+            } catch (RhinoException ignored) {
+                // the original error wins (7.4.11 step 5)
+            }
         }
     }
 
@@ -661,7 +687,14 @@ public class NativePromise extends ScriptableObject {
             }
 
             Scriptable sresolution = ScriptableObject.ensureScriptable(resolution);
-            Object thenObj = ScriptableObject.getProperty(sresolution, "then");
+            Object thenObj;
+            try {
+                thenObj = ScriptableObject.getProperty(sresolution, "then");
+            } catch (RhinoException re) {
+                // 27.2.1.3.2 step 10: an abrupt Get rejects the promise
+                promise.rejectPromise(cx, scope, getErrorObject(cx, scope, re));
+                return Undefined.instance;
+            }
             if (!(thenObj instanceof Callable)) {
                 return promise.fulfillPromise(cx, scope, resolution);
             }
@@ -777,22 +810,25 @@ public class NativePromise extends ScriptableObject {
 
         IteratorLikeIterable.Itr iterator;
         Object thisObj;
+        Callable promiseResolve;
         Capability capability;
         boolean failFast;
 
         PromiseAllResolver(
-                IteratorLikeIterable.Itr iter, Object thisObj, Capability cap, boolean failFast) {
+                IteratorLikeIterable.Itr iter,
+                Object thisObj,
+                Callable promiseResolve,
+                Capability cap,
+                boolean failFast) {
             this.iterator = iter;
             this.thisObj = thisObj;
+            this.promiseResolve = promiseResolve;
             this.capability = cap;
             this.failFast = failFast;
         }
 
         Object resolve(Context topCx, VarScope topScope) {
             int index = 0;
-            // Do this first because we should catch any exception before
-            // invoking the iterator.
-            var resolve = ScriptRuntime.getPropAndThis(thisObj, "resolve", topCx, topScope);
 
             // Iterate manually because we need to catch exceptions in a special way.
             while (true) {
@@ -824,7 +860,9 @@ public class NativePromise extends ScriptableObject {
                 values.add(Undefined.instance);
 
                 // Call "resolve" to get the next promise in the chain
-                Object nextPromise = resolve.call(topCx, topScope, new Object[] {nextVal});
+                Object nextPromise =
+                        promiseResolve.call(
+                                topCx, topScope, (Scriptable) thisObj, new Object[] {nextVal});
 
                 // Create a resolution func that will stash its result in the right place
                 PromiseElementResolver eltResolver = new PromiseElementResolver(index);
@@ -851,7 +889,7 @@ public class NativePromise extends ScriptableObject {
                                     1,
                                     (cx, scope, thisObj, args) -> {
                                         Scriptable result = cx.newObject(scope);
-                                        result.put("status", result, " rejected");
+                                        result.put("status", result, "rejected");
                                         result.put(
                                                 "reason",
                                                 result,
@@ -887,19 +925,22 @@ public class NativePromise extends ScriptableObject {
 
         IteratorLikeIterable.Itr iterator;
         Scriptable thisObj;
+        Callable promiseResolve;
         Capability capability;
 
-        PromiseAnyRejector(IteratorLikeIterable.Itr iter, Scriptable thisObj, Capability cap) {
+        PromiseAnyRejector(
+                IteratorLikeIterable.Itr iter,
+                Scriptable thisObj,
+                Callable promiseResolve,
+                Capability cap) {
             this.iterator = iter;
             this.thisObj = thisObj;
+            this.promiseResolve = promiseResolve;
             this.capability = cap;
         }
 
         Object reject(Context topCx, VarScope topScope) {
             int index = 0;
-            // Do this first because we should catch any exception before
-            // invoking the iterator.
-            var resolve = ScriptRuntime.getPropAndThis(thisObj, "resolve", topCx, topScope);
 
             // Iterate manually because we need to catch exceptions in a special way.
             while (true) {
@@ -938,7 +979,9 @@ public class NativePromise extends ScriptableObject {
                 errors.add(Undefined.instance);
 
                 // Call "resolve" to get the next promise in the chain
-                Object nextPromise = resolve.call(topCx, topScope, new Object[] {nextVal});
+                Object nextPromise =
+                        promiseResolve.call(
+                                topCx, topScope, (Scriptable) thisObj, new Object[] {nextVal});
 
                 // Create a resolution func that will stash its result in the right place
                 PromiseElementResolver eltResolver = new PromiseElementResolver(index);

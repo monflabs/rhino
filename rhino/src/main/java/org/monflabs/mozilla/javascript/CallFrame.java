@@ -169,11 +169,19 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
             if (argCount >= desc.getParamCount()) {
                 vals = new Object[argCount - offset];
 
-                argShift = argShift + offset;
-                for (int valsIdx = 0; valsIdx != vals.length; ++argShift, ++valsIdx) {
-                    Object val = args[argShift];
-                    if (val == UniqueTag.DOUBLE_MARK) {
-                        val = ScriptRuntime.wrapNumber(argsDbl[argShift]);
+                // the arguments are the bound ones, then those on the stack from argShift
+                int bound = boundArgs == null ? 0 : boundArgs.length;
+                for (int valsIdx = 0; valsIdx != vals.length; ++valsIdx) {
+                    int k = offset + valsIdx;
+                    Object val;
+                    if (k < bound) {
+                        val = boundArgs[k];
+                    } else {
+                        int i = argShift + k - bound;
+                        val = args[i];
+                        if (val == UniqueTag.DOUBLE_MARK) {
+                            val = ScriptRuntime.wrapNumber(argsDbl[i]);
+                        }
                     }
                     vals[valsIdx] = val;
                 }

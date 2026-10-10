@@ -662,6 +662,10 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
                 cx = Context.getContext();
             }
             v = fun.call(cx, fun.getDeclarationScope(), object, ScriptRuntime.emptyArgs);
+            if (v == null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                // null is a primitive (OrdinaryToPrimitive, 7.1.1.1)
+                return null;
+            }
             if (v != null) {
                 if (!(v instanceof Scriptable)) {
                     return v;

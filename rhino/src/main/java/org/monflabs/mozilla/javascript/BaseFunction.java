@@ -542,6 +542,9 @@ public class BaseFunction extends ScriptableObject implements Function {
         if (thisObj == null) {
             throw ScriptRuntime.notFunctionError(null);
         }
+        if (thisObj instanceof BaseFunction) {
+            return (BaseFunction) thisObj;
+        }
         if (thisObj instanceof Scriptable) {
             Object x = ((Scriptable) thisObj).getDefaultValue(ScriptRuntime.FunctionClass);
             if (x instanceof Delegator) {
@@ -638,6 +641,13 @@ public class BaseFunction extends ScriptableObject implements Function {
         Object proto;
         if (nt instanceof JSFunction || nt instanceof ClassDefinition.DefaultConstructor) {
             proto = ((BaseFunction) nt).getPrototypeProperty();
+        } else if (nt instanceof NativeProxy) {
+            // GetPrototypeFromConstructor: Get, then GetFunctionRealm, which throws for a revoked
+            // proxy
+            proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");
+            if (!(proto instanceof Scriptable)) {
+                ((NativeProxy) nt).getTargetThrowIfRevoked();
+            }
         } else {
             proto = Undefined.instance;
         }
@@ -930,7 +940,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private Object prototypeProperty;
     private Object argumentsObj = NOT_FOUND;
     private Object nameValue = null;
-    private Object lengthValue = null;
+    Object lengthValue = null;
     private boolean isGeneratorFunction = false;
     private Scriptable homeObject = null;
 

@@ -33,7 +33,24 @@ public class BoundFunction extends BaseFunction {
         this.targetFunction = targetFunction;
         this.boundThis = boundThis;
         this.boundArgs = boundArgs;
-        if (targetFunction instanceof BaseFunction) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6
+                && targetFunction instanceof Scriptable target) {
+            // 20.2.3.2 steps 4-6: the target's own length, which may not be an int32
+            double len = 0;
+            if (AbstractEcmaObjectOperations.hasOwnProperty(cx, target, "length")) {
+                Object targetLen = ScriptableObject.getProperty(target, "length");
+                if (targetLen instanceof Number) {
+                    double d = ((Number) targetLen).doubleValue();
+                    if (d == Double.POSITIVE_INFINITY) {
+                        len = d;
+                    } else if (d != Double.NEGATIVE_INFINITY) {
+                        len = Math.max(ScriptRuntime.toIntegerOrInfinity(d) - boundArgs.length, 0);
+                    }
+                }
+            }
+            length = (int) Math.min(len, Integer.MAX_VALUE);
+            lengthValue = ScriptRuntime.wrapNumber(len);
+        } else if (targetFunction instanceof BaseFunction) {
             length = Math.max(0, ((BaseFunction) targetFunction).getLength() - boundArgs.length);
         } else {
             length = 0;

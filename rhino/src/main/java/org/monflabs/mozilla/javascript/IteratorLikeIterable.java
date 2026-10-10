@@ -23,7 +23,6 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
     private final Context cx;
     private final VarScope scope;
     private final Callable next;
-    private final Callable returnFunc;
     private final Scriptable iterator;
     private boolean closed;
 
@@ -34,25 +33,22 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
         var nextCall = ScriptRuntime.getPropAndThis(target, ES6Iterator.NEXT_METHOD, cx, scope);
         next = nextCall.getCallable();
         iterator = nextCall.getThis();
-        Object retObj =
-                ScriptRuntime.getObjectPropNoWarn(target, ES6Iterator.RETURN_PROPERTY, cx, scope);
-        // We only care about "return" if it is not null or undefined
-        if ((retObj != null) && !Undefined.isUndefined(retObj)) {
-            if (!(retObj instanceof Callable)) {
-                throw ScriptRuntime.notFunctionError(target, retObj, ES6Iterator.RETURN_PROPERTY);
-            }
-            returnFunc = (Callable) retObj;
-        } else {
-            returnFunc = null;
-        }
     }
 
     @Override
     public void close() {
         if (!closed) {
             closed = true;
-            if (returnFunc != null) {
-                returnFunc.call(cx, scope, iterator, ScriptRuntime.emptyArgs);
+            // IteratorClose (7.4.11): "return" is read when the iteration is closed
+            Object retObj =
+                    ScriptRuntime.getObjectPropNoWarn(
+                            iterator, ES6Iterator.RETURN_PROPERTY, cx, scope);
+            if ((retObj != null) && !Undefined.isUndefined(retObj)) {
+                if (!(retObj instanceof Callable)) {
+                    throw ScriptRuntime.notFunctionError(
+                            iterator, retObj, ES6Iterator.RETURN_PROPERTY);
+                }
+                ((Callable) retObj).call(cx, scope, iterator, ScriptRuntime.emptyArgs);
             }
         }
     }

@@ -605,6 +605,24 @@ Reflect.has([1], "0");                                        // before: false  
 - **Why:** ECMA-262 2026, §23.1.3 (Array.prototype), §10.4.2.3 (ArraySpeciesCreate), §10.4.2.4 (ArraySetLength),
   §28.1.9 (Reflect.has), §20.1.3.6 (Object.prototype.toString).
 
+### 2.30 Promise combinators, IsRegExp, ToPrimitive and null
+
+```js
+Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now: status "rejected"
+"a".startsWith({ [Symbol.match]: true });   // before: false   now: TypeError
+"x".indexOf({ valueOf() { return null; }, toString: null });   // before: TypeError   now: -1 (searches "null")
+```
+
+- All versions: `Promise.all`/`allSettled`/`any`/`race` read `C.resolve` before the iterator and reject (instead of
+  throwing) when the iterator's `return` method is not callable; the iterators of the built-ins read `return` when
+  they are closed; an abrupt `then` getter rejects the promise.
+- From `VERSION_ES6`: `startsWith`/`endsWith`/`includes` throw a TypeError for any object whose `Symbol.match` is
+  truthy; `null` returned by `valueOf`/`toString` is a valid primitive for ToPrimitive.
+- From `VERSION_ES6`: the `length` of a bound function is computed from the target's own `length` property (a
+  redefined `length` is honored; before, the declared arity was used).
+- **Why:** ECMA-262 2026, §27.2.4 (Promise combinators), §7.4.11 (IteratorClose), §7.2.6 (IsRegExp), §7.1.1.1
+  (OrdinaryToPrimitive), §20.2.3.2 (Function.prototype.bind).
+
 ---
 
 ## 3. Platform and embedding

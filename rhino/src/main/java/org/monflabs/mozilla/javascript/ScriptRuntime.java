@@ -1634,6 +1634,10 @@ public class ScriptRuntime {
     }
 
     public static double toIntegerOrInfinity(double d) {
+        // NaN and -0 are +0 (7.1.5)
+        if (Double.isNaN(d) || d == 0) {
+            return 0;
+        }
         return DoubleConversion.truncate(d);
     }
 
