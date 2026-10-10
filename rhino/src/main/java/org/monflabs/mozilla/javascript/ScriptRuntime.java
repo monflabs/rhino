@@ -5805,6 +5805,23 @@ public class ScriptRuntime {
         }
     }
 
+    /**
+     * GetPrototypeFromConstructor(newTarget) for a built-in without a TopLevel.Builtins entry: the
+     * prototype of the built-in itself when newTarget has none.
+     */
+    public static Scriptable findPrototype(JSFunction f, Object nt) {
+        if (nt != f
+                && nt instanceof Scriptable
+                && nt instanceof Function
+                && ((Function) nt).isConstructor()) {
+            Object proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");
+            if (proto instanceof Scriptable) {
+                return (Scriptable) proto;
+            }
+        }
+        return (Scriptable) f.getPrototypeProperty();
+    }
+
     public static Scriptable findPrototype(JSFunction f, Object nt, TopLevel.NativeErrors type) {
         Object proto;
         if (nt instanceof JSFunction) {

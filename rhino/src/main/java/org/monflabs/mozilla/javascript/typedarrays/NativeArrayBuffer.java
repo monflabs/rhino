@@ -21,6 +21,7 @@ import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.LambdaConstructor;
 import org.monflabs.mozilla.javascript.NativeObject;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
+import org.monflabs.mozilla.javascript.ScriptRuntimeES6;
 import org.monflabs.mozilla.javascript.Scriptable;
 import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.SymbolKey;
@@ -43,6 +44,7 @@ public class NativeArrayBuffer extends ScriptableObject {
         DESCRIPTOR =
                 new ClassDescriptor.Builder("ArrayBuffer", 1, NativeArrayBuffer::js_constructor)
                         .withMethod(CTOR, "isView", 1, NativeArrayBuffer::js_isView)
+                        .withProp(CTOR, SymbolKey.SPECIES, ScriptRuntimeES6::symbolSpecies)
                         .withMethod(PROTO, "slice", 2, NativeArrayBuffer::js_slice)
                         .withMethod(PROTO, "transfer", 0, NativeArrayBuffer::js_transfer)
                         .withMethod(PROTO, "resize", 1, NativeArrayBuffer::js_resize)

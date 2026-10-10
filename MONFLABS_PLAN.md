@@ -363,7 +363,11 @@ Steps:
   `class` removed from `UNSUPPORTED_FEATURES`.
 - *1.7b (done)* `super()`, derived-constructor `this` bound by `super()`, `super.x` in methods and static
   methods (home object of statics), `new.target`.
-- *1.7c* subclassing built-ins via `NewTarget`.
+- *1.7c (done)* subclassing built-ins via `NewTarget`: most built-ins already took the prototype from
+  `NewTarget`; fixed `WeakRef`, `FinalizationRegistry`, `Object(value)`, `ArrayBuffer[Symbol.species]`, the
+  order of `DataView`, and the Annex B `RegExp` legacy accessors on a subclass.
+- Left for other items: separate parameter and body scopes (1.2g), async methods (M3), private names, fields and
+  static blocks (M8), Iterator helpers, the `arity` own property of functions (property order tests).
 
 **1.8 Well-known symbols and built-in protocol conformance.** `Symbol.species`, `toStringTag`, `unscopables`
 (`with`), `hasInstance`, `toPrimitive`, `isConcatSpreadable`; `Proxy` invariants and trap ordering, `Reflect`
@@ -531,8 +535,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
-| 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
-| 1.7  | Classes                                         | in progress | 61.1% → 68.3% (1.7a–b)       | (this) |
+| 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
+| 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | (this) |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |

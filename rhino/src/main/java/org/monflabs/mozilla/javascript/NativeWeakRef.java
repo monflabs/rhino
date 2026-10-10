@@ -57,7 +57,7 @@ public class NativeWeakRef extends ScriptableObject {
         var w = new NativeWeakRef(target);
         w.instanceOfWeakRef = true;
         w.setParentScope(f.getDeclarationScope());
-        w.setPrototype((Scriptable) f.getPrototypeProperty());
+        w.setPrototype(ScriptRuntime.findPrototype(f, nt));
         return w;
     }
 

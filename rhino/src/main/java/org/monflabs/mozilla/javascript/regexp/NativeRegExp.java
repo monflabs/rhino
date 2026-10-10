@@ -285,51 +285,70 @@ public class NativeRegExp extends ScriptableObject {
                         .withProp(
                                 CTOR,
                                 "input",
-                                (c) -> toStr(getImpl().input),
-                                (c, v) -> getImpl().input = ScriptRuntime.toString(v),
+                                (c) -> legacyStr(c, getImpl().input),
+                                (c, v) -> getImpl().input = legacyStr(c, ScriptRuntime.toString(v)),
                                 PERMANENT)
                         .withProp(
                                 CTOR,
                                 "$_",
-                                (c) -> toStr(getImpl().input),
-                                (c, v) -> getImpl().input = ScriptRuntime.toString(v),
+                                (c) -> legacyStr(c, getImpl().input),
+                                (c, v) -> getImpl().input = legacyStr(c, ScriptRuntime.toString(v)),
                                 PERMANENT)
                         .withProp(
                                 CTOR,
                                 "lastMatch",
-                                (c) -> toStr(getImpl().lastMatch),
+                                (c) -> legacyStr(c, getImpl().lastMatch),
                                 null,
                                 PERMANENT)
-                        .withProp(CTOR, "$&", (c) -> toStr(getImpl().lastMatch), null, PERMANENT)
+                        .withProp(
+                                CTOR,
+                                "$&",
+                                (c) -> legacyStr(c, getImpl().lastMatch),
+                                null,
+                                PERMANENT)
                         .withProp(
                                 CTOR,
                                 "lastParen",
-                                (c) -> toStr(getImpl().lastParen),
+                                (c) -> legacyStr(c, getImpl().lastParen),
                                 null,
                                 PERMANENT)
-                        .withProp(CTOR, "$+", (c) -> toStr(getImpl().lastParen), null, PERMANENT)
+                        .withProp(
+                                CTOR,
+                                "$+",
+                                (c) -> legacyStr(c, getImpl().lastParen),
+                                null,
+                                PERMANENT)
                         .withProp(
                                 CTOR,
                                 "leftContext",
-                                (c) -> toStr(getImpl().leftContext),
+                                (c) -> legacyStr(c, getImpl().leftContext),
                                 null,
                                 PERMANENT)
-                        .withProp(CTOR, "$`", (c) -> toStr(getImpl().leftContext), null, PERMANENT)
+                        .withProp(
+                                CTOR,
+                                "$`",
+                                (c) -> legacyStr(c, getImpl().leftContext),
+                                null,
+                                PERMANENT)
                         .withProp(
                                 CTOR,
                                 "rightContext",
-                                (c) -> toStr(getImpl().rightContext),
+                                (c) -> legacyStr(c, getImpl().rightContext),
                                 null,
                                 PERMANENT)
                         .withProp(
-                                CTOR, "$'", (c) -> toStr(getImpl().rightContext), null, PERMANENT);
+                                CTOR,
+                                "$'",
+                                (c) -> legacyStr(c, getImpl().rightContext),
+                                null,
+                                PERMANENT);
 
         for (int i = 1; i < 10; i++) {
             int c = i - 1;
             builder.withProp(
                     CTOR,
                     String.format("$%d", i),
-                    (x) -> toStr(getImpl().getParenSubString(c)),
+                    (x) -> legacyStr(x, getImpl().getParenSubString(c)),
                     null,
                     PERMANENT);
         }
@@ -352,6 +371,25 @@ public class NativeRegExp extends ScriptableObject {
         re.compile(cx, s, args);
         ScriptRuntime.setBuiltinProtoAndParent(re, f, nt, s, TopLevel.Builtins.RegExp);
         return re;
+    }
+
+    /**
+     * The value of a legacy static property (Annex B, RegExp legacy features): a TypeError when
+     * read through another constructor than RegExp, such as a subclass.
+     */
+    private static String legacyStr(Scriptable receiver, Object value) {
+        Context cx = Context.getCurrentContext();
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6
+                && (!(receiver instanceof Function)
+                        || receiver
+                                != TopLevel.getBuiltinCtor(
+                                        cx,
+                                        ScriptableObject.getTopLevelScope(
+                                                ((Function) receiver).getDeclarationScope()),
+                                        TopLevel.Builtins.RegExp))) {
+            throw ScriptRuntime.typeErrorById("msg.regexp.legacy.receiver");
+        }
+        return value instanceof SubString ? toStr((SubString) value) : toStr((String) value);
     }
 
     private static String toStr(String subStr) {

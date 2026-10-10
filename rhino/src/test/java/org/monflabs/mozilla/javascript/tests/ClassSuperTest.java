@@ -83,4 +83,17 @@ class ClassSuperTest {
                         + " t(function () { class B extends A { constructor() { eval('this'); } } new B(); });"
                         + " t(function () { eval('class X { m() { super(); } }'); });");
     }
+
+    @Test
+    void builtinSubclasses() {
+        assertBoth(
+                "true|true|,true|TypeError|true",
+                "t(function () { class W extends WeakRef {} return new W({}) instanceof W; });"
+                        + " t(function () { class AB extends ArrayBuffer {} return new AB(4).slice(0, 1) instanceof AB; });"
+                        + " t(function () { class O extends Object {} var o = new O({a: 1});"
+                        + " return [o.a, Object.getPrototypeOf(o) === O.prototype].join(); });"
+                        + " t(function () { class R extends RegExp {} return R.lastMatch; });"
+                        + " t(function () { class E extends TypeError {} var e = new E('m');"
+                        + " return e instanceof E && e instanceof TypeError && e.message === 'm'; });");
+    }
 }

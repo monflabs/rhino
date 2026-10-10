@@ -76,7 +76,7 @@ public class NativeFinalizationRegistry extends ScriptableObject {
 
         NativeFinalizationRegistry r = new NativeFinalizationRegistry((Function) args[0], s);
         r.setParentScope(f.getDeclarationScope());
-        r.setPrototype((Scriptable) f.getPrototypeProperty());
+        r.setPrototype(ScriptRuntime.findPrototype(f, nt));
         return r;
     }
 

@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Classes: subclassing built-ins (2026-10-09, plan 1.7c)
+
+All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.20):
+
+- `WeakRef` and `FinalizationRegistry` take their prototype from `NewTarget` (`ScriptRuntime.findPrototype(f,
+  nt)`); `Object` called with a NewTarget other than itself ignores its argument.
+- `ArrayBuffer[Symbol.species]` is defined, so `slice` of a subclass instance creates a subclass instance.
+- `DataView` reads the prototype of `NewTarget` before checking the buffer again (detached, resized).
+- The Annex B legacy static properties of `RegExp` throw a TypeError when read through another constructor (2.20).
+- test262: 27 more files pass; 29,116 of 42,616 in-scope files (68.3%).
+
 ### Classes: fixes from the class test directories (2026-10-09, plan 1.7)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.18, 2.19):

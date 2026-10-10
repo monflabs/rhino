@@ -120,7 +120,9 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Scriptable js_constructor(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (args.length == 0 || args[0] == null || Undefined.isUndefined(args[0])) {
+        // a subclass (NewTarget other than Object itself) ignores the value
+        boolean subclass = nt != null && nt != f && !Undefined.isUndefined(nt);
+        if (subclass || args.length == 0 || args[0] == null || Undefined.isUndefined(args[0])) {
             var res = new NativeObject();
             ScriptRuntime.setBuiltinProtoAndParent(res, f, nt, s, TopLevel.Builtins.Object);
             return res;

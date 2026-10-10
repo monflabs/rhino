@@ -171,8 +171,25 @@ public class NativeDataView extends NativeArrayBufferView {
             }
         }
 
+        // the prototype of newTarget may detach or resize the buffer: checked again after it
+        Scriptable proto = ScriptRuntime.findPrototype(f, nt, TopLevel.Builtins.DataView);
+        if (ab.isDetached()) {
+            throw ScriptRuntime.typeErrorById("msg.arraybuf.detached");
+        }
+        bufferByteLength = ab.getLength();
+        if (pos > bufferByteLength) {
+            throw ScriptRuntime.rangeErrorById("msg.dataview.offset.range");
+        }
+        if (isArg(args, 2) && (long) pos + len > bufferByteLength) {
+            throw ScriptRuntime.rangeErrorById("msg.dataview.length.range");
+        }
+        if (!isArg(args, 2) && !autoLength) {
+            len = bufferByteLength - pos;
+        }
+
         var res = new NativeDataView(ab, pos, len, autoLength);
-        ScriptRuntime.setBuiltinProtoAndParent(res, f, nt, s, TopLevel.Builtins.DataView);
+        res.setPrototype(proto);
+        res.setParentScope(s);
         return res;
     }
 

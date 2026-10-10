@@ -433,6 +433,18 @@ new d.get();            // before: an object   now: TypeError
   no `prototype` property and are not constructors, like the methods of an object literal already were.
 - **Why:** ECMA-262 2026, §15.4.4 (MethodDefinition: DefineMethodProperty without MakeConstructor).
 
+### 2.20 Legacy static properties of RegExp read through another object
+
+```js
+var F = Object.setPrototypeOf(function () {}, RegExp);
+F.lastMatch;   // before: the last match   now: TypeError
+```
+
+- From `VERSION_ES6`: the legacy static properties `RegExp.input` (`$_`), `lastMatch` (`$&`), `lastParen` (`$+`),
+  `leftContext`, `rightContext` and `$1`–`$9` are read (and `input` written) only on `RegExp` itself, not through
+  an object inheriting from it, such as a class extending `RegExp`. `RegExp.multiline` (`$*`) is not affected.
+- **Why:** ECMA-262 Annex B proposal "Legacy RegExp features" (GetLegacyRegExpStaticProperty), tested by test262.
+
 ---
 
 ## 3. Platform and embedding
