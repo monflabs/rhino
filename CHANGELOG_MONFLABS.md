@@ -6,6 +6,12 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Class test directories un-skipped (2026-10-09, plan 1.7)
+
+- `language/expressions/class` and `language/statements/class` were skipped as whole directories (`~`) in
+  `test262.properties`; they now run, their failures listed as expected failures.
+- test262: 2,372 more files pass; 28,863 of 42,616 in-scope files (67.7%).
+
 ### Classes: super and derived constructors (2026-10-09, plan 1.7b)
 
 All versions from `VERSION_ES6` (additive):
