@@ -1826,11 +1826,15 @@ public class NativeArray extends ScriptableObject implements List {
         }
 
         for (; count > 0; count--) {
-            final Object temp = getRawElem(o, from);
-            if ((temp == Scriptable.NOT_FOUND) || Undefined.isUndefined(temp)) {
-                deleteElem(o, to);
+            // HasProperty, then Get and Set, or DeletePropertyOrThrow (23.1.3.4 step 13)
+            boolean fromPresent =
+                    from > Integer.MAX_VALUE
+                            ? ScriptableObject.hasProperty(o, Long.toString(from))
+                            : ScriptableObject.hasProperty(o, (int) from);
+            if (fromPresent) {
+                setElem(cx, o, to, getRawElem(o, from));
             } else {
-                setElem(cx, o, to, temp);
+                deleteElem(o, to);
             }
 
             from += direction;

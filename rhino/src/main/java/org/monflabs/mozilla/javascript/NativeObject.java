@@ -387,9 +387,9 @@ public class NativeObject extends ScriptableObject implements Map {
             throw ScriptRuntime.typeErrorById("msg.not.extensible");
         }
 
-        // cycle detection
+        // cycle detection, which stops at a proxy (OrdinarySetPrototypeOf step 8.c.i)
         Scriptable prototypeProto = proto;
-        while (prototypeProto != null) {
+        while (prototypeProto != null && !(prototypeProto instanceof NativeProxy)) {
             if (prototypeProto == thisScriptable) {
                 throw ScriptRuntime.typeErrorById(
                         "msg.object.cyclic.prototype", thisScriptable.getClass().getSimpleName());

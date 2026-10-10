@@ -425,7 +425,7 @@ public class AbstractEcmaObjectOperations {
             boolean extensible,
             DescriptorInfo desc,
             DescriptorInfo current) {
-        if (Undefined.isUndefined(current)) {
+        if (current == null || Undefined.isUndefined(current)) {
             if (!extensible) {
                 return false;
             }
@@ -552,80 +552,71 @@ public class AbstractEcmaObjectOperations {
     }
 
     /**
-     * Implements the OrdinarySetWithOwnDescriptor abstract operation.
-     *
-     * <p>see <a href="https://262.ecma-international.org/14.0/#sec-ordinaryset">OrdinarySet ( O, P,
-     * V, Receiver )</a>
+     * Implements the OrdinarySet abstract operation (ECMA-262 10.1.9.2): false when the assignment
+     * fails. The receiver may be any value.
      */
     public static boolean ordinarySet(
-            Context cx, VarScope s, ScriptableObject o, Object p, Object v, Scriptable receiver) {
-        /*
-         * 1. Let ownDesc be ? O.[[GetOwnProperty]](P).
-         * 2. Return ? OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc).
-         */
-        DescriptorInfo ownDesc =
-                ScriptRuntime.isSymbol(p)
-                        ? o.getOwnPropertyDescriptor(cx, p)
-                        : o.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(p));
-
+            Context cx, VarScope s, ScriptableObject o, Object p, Object v, Object receiver) {
+        DescriptorInfo ownDesc = o.getOwnPropertyDescriptor(cx, ownKey(p));
         return ordinarySetWithOwnDescriptor(cx, s, o, p, v, receiver, ownDesc);
     }
 
     /**
-     * Implements the OrdinarySetWithOwnDescriptor abstract operation.
-     *
-     * <p>see <a href="https://262.ecma-international.org/14.0/#sec-ordinarysetwithowndescriptor">
-     * OrdinarySetWithOwnDescriptor ( O, P, V, Receiver, ownDesc )</a>
+     * O.[[Set]](P, V, Receiver) for any object: ScriptableObject#set, or put (assumed to succeed)
+     * for an object that is not a ScriptableObject.
      */
+    public static boolean set(Context cx, Scriptable o, Object p, Object v, Object receiver) {
+        if (o instanceof ScriptableObject) {
+            return ((ScriptableObject) o).set(cx, p, v, receiver);
+        }
+        Scriptable start = receiver instanceof Scriptable ? (Scriptable) receiver : o;
+        if (ScriptRuntime.isSymbol(p)) {
+            ScriptableObject.ensureSymbolScriptable(o).put((Symbol) p, start, v);
+        } else {
+            ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(p);
+            if (soi.stringId == null) {
+                o.put(soi.index, start, v);
+            } else {
+                o.put(soi.stringId, start, v);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * obj.[[DefineOwnProperty]](key, desc) returning false instead of throwing when the definition
+     * is not allowed (ValidateAndApplyPropertyDescriptor), or the result of a proxy's trap.
+     */
+    static boolean defineOwn(Context cx, ScriptableObject obj, Object key, DescriptorInfo desc) {
+        if (obj instanceof NativeProxy) {
+            return ((NativeProxy) obj).defineOwnPropertyResult(cx, key, desc);
+        }
+        DescriptorInfo current = obj.getOwnPropertyDescriptor(cx, key);
+        if (!isCompatiblePropertyDescriptor(cx, obj.isExtensible(), desc, current)) {
+            return false;
+        }
+        return obj.defineOwnProperty(cx, key, desc, false);
+    }
+
+    /** The key of a descriptor lookup: a symbol, or a string. */
+    private static Object ownKey(Object p) {
+        return ScriptRuntime.isSymbol(p) ? p : ScriptRuntime.toString(p);
+    }
+
+    /** Implements the OrdinarySetWithOwnDescriptor abstract operation (ECMA-262 10.1.9.2). */
     private static boolean ordinarySetWithOwnDescriptor(
             Context cx,
             VarScope s,
             Scriptable o,
             Object p,
             Object v,
-            Scriptable receiver,
+            Object receiver,
             DescriptorInfo ownDesc) {
-        /*
-         * 1. If ownDesc is undefined, then
-         *    a. Let parent be ? O.[[GetPrototypeOf]]().
-         *    b. If parent is not null, then
-         *       i. Return ? parent.[[Set]](P, V, Receiver).
-         *    c. Else,
-         *       i. Set ownDesc to the PropertyDescriptor { [[Value]]: undefined, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true }.
-         * 2. If IsDataDescriptor(ownDesc) is true, then
-         *    a. If ownDesc.[[Writable]] is false, return false.
-         *    b. If Type(Receiver) is not Object, return false.
-         *    c. Let existingDescriptor be ? Receiver.[[GetOwnProperty]](P).
-         *    d. If existingDescriptor is not undefined, then
-         *       i.  If IsAccessorDescriptor(existingDescriptor) is true, return false.
-         *       ii. If existingDescriptor.[[Writable]] is false, return false.
-         *       iii.Let valueDesc be the PropertyDescriptor { [[Value]]: V }.
-         *           Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
-         *    e. Else,
-         *       Return ? CreateDataProperty(Receiver, P, V).
-         * 3. Assert: IsAccessorDescriptor(ownDesc) is true.
-         * 4. Let setter be ownDesc.[[Set]].
-         * 5. If setter is undefined, return false.
-         * 6. Perform ? Call(setter, Receiver, « V »).
-         * 7. Return true.
-         */
-
         if (ownDesc == null || Undefined.isUndefined(ownDesc)) {
             Scriptable parent = o.getPrototype();
             if (parent != null) {
-                if (ScriptRuntime.isSymbol(p)) {
-                    parent.put((Symbol) p, receiver, v);
-                } else {
-                    ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(p);
-                    if (soi.stringId == null) {
-                        parent.put(soi.index, receiver, v);
-                    } else {
-                        parent.put(soi.stringId, receiver, v);
-                    }
-                }
-                return true;
+                return set(cx, parent, p, v, receiver);
             }
-
             ownDesc = new DescriptorInfo(true, true, true, Undefined.instance);
         }
 
@@ -634,12 +625,8 @@ public class AbstractEcmaObjectOperations {
                 return false;
             }
             ScriptableObject receiverObj = (ScriptableObject) receiver;
-
-            DescriptorInfo existingDesc =
-                    ScriptRuntime.isSymbol(p)
-                            ? receiverObj.getOwnPropertyDescriptor(cx, p)
-                            : receiverObj.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(p));
-
+            Object key = ownKey(p);
+            DescriptorInfo existingDesc = receiverObj.getOwnPropertyDescriptor(cx, key);
             if (existingDesc != null) {
                 if (existingDesc.isAccessorDescriptor() || existingDesc.isWritable(false)) {
                     return false;
@@ -647,12 +634,13 @@ public class AbstractEcmaObjectOperations {
                 DescriptorInfo valueDesc =
                         new DescriptorInfo(
                                 NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, v);
-                return receiverObj.defineOwnProperty(cx, p, valueDesc);
+                return defineOwn(cx, receiverObj, key, valueDesc);
             }
-
-            DescriptorInfo newDesc = new DescriptorInfo(true, true, true, v);
-            receiverObj.defineOwnProperty(cx, p, newDesc);
-            return true;
+            // CreateDataProperty
+            if (!(receiverObj instanceof NativeProxy) && !receiverObj.isExtensible()) {
+                return false;
+            }
+            return defineOwn(cx, receiverObj, key, new DescriptorInfo(true, true, true, v));
         }
 
         Object setter = ownDesc.setter;

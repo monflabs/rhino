@@ -212,6 +212,25 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     }
 
     @Override
+    public boolean set(Context cx, Object key, Object value, Object receiver) {
+        // [[Set]] (10.4.5.5)
+        Double num = ScriptRuntime.isSymbol(key) ? null : numericKey(propertyKey(key));
+        if (num != null) {
+            if (receiver == this) {
+                Object numeric = toNumeric(value);
+                if (isValidIntegerIndex(num)) {
+                    js_set(num.intValue(), numeric);
+                }
+                return true;
+            }
+            if (!isValidIntegerIndex(num)) {
+                return true;
+            }
+        }
+        return super.set(cx, key, value, receiver);
+    }
+
+    @Override
     protected boolean endsPropertyLookup(String name) {
         return numericIndex(name) != null;
     }

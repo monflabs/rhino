@@ -6,6 +6,27 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### [[Set]] with a result; proxy descriptors (2026-10-10, plan 1.8b, part 1)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.24):
+
+- `ScriptableObject.set(cx, key, value, receiver)` is [[Set]] returning whether it succeeded: OrdinarySet
+  (`AbstractEcmaObjectOperations.ordinarySet`) through the prototype chain, overridden by proxies (the `set` trap and
+  its invariants, SameValue) and typed arrays; `Reflect.set` returns it and accepts any receiver; a definition on the
+  receiver returns false rather than throwing (`AbstractEcmaObjectOperations.defineOwn`).
+- An assignment through a proxy whose [[Set]] fails throws in strict code; without a `set` trap, the receiver stays
+  the proxy (before, the target), so its `getOwnPropertyDescriptor`/`defineProperty` traps run.
+- A proxy in a prototype chain answers [[HasProperty]] and [[Set]] itself (`ScriptableObject.endsPropertyLookup`):
+  its `getPrototypeOf` and `has` traps are not called by a lookup or an assignment through it;
+  `Object.setPrototypeOf` stops its cycle check at a proxy.
+- The `getOwnPropertyDescriptor` trap result is validated (ToPropertyDescriptor, CompletePropertyDescriptor,
+  IsCompatiblePropertyDescriptor and the non-configurable invariants), and may be an accessor.
+- A proxy without a `has` trap answers with the target's [[HasProperty]] (its prototype chain included); an
+  assignment in a `with` statement checks the binding again (SetMutableBinding of an object environment).
+- `Reflect.get` converts its key with ToPropertyKey and calls a getter of an index key (before, `Reflect.get(o, "4")`
+  missed it); `Array.prototype.copyWithin` uses HasProperty and copies `undefined` values (before, deleted).
+- test262: 64 more files pass; 29,285 of 42,616 in-scope files (68.7%).
+
 ### Typed array internal methods (2026-10-10, plan 1.8a)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.23):

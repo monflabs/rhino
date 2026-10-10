@@ -12,7 +12,6 @@ import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.CTOR;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.List;
-import org.monflabs.mozilla.javascript.ScriptRuntime.StringIdOrIndex;
 
 /**
  * This class implements the Reflect object.
@@ -230,17 +229,16 @@ final class NativeReflect extends ScriptableObject {
         Scriptable receiver =
                 (args.length > 2 && args[2] instanceof Scriptable) ? (Scriptable) args[2] : target;
 
+        Object key = toPropertyKey(args[1]);
         Object prop;
-        if (ScriptRuntime.isSymbol(args[1])) {
-            prop = ScriptableObject.getSuperProperty(target, receiver, (Symbol) args[1]);
-        } else if (args[1] instanceof Number) {
-            prop =
-                    ScriptableObject.getSuperProperty(
-                            target, receiver, ScriptRuntime.toIndex(args[1]));
+        if (ScriptRuntime.isSymbol(key)) {
+            prop = ScriptableObject.getSuperProperty(target, receiver, (Symbol) key);
         } else {
+            ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(key);
             prop =
-                    ScriptableObject.getSuperProperty(
-                            target, receiver, ScriptRuntime.toString(args[1]));
+                    soi.stringId == null
+                            ? ScriptableObject.getSuperProperty(target, receiver, soi.index)
+                            : ScriptableObject.getSuperProperty(target, receiver, soi.stringId);
         }
         return prop == Scriptable.NOT_FOUND ? Undefined.SCRIPTABLE_UNDEFINED : prop;
     }
@@ -388,56 +386,19 @@ final class NativeReflect extends ScriptableObject {
          * 4. Return ? target.[[Set]](key, V, receiver).
          */
         ScriptableObject target = checkTarget(args);
-        if (args.length < 2) {
-            return true;
+        Object key = toPropertyKey(args.length > 1 ? args[1] : Undefined.instance);
+        Object value = args.length > 2 ? args[2] : Undefined.instance;
+        Object receiver = args.length > 3 ? args[3] : target;
+        return target.set(cx, key, value, receiver);
+    }
+
+    /** ToPropertyKey: a symbol, or a string (converting an object may run code). */
+    private static Object toPropertyKey(Object key) {
+        if (ScriptRuntime.isSymbol(key)) {
+            return key;
         }
-
-        // A missing value must be treated as undefined
-        final Object value = args.length > 2 ? args[2] : Undefined.instance;
-
-        Scriptable receiver = args.length > 3 ? ScriptableObject.ensureScriptable(args[3]) : target;
-
-        // OrdinarySet is only needed when receiver != target.
-        // When receiver == target we must call target.[[Set]] directly via put(),
-        // which correctly invokes any proxy set trap on target.
-        // Inlining OrdinarySet when receiver == target would
-        // bypass the proxy trap and apply the plain-object non-writable check
-        // incorrectly (e.g. a configurable+non-writable property where the trap
-        // returns true would wrongly return false).
-        if (receiver != target) {
-            if (target instanceof NativeProxy) {
-                if (ScriptRuntime.isSymbol(args[1])) {
-                    target.put((Symbol) args[1], receiver, value);
-                } else {
-                    StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(args[1]);
-                    if (soi.stringId == null) {
-                        target.put(soi.index, receiver, value);
-                    } else {
-                        target.put(soi.stringId, receiver, value);
-                    }
-                }
-                return true;
-            }
-
-            AbstractEcmaObjectOperations.ordinarySet(cx, s, target, args[1], args[2], receiver);
-            return true;
-        }
-
-        // receiver == target (or target has no own property P):
-        // delegate to [[Set]] on the receiver, which correctly fires any proxy
-        // set trap when receiver/target is a Proxy.
-        if (ScriptRuntime.isSymbol(args[1])) {
-            target.put((Symbol) args[1], receiver, value);
-        } else {
-            StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(args[1]);
-            if (soi.stringId == null) {
-                target.put(soi.index, receiver, value);
-            } else {
-                target.put(soi.stringId, receiver, value);
-            }
-        }
-
-        return true;
+        Object prim = ScriptRuntime.toPrimitive(key, ScriptRuntime.StringClass);
+        return ScriptRuntime.isSymbol(prim) ? prim : ScriptRuntime.toString(prim);
     }
 
     /**

@@ -508,6 +508,23 @@ Object.create(ta)[0] = 1;                     // before: set ta[0]   now: an own
   accessors.
 - **Why:** ECMA-262 2026, §10.4.5 TypedArray Exotic Objects.
 
+### 2.24 Reflect.set and proxies
+
+```js
+Reflect.set(Object.freeze({x: 1}), "x", 2);       // before: true   now: false
+Reflect.set({}, "x", 1, "receiver");              // before: TypeError   now: false
+var p = new Proxy({}, { set() { return false; } });
+(function () { "use strict"; p.x = 1; })();        // before: fine   now: TypeError
+var q = new Proxy({}, { getOwnPropertyDescriptor() { return { value: 1, configurable: false }; } });
+Object.getOwnPropertyDescriptor(q, "x");          // before: a descriptor   now: TypeError (invariant)
+```
+
+- All versions: `Reflect.set` returns false when the assignment fails, and accepts a receiver that is not an object.
+  Proxies check the invariants of their `set` and `getOwnPropertyDescriptor` traps; a failed assignment through a
+  proxy throws in strict code; a proxy in a prototype chain handles a lookup itself (its `getPrototypeOf` trap is not
+  called by `in` or an assignment).
+- **Why:** ECMA-262 2026, §10.1.9 [[Set]], §10.5.5 and §10.5.9 (proxy internal methods), §28.1.12 Reflect.set.
+
 ---
 
 ## 3. Platform and embedding

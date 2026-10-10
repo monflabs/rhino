@@ -75,6 +75,12 @@ public class WithScope implements VarScope {
 
     @Override
     public void put(String name, VarScope start, Object value) {
+        // SetMutableBinding of an object environment (9.1.1.2.5): the binding is checked again
+        boolean stillExists = ScriptableObject.hasProperty(obj, name);
+        if (!stillExists && Context.isCurrentContextStrict()) {
+            throw ScriptRuntime.constructError(
+                    "ReferenceError", ScriptRuntime.getMessageById("msg.is.not.defined", name));
+        }
         ScriptableObject.putProperty(obj, name, value);
     }
 

@@ -2477,11 +2477,11 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     public static boolean hasProperty(Scriptable obj, String name) {
         Scriptable o = obj;
         do {
+            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(name)) {
+                return o.has(name, obj);
+            }
             if (o.has(name, obj)) {
                 return true;
-            }
-            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(name)) {
-                return false;
             }
             o = o.getPrototype();
         } while (o != null);
@@ -2489,8 +2489,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     }
 
     /**
-     * Whether a lookup of the key stops at this object even when it does not have it: the prototype
-     * chain is not searched (a canonical numeric key of a typed array, ECMA-262 10.4.5).
+     * Whether a lookup of the key stops at this object, which answers [[HasProperty]] and [[Set]]
+     * itself: the caller does not search the rest of the prototype chain (a canonical numeric key
+     * of a typed array, ECMA-262 10.4.5; a proxy, 10.5).
      */
     protected boolean endsPropertyLookup(String name) {
         return false;
@@ -2546,11 +2547,11 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     public static boolean hasProperty(Scriptable obj, int index) {
         Scriptable o = obj;
         do {
+            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(index)) {
+                return o.has(index, obj);
+            }
             if (o.has(index, obj)) {
                 return true;
-            }
-            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(index)) {
-                return false;
             }
             o = o.getPrototype();
         } while (o != null);
@@ -2801,9 +2802,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
         Scriptable obj = (Scriptable) start;
         Scriptable startObj = obj;
         do {
-            if (obj.has(name, startObj)
-                    || (obj instanceof ScriptableObject
-                            && ((ScriptableObject) obj).endsPropertyLookup(name))) {
+            if ((obj instanceof ScriptableObject
+                            && ((ScriptableObject) obj).endsPropertyLookup(name))
+                    || obj.has(name, startObj)) {
                 break;
             }
             obj = obj.getPrototype();
@@ -2818,9 +2819,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     static Scriptable getBase(Scriptable start, int index) {
         Scriptable obj = start;
         do {
-            if (obj.has(index, start)
-                    || (obj instanceof ScriptableObject
-                            && ((ScriptableObject) obj).endsPropertyLookup(index))) {
+            if ((obj instanceof ScriptableObject
+                            && ((ScriptableObject) obj).endsPropertyLookup(index))
+                    || obj.has(index, start)) {
                 break;
             }
             obj = obj.getPrototype();
@@ -3055,6 +3056,15 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         readMaps(in);
+    }
+
+    /**
+     * [[Set]](key, value, receiver) (ECMA-262 10.1.9): false when the assignment fails. The
+     * receiver may be any value. Used by Reflect.set and Proxy; ordinary assignments use put.
+     */
+    public boolean set(Context cx, Object key, Object value, Object receiver) {
+        return AbstractEcmaObjectOperations.ordinarySet(
+                cx, ScriptRuntime.getTopCallScope(cx), this, key, value, receiver);
     }
 
     /** The own property descriptor of obj for id ([[GetOwnProperty]]), or null. */
