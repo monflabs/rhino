@@ -6,6 +6,27 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Language residuals: completion values, assignments, `with` (2026-10-10, plan 1.10a)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 1.8 and 2.35) unless stated:
+
+- `VERSION_ECMASCRIPT`: completion values (the result of `eval` and of scripts) follow the ES2015 reform: `if`,
+  loops, `switch`, `try` and `with` complete with `undefined` when their body produces no value
+  (`eval("1; if (true) {}")` is `undefined`), a `catch` block starts from `undefined`, and a `finally` block that
+  completes normally does not change the value (`eval("6; try { 7; } finally { 8; }")` is 7).
+- Logical assignment (`&&=`, `||=`, `??=`) evaluates its target once and does not assign when it short-circuits
+  (before, it always wrote back, which threw on a read-only property); all versions.
+- A compound assignment or `++`/`--` on an element converts an object key with ToPropertyKey once, and the
+  TypeError of a `null`/`undefined` base comes before the key is converted (its message no longer calls the key's
+  `toString`).
+- An accessor defined with `set: undefined` has no setter: a strict assignment throws a TypeError (before, the
+  assignment was silently ignored); all versions.
+- In strict code, assigning a global variable that was deleted after its reference was resolved is a
+  ReferenceError (Object Environment Record SetMutableBinding).
+- `with` honors `Symbol.unscopables` (HasBinding: HasProperty, then the unscopables of the object) and
+  GetBindingValue checks the binding again.
+- test262: 171 more files pass; 29,857 of 42,616 in-scope files (70.1%).
+
 ### RegExp, ES2015 core (2026-10-10, plan 1.9a)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 1.7 and 2.34) unless stated:

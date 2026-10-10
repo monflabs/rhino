@@ -47,6 +47,7 @@ import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
 import org.monflabs.mozilla.javascript.ast.Label;
 import org.monflabs.mozilla.javascript.ast.LabeledStatement;
 import org.monflabs.mozilla.javascript.ast.LetNode;
+import org.monflabs.mozilla.javascript.ast.Loop;
 import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.NewExpression;
 import org.monflabs.mozilla.javascript.ast.NumberLiteral;
@@ -150,7 +151,46 @@ public final class IRFactory {
     // functions into the AstNode subclasses.  OTOH that would make
     // IR transformation part of the public AST API - desirable?
     // Another possibility:  create AstTransformer interface and adapter.
+    /** Depth of finally blocks being transformed: their normal completion keeps the value. */
+    private int finallyDepth;
+
     private Node transform(AstNode node) {
+        Node result = transformStatement(node);
+        if (resetsCompletionValue(node)) {
+            // UpdateEmpty(stmt, undefined) (ES2015 completion reform): the statement's value is
+            // undefined unless its body produces one
+            Node block = new Node(Token.BLOCK, node.getLineno(), node.getColumn());
+            block.addChildToBack(undefinedCompletion(node));
+            block.addChildToBack(result);
+            return block;
+        }
+        return result;
+    }
+
+    /**
+     * Whether the statement is one whose completion value is UpdateEmpty(…, undefined), in code
+     * whose completion value is observable (script or eval code).
+     */
+    private boolean resetsCompletionValue(AstNode node) {
+        return (node instanceof IfStatement
+                        || node instanceof Loop
+                        || node instanceof SwitchStatement
+                        || node instanceof TryStatement
+                        || node instanceof WithStatement)
+                && finallyDepth == 0
+                && parser.compilerEnv.isLatestEcmaScript()
+                && node.getEnclosingFunction() == null;
+    }
+
+    private static Node undefinedCompletion(AstNode node) {
+        return new Node(
+                Token.EXPR_RESULT,
+                new Node(Token.VOID, Node.newNumber(0.0)),
+                node.getLineno(),
+                node.getColumn());
+    }
+
+    private Node transformStatement(AstNode node) {
         if (node instanceof ExpressionStatement
                 || (node instanceof VariableDeclaration
                         && ((VariableDeclaration) node).isStatement())
@@ -670,7 +710,14 @@ public final class IRFactory {
 
     private Node transformExprStmt(ExpressionStatement node) {
         Node expr = transform(node.getExpression());
-        return new Node(node.getType(), expr, node.getLineno(), node.getColumn());
+        int type = node.getType();
+        if (type == Token.EXPR_RESULT
+                && finallyDepth > 0
+                && parser.compilerEnv.isLatestEcmaScript()) {
+            // a finally block that completes normally does not change the completion value
+            type = Token.EXPR_VOID;
+        }
+        return new Node(type, expr, node.getLineno(), node.getColumn());
     }
 
     private Node transformForInLoop(ForInLoop loop) {
@@ -1621,13 +1668,24 @@ public final class IRFactory {
             }
 
             Node body = transform(catchBody);
+            if (finallyDepth == 0
+                    && parser.compilerEnv.isLatestEcmaScript()
+                    && node.getEnclosingFunction() == null) {
+                // the completion value of a catch block starts as undefined
+                body.addChildToFront(undefinedCompletion(cc));
+            }
 
             catchBlocks.addChildToBack(
                     createCatch(varNameNode, catchCond, body, cc.getLineno(), cc.getColumn()));
         }
         Node finallyBlock = null;
         if (node.getFinallyBlock() != null) {
-            finallyBlock = transform(node.getFinallyBlock());
+            finallyDepth++;
+            try {
+                finallyBlock = transform(node.getFinallyBlock());
+            } finally {
+                finallyDepth--;
+            }
         }
         return createTryCatchFinally(
                 tryBlock, catchBlocks, finallyBlock, node.getLineno(), node.getColumn());
@@ -2843,6 +2901,15 @@ public final class IRFactory {
         }
 
         int nodeType = left.getType();
+        if ((assignType == Token.ASSIGN_LOGICAL_OR
+                        || assignType == Token.ASSIGN_LOGICAL_AND
+                        || assignType == Token.ASSIGN_NULLISH)
+                && left.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 0
+                && (nodeType == Token.NAME
+                        || nodeType == Token.GETPROP
+                        || nodeType == Token.GETELEM)) {
+            return createLogicalAssignment(assignOp, left, right);
+        }
         switch (nodeType) {
             case Token.NAME:
                 {
@@ -2873,6 +2940,65 @@ public final class IRFactory {
         }
 
         throw Kit.codeBug();
+    }
+
+    /**
+     * A logical assignment (13.15.2): the reference is evaluated once, and the assignment only
+     * happens when the operator does not short-circuit. <code>o.p ||= v</code> becomes <code>
+     * let $t = o; $t.p || ($t.p = v)</code>, and <code>x ||= v</code> becomes <code>x || (x = v)
+     * </code>.
+     */
+    private Node createLogicalAssignment(int assignOp, Node left, Node right) {
+        int nodeType = left.getType();
+        if (nodeType == Token.NAME) {
+            Node read = Node.newString(Token.NAME, left.getString());
+            Node set = parser.simpleAssignment(left, right);
+            return new Node(assignOp, read, set);
+        }
+        Node obj = left.getFirstChild();
+        Node id = left.getLastChild();
+        left.removeChild(obj);
+        left.removeChild(id);
+        Scope scope = parser.createScopeNode(Token.LETEXPR, left.getLineno(), left.getColumn());
+        String objName = parser.currentScriptOrFn.getNextTempName();
+        Node lets = new Node(Token.LET, parser.createName(Token.NAME, objName, obj));
+        String idName = null;
+        if (nodeType == Token.GETELEM) {
+            idName = parser.currentScriptOrFn.getNextTempName();
+            lets.addChildToBack(parser.createName(Token.NAME, idName, id));
+        }
+        scope.addChildToFront(lets);
+        parser.pushScope(scope);
+        try {
+            parser.defineSymbol(Token.LET, objName, true);
+            if (idName != null) {
+                parser.defineSymbol(Token.LET, idName, true);
+            }
+        } finally {
+            parser.popScope();
+        }
+        Node read;
+        Node set;
+        if (nodeType == Token.GETPROP) {
+            String property = id.getString();
+            read = new Node(Token.GETPROP, parser.createName(objName), Node.newString(property));
+            set =
+                    new Node(
+                            Token.SETPROP,
+                            parser.createName(objName),
+                            Node.newString(property),
+                            right);
+        } else {
+            read = new Node(Token.GETELEM, parser.createName(objName), parser.createName(idName));
+            set =
+                    new Node(
+                            Token.SETELEM,
+                            parser.createName(objName),
+                            parser.createName(idName),
+                            right);
+        }
+        scope.addChildToBack(new Node(assignOp, read, set));
+        return scope;
     }
 
     /** Infer function name is missing on rhs. In the future, should also handle class names. */

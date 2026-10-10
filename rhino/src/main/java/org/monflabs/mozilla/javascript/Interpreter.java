@@ -792,6 +792,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.DERIVED_THIS] = new DoDerivedThis();
         instructionObjs[base + Icode.FN_NAME_ASSIGN] = new DoFnNameAssign();
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
+        instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
@@ -3571,6 +3572,18 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             frame.stack[frame.stackTop] = ScriptRuntime.derivedThis(frame.stack[frame.stackTop]);
+            return null;
+        }
+    }
+
+    private static class DoElemKey extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object key = frame.stack[frame.stackTop];
+            if (key != UniqueTag.DOUBLE_MARK) {
+                frame.stack[frame.stackTop] =
+                        ScriptRuntime.elementKey(frame.stack[frame.stackTop - 1], key);
+            }
             return null;
         }
     }

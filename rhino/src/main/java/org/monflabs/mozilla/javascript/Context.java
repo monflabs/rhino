@@ -146,6 +146,9 @@ public class Context implements Closeable {
      *       is true by default); under {@link #VERSION_ES6} big endian.
      *   <li>In a regular expression without the {@code u} flag, {@code \p} and {@code \P} are
      *       identity escapes; under {@link #VERSION_ES6} they are Unicode property escapes.
+     *   <li>Completion values of scripts and eval code: {@code if}, loops, {@code switch}, {@code
+     *       try} and {@code with} give undefined when their body produces no value, and a {@code
+     *       finally} block that completes normally does not change the value.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

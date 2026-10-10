@@ -4947,6 +4947,17 @@ class BodyCodegen {
         child = child.getNext();
         boolean indexIsNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);
         boolean isSuper = node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1;
+        if (type == Token.SETELEM_OP
+                && !indexIsNumber
+                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+            // the key is converted once, for the get and the set (13.15.2)
+            // stack: ... object object key -> ... object object key'
+            cfw.add(ByteCode.DUP2);
+            addScriptRuntimeInvoke(
+                    "elementKey", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+            cfw.add(ByteCode.SWAP);
+            cfw.add(ByteCode.POP);
+        }
         if (type == Token.SETELEM_OP) {
             if (isSuper) {
                 // indexIsNumber will never be true because functions with super always require

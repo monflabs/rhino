@@ -70,7 +70,45 @@ public class WithScope implements VarScope {
 
     @Override
     public Object get(String name, VarScope start) {
+        if (isES6()) {
+            // HasBinding (9.1.1.2.1), then GetBindingValue (9.1.1.2.6)
+            if (!hasBinding(name)) {
+                return NOT_FOUND;
+            }
+            if (!ScriptableObject.hasProperty(obj, name)) {
+                // the binding was deleted after HasBinding (Symbol.unscopables getter, ...)
+                if (Context.isCurrentContextStrict()) {
+                    throw ScriptRuntime.constructError(
+                            "ReferenceError",
+                            ScriptRuntime.getMessageById("msg.is.not.defined", name));
+                }
+                return Undefined.instance;
+            }
+            Object value = ScriptableObject.getProperty(obj, name);
+            return value == NOT_FOUND ? Undefined.instance : value;
+        }
         return ScriptableObject.getProperty(obj, name);
+    }
+
+    private static boolean isES6() {
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6;
+    }
+
+    /**
+     * HasBinding of the object environment of a with statement: the property, unless the object's
+     * {@code Symbol.unscopables} blocks it.
+     */
+    private boolean hasBinding(String name) {
+        if (!ScriptableObject.hasProperty(obj, name)) {
+            return false;
+        }
+        Object unscopables = ScriptableObject.getProperty(obj, SymbolKey.UNSCOPABLES);
+        if (unscopables instanceof Scriptable && ScriptRuntime.isObject(unscopables)) {
+            Object blocked = ScriptableObject.getProperty((Scriptable) unscopables, name);
+            return blocked == NOT_FOUND || !ScriptRuntime.toBoolean(blocked);
+        }
+        return true;
     }
 
     @Override
@@ -86,7 +124,7 @@ public class WithScope implements VarScope {
 
     @Override
     public boolean has(String name, VarScope start) {
-        return ScriptableObject.hasProperty(obj, name);
+        return isES6() ? hasBinding(name) : ScriptableObject.hasProperty(obj, name);
     }
 
     @Override

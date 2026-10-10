@@ -94,6 +94,11 @@ public class AccessorSlot extends StandardSlot<Scriptable> {
                 throwNoSetterException(start, value);
                 return true;
             }
+        } else if (setter instanceof FunctionSetter
+                && !(((FunctionSetter) setter).target instanceof Function)) {
+            // an accessor defined with set: undefined has no setter either (10.1.9.2 step 7)
+            throwNoSetterException(start, value);
+            return true;
         } else {
             return setter.setValue(value, owner, start);
         }

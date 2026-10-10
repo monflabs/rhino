@@ -177,6 +177,18 @@ new Uint8Array(new Uint16Array([1]).buffer)[0];   // VERSION_ES6: 0   VERSION_EC
 - **Why:** ECMA-262 2026, Annex B.1.2 (IdentityEscape) and §22.2.1 (UnicodePropertyValueExpression only with
   [+UnicodeMode]).
 
+### 1.8 Completion values of statements
+
+```js
+eval("1; if (true) {}");                   // VERSION_ES6: 1   VERSION_ECMASCRIPT: undefined
+eval("6; try { 7; } finally { 8; }");      // VERSION_ES6: 8   VERSION_ECMASCRIPT: 7
+```
+
+- The value of a script or of `eval` code: `if`, loops, `switch`, `try` and `with` statements give `undefined`
+  when their body produces no value, instead of keeping the previous statement's value; a `finally` block that
+  completes normally no longer replaces the value. Function code is not affected.
+- **Why:** ECMA-262 2026, §14 (UpdateEmpty in the evaluation of each statement), the ES2015 completion reform.
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -710,6 +722,22 @@ new RegExp("").source;                              // before: ""   now: "(?:)"
 - All versions: format-control characters stay in regexp literals.
 - **Why:** ECMA-262 2026, §22.2.6 (RegExp.prototype), §22.2.4.1 (RegExp), §22.2.6.13.1 (EscapeRegExpPattern),
   Annex B.1.2 (InvalidBracedQuantifier), §12.1 (format-control characters).
+
+### 2.35 Logical and compound assignment, setter-less accessors, `with`
+
+```js
+var o = {}; Object.defineProperty(o, "p", { value: 0, writable: false });
+o.p &&= 1;                                  // before: TypeError (strict) or a write   now: 0, no write
+"use strict"; Object.defineProperty(o, "q", { get() {}, set: undefined }); o.q = 1;   // before: ignored   now: TypeError
+with ({ v: 1, [Symbol.unscopables]: { v: true } }) v;   // before: 1   now: the outer v
+```
+
+- All versions: logical assignment does not write when it short-circuits; an accessor with `set: undefined` has
+  no setter (TypeError in strict mode).
+- From `VERSION_ES6`: compound assignment and `++`/`--` convert an object key once; strict assignments to a
+  deleted global binding throw a ReferenceError; `with` honors `Symbol.unscopables`.
+- **Why:** ECMA-262 2026, §13.15.2 (assignment operators), §10.1.9.2 (OrdinarySetWithOwnDescriptor), §9.1.1.2
+  (Object Environment Records).
 
 ---
 

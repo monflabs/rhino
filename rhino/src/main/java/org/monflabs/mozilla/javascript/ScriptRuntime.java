@@ -2533,7 +2533,8 @@ public class ScriptRuntime {
                         firstXMLObject = xmlObj;
                     }
                 } else {
-                    result = ScriptableObject.getProperty(withObj, name);
+                    // HasBinding, with Symbol.unscopables, then GetBindingValue
+                    result = scope.get(name, scope);
                     if (result != Scriptable.NOT_FOUND) {
                         // function this should be the target object of with
                         thisObj = withObj;
@@ -2618,7 +2619,8 @@ public class ScriptRuntime {
                         firstXMLObject = xmlObj;
                     }
                 } else {
-                    result = ScriptableObject.getProperty(withObj, name);
+                    // HasBinding, with Symbol.unscopables, then GetBindingValue
+                    result = scope.get(name, scope);
                     if (result != Scriptable.NOT_FOUND) {
                         // function this should be the target object of with
                         thisObj = withObj;
@@ -2745,7 +2747,7 @@ public class ScriptRuntime {
                             firstXMLScope = scope;
                         }
                     } else {
-                        if (ScriptableObject.hasProperty(withObj, id)) {
+                        if (scope.has(id, scope)) {
                             return scope;
                         }
                     }
@@ -2820,6 +2822,13 @@ public class ScriptRuntime {
             // seems to work for E4X and we should optimize  the common case
             if (bound instanceof NativeCall && ((NativeCall) bound).isSelfName(id, value)) {
                 throw typeErrorById("msg.fn.name.assign", id);
+            }
+            if (bound instanceof TopLevel
+                    && cx.getLanguageVersion() >= Context.VERSION_ES6
+                    && !ScriptableObject.hasProperty(bound, id)) {
+                // Object Environment Record SetMutableBinding (9.1.1.2.5): the binding was
+                // deleted after the reference was resolved
+                throw notFoundError(bound, id);
             }
             ScriptableObject.putProperty(bound, id, value);
             return value;
@@ -3972,6 +3981,22 @@ public class ScriptRuntime {
     }
 
     /** ToPropertyKey (7.1.19): a symbol, or a string (converting an object may run code). */
+    /**
+     * The key of an element reference that is read then written (compound assignment, ++/--):
+     * ToPropertyKey of an object key, once; a primitive key is left as is (its conversion is
+     * invisible).
+     */
+    public static Object elementKey(Object base, Object key) {
+        // with a null or undefined base, the TypeError of the access comes first
+        if (key instanceof Scriptable
+                && !(key instanceof Symbol)
+                && base != null
+                && !Undefined.isUndefined(base)) {
+            return toPropertyKey(key);
+        }
+        return key;
+    }
+
     public static Object toPropertyKey(Object key) {
         if (isSymbol(key)) {
             return key;
@@ -4559,6 +4584,16 @@ public class ScriptRuntime {
             }
         }
 
+        if (target instanceof TopLevel) {
+            Context cx = Context.getCurrentContext();
+            if (cx != null
+                    && cx.isStrictMode()
+                    && cx.getLanguageVersion() >= Context.VERSION_ES6
+                    && !ScriptableObject.hasProperty(target, id)) {
+                // Object Environment Record SetMutableBinding (9.1.1.2.5)
+                throw notFoundError(target, id);
+            }
+        }
         target.put(id, target, result);
         if (post) {
             return number;
@@ -4576,6 +4611,10 @@ public class ScriptRuntime {
 
     public static Object elemIncrDecr(
             Object obj, Object index, Context cx, VarScope scope, int incrDecrMask) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // the key is converted once, for the get and the set (13.4.2.1)
+            index = elementKey(obj, index);
+        }
         Object value = getObjectElem(obj, index, cx, scope);
         final boolean post = (incrDecrMask & Node.POST_FLAG) != 0;
 
@@ -6440,20 +6479,31 @@ public class ScriptRuntime {
     }
 
     public static RuntimeException undefReadError(Object object, Object id) {
-        return typeErrorById("msg.undef.prop.read", toString(object), toString(id));
+        return typeErrorById("msg.undef.prop.read", toString(object), describeKey(id));
     }
 
     public static RuntimeException undefCallError(Object object, Object id) {
-        return typeErrorById("msg.undef.method.call", toString(object), toString(id));
+        return typeErrorById("msg.undef.method.call", toString(object), describeKey(id));
     }
 
     public static RuntimeException undefWriteError(Object object, Object id, Object value) {
         return typeErrorById(
-                "msg.undef.prop.write", toString(object), toString(id), toString(value));
+                "msg.undef.prop.write", toString(object), describeKey(id), describeKey(value));
     }
 
     private static RuntimeException undefDeleteError(Object object, Object id) {
-        throw typeErrorById("msg.undef.prop.delete", toString(object), toString(id));
+        throw typeErrorById("msg.undef.prop.delete", toString(object), describeKey(id));
+    }
+
+    /**
+     * A key or value for an error message, without running script code: the TypeError of a property
+     * access on null/undefined comes before ToPropertyKey (13.3.2.1, 13.3.3).
+     */
+    private static String describeKey(Object id) {
+        if (id instanceof Scriptable && !(id instanceof Symbol)) {
+            return "[object " + ((Scriptable) id).getClassName() + "]";
+        }
+        return toString(id);
     }
 
     public static RuntimeException notFoundError(VarScope object, String property) {

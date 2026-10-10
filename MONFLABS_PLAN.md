@@ -415,6 +415,10 @@ Steps:
 `new.target` outside classes, `language/expressions/arrow-function` residuals (82%), `language/literals`,
 `language/identifiers` (Unicode ID_Start/ID_Continue from the JDK), reserved words.
 
+Steps:
+- *1.10a (done)* completion values (gated), logical assignment short-circuit, compound assignment key conversion,
+  setter-less accessors, strict PutValue on deleted globals, `with` and `Symbol.unscopables`.
+
 **1.11 Annex B (ES2015 parts).** Block-level function declarations in sloppy mode (B.3.3), `__proto__`,
 `__defineGetter__` and kin, HTML-like comments, legacy octal, `RegExp` legacy syntax (`annexB/language`,
 `annexB/built-ins`). *Gating:* B.3.3 changes how existing Rhino scripts resolve functions declared in blocks →
@@ -569,8 +573,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
-| 1.9  | RegExp ES2015                                   | in progress | 69.5% → 69.7% (1.9a)         | (this) |
-| 1.10 | Templates and syntax residuals                  | todo        |                              |        |
+| 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
+| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.1% (1.10a)        | (this) |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |
 | 1.12 | ES modules                                      | todo        |                              |        |
 | 2.x  | ES2016                                          | todo        |                              |        |

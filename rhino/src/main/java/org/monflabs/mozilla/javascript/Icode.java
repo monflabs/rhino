@@ -206,9 +206,11 @@ abstract class Icode {
             SUPER_CALLEE = DERIVED_THIS - 1,
             // see Token#FN_NAME_ASSIGN
             FN_NAME_ASSIGN = SUPER_CALLEE - 1,
+            // ToPropertyKey of an object key, before the get and the set of a compound assignment
+            ELEM_KEY = FN_NAME_ASSIGN - 1,
 
             // Last icode
-            MIN_ICODE = FN_NAME_ASSIGN;
+            MIN_ICODE = ELEM_KEY;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -444,6 +446,8 @@ abstract class Icode {
                 return "SUPER_CALLEE";
             case FN_NAME_ASSIGN:
                 return "FN_NAME_ASSIGN";
+            case ELEM_KEY:
+                return "ELEM_KEY";
         }
 
         // icode without name
