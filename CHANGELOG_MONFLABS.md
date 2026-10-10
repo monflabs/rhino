@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Global declarations, supplementary identifiers (2026-10-10, plan 1.10d)
+
+- `VERSION_ECMASCRIPT`: GlobalDeclarationInstantiation of scripts: the global let/const/class are checked
+  (CanDeclare…, a name already declared or a non-configurable global is a SyntaxError) and the functions and vars
+  (CanDeclareGlobalFunction, CanDeclareGlobalVar: a TypeError on a non-extensible global object or a
+  non-configurable, non-writable property) before any binding is created; a global function replaces a
+  configurable property with a writable, enumerable, non-configurable one (CreateGlobalFunctionBinding); `var NaN`,
+  `var undefined` and `var Infinity` are allowed (before, a "redeclaration of const" TypeError).
+- All versions: identifiers may contain supplementary characters (U+10000 and above, e.g. U+13000); the tokenizer
+  took them for the BMP character with the same low 16 bits (U+13000 was read as the ideographic space U+3000).
+- test262: 29,945/42,616 (70.3%), 22 more tests pass.
+
 ### Language residuals: arrow covers, eval spread, instanceof, rest, `let` (2026-10-10, plan 1.10b–c)
 
 All versions unless stated (`BACKWARD_COMPATIBILITY.md` 1.9 and 2.36):

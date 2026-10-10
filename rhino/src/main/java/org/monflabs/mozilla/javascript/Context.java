@@ -154,6 +154,9 @@ public class Context implements Closeable {
      *   <li>{@code let} is an identifier in sloppy code where it does not start a declaration
      *       ({@code var let}, {@code if (a) let} followed by a line break); under {@link
      *       #VERSION_ES6} it is always a keyword.
+     *   <li>The declarations of a script are validated before any binding is created; a {@code var}
+     *       may name a non-writable global ({@code var NaN}) and a global function redefines a
+     *       configurable property of the same name.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

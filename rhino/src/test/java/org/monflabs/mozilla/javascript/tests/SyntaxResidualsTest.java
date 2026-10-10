@@ -4,7 +4,11 @@
 
 package org.monflabs.mozilla.javascript.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.RhinoException;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /** Language residuals (plan 1.10). */
@@ -103,5 +107,46 @@ class SyntaxResidualsTest {
                 "1|2|3",
                 "try { eval('var let = 1; var r = [let]; let = 2; r.push(let);"
                         + " var o = { let }; r.push(o.let + 1); r.join(\"|\")'); } catch (e) { e.name }");
+    }
+
+    @Test
+    void supplementaryIdentifiers() {
+        assertBoth(
+                "3",
+                "var \uD80C\uDC00 = 1; var a\uD80C\uDC00 = 2; String(\uD80C\uDC00 + a\uD80C\uDC00)");
+    }
+
+    @Test
+    void globalDeclarationInstantiation() {
+        Utils.runWithAllModes(
+                cx -> {
+                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                    var scope = cx.initStandardObjects();
+                    cx.evaluateString(
+                            scope,
+                            "Object.defineProperty(this, 'cfg', { configurable: true, value: 0 });",
+                            "a",
+                            1,
+                            null);
+                    cx.evaluateString(scope, "var NaN; function cfg() {}", "b", 1, null);
+                    String error;
+                    try {
+                        cx.evaluateString(scope, "var created; let undefined;", "c", 1, null);
+                        error = "none";
+                    } catch (RhinoException e) {
+                        error = "SyntaxError";
+                    }
+                    assertEquals(
+                            "function|NaN|SyntaxError|undefined",
+                            cx.evaluateString(
+                                    scope,
+                                    "[typeof cfg, String(NaN), '"
+                                            + error
+                                            + "', typeof created].join('|')",
+                                    "d",
+                                    1,
+                                    null));
+                    return null;
+                });
     }
 }

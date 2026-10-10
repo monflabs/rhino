@@ -57,6 +57,9 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private final Object securityDomain;
     private final int functionType;
 
+    /** A script's global let/const declarations (see Token#GLOBAL_LEXICALS), or null. */
+    private String globalLexicals;
+
     public JSDescriptor(
             JSCode<T> code,
             JSCode<T> constructor,
@@ -333,6 +336,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return securityDomain;
     }
 
+    /** The global let/const declarations of a script, as in Token#GLOBAL_LEXICALS, or null. */
+    public String getGlobalLexicals() {
+        return globalLexicals;
+    }
+
     public int getFunctionType() {
         return functionType;
     }
@@ -384,6 +392,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
+        public String globalLexicals;
 
         public Builder() {}
 
@@ -459,6 +468,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             securityController,
                             securityDomain,
                             functionType);
+            result.globalLexicals = globalLexicals;
             consumer.accept(result);
             result.nestedFunctions =
                     Collections.unmodifiableList(

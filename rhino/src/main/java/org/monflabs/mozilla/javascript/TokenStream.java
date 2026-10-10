@@ -1527,11 +1527,11 @@ class TokenStream implements Parser.CurrentPositionReporter {
         }
         return c == 0xA0
                 || c == BYTE_ORDER_MARK
-                || Character.getType((char) c) == Character.SPACE_SEPARATOR;
+                || Character.getType(c) == Character.SPACE_SEPARATOR;
     }
 
     private static boolean isJSFormatChar(int c) {
-        return c > 127 && Character.getType((char) c) == Character.FORMAT;
+        return c > 127 && Character.getType(c) == Character.FORMAT;
     }
 
     /** Parser calls the method when it gets / or /= in literal context. */

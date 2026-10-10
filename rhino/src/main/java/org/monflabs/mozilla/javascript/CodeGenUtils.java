@@ -109,6 +109,7 @@ public class CodeGenUtils {
         builder.isScript = true;
         builder.isEvalFunction = compilerEnv.isInEval();
         builder.isStrict = scriptOrFn.isInStrictMode();
+        builder.globalLexicals = (String) scriptOrFn.getProp(Node.GLOBAL_LEXICALS_PROP);
         builder.hasLexicalThis = false;
         builder.securityController = compilerEnv.securityController();
         builder.securityDomain = compilerEnv.securityDomain();

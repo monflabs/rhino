@@ -2725,6 +2725,17 @@ public class ScriptRuntime {
             return;
         }
         TopLevel topLevel = (TopLevel) top;
+        checkGlobalLexicals(topLevel, entries);
+        for (String entry : entries) {
+            topLevel.declareLexical(entry.substring(1), entry.charAt(0) == 'C');
+        }
+    }
+
+    /**
+     * GlobalDeclarationInstantiation (16.1.7) steps 3-4: a global let/const may not reuse the name
+     * of a lexical declaration, a var, a function, or a non-configurable global property.
+     */
+    private static void checkGlobalLexicals(TopLevel topLevel, String[] entries) {
         ScriptableObject global = topLevel.getGlobalThis();
         for (String entry : entries) {
             String name = entry.substring(1);
@@ -2734,9 +2745,6 @@ public class ScriptRuntime {
                 // already a lexical declaration, a var, a function, or a non-configurable global
                 throw constructError("SyntaxError", getMessageById("msg.global.redecl", name));
             }
-        }
-        for (String entry : entries) {
-            topLevel.declareLexical(entry.substring(1), entry.charAt(0) == 'C');
         }
     }
 
@@ -5488,6 +5496,19 @@ public class ScriptRuntime {
 
         var desc = execObj.getDescriptor();
 
+        if (!evalScript
+                && desc.getGlobalLexicals() != null
+                && desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT) {
+            VarScope top = scope;
+            while (top.isNestedScope()) {
+                top = top.getParentScope();
+            }
+            if (top instanceof TopLevel) {
+                // the lexical declarations are checked before any var or function is created
+                checkGlobalLexicals((TopLevel) top, desc.getGlobalLexicals().split(","));
+            }
+        }
+
         int varCount = desc.getParamAndVarCount();
         if (varCount != 0) {
 
@@ -5510,9 +5531,12 @@ public class ScriptRuntime {
                     }
                 }
             }
-            if (evalScript
-                    && varScope instanceof TopLevel
-                    && desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT) {
+            boolean globalInstantiation =
+                    varScope instanceof TopLevel
+                            && desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT;
+            if (globalInstantiation) {
+                // CanDeclareGlobalFunction and CanDeclareGlobalVar, before any binding is created
+                // (GlobalDeclarationInstantiation 16.1.7, EvalDeclarationInstantiation 19.2.1.3)
                 checkEvalGlobalDeclarations(desc, ((TopLevel) varScope).getGlobalThis());
             }
 
@@ -5533,7 +5557,8 @@ public class ScriptRuntime {
                     } else {
                         varScope.put(name, varScope, Undefined.instance);
                     }
-                } else {
+                } else if (!(globalInstantiation && !isConst)) {
+                    // a var may reuse a global property (var NaN): only a const is checked
                     ScriptableObject.redefineProperty(scope, name, isConst);
                 }
             }
@@ -6078,7 +6103,20 @@ public class ScriptRuntime {
         if (type == FunctionNode.FUNCTION_STATEMENT) {
             String name = function.getFunctionName();
             if (name != null && name.length() != 0) {
-                if (!fromEvalCode) {
+                if (!fromEvalCode && cx.isLatestEcmaScript() && scope instanceof TopLevel) {
+                    // CreateGlobalFunctionBinding (9.1.1.4.18), D false
+                    ScriptableObject global = ((TopLevel) scope).getGlobalThis();
+                    ScriptableObject.DescriptorInfo existing =
+                            ScriptableObject.getOwnPropertyDescriptorInfo(global, cx, name);
+                    ScriptableObject.DescriptorInfo desc =
+                            existing == null || !Boolean.FALSE.equals(existing.configurable)
+                                    ? new ScriptableObject.DescriptorInfo(
+                                            true, true, false, function)
+                                    : new ScriptableObject.DescriptorInfo(
+                                            NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND,
+                                            function);
+                    global.defineOwnProperty(cx, name, desc, true);
+                } else if (!fromEvalCode) {
                     // ECMA specifies that functions defined in global and
                     // function scope outside eval should have DONTDELETE set.
                     ScriptableObject.defineProperty(

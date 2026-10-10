@@ -79,7 +79,9 @@ public class Node implements Iterable<Node> {
             STRICT_PROP = 39, // FN_NAME_ASSIGN in strict code (throws)
             // SETNAME of a destructuring assignment target (subject to the TDZ of its binding)
             DESTRUCTURING_TARGET_PROP = 40,
-            LAST_PROP = DESTRUCTURING_TARGET_PROP,
+            // SCRIPT: its global let/const declarations, as in Token#GLOBAL_LEXICALS
+            GLOBAL_LEXICALS_PROP = 41,
+            LAST_PROP = GLOBAL_LEXICALS_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /** Values of DERIVED_THIS_PROP. */
@@ -487,6 +489,8 @@ public class Node implements Iterable<Node> {
                 return "strict_prop";
             case DESTRUCTURING_TARGET_PROP:
                 return "destructuring_target_prop";
+            case GLOBAL_LEXICALS_PROP:
+                return "global_lexicals_prop";
 
             default:
                 Kit.codeBug();

@@ -213,6 +213,17 @@ x = 1;                    // VERSION_ES6: SyntaxError (let declaration)   VERSIO
 - **Why:** ECMA-262 2026, §14.3.1 (LexicalDeclaration), §14.5 (ExpressionStatement lookahead), §13.1
   (`let` is not a reserved word).
 
+### 1.11 Global declaration instantiation
+
+```js
+var NaN;                  // VERSION_ES6: TypeError (redeclaration of const)   VERSION_ECMASCRIPT: allowed
+// a script `var x; let undefined;`: VERSION_ES6 creates x then fails; VERSION_ECMASCRIPT fails before creating x
+```
+
+- The declarations of a script are validated before any of them is created; a `var` may name an existing
+  non-writable global (`NaN`); a global function redefines a configurable property of the same name.
+- **Why:** ECMA-262 2026, §16.1.7 (GlobalDeclarationInstantiation), §9.1.1.4.15–18.
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`

@@ -737,6 +737,7 @@ public class NodeTransformer {
         }
         if (declarations.length() > 0) {
             tree.removeLexicalVariables();
+            tree.putProp(Node.GLOBAL_LEXICALS_PROP, declarations.toString());
             Node declare = Node.newString(Token.GLOBAL_LEXICALS, declarations.toString());
             declare.setLineColumnNumber(Math.max(tree.getLineno(), 1), 1);
             tree.addChildToFront(declare);
