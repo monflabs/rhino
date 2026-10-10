@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Classes: syntax and definition (2026-10-09, plan 1.7a)
+
+All versions from `VERSION_ES6` (additive: `class` was a reserved word):
+
+- Class declarations and expressions: constructor, methods, getters/setters, static and computed members, an
+  optional `extends` clause (including `null`), strict-mode bodies. The parser builds a `ClassNode`; `IRFactory`
+  turns it into a `CLASS` node (constructor, heritage, and the prototype and static members as object literals)
+  wrapped in a scope binding the class name; both backends call `ClassDefinition.define`
+  (ClassDefinitionEvaluation).
+- A class constructor throws a `TypeError` when called without `new` (`JSDescriptor` class-constructor flag); a
+  class without a constructor gets a default one forwarding to its parent; `prototype` is non-writable, methods are
+  non-enumerable, a computed `['constructor']` member replaces the `constructor` property.
+- Early errors: duplicate constructors, special constructor methods, `static prototype`, unnamed declarations, a
+  class declaration as a statement body or labeled item.
+- Fixes found by the un-skipped tests: BigInt literal property keys in object literals, classes and destructuring
+  patterns crashed the compiler.
+- `class` removed from the unsupported test262 features. Not yet: `super`, derived constructors binding `this`,
+  `new.target`, the home object of static methods (1.7b), subclassing built-ins (1.7c); the class name binding is
+  not immutable.
+- test262: 364 more files pass; 26,404 of 42,616 in-scope files (62.0%). The static member order tests still fail
+  on Rhino's own `arity` property of functions.
+
 ### Generator details (2026-10-09, plan 1.6c)
 
 All versions from `VERSION_ES6`:

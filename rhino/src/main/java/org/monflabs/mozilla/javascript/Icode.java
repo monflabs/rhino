@@ -199,8 +199,11 @@ abstract class Icode {
             ENUM_CLOSE = NEW_SPREAD - 1,
             ENUM_CLOSE_ABRUPT = ENUM_CLOSE - 1,
 
+            // Class definition: constructor, heritage, prototype and static members
+            CLASS_DEFINE = ENUM_CLOSE_ABRUPT - 1,
+
             // Last icode
-            MIN_ICODE = ENUM_CLOSE_ABRUPT;
+            MIN_ICODE = CLASS_DEFINE;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -428,6 +431,8 @@ abstract class Icode {
                 return "ENUM_CLOSE";
             case ENUM_CLOSE_ABRUPT:
                 return "ENUM_CLOSE_ABRUPT";
+            case CLASS_DEFINE:
+                return "CLASS_DEFINE";
         }
 
         // icode without name

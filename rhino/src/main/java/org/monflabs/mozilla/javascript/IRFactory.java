@@ -24,6 +24,7 @@ import org.monflabs.mozilla.javascript.ast.BigIntLiteral;
 import org.monflabs.mozilla.javascript.ast.Block;
 import org.monflabs.mozilla.javascript.ast.BreakStatement;
 import org.monflabs.mozilla.javascript.ast.CatchClause;
+import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.ComputedPropertyKey;
 import org.monflabs.mozilla.javascript.ast.ConditionalExpression;
 import org.monflabs.mozilla.javascript.ast.ContinueStatement;
@@ -210,6 +211,8 @@ public final class IRFactory {
 
     private Node transformNode(AstNode node) {
         switch (node.getType()) {
+            case Token.CLASS:
+                return transformClass((ClassNode) node);
             case Token.ARRAYCOMP:
                 return transformArrayComp((ArrayComprehension) node);
             case Token.ARRAYLIT:
@@ -1161,6 +1164,49 @@ public final class IRFactory {
         call.putIntProp(Node.SPREAD_ARGS_PROP, 1);
         // a direct eval with spread arguments is not supported: it is an ordinary call
         call.removeProp(Node.SPECIALCALL_PROP);
+    }
+
+    /**
+     * A class: CLASS(constructor or null, heritage or null, prototype members, static members), its
+     * string being E or N (whether there is an extends clause) and the class name; see
+     * ClassDefinition. A named class binds its name in a scope around the definition.
+     */
+    private Node transformClass(ClassNode cls) {
+        Name className = cls.getClassName();
+        String name = className == null ? "" : className.getIdentifier();
+        Scope scope = cls.getScope();
+        // the heritage is outside the scope of the class name (it was parsed before it)
+        Node heritage =
+                cls.getHeritage() != null ? transform(cls.getHeritage()) : new Node(Token.NULL);
+        // not pushScope: a class in a destructuring default is transformed out of its parent scope
+        Scope outer = parser.currentScope;
+        parser.currentScope = scope;
+        try {
+            Node def = Node.newString(Token.CLASS, (cls.getHeritage() != null ? "E" : "N") + name);
+            def.addChildToBack(heritage);
+            def.addChildToFront(
+                    cls.getConstructor() != null
+                            ? transform(cls.getConstructor())
+                            : new Node(Token.NULL));
+            def.addChildToBack(transformObjectLiteral(cls.getPrototypeMembers()));
+            def.addChildToBack(transformObjectLiteral(cls.getStaticMembers()));
+            def.setLineColumnNumber(cls.getLineno(), cls.getColumn());
+            if (className == null) {
+                return def;
+            }
+            // let (C) { C = class ...; C }: the methods close over the binding of the name
+            Node binding = Node.newString(Token.NAME, name);
+            // uninitialized (in its temporal dead zone) until the class is defined
+            binding.putIntProp(Node.LEXICAL_PROP, 1);
+            Node let = new Node(Token.LET, binding);
+            Node init = new Node(Token.SETNAME, Node.newString(Token.BINDNAME, name), def);
+            init.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+            scope.addChildToBack(let);
+            scope.addChildToBack(new Node(Token.COMMA, init, Node.newString(Token.NAME, name)));
+            return scope;
+        } finally {
+            parser.currentScope = outer;
+        }
     }
 
     private Node transformNumber(NumberLiteral node) {

@@ -153,7 +153,6 @@ public class Test262SuiteTest {
                             "IsHTMLDDA",
                             "async-functions",
                             "async-iteration",
-                            "class",
                             "class-fields-private",
                             "class-fields-public",
                             "SharedArrayBuffer",

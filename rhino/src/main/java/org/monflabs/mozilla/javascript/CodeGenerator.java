@@ -965,6 +965,16 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 break;
 
+            case Token.CLASS:
+                // constructor, heritage, prototype members, static members
+                for (int i = 0; i < 4; i++) {
+                    visitExpression(child, 0);
+                    child = child.getNext();
+                }
+                addStringOp(Icode.CLASS_DEFINE, node.getString());
+                stackChange(-3);
+                break;
+
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:

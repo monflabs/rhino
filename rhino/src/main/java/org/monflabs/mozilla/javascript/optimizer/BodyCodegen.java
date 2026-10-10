@@ -1365,6 +1365,27 @@ class BodyCodegen {
                         "Lorg/monflabs/mozilla/javascript/UniqueTag;");
                 break;
 
+            case Token.CLASS:
+                {
+                    // constructor, heritage, prototype members, static members
+                    Node c = child;
+                    for (int i = 0; i < 4; i++) {
+                        generateExpression(c, node);
+                        c = c.getNext();
+                    }
+                    cfw.addPush(node.getString());
+                    cfw.addALoad(contextLocal);
+                    cfw.addALoad(variableObjectLocal);
+                    addScriptRuntimeInvoke(
+                            "defineClass",
+                            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;"
+                                    + "Ljava/lang/String;"
+                                    + "Lorg/monflabs/mozilla/javascript/Context;"
+                                    + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                    + ")Ljava/lang/Object;");
+                    break;
+                }
+
             case Token.ITER_OPEN:
             case Token.ITER_STEP:
             case Token.ITER_REST:

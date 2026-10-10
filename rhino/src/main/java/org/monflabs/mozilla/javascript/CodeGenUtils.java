@@ -61,6 +61,9 @@ public class CodeGenUtils {
         if (fn.isNamedByLiteral()) {
             builder.namedByLiteral = true;
         }
+        if (fn.isClassConstructor()) {
+            builder.classConstructor = true;
+        }
         fillInCommon(builder, fn);
     }
 

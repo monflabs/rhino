@@ -3840,6 +3840,29 @@ public class ScriptRuntime {
         return forbidden;
     }
 
+    /**
+     * A class (Token#CLASS): its constructor (or null), heritage, prototype and static members;
+     * {@code kind} is E or N (whether there is an extends clause) followed by the class name.
+     */
+    public static Object defineClass(
+            Object constructor,
+            Object heritage,
+            Object prototypeMembers,
+            Object staticMembers,
+            String kind,
+            Context cx,
+            VarScope scope) {
+        return ClassDefinition.define(
+                constructor,
+                heritage,
+                kind.charAt(0) == 'E',
+                prototypeMembers,
+                staticMembers,
+                kind.substring(1),
+                cx,
+                scope);
+    }
+
     /** The arguments of a call with spread arguments, built as an array (Node#SPREAD_ARGS_PROP). */
     public static Object[] spreadArguments(Object array) {
         NativeArray a = (NativeArray) array;

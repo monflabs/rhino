@@ -266,7 +266,8 @@ public class Token {
             // IteratorClose of a for-of loop left by a jump, or (abrupt) by a throw
             ENUM_CLOSE = REQUIRE_OBJECT + 1,
             ENUM_CLOSE_ABRUPT = ENUM_CLOSE + 1,
-            LAST_TOKEN = ENUM_CLOSE_ABRUPT + 1;
+            CLASS = ENUM_CLOSE_ABRUPT + 1, // a class; in the IR: ScriptRuntime.defineClass
+            LAST_TOKEN = CLASS + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -647,6 +648,8 @@ public class Token {
                 return "ENUM_CLOSE";
             case ENUM_CLOSE_ABRUPT:
                 return "ENUM_CLOSE_ABRUPT";
+            case CLASS:
+                return "CLASS";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

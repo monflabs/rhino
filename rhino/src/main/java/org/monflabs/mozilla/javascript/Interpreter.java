@@ -788,6 +788,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.CALL_SPREAD_ON_SUPER] = new DoCallSpread();
         instructionObjs[base + Icode.NEW_SPREAD] = new DoCallSpread();
         instructionObjs[base + Icode.ENUM_CLOSE] = new DoEnumClose();
+        instructionObjs[base + Icode.CLASS_DEFINE] = new DoClassDefine();
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
@@ -2805,7 +2806,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             }
 
             if (fun instanceof JSFunction
-                    && ((JSFunction) fun).getDescriptor().getCode() instanceof InterpreterData) {
+                    && ((JSFunction) fun).getDescriptor().getCode() instanceof InterpreterData
+                    && !((JSFunction) fun).getDescriptor().isClassConstructor()) {
                 JSFunction ifun = (JSFunction) fun;
 
                 JSDescriptor<JSFunction> desc = ifun.getDescriptor();
@@ -3545,6 +3547,25 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         op == Icode.CALL_SPREAD_ON_SUPER ? frame.thisObj : result.getThis();
                 frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
             }
+            return null;
+        }
+    }
+
+    private static class DoClassDefine extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object[] stack = frame.stack;
+            frame.stackTop -= 3;
+            int top = frame.stackTop;
+            stack[top] =
+                    ScriptRuntime.defineClass(
+                            stack[top],
+                            stack[top + 1],
+                            stack[top + 2],
+                            stack[top + 3],
+                            state.stringReg,
+                            cx,
+                            frame.scope);
             return null;
         }
     }

@@ -28,6 +28,7 @@ import org.monflabs.mozilla.javascript.ast.BigIntLiteral;
 import org.monflabs.mozilla.javascript.ast.Block;
 import org.monflabs.mozilla.javascript.ast.BreakStatement;
 import org.monflabs.mozilla.javascript.ast.CatchClause;
+import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.Comment;
 import org.monflabs.mozilla.javascript.ast.ComputedPropertyKey;
 import org.monflabs.mozilla.javascript.ast.ConditionalExpression;
@@ -1626,6 +1627,13 @@ public class Parser {
         int tt = peekToken(), pos = ts.tokenBeg;
         int lineno, column;
 
+        if (tt == Token.RESERVED && isClassKeyword()) {
+            if (inSingleStatementContext) {
+                reportError("msg.class.not.statement");
+            }
+            return classDeclaration();
+        }
+
         switch (tt) {
             case Token.IF:
                 return ifStatement();
@@ -2502,6 +2510,9 @@ public class Parser {
         boolean previous = hasUndefinedBeenRedefined;
         try {
             hasUndefinedBeenRedefined = true;
+            if (peekToken() == Token.RESERVED && isClassKeyword()) {
+                reportError("msg.class.not.statement");
+            }
             AstNode body = getNextStatementAfterInlineComments(pn);
 
             pn.setLength(getNodeEnd(body) - pos);
@@ -2743,6 +2754,9 @@ public class Parser {
         try {
             currentLabel = bundle;
             if (stmt == null) {
+                if (peekToken() == Token.RESERVED && isClassKeyword()) {
+                    reportError("msg.class.not.statement");
+                }
                 stmt = statementHelper();
                 int ntt = peekToken();
                 if (ntt == Token.COMMENT
@@ -4219,6 +4233,9 @@ public class Parser {
                 break;
 
             case Token.RESERVED:
+                if (isClassKeyword()) {
+                    return classDefinition(false);
+                }
                 consumeToken();
                 reportError("msg.reserved.id", ts.getString());
                 break;
@@ -5591,6 +5608,212 @@ public class Parser {
                 createName(elemName));
     }
 
+    /** Whether the peeked RESERVED token is the class keyword (ES6 and later). */
+    private boolean isClassKeyword() {
+        return compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                && "class".equals(ts.getString());
+    }
+
+    /** A class declaration: a let binding of the class name, initialized by the class. */
+    private AstNode classDeclaration() throws IOException {
+        int pos = ts.tokenBeg, lineno = ts.getLineno(), column = ts.getTokenColumn();
+        ClassNode cls = classDefinition(true);
+        VariableDeclaration decl = new VariableDeclaration(pos, cls.getLength());
+        decl.setType(Token.LET);
+        VariableInitializer vi = new VariableInitializer(pos, cls.getLength());
+        Name name = cls.getClassName();
+        Name target = new Name(name.getPosition(), name.getIdentifier());
+        target.setLineColumnNumber(name.getLineno(), name.getColumn());
+        vi.setTarget(target);
+        vi.setInitializer(cls);
+        vi.setType(Token.LET);
+        vi.setLineColumnNumber(lineno, column);
+        decl.addVariable(vi);
+        decl.setIsStatement(true);
+        decl.setLineColumnNumber(lineno, column);
+        Symbol symbol = currentScope.getSymbol(name.getIdentifier());
+        if (symbol != null) {
+            // the temporal dead zone of the binding ends with the class
+            symbol.setNode(vi);
+        }
+        return decl;
+    }
+
+    /**
+     * A class (ECMA-262 15.7): the class keyword is the peeked token. Everything in a class is
+     * strict code. The name is also bound, immutably, in a scope around the class body.
+     */
+    private ClassNode classDefinition(boolean isStatement) throws IOException {
+        consumeToken();
+        int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
+        ClassNode cls = new ClassNode(pos);
+        cls.setLineColumnNumber(lineno, column);
+        boolean savedStrict = inUseStrictDirective;
+        inUseStrictDirective = true;
+        try {
+            if (matchToken(Token.NAME, true)) {
+                Name name = createNameNode(true, Token.NAME);
+                String id = name.getIdentifier();
+                if ("eval".equals(id) || "arguments".equals(id)) {
+                    reportError("msg.bad.id.strict", id);
+                }
+                cls.setClassName(name);
+                if (isStatement) {
+                    defineSymbol(Token.LET, id);
+                }
+            } else if (isStatement) {
+                reportError("msg.class.no.name");
+            }
+            if (peekToken() == Token.RESERVED && "extends".equals(ts.getString())) {
+                consumeToken();
+                cls.setHeritage(memberExpr(true));
+            }
+            mustMatchToken(Token.LC, "msg.no.brace.class", true);
+
+            Scope scope = createScopeNode(Token.LETEXPR, lineno, column);
+            cls.setScope(scope);
+            pushScope(scope);
+            try {
+                if (cls.getClassName() != null) {
+                    // immutable in the spec; a let here (assigning it does not throw)
+                    defineSymbol(Token.LET, cls.getClassName().getIdentifier(), true);
+                }
+                classBody(cls, pos);
+            } finally {
+                popScope();
+            }
+            mustMatchToken(Token.RC, "msg.no.brace.class", true);
+            cls.setSourceBounds(pos, ts.tokenEnd);
+            cls.setLength(ts.tokenEnd - pos);
+            if (cls.getConstructor() != null) {
+                // the source text of the class is that of its constructor
+                cls.getConstructor().setRawSourceBounds(pos, ts.tokenEnd);
+            }
+        } finally {
+            inUseStrictDirective = savedStrict;
+        }
+        return cls;
+    }
+
+    private void classBody(ClassNode cls, int pos) throws IOException {
+        ObjectLiteral prototypeMembers = new ObjectLiteral(pos);
+        ObjectLiteral staticMembers = new ObjectLiteral(pos);
+        List<AbstractObjectProperty> protoElems = new ArrayList<>();
+        List<AbstractObjectProperty> staticElems = new ArrayList<>();
+        // constructor is the first property of the prototype (ClassDefinition sets its value)
+        ObjectProperty constructorSlot = new ObjectProperty(pos);
+        constructorSlot.setKeyAndValue(
+                new Name(pos, "constructor"), new KeywordLiteral(pos, 0, Token.UNDEFINED));
+        protoElems.add(constructorSlot);
+        for (; ; ) {
+            int tt = peekToken();
+            if (tt == Token.SEMI) {
+                consumeToken();
+                continue;
+            }
+            if (tt == Token.RC || tt == Token.EOF || tt == Token.ERROR) {
+                break;
+            }
+            boolean isStatic = false;
+            if ((tt == Token.NAME || tt == Token.RESERVED) && "static".equals(ts.getString())) {
+                consumeToken();
+                int next = peekToken();
+                if (next == Token.LP) {
+                    // a method named static
+                    Name name = new Name(ts.tokenBeg, "static");
+                    classMember(cls, name, ts.tokenBeg, protoElems, false, true);
+                    continue;
+                }
+                isStatic = true;
+            }
+            int propStart = ts.tokenBeg;
+            AstNode pname = objliteralProperty();
+            if (pname == null || pname instanceof Spread) {
+                reportError("msg.bad.prop");
+                break;
+            }
+            classMember(
+                    cls, pname, propStart, isStatic ? staticElems : protoElems, isStatic, false);
+        }
+        prototypeMembers.setElements(protoElems);
+        staticMembers.setElements(staticElems);
+        cls.setPrototypeMembers(prototypeMembers);
+        cls.setStaticMembers(staticMembers);
+    }
+
+    /** A method, getter or setter of a class; pname is the peeked (or synthesized) key. */
+    private void classMember(
+            ClassNode cls,
+            AstNode pname,
+            int propStart,
+            List<AbstractObjectProperty> elems,
+            boolean isStatic,
+            boolean keyConsumed)
+            throws IOException {
+        int ppos = ts.tokenBeg;
+        if (!keyConsumed) {
+            consumeToken();
+        }
+        if (pname instanceof Name || pname instanceof StringLiteral) {
+            pname.setLineColumnNumber(lineNumber(), columnNumber());
+        }
+        String propertyName =
+                pname instanceof Name
+                        ? ((Name) pname).getIdentifier()
+                        : pname instanceof StringLiteral
+                                ? ((StringLiteral) pname).getValue()
+                                : null;
+        int entryKind = METHOD_ENTRY;
+        if (peekToken() != Token.LP && pname instanceof Name) {
+            if ("get".equals(propertyName)) {
+                entryKind = GET_ENTRY;
+            } else if ("set".equals(propertyName)) {
+                entryKind = SET_ENTRY;
+            } else {
+                reportError("msg.bad.prop");
+            }
+            propStart = ts.tokenBeg;
+            pname = objliteralProperty();
+            if (pname == null) {
+                reportError("msg.bad.prop");
+                return;
+            }
+            consumeToken();
+            propertyName =
+                    pname instanceof Name
+                            ? ((Name) pname).getIdentifier()
+                            : pname instanceof StringLiteral
+                                    ? ((StringLiteral) pname).getValue()
+                                    : null;
+        }
+        boolean isGenerator = pname instanceof GeneratorMethodDefinition;
+        if (isStatic && "prototype".equals(propertyName)) {
+            reportError("msg.class.static.prototype");
+        }
+        if (!isStatic && "constructor".equals(propertyName)) {
+            if (entryKind != METHOD_ENTRY || isGenerator) {
+                reportError("msg.class.special.ctor");
+            }
+            if (cls.getConstructor() != null) {
+                reportError("msg.class.dup.ctor");
+            }
+            FunctionNode ctor = function(FunctionNode.FUNCTION_EXPRESSION, true);
+            ctor.setMethodDefinition(false);
+            ctor.setClassConstructor();
+            ctor.setInStrictMode(true);
+            if (cls.getClassName() != null) {
+                ctor.setFunctionName(
+                        new Name(ctor.getPosition(), cls.getClassName().getIdentifier()));
+            }
+            cls.setConstructor(ctor);
+            return;
+        }
+        ObjectProperty prop =
+                methodDefinition(ppos, propStart, pname, entryKind, isGenerator, true);
+        ((FunctionNode) prop.getValue()).setInStrictMode(true);
+        elems.add(prop);
+    }
+
     /** Set by methodDefinition for function(): the method being parsed is a generator. */
     private boolean methodIsGenerator;
 
@@ -5732,6 +5955,8 @@ public class Parser {
         } else if (id instanceof NumberLiteral) {
             double n = ((NumberLiteral) id).getNumber();
             key = ScriptRuntime.getIndexObject(n);
+        } else if (id instanceof BigIntLiteral) {
+            key = ScriptRuntime.getIndexObject(((BigIntLiteral) id).getBigInt().toString());
         } else if (id instanceof GeneratorMethodDefinition) {
             key = getPropKey(((GeneratorMethodDefinition) id).getMethodName());
         } else {
@@ -5882,6 +6107,9 @@ public class Parser {
                 extractedKeys.add(keyName);
             } else if (id instanceof NumberLiteral) {
                 Node s = createNumber((int) ((NumberLiteral) id).getNumber());
+                rightElem = new Node(Token.GETELEM, createName(tempName), s);
+            } else if (id instanceof BigIntLiteral) {
+                Node s = Node.newString(((BigIntLiteral) id).getBigInt().toString());
                 rightElem = new Node(Token.GETELEM, createName(tempName), s);
             } else if (id instanceof ComputedPropertyKey) {
                 // handle computed property key: [...key]

@@ -33,6 +33,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private static final int DECLARED_AS_FUNCTION_EXPRESSION_FLAG = 1 << 12;
     private static final int DERIVED_CONSTRUCTOR_FLAG = 1 << 13;
     private static final int NAMED_BY_LITERAL_FLAG = 1 << 14;
+    private static final int CLASS_CONSTRUCTOR_FLAG = 1 << 15;
 
     private final JSCode<T> code;
     private final JSCode<T> constructor;
@@ -84,6 +85,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             boolean declaredAsFunctionExpression,
             boolean derivedConstructor,
             boolean namedByLiteral,
+            boolean classConstructor,
             SecurityController securityController,
             Object securityDomain,
             int functionType) {
@@ -109,6 +111,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         flags = flags | (declaredAsFunctionExpression ? DECLARED_AS_FUNCTION_EXPRESSION_FLAG : 0);
         flags = flags | (derivedConstructor ? DERIVED_CONSTRUCTOR_FLAG : 0);
         flags = flags | (namedByLiteral ? NAMED_BY_LITERAL_FLAG : 0);
+        flags = flags | (classConstructor ? CLASS_CONSTRUCTOR_FLAG : 0);
         this.flags = flags;
 
         this.sourceFile = sourceFile;
@@ -172,6 +175,13 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     public boolean isNamedByLiteral() {
         return (flags & NAMED_BY_LITERAL_FLAG) != 0;
+    }
+
+    /**
+     * Whether the function is the constructor of a class: calling it without new is a TypeError.
+     */
+    public boolean isClassConstructor() {
+        return (flags & CLASS_CONSTRUCTOR_FLAG) != 0;
     }
 
     public boolean hasPrototype() {
@@ -343,6 +353,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean requiresArgumentObject;
         public boolean declaredAsFunctionExpression;
         public boolean namedByLiteral;
+        public boolean classConstructor;
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
@@ -415,6 +426,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             declaredAsFunctionExpression,
                             false,
                             namedByLiteral,
+                            classConstructor,
                             securityController,
                             securityDomain,
                             functionType);

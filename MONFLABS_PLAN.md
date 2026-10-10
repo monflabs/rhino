@@ -356,6 +356,15 @@ un-skips `language/{statements,expressions}/class` (~8,400 tests; tests using la
 their own tags until M8). Biggest single item; may be split into 1.7a (syntax + runtime) and 1.7b (built-in
 subclassing). Nashorn: classes desugared in its IR with `NewTarget` threaded through built-in constructors.
 
+Steps:
+- *1.7a (done)* class syntax and ClassDefinitionEvaluation: `ClassNode` desugared by `IRFactory` into a `CLASS`
+  node (constructor, heritage, prototype and static members as object literals) evaluated by
+  `ClassDefinition.define`; class constructors throw when called; default constructors; inner name binding;
+  `class` removed from `UNSUPPORTED_FEATURES`.
+- *1.7b* `super()`, derived-constructor `this` bound by `super()`, `super.x` in methods and static methods (home
+  object of statics), `new.target`.
+- *1.7c* subclassing built-ins via `NewTarget`.
+
 **1.8 Well-known symbols and built-in protocol conformance.** `Symbol.species`, `toStringTag`, `unscopables`
 (`with`), `hasInstance`, `toPrimitive`, `isConcatSpreadable`; `Proxy` invariants and trap ordering, `Reflect`
 (68% → 100%); `TypedArray`/`ArrayBuffer`/`DataView` (non-resizable) conformance; `String.fromCodePoint`,
@@ -522,8 +531,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
-| 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–b)       | (this) |
-| 1.7  | Classes                                         | todo        |                              |        |
+| 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
+| 1.7  | Classes                                         | in progress | 61.1% → 62.0% (1.7a)         | (this) |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |
