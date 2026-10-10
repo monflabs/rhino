@@ -2301,6 +2301,15 @@ public class ScriptRuntime {
             so.delete(s);
             return !so.has(s, (Scriptable) target);
         }
+        if (target instanceof NativeProxy) {
+            // [[Delete]] of a proxy has a result: has would call its has trap
+            NativeProxy proxy = (NativeProxy) target;
+            boolean deleted = proxy.delete(cx, elem);
+            if (!deleted && cx.isStrictMode()) {
+                throw typeErrorById("msg.delete.property.with.configurable.false", elem);
+            }
+            return deleted;
+        }
         StringIdOrIndex s = toStringIdOrIndex(elem);
         if (s.stringId == null) {
             target.delete(s.index);

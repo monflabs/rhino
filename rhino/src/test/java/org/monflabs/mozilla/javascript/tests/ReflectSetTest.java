@@ -46,4 +46,20 @@ class ReflectSetTest {
                         + " t(() => Object.getOwnPropertyDescriptor(new Proxy({}, {"
                         + " getOwnPropertyDescriptor() { return { value: 1, configurable: false }; } }), 'x'));");
     }
+
+    @Test
+    void deleteDefineAndSetPrototype() {
+        assertBoth(
+                "false|TypeError|false|TypeError|false|TypeError|true",
+                "var nd = new Proxy({}, { deleteProperty() { return false; } });"
+                        + " t(() => Reflect.deleteProperty(nd, 'x'));"
+                        + " t(function () { 'use strict'; delete nd.x; });"
+                        + " var ndef = new Proxy({}, { defineProperty() { return false; } });"
+                        + " t(() => Reflect.defineProperty(ndef, 'x', { value: 1 }));"
+                        + " t(() => Object.defineProperty(ndef, 'x', { value: 1 }));"
+                        + " t(() => Reflect.setPrototypeOf(Object.preventExtensions({}), {}));"
+                        + " t(() => Object.setPrototypeOf(new Proxy({}, { setPrototypeOf() { return false; } }), {}));"
+                        + " t(() => { var tgt = { get a() { return this; } }; var p = new Proxy(tgt, {});"
+                        + " return p.a === p; });");
+    }
 }

@@ -156,31 +156,34 @@ final class NativeReflect extends ScriptableObject {
          * 3. Let desc be ? ToPropertyDescriptor(attributes).
          * 4. Return ? target.[[DefineOwnProperty]](key, desc).
          */
-        if (args.length < 3) {
-            throw ScriptRuntime.typeErrorById(
-                    "msg.method.missing.parameter",
-                    "Reflect.defineProperty",
-                    "3",
-                    Integer.toString(args.length));
-        }
-
         ScriptableObject target = checkTarget(args);
-        DescriptorInfo desc = new DescriptorInfo(ScriptableObject.ensureScriptableObject(args[2]));
+        Object key = toPropertyKey(args.length > 1 ? args[1] : Undefined.instance);
+        // ToPropertyDescriptor
+        ScriptableObject attributes =
+                ScriptableObject.ensureScriptableObject(
+                        args.length > 2 ? args[2] : Undefined.instance);
+        checkDescriptor(attributes);
+        DescriptorInfo desc = new DescriptorInfo(attributes);
+        return AbstractEcmaObjectOperations.defineOwn(cx, target, key, desc);
+    }
 
-        Object key = args[1];
-
-        try {
-            if (key instanceof Symbol) {
-                return target.defineOwnProperty(cx, key, desc);
-            } else {
-                String propertyKey =
-                        ScriptRuntime.toString(
-                                ScriptRuntime.toPrimitive(key, ScriptRuntime.StringClass));
-                return target.defineOwnProperty(cx, propertyKey, desc);
-            }
-
-        } catch (EcmaError e) {
-            return false;
+    private static void checkDescriptor(ScriptableObject desc) {
+        Object getter = ScriptableObject.getProperty(desc, "get");
+        Object setter = ScriptableObject.getProperty(desc, "set");
+        if (getter != NOT_FOUND
+                && !Undefined.isUndefined(getter)
+                && !(getter instanceof Callable)) {
+            throw ScriptRuntime.notFunctionError(getter);
+        }
+        if (setter != NOT_FOUND
+                && !Undefined.isUndefined(setter)
+                && !(setter instanceof Callable)) {
+            throw ScriptRuntime.notFunctionError(setter);
+        }
+        boolean accessor = getter != NOT_FOUND || setter != NOT_FOUND;
+        boolean data = desc.has("value", desc) || desc.has("writable", desc);
+        if (accessor && data) {
+            throw ScriptRuntime.typeErrorById("msg.both.data.and.accessor.desc");
         }
     }
 
@@ -196,15 +199,7 @@ final class NativeReflect extends ScriptableObject {
          * 3. Return ? target.[[Delete]](key).
          */
         ScriptableObject target = checkTarget(args);
-
-        if (args.length > 1) {
-            if (ScriptRuntime.isSymbol(args[1])) {
-                return ScriptableObject.deleteProperty(target, (Symbol) args[1]);
-            }
-            return ScriptableObject.deleteProperty(target, ScriptRuntime.toString(args[1]));
-        }
-
-        return false;
+        return target.delete(cx, toPropertyKey(args.length > 1 ? args[1] : Undefined.instance));
     }
 
     /**
@@ -421,40 +416,11 @@ final class NativeReflect extends ScriptableObject {
         }
 
         ScriptableObject target = checkTarget(args);
-
-        if (target.getPrototype() == args[1]) {
-            return true;
+        if (args[1] != null
+                && (!(args[1] instanceof Scriptable) || ScriptRuntime.isSymbol(args[1]))) {
+            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(args[1]));
         }
-
-        if (!target.isExtensible()) {
-            return false;
-        }
-
-        if (args[1] == null) {
-            target.setPrototype(null);
-            return true;
-        }
-
-        if (ScriptRuntime.isSymbol(args[1])) {
-            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(args[0]));
-        }
-
-        Scriptable proto = ScriptableObject.ensureScriptable(args[1]);
-        if (target.getPrototype() == proto) {
-            return true;
-        }
-
-        // avoid cycles
-        Scriptable p = proto;
-        while (p != null) {
-            if (target == p) {
-                return false;
-            }
-            p = p.getPrototype();
-        }
-
-        target.setPrototype(proto);
-        return true;
+        return target.setPrototypeOf(cx, (Scriptable) args[1]);
     }
 
     private static ScriptableObject checkTarget(Object[] args) {

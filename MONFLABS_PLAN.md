@@ -383,8 +383,9 @@ Steps:
 Steps (2026-10-10, from a run of the in-scope built-ins failures: 435 files):
 - *1.8a (done)* typed array internal methods (10.4.5).
 - *1.8b* `[[Set]]` returning a boolean (`Reflect.set`, receivers, Proxy `set`), Proxy invariants and trap order.
-  Part 1 (done): [[Set]], proxy `set`/`getOwnPropertyDescriptor`, proxies in prototype chains. Part 2:
-  `deleteProperty`/`defineProperty`/`setPrototypeOf` results and proxies as targets, `with` and proxies.
+  Part 1 (done): [[Set]], proxy `set`/`getOwnPropertyDescriptor`, proxies in prototype chains. Part 2 (done):
+  `deleteProperty`/`defineProperty`/`setPrototypeOf` results, proxies as targets, `get` receiver. Left: `with` and
+  proxies (name resolution through the `has` trap), `ownKeys` order of a proxy target.
 - *1.8c* `Object.*`, `Array.prototype`, `String.prototype`, `Function.prototype`, `JSON`, `Date`, `Promise`
   residuals, by directory.
 
@@ -550,7 +551,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
-| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | in progress | 68.5% → 68.7% (1.8a–b1)      | (this) |
+| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | in progress | 68.5% → 68.8% (1.8a–b)       | (this) |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |

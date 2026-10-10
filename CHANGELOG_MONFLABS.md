@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### [[Delete]], [[DefineOwnProperty]] and [[SetPrototypeOf]] with results (2026-10-10, plan 1.8b, part 2)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.24):
+
+- `ScriptableObject.delete(cx, key)` and `setPrototypeOf(cx, proto)` are [[Delete]] and [[SetPrototypeOf]] returning
+  whether they succeeded, overridden by proxies (traps, invariants, or the target's method) and typed arrays;
+  `Reflect.deleteProperty`/`setPrototypeOf` return them, `delete` and `Object.setPrototypeOf` on a proxy throw on
+  failure (strict code for `delete`), without calling its `has` or `getPrototypeOf` traps afterwards.
+- A proxy's [[DefineOwnProperty]] (also the 4-argument `defineOwnProperty`, which bypassed the trap) returns the
+  trap's result or the target's, validated without throwing; `Object.defineProperty`/`defineProperties` throw when
+  it is false. `Reflect.defineProperty` converts its key first, validates the descriptor and no longer turns every
+  error into false (a proxy invariant violation, an abrupt key conversion propagate).
+- A proxy without a `get` trap reads `target.[[Get]](P, Receiver)` through the target's prototype chain, the
+  receiver staying the proxy (or the object inheriting from it).
+- Updated test: `NativeProxyTest.definePropertyFreezedWithoutHandler` (message of the TypeError).
+- test262: 18 more files pass; 29,303 of 42,616 in-scope files (68.8%).
+
 ### [[Set]] with a result; proxy descriptors (2026-10-10, plan 1.8b, part 1)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.24):

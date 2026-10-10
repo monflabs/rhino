@@ -231,6 +231,16 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     }
 
     @Override
+    public boolean delete(Context cx, Object key) {
+        // [[Delete]] (10.4.5.6)
+        Double num = ScriptRuntime.isSymbol(key) ? null : numericKey(propertyKey(key));
+        if (num != null) {
+            return !isValidIntegerIndex(num);
+        }
+        return super.delete(cx, key);
+    }
+
+    @Override
     protected boolean endsPropertyLookup(String name) {
         return numericIndex(name) != null;
     }

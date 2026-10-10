@@ -591,11 +591,16 @@ public class AbstractEcmaObjectOperations {
         if (obj instanceof NativeProxy) {
             return ((NativeProxy) obj).defineOwnPropertyResult(cx, key, desc);
         }
-        DescriptorInfo current = obj.getOwnPropertyDescriptor(cx, key);
-        if (!isCompatiblePropertyDescriptor(cx, obj.isExtensible(), desc, current)) {
-            return false;
+        try {
+            return obj.defineOwnProperty(cx, key, desc, true);
+        } catch (EcmaError e) {
+            // a definition that is not allowed (the engine's TypeError; a RangeError of an array
+            // length or an exception of the script propagates)
+            if ("TypeError".equals(e.getName())) {
+                return false;
+            }
+            throw e;
         }
-        return obj.defineOwnProperty(cx, key, desc, false);
     }
 
     /** The key of a descriptor lookup: a symbol, or a string. */

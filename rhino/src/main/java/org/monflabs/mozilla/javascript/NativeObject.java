@@ -379,6 +379,13 @@ public class NativeObject extends ScriptableObject implements Map {
         if (!(thisObj instanceof ScriptableObject)) {
             return thisObj;
         }
+        if (thisObj instanceof NativeProxy) {
+            // [[SetPrototypeOf]] of the proxy, then OrdinarySetPrototypeOf failures throw
+            if (!((NativeProxy) thisObj).setPrototypeOf(Context.getCurrentContext(), proto)) {
+                throw ScriptRuntime.typeErrorById("msg.proxy.setprototype.refused");
+            }
+            return thisObj;
+        }
         ScriptableObject thisScriptable = (ScriptableObject) thisObj;
         if (thisScriptable.getPrototype() == proto) {
             return thisObj;

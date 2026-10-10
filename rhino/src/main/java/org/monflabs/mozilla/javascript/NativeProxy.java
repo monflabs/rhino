@@ -408,10 +408,8 @@ class NativeProxy extends ScriptableObject {
             return trapResult;
         }
 
-        if (start == this) {
-            start = target;
-        }
-        return target.get(name, start);
+        // target.[[Get]](P, Receiver): the receiver stays the proxy
+        return ScriptableObject.getSuperProperty(target, start, name);
     }
 
     /**
@@ -467,10 +465,7 @@ class NativeProxy extends ScriptableObject {
             return trapResult;
         }
 
-        if (start == this) {
-            start = target;
-        }
-        return target.get(index, start);
+        return ScriptableObject.getSuperProperty(target, start, index);
     }
 
     /**
@@ -524,11 +519,7 @@ class NativeProxy extends ScriptableObject {
             return trapResult;
         }
 
-        if (start == this) {
-            start = target;
-        }
-        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
-        return symbolScriptableTarget.get(key, start);
+        return ScriptableObject.getSuperProperty(target, start, key);
     }
 
     /**
@@ -603,156 +594,57 @@ class NativeProxy extends ScriptableObject {
     }
 
     /**
-     * see <a
-     * href="https://262.ecma-international.org/12.0/#sec-proxy-object-internal-methods-and-internal-slots-delete-p">10.5.10
+     * <a
+     * href="https://262.ecma-international.org/16.0/#sec-proxy-object-internal-methods-and-internal-slots-delete-p">10.5.10
      * [[Delete]] (P)</a>
      */
+    @Override
+    public boolean delete(Context cx, Object key) {
+        ScriptableObject target = getTargetThrowIfRevoked();
+        Function trap = getTrap(TRAP_DELETE_PROPERTY);
+        if (trap == null) {
+            return target.delete(cx, key);
+        }
+        Object trapKey = ScriptRuntime.isSymbol(key) ? key : ScriptRuntime.toString(key);
+        boolean booleanTrapResult =
+                ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, trapKey}));
+        if (!booleanTrapResult) {
+            return false;
+        }
+        DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(cx, trapKey);
+        if (targetDesc == null) {
+            return true;
+        }
+        if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+            throw ScriptRuntime.typeError(
+                    "proxy can't delete an existing own property '"
+                            + trapKey
+                            + "' on a non-configurable or non-extensible object");
+        }
+        return true;
+    }
+
     @Override
     public void delete(String name) {
-        /*
-         * 1. Assert: IsPropertyKey(P) is true.
-         * 2. Let handler be O.[[ProxyHandler]].
-         * 3. If handler is null, throw a TypeError exception.
-         * 4. Assert: Type(handler) is Object.
-         * 5. Let target be O.[[ProxyTarget]].
-         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
-         * 7. If trap is undefined, then
-         *     a. Return ? target.[[Delete]](P).
-         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
-         * 9. If booleanTrapResult is false, return false.
-         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
-         * 11. If targetDesc is undefined, return true.
-         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
-         * 13. Let extensibleTarget be ? IsExtensible(target).
-         * 14. If extensibleTarget is false, throw a TypeError exception.
-         * 15. Return true.
-         */
-        ScriptableObject target = getTargetThrowIfRevoked();
-
-        Function trap = getTrap(TRAP_DELETE_PROPERTY);
-        if (trap != null) {
-            boolean booleanTrapResult =
-                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, name}));
-            if (!booleanTrapResult) {
-                return; // false
-            }
-
-            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), name);
-            if (targetDesc == null) {
-                return; // true
-            }
-            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
-                throw ScriptRuntime.typeError(
-                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
-            }
-
-            return; // true
-        }
-
-        target.delete(name);
+        deleteOrThrow(name);
     }
 
-    /**
-     * see <a
-     * href="https://262.ecma-international.org/12.0/#sec-proxy-object-internal-methods-and-internal-slots-delete-p">10.5.10
-     * [[Delete]] (P)</a>
-     */
     @Override
     public void delete(int index) {
-        /*
-         * 1. Assert: IsPropertyKey(P) is true.
-         * 2. Let handler be O.[[ProxyHandler]].
-         * 3. If handler is null, throw a TypeError exception.
-         * 4. Assert: Type(handler) is Object.
-         * 5. Let target be O.[[ProxyTarget]].
-         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
-         * 7. If trap is undefined, then
-         *     a. Return ? target.[[Delete]](P).
-         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
-         * 9. If booleanTrapResult is false, return false.
-         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
-         * 11. If targetDesc is undefined, return true.
-         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
-         * 13. Let extensibleTarget be ? IsExtensible(target).
-         * 14. If extensibleTarget is false, throw a TypeError exception.
-         * 15. Return true.
-         */
-        ScriptableObject target = getTargetThrowIfRevoked();
-
-        Function trap = getTrap(TRAP_DELETE_PROPERTY);
-        if (trap != null) {
-            boolean booleanTrapResult =
-                    ScriptRuntime.toBoolean(
-                            callTrap(trap, new Object[] {target, ScriptRuntime.toString(index)}));
-            if (!booleanTrapResult) {
-                return; // false
-            }
-
-            DescriptorInfo targetDesc =
-                    target.getOwnPropertyDescriptor(Context.getContext(), index);
-            if (targetDesc == null) {
-                return; // true
-            }
-            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
-                throw ScriptRuntime.typeError(
-                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
-            }
-
-            return; // true
-        }
-
-        target.delete(index);
+        deleteOrThrow(index);
     }
 
-    /**
-     * see <a
-     * href="https://262.ecma-international.org/12.0/#sec-proxy-object-internal-methods-and-internal-slots-delete-p">10.5.10
-     * [[Delete]] (P)</a>
-     */
     @Override
     public void delete(Symbol key) {
-        /*
-         * 1. Assert: IsPropertyKey(P) is true.
-         * 2. Let handler be O.[[ProxyHandler]].
-         * 3. If handler is null, throw a TypeError exception.
-         * 4. Assert: Type(handler) is Object.
-         * 5. Let target be O.[[ProxyTarget]].
-         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
-         * 7. If trap is undefined, then
-         *     a. Return ? target.[[Delete]](P).
-         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
-         * 9. If booleanTrapResult is false, return false.
-         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
-         * 11. If targetDesc is undefined, return true.
-         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
-         * 13. Let extensibleTarget be ? IsExtensible(target).
-         * 14. If extensibleTarget is false, throw a TypeError exception.
-         * 15. Return true.
-         */
-        ScriptableObject target = getTargetThrowIfRevoked();
+        deleteOrThrow(key);
+    }
 
-        Function trap = getTrap(TRAP_DELETE_PROPERTY);
-        if (trap != null) {
-            boolean booleanTrapResult =
-                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, key}));
-            if (!booleanTrapResult) {
-                return; // false
-            }
-
-            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), key);
-            if (targetDesc == null) {
-                return; // true
-            }
-            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
-                throw ScriptRuntime.typeError(
-                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
-            }
-
-            return; // true
+    /** The delete operator: a failed [[Delete]] throws in strict code. */
+    private void deleteOrThrow(Object key) {
+        Context cx = Context.getContext();
+        if (!delete(cx, key) && cx.isStrictMode()) {
+            throw ScriptRuntime.typeErrorById("msg.delete.property.with.configurable.false", key);
         }
-
-        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
-        symbolScriptableTarget.delete(key);
     }
 
     /**
@@ -887,8 +779,7 @@ class NativeProxy extends ScriptableObject {
      * href="https://262.ecma-international.org/12.0/#sec-proxy-object-internal-methods-and-internal-slots-defineownproperty-p-desc">10.5.6
      * [[DefineOwnProperty]] (P, Desc)</a>
      */
-    @Override
-    public boolean defineOwnProperty(Context cx, Object id, DescriptorInfo desc) {
+    private boolean defineOwnPropertyTrap(Context cx, Object id, DescriptorInfo desc) {
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -973,10 +864,21 @@ class NativeProxy extends ScriptableObject {
      * when the trap, or the target without a trap, refuses the definition.
      */
     boolean defineOwnPropertyResult(Context cx, Object id, DescriptorInfo desc) {
+        ScriptableObject target = getTargetThrowIfRevoked();
         if (getTrap(TRAP_DEFINE_PROPERTY) != null) {
-            return defineOwnProperty(cx, id, desc);
+            return defineOwnPropertyTrap(cx, id, desc);
         }
-        return AbstractEcmaObjectOperations.defineOwn(cx, getTargetThrowIfRevoked(), id, desc);
+        return AbstractEcmaObjectOperations.defineOwn(cx, target, id, desc);
+    }
+
+    @Override
+    protected boolean defineOwnProperty(
+            Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        boolean defined = defineOwnPropertyResult(cx, id, desc);
+        if (!defined && checkValid) {
+            throw ScriptRuntime.typeErrorById("msg.proxy.define.refused", id);
+        }
+        return defined;
     }
 
     /**
@@ -1134,23 +1036,32 @@ class NativeProxy extends ScriptableObject {
          * 13. If SameValue(V, targetProto) is false, throw a TypeError exception.
          * 14. Return true.
          */
-        ScriptableObject target = getTargetThrowIfRevoked();
-
-        Function trap = getTrap(TRAP_SET_PROTOTYPE_OF);
-        if (trap != null) {
-            boolean booleanTrapResult =
-                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, prototype}));
-            if (!booleanTrapResult) {
-                return; // false
-            }
-            if (target.isExtensible()) {
-                return; // true
-            }
-
-            return;
+        if (!setPrototypeOf(Context.getContext(), prototype)) {
+            throw ScriptRuntime.typeErrorById("msg.proxy.setprototype.refused");
         }
+    }
 
-        target.setPrototype(prototype);
+    @Override
+    public boolean setPrototypeOf(Context cx, Scriptable prototype) {
+        ScriptableObject target = getTargetThrowIfRevoked();
+        Function trap = getTrap(TRAP_SET_PROTOTYPE_OF);
+        if (trap == null) {
+            return target.setPrototypeOf(cx, prototype);
+        }
+        boolean booleanTrapResult =
+                ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, prototype}));
+        if (!booleanTrapResult) {
+            return false;
+        }
+        if (target.isExtensible()) {
+            return true;
+        }
+        if (target.getPrototype() != prototype) {
+            throw ScriptRuntime.typeError(
+                    "proxy setPrototypeOf trap returned true but the non-extensible target has a"
+                            + " different prototype");
+        }
+        return true;
     }
 
     private static NativeProxy js_constructor(

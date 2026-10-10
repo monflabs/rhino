@@ -523,7 +523,12 @@ Object.getOwnPropertyDescriptor(q, "x");          // before: a descriptor   now:
   Proxies check the invariants of their `set` and `getOwnPropertyDescriptor` traps; a failed assignment through a
   proxy throws in strict code; a proxy in a prototype chain handles a lookup itself (its `getPrototypeOf` trap is not
   called by `in` or an assignment).
-- **Why:** ECMA-262 2026, §10.1.9 [[Set]], §10.5.5 and §10.5.9 (proxy internal methods), §28.1.12 Reflect.set.
+- Likewise for deleting, defining and changing the prototype: `Reflect.deleteProperty`, `Reflect.defineProperty`
+  and `Reflect.setPrototypeOf` return the result of the proxy's trap (or target), `delete` (strict code),
+  `Object.defineProperty` and `Object.setPrototypeOf` throw when it is false, and invariant violations of these
+  traps throw a TypeError (before, `Reflect.defineProperty` returned false for any error). A proxy without a `get`
+  trap calls the target's getters with the proxy as `this` (before, the target).
+- **Why:** ECMA-262 2026, §10.1.9 [[Set]], §10.5 (proxy internal methods), §28.1 (Reflect).
 
 ---
 

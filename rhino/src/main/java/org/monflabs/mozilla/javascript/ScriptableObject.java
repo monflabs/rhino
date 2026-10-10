@@ -3067,6 +3067,53 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
                 cx, ScriptRuntime.getTopCallScope(cx), this, key, value, receiver);
     }
 
+    /**
+     * [[SetPrototypeOf]](proto) (ECMA-262 10.1.2): false when the prototype cannot be changed (a
+     * non-extensible object, or a cycle). Used by Reflect, Object.setPrototypeOf and Proxy.
+     */
+    public boolean setPrototypeOf(Context cx, Scriptable proto) {
+        if (proto == getPrototype()) {
+            return true;
+        }
+        if (!isExtensible()) {
+            return false;
+        }
+        // the cycle check stops at a proxy (OrdinarySetPrototypeOf step 8.c.i)
+        for (Scriptable p = proto; p != null && !(p instanceof NativeProxy); p = p.getPrototype()) {
+            if (p == this) {
+                return false;
+            }
+        }
+        setPrototype(proto);
+        return true;
+    }
+
+    /**
+     * [[Delete]](key) (ECMA-262 10.1.10): false, without throwing, when the property cannot be
+     * deleted. Used by Reflect.deleteProperty and Proxy; the delete operator uses delete.
+     */
+    public boolean delete(Context cx, Object key) {
+        Object k = ScriptRuntime.isSymbol(key) ? key : ScriptRuntime.toString(key);
+        DescriptorInfo desc = getOwnPropertyDescriptor(cx, k);
+        if (desc == null) {
+            return true;
+        }
+        if (Boolean.FALSE.equals(desc.configurable)) {
+            return false;
+        }
+        if (k instanceof Symbol) {
+            delete((Symbol) k);
+        } else {
+            ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(k);
+            if (soi.stringId == null) {
+                delete(soi.index);
+            } else {
+                delete(soi.stringId);
+            }
+        }
+        return getOwnPropertyDescriptor(cx, k) == null;
+    }
+
     /** The own property descriptor of obj for id ([[GetOwnProperty]]), or null. */
     public static DescriptorInfo getOwnPropertyDescriptorInfo(
             ScriptableObject obj, Context cx, Object id) {
