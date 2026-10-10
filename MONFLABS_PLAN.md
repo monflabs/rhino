@@ -33,6 +33,8 @@ existing code and without slowing the engine down.
 | 2026-10-07 | Every change that makes code or an embedding behave differently from stock Rhino (gated or not) is documented in **`BACKWARD_COMPATIBILITY.md`**. |
 | 2026-10-08 | **Ultimate goal: remove the language versions and always behave as `VERSION_ECMASCRIPT`** (M15). Until then, each change is gated or applied to all versions, whichever is easier, without asking; every change incompatible with `VERSION_ES6` behavior is still logged in `BACKWARD_COMPATIBILITY.md`. |
 | 2026-10-08 | 1.2: `typeof this` in a strict function called without a receiver is `"undefined"` — all versions. |
+| 2026-10-10 | 1.8: typed arrays are little endian by default under `VERSION_ECMASCRIPT` (`FEATURE_LITTLE_ENDIAN`), as Nashorn and test262 assume; gated because embedders may read buffer bytes. |
+| 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
