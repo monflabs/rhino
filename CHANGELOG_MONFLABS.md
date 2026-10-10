@@ -6,6 +6,19 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Generator details (2026-10-09, plan 1.6c)
+
+All versions from `VERSION_ES6`:
+
+- `yield*` takes its operand from the next line; a function expression nested in a generator may be named `yield`.
+- `yield*` calls the delegate's `next` with the received value, also `undefined` (one argument).
+- `%GeneratorPrototype%.constructor` is `%GeneratorFunction.prototype%` (defined also when the standard objects
+  are sealed).
+- A generator whose body throws is completed (`ES6Generator.resumeLocal`): resuming it again gives `{done: true}`;
+  before, the interpreter resumed a frame that could not be resumed (an internal error), e.g. after calling the
+  generator's own `next` from inside it.
+- test262: 11 more files pass; 26,040 of 42,616 in-scope files (61.1%).
+
 ### Generator parameters bound at the call (2026-10-09, plan 1.6b)
 
 All versions from `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.17):

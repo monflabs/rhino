@@ -342,6 +342,8 @@ machinery (decision at M3.1).
 Steps:
 - *1.6a (done)* `yield` parsing (AssignmentExpression operand, contextual identifier, `yield*` on one line),
   generator `prototype`, interpreter fallback when the class compiler cannot compile a `yield` in an expression.
+- *1.6c (done)* `yield*` across a newline and with one argument, `function yield` in a generator,
+  `%GeneratorPrototype%.constructor`, a generator completed by a throw.
 - *1.6b (done)* generator parameters bound when the generator is called (FunctionDeclarationInstantiation before the
   generator object is created; ~110 destructuring tests).
 

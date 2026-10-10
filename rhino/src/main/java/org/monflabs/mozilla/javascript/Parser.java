@@ -1097,6 +1097,14 @@ public class Parser {
                     }
                     mustMatchToken(Token.LP, "msg.no.paren.parms", true);
                 }
+            } else if (type == FunctionNode.FUNCTION_EXPRESSION
+                    && !isGenerator
+                    && !inUseStrictDirective
+                    && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                    && matchToken(Token.YIELD, true)) {
+                // the name of a function expression is bound in that function: not a generator
+                name = createNameNode(true, Token.NAME);
+                mustMatchToken(Token.LP, "msg.no.paren.parms", true);
             } else if (matchToken(Token.LP, true)) {
                 // Anonymous function:  leave name as null
             } else if (matchToken(Token.MUL, true)
@@ -2554,7 +2562,8 @@ public class Parser {
         // This is ugly, but we don't want to require a semicolon.
         boolean es6Yield =
                 tt == Token.YIELD && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
-        switch (peekTokenOrEOL()) {
+        // yield* requires an operand, which may be on the next line
+        switch (yieldStar ? peekToken() : peekTokenOrEOL()) {
             case Token.SEMI:
             case Token.RC:
             case Token.RB:

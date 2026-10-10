@@ -170,6 +170,19 @@ public class BaseFunction extends ScriptableObject implements Function {
 
                     proto.setAttributes("constructor", DONTENUM | READONLY);
                     proto.defineProperty("prototype", generatorProto, READONLY | DONTENUM);
+                    if (generatorProto instanceof ScriptableObject) {
+                        // %GeneratorPrototype%.constructor is %GeneratorFunction.prototype%;
+                        // %GeneratorPrototype% is created, and possibly sealed, before
+                        ScriptableObject generatorPrototype = (ScriptableObject) generatorProto;
+                        boolean wasSealed = generatorPrototype.isSealed;
+                        generatorPrototype.isSealed = false;
+                        try {
+                            generatorPrototype.defineProperty(
+                                    "constructor", proto, READONLY | DONTENUM);
+                        } finally {
+                            generatorPrototype.isSealed = wasSealed;
+                        }
+                    }
                 });
     }
 

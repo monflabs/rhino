@@ -65,6 +65,22 @@ class GeneratorSyntaxTest {
     }
 
     @Test
+    void generatorDetails() {
+        assertBoth(
+                "5|1|1|true|TypeError|true",
+                "var r = [];"
+                        + " var g = function* () { yield *\n g2(); }; var g2 = function* () { yield 5; };"
+                        + " r.push(g().next().value);"
+                        + " function* h() { return (function yield() { return 1; })(); } r.push(h().next().value);"
+                        + " var n; var it = { [Symbol.iterator]() { return { next() { n = arguments.length;"
+                        + "   return { done: true }; } }; } }; function* d() { yield* it; } d().next(); r.push(n);"
+                        + " r.push(Object.getPrototypeOf(h).prototype.constructor === Object.getPrototypeOf(h));"
+                        + " var iter; function* w() { iter.next(); } iter = w();"
+                        + " try { iter.next(); } catch (e) { r.push(e.name); } r.push(iter.next().done);"
+                        + " r.join('|')");
+    }
+
+    @Test
     void generatorPrototypeHasNoOwnProperties() {
         assertBoth(0, "function* g() {} Object.getOwnPropertyNames(g.prototype).length");
     }
