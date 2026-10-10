@@ -226,7 +226,7 @@ class Arguments extends ScriptableObject {
     }
 
     @Override
-    Object[] getIds(
+    protected Object[] getIds(
             CompoundOperationMap<Scriptable> map, boolean getNonEnumerable, boolean getSymbols) {
         Object[] ids = super.getIds(map, getNonEnumerable, getSymbols);
         int lazy = 0;

@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Typed array internal methods (2026-10-10, plan 1.8a)
+
+All versions (`BACKWARD_COMPATIBILITY.md` 2.23):
+
+- The internal methods of typed arrays follow ECMA-262 10.4.5: a canonical numeric key (`"-0"`, `"1.5"`, out of
+  bounds) designates an element or nothing and never reaches the prototype chain (`ScriptableObject
+  .endsPropertyLookup`, used by `hasProperty` and `getBase`); `[[OwnPropertyKeys]]` lists the indexes, then the other
+  keys (`getIds(map, …)` is now protected); `[[GetOwnProperty]]` describes an element; `[[DefineOwnProperty]]`
+  rejects a non-configurable, non-enumerable, non-writable or accessor descriptor; deleting an element fails (a
+  TypeError in strict code); a store converts the value even for an invalid index; a store through an object
+  inheriting from a typed array creates a property of that object.
+- Not yet: `Reflect.set` returning false and receivers that are not objects (with the Reflect/Proxy step).
+- test262: 49 more files pass; 29,221 of 42,616 in-scope files (68.6%).
+
 ### Environments of functions and eval code (2026-10-10, plan 1.2g)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.9, 2.12, 2.21, 2.22) and under `VERSION_ECMASCRIPT` (1.4, 1.5):

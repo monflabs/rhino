@@ -165,6 +165,24 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     // behave differently than in other types of JavaScript objects, in that they are
     // silently ignored (and always valued as "undefined") when they are out of bounds.
 
+    // The internal methods of a TypedArray (ECMA-262 10.4.5): a key that is a canonical numeric
+    // string never reaches the prototype chain; it designates an element when it is a valid
+    // integer index (IsValidIntegerIndex), and nothing otherwise.
+
+    /** CanonicalNumericIndexString(name), or null when the key is not numeric. */
+    private static Double numericIndex(String name) {
+        Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
+        return num.isPresent() ? num.get() : null;
+    }
+
+    /** IsValidIntegerIndex(this, index): an integer (not -0) in bounds of an attached buffer. */
+    private boolean isValidIntegerIndex(double index) {
+        if (index != Math.rint(index) || (index == 0 && 1 / index < 0)) {
+            return false;
+        }
+        return index >= 0 && index <= Integer.MAX_VALUE && !checkIndex((int) index);
+    }
+
     @Override
     public Object get(int index, Scriptable start) {
         return js_get(index);
@@ -172,13 +190,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     @Override
     public Object get(String name, Scriptable start) {
-        Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
-        if (num.isPresent()) {
-            // Now we had a valid number, so no matter what we try to return an array element
-            int ix = toIndex(num.get());
-            if (ix >= 0) {
-                return js_get(ix);
-            }
+        Double num = numericIndex(name);
+        if (num != null) {
+            return isValidIntegerIndex(num) ? js_get(num.intValue()) : Undefined.instance;
         }
         return super.get(name, start);
     }
@@ -190,54 +204,151 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     @Override
     public boolean has(String name, Scriptable start) {
-        Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
-        if (num.isPresent()) {
-            int ix = toIndex(num.get());
-            if (ix >= 0) {
-                return !checkIndex(ix);
-            }
+        Double num = numericIndex(name);
+        if (num != null) {
+            return isValidIntegerIndex(num);
         }
         return super.has(name, start);
     }
 
     @Override
+    protected boolean endsPropertyLookup(String name) {
+        return numericIndex(name) != null;
+    }
+
+    @Override
+    protected boolean endsPropertyLookup(int index) {
+        return true;
+    }
+
+    @Override
     public void put(int index, Scriptable start, Object val) {
-        js_set(index, val);
+        setElement(index, index, start, val);
     }
 
     @Override
     public void put(String name, Scriptable start, Object val) {
-        Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
-        if (num.isPresent()) {
-            int ix = toIndex(num.get());
-            if (ix >= 0) {
-                js_set(ix, val);
-            }
+        Double num = numericIndex(name);
+        if (num != null) {
+            setElement(name, num, start, val);
         } else {
             super.put(name, start, val);
         }
     }
 
-    @Override
-    public void delete(int index) {}
-
-    @Override
-    public void delete(String name) {
-        Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
-        if (!num.isPresent()) {
-            // No delete for indexed elements, so only delete if "name" is not a number
-            super.delete(name);
+    /** [[Set]] of a numeric key: the element, or (another receiver) OrdinarySet on it. */
+    private void setElement(Object key, double index, Scriptable start, Object val) {
+        if (start == this || start == null) {
+            // TypedArraySetElement: the value is converted even when the index is not valid
+            Object numeric = toNumeric(val);
+            if (isValidIntegerIndex(index)) {
+                js_set((int) index, numeric);
+            }
+            return;
+        }
+        if (!isValidIntegerIndex(index)) {
+            return;
+        }
+        // OrdinarySet with a writable data property: a data property of the receiver
+        if (!(start instanceof ScriptableObject)) {
+            return;
+        }
+        ScriptableObject receiver = (ScriptableObject) start;
+        Context cx = Context.getCurrentContext();
+        DescriptorInfo existing = getOwnPropertyDescriptorInfo(receiver, cx, key);
+        if (existing != null) {
+            if (existing.isAccessorDescriptor() || Boolean.FALSE.equals(existing.writable)) {
+                return;
+            }
+            receiver.defineOwnProperty(
+                    cx,
+                    key,
+                    new DescriptorInfo(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, val));
+        } else if (receiver.isExtensible()) {
+            receiver.defineOwnProperty(cx, key, new DescriptorInfo(true, true, true, val));
         }
     }
 
     @Override
-    public Object[] getIds() {
-        int len = getLength();
-        Object[] ret = new Object[len];
+    public void delete(int index) {
+        if (!checkIndex(index)) {
+            undeletable(index);
+        }
+    }
+
+    @Override
+    public void delete(String name) {
+        Double num = numericIndex(name);
+        if (num == null) {
+            super.delete(name);
+        } else if (isValidIntegerIndex(num)) {
+            undeletable(name);
+        }
+    }
+
+    /** An element is not configurable: deleting it fails (a TypeError in strict code). */
+    private static void undeletable(Object key) {
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.isStrictMode()) {
+            throw ScriptRuntime.typeErrorById("msg.delete.property.with.configurable.false", key);
+        }
+    }
+
+    @Override
+    protected Object[] getIds(
+            org.monflabs.mozilla.javascript.CompoundOperationMap<Scriptable> map,
+            boolean getNonEnumerable,
+            boolean getSymbols) {
+        return withIndexes(super.getIds(map, getNonEnumerable, getSymbols));
+    }
+
+    /** [[OwnPropertyKeys]]: the indexes of the elements first. */
+    private Object[] withIndexes(Object[] ids) {
+        int len = isTypedArrayOutOfBounds() ? 0 : getLength();
+        Object[] ret = new Object[len + ids.length];
         for (int i = 0; i < len; i++) {
             ret[i] = Integer.valueOf(i);
         }
+        System.arraycopy(ids, 0, ret, len, ids.length);
         return ret;
+    }
+
+    @Override
+    protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
+        id = propertyKey(id);
+        Double num = numericKey(id);
+        if (num != null) {
+            if (!isValidIntegerIndex(num)) {
+                return null;
+            }
+            return new DescriptorInfo(true, true, true, js_get(num.intValue()));
+        }
+        return super.getOwnPropertyDescriptor(cx, id);
+    }
+
+    /** ToPropertyKey of an id that is not yet a key (an object, whose conversion may run code). */
+    private static Object propertyKey(Object id) {
+        if (id instanceof CharSequence
+                || id instanceof Integer
+                || id instanceof Number
+                || ScriptRuntime.isSymbol(id)) {
+            return id;
+        }
+        return ScriptRuntime.toString(id);
+    }
+
+    /** The numeric index designated by a property key, or null. */
+    private static Double numericKey(Object id) {
+        if (id instanceof Integer) {
+            return ((Integer) id).doubleValue();
+        }
+        if (id instanceof CharSequence) {
+            return numericIndex(id.toString());
+        }
+        if (id instanceof Number && !ScriptRuntime.isSymbol(id)) {
+            return numericIndex(ScriptRuntime.toString(id));
+        }
+        return null;
     }
 
     private boolean isFixedLength() {
@@ -255,68 +366,29 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     @Override
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
-        if (id instanceof CharSequence) {
-            // Definition of [[DefineOwnProperty]] for typed array from the spec
-            Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(id.toString());
-            if (num.isPresent()) {
-                int idx = num.get().intValue();
-                if (checkIndex(idx)) {
-                    if (checkValid) {
-                        throw ScriptRuntime.typeErrorById(
-                                "msg.typed.array.index.out.of.bounds", idx, 0, getLength());
-                    }
-
-                    // Out-of-bounds: coerce value then return false.
-                    if (desc.hasValue()) {
-                        toNumeric(desc.value);
-                    }
-                    return false;
-                }
-                if (desc.isConfigurable(false)) {
-                    return false;
-                }
-                if (desc.isEnumerable(false)) {
-                    return false;
-                }
-                if (desc.isAccessorDescriptor()) {
-                    return false;
-                }
-                if (desc.isWritable(false)) {
-                    return false;
-                }
-                if (desc.hasValue()) {
-                    js_set(idx, desc.value);
-                }
-                return true;
-            }
+        id = propertyKey(id);
+        Double num = numericKey(id);
+        if (num == null) {
+            return super.defineOwnProperty(cx, id, desc, checkValid);
         }
-
-        // Default implementation assumes we have a slot map -- we need to override
-        // in this case.
-        if (!ScriptRuntime.isSymbol(id)) {
-            var s = ScriptRuntime.toStringIdOrIndex(id);
-            if (s.getStringId() == null) {
-                int idx = s.getIndex();
-                if (checkIndex(idx)) {
-                    if (checkValid) {
-                        throw ScriptRuntime.typeErrorById(
-                                "msg.typed.array.index.out.of.bounds", idx, 0, getLength());
-                    }
-
-                    // Out-of-bounds: coerce value then return false.
-                    if (desc.hasValue()) {
-                        toNumeric(desc.value);
-                    }
-                    return false;
-                }
-                if (desc.hasValue()) {
-                    js_set(idx, desc.value);
-                    return true;
-                }
+        // [[DefineOwnProperty]] of an element
+        boolean allowed =
+                isValidIntegerIndex(num)
+                        && !Boolean.FALSE.equals(desc.configurable)
+                        && !Boolean.FALSE.equals(desc.enumerable)
+                        && !desc.isAccessorDescriptor()
+                        && !Boolean.FALSE.equals(desc.writable);
+        if (!allowed) {
+            if (checkValid) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.typed.array.define", ScriptRuntime.toString(id));
             }
+            return false;
         }
-
-        return super.defineOwnProperty(cx, id, desc, checkValid);
+        if (desc.hasValue()) {
+            js_set(num.intValue(), toNumeric(desc.value));
+        }
+        return true;
     }
 
     /**

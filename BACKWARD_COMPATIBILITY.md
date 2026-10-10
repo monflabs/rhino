@@ -490,6 +490,24 @@ Object.defineProperty(o, "x", { value: 2 });   // before: TypeError   now: o.x i
 - **Why:** ECMA-262 2026, §10.1.6.3 ValidateAndApplyPropertyDescriptor step 5.b (compares [[Enumerable]] only when
   the descriptor has one).
 
+### 2.23 Typed arrays as exotic objects
+
+```js
+var ta = new Int8Array(2);
+Reflect.ownKeys(ta);                          // before: []   now: ["0", "1"]
+Object.getOwnPropertyDescriptor(ta, "0");     // before: TypeError   now: {value: 0, writable, enumerable, configurable}
+"use strict"; delete ta[0];                   // before: false   now: TypeError
+Object.defineProperty(ta, "0", {configurable: false});   // before: fine (no effect)   now: TypeError
+ta["-0"];                                     // before: from the prototype   now: undefined
+Object.create(ta)[0] = 1;                     // before: set ta[0]   now: an own property of the new object
+```
+
+- All versions: the elements of a typed array behave as specified for its internal methods: canonical numeric keys
+  that are not valid indexes are absent without consulting the prototype chain; the elements are listed by
+  `Reflect.ownKeys` and have descriptors; they cannot be deleted, made non-configurable, non-enumerable, read-only or
+  accessors.
+- **Why:** ECMA-262 2026, §10.4.5 TypedArray Exotic Objects.
+
 ---
 
 ## 3. Platform and embedding

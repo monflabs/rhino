@@ -2475,7 +2475,30 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
      * @since 1.5R2
      */
     public static boolean hasProperty(Scriptable obj, String name) {
-        return null != getBase(obj, name);
+        Scriptable o = obj;
+        do {
+            if (o.has(name, obj)) {
+                return true;
+            }
+            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(name)) {
+                return false;
+            }
+            o = o.getPrototype();
+        } while (o != null);
+        return false;
+    }
+
+    /**
+     * Whether a lookup of the key stops at this object even when it does not have it: the prototype
+     * chain is not searched (a canonical numeric key of a typed array, ECMA-262 10.4.5).
+     */
+    protected boolean endsPropertyLookup(String name) {
+        return false;
+    }
+
+    /** See {@link #endsPropertyLookup(String)}. */
+    protected boolean endsPropertyLookup(int index) {
+        return false;
     }
 
     public static boolean hasProperty(VarScope obj, String name) {
@@ -2521,7 +2544,17 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
      * @since 1.5R2
      */
     public static boolean hasProperty(Scriptable obj, int index) {
-        return null != getBase(obj, index);
+        Scriptable o = obj;
+        do {
+            if (o.has(index, obj)) {
+                return true;
+            }
+            if (o instanceof ScriptableObject && ((ScriptableObject) o).endsPropertyLookup(index)) {
+                return false;
+            }
+            o = o.getPrototype();
+        } while (o != null);
+        return false;
     }
 
     /** A version of hasProperty for properties with Symbol keys. */
@@ -2768,7 +2801,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
         Scriptable obj = (Scriptable) start;
         Scriptable startObj = obj;
         do {
-            if (obj.has(name, startObj)) {
+            if (obj.has(name, startObj)
+                    || (obj instanceof ScriptableObject
+                            && ((ScriptableObject) obj).endsPropertyLookup(name))) {
                 break;
             }
             obj = obj.getPrototype();
@@ -2783,7 +2818,11 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     static Scriptable getBase(Scriptable start, int index) {
         Scriptable obj = start;
         do {
-            if (obj.has(index, start)) break;
+            if (obj.has(index, start)
+                    || (obj instanceof ScriptableObject
+                            && ((ScriptableObject) obj).endsPropertyLookup(index))) {
+                break;
+            }
             obj = obj.getPrototype();
         } while (obj != null);
         return obj;
@@ -2908,7 +2947,7 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     }
 
     @Override
-    Object[] getIds(
+    protected Object[] getIds(
             CompoundOperationMap<Scriptable> map, boolean getNonEnumerable, boolean getSymbols) {
         Object[] a;
         int externalLen = (externalData == null ? 0 : externalData.getArrayLength());
@@ -3016,6 +3055,12 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         in.defaultReadObject();
         readMaps(in);
+    }
+
+    /** The own property descriptor of obj for id ([[GetOwnProperty]]), or null. */
+    public static DescriptorInfo getOwnPropertyDescriptorInfo(
+            ScriptableObject obj, Context cx, Object id) {
+        return obj.getOwnPropertyDescriptor(cx, id);
     }
 
     protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {

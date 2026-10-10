@@ -825,7 +825,8 @@ public abstract class SlotMapOwner<T extends PropHolder<T>> implements PropHolde
         }
     }
 
-    Object[] getIds(CompoundOperationMap<T> map, boolean getNonEnumerable, boolean getSymbols) {
+    protected Object[] getIds(
+            CompoundOperationMap<T> map, boolean getNonEnumerable, boolean getSymbols) {
         if (map.isEmpty()) {
             return ScriptRuntime.emptyArgs;
         }
