@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Array methods throw when a write fails (2026-10-10, plan 1.8c, part 2)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.26; `js1_6/Array/regress-304828.js` keeps the 1.x behavior):
+
+- The generic paths of the Array methods store elements and the length with Set(O, P, V, true) and delete with
+  DeletePropertyOrThrow (the context is strict while they write): a read-only property, a non-extensible object, a
+  non-configurable property or a refusing proxy is a TypeError (before, the write was ignored). The dense fast paths
+  of `push`, `pop`, `shift`, `unshift`, `reverse` and `copyWithin` only apply to arrays with a writable length that
+  are extensible.
+- Not yet: the fast paths ignore index properties of `Array.prototype` (a setter there is not called).
+- test262: 16 more files pass; 29,348 of 42,616 in-scope files (68.9%).
+
 ### Built-ins residuals: String symbol methods, key order (2026-10-10, plan 1.8c, part 1)
 
 All versions (`BACKWARD_COMPATIBILITY.md` 2.25):

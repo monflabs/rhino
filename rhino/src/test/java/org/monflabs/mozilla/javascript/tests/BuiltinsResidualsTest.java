@@ -37,4 +37,18 @@ class BuiltinsResidualsTest {
                         + " return Reflect.getOwnPropertyDescriptor(t, k); } });"
                         + " Object.getOwnPropertyDescriptors(p); keys + '|' + log.join()");
     }
+
+    @Test
+    void arrayMethodsThrowWhenAWriteFails() {
+        assertBoth(
+                "TypeError|TypeError|TypeError|TypeError|TypeError",
+                "var r = []; function t(f) { try { f(); r.push('ok'); } catch (e) { r.push(e.name); } }"
+                        + " t(() => Object.freeze([1]).push(2));"
+                        + " t(() => { var a = [1]; Object.defineProperty(a, 'length', { writable: false }); a.pop(); });"
+                        + " t(() => Array.prototype.push.call(Object.freeze({ length: 0 }), 1));"
+                        + " t(() => Array.prototype.shift.call(Object.defineProperty({ length: 2, 0: 1 }, '1',"
+                        + " { value: 2, configurable: false })));"
+                        + " t(() => Array.prototype.pop.call(''));"
+                        + " r.join('|')");
+    }
 }

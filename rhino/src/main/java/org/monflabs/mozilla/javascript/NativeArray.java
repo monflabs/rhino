@@ -311,6 +311,14 @@ public class NativeArray extends ScriptableObject implements List {
         }
     }
 
+    /**
+     * Whether the dense fast paths of the mutating methods apply: they write the elements and the
+     * length directly, so the length must be writable and the array extensible.
+     */
+    private boolean isWritableDense() {
+        return (lengthAttr & READONLY) == 0 && isExtensible() && !isSealed();
+    }
+
     private boolean ensureCapacity(int capacity) {
         if (capacity > dense.length) {
             if (capacity > MAX_PRE_GROW_SIZE) {
@@ -867,7 +875,13 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object setLengthProperty(Context cx, Scriptable target, long length) {
         Object len = ScriptRuntime.wrapNumber((double) length);
-        ScriptableObject.putProperty(target, "length", len);
+        boolean wasStrict = cx.isStrictMode();
+        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        try {
+            ScriptableObject.putProperty(target, "length", len);
+        } finally {
+            cx.setIsStrictMode(wasStrict);
+        }
         return len;
     }
 
@@ -876,12 +890,20 @@ public class NativeArray extends ScriptableObject implements List {
      * be necessary to use the general ScriptRuntime.get/setElem
      * functions... though this is probably premature optimization.
      */
+    /** DeletePropertyOrThrow: a property that cannot be deleted throws a TypeError. */
     private static void deleteElem(Scriptable target, long index) {
-        int i = (int) index;
-        if (i == index) {
-            target.delete(i);
-        } else {
-            target.delete(Long.toString(index));
+        Context cx = Context.getCurrentContext();
+        boolean wasStrict = cx.isStrictMode();
+        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        try {
+            int i = (int) index;
+            if (i == index) {
+                target.delete(i);
+            } else {
+                target.delete(Long.toString(index));
+            }
+        } finally {
+            cx.setIsStrictMode(wasStrict);
         }
     }
 
@@ -912,12 +934,22 @@ public class NativeArray extends ScriptableObject implements List {
         }
     }
 
+    /**
+     * Set(O, P, V, true): an assignment that fails throws a TypeError (from VERSION_ES6; JavaScript
+     * 1.x ignores it).
+     */
     private static void setElem(Context cx, Scriptable target, long index, Object value) {
-        if (index > Integer.MAX_VALUE) {
-            String id = Long.toString(index);
-            ScriptableObject.putProperty(target, id, value);
-        } else {
-            ScriptableObject.putProperty(target, (int) index, value);
+        boolean wasStrict = cx.isStrictMode();
+        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        try {
+            if (index > Integer.MAX_VALUE) {
+                String id = Long.toString(index);
+                ScriptableObject.putProperty(target, id, value);
+            } else {
+                ScriptableObject.putProperty(target, (int) index, value);
+            }
+        } finally {
+            cx.setIsStrictMode(wasStrict);
         }
     }
 
@@ -1110,7 +1142,7 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly) {
+            if (na.denseOnly && na.isWritableDense()) {
                 for (int i = 0, j = ((int) na.length) - 1; i < j; i++, j--) {
                     Object temp = na.dense[i];
                     na.dense[i] = na.dense[j];
@@ -1178,7 +1210,9 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly && na.ensureCapacity((int) na.length + args.length)) {
+            if (na.denseOnly
+                    && na.isWritableDense()
+                    && na.ensureCapacity((int) na.length + args.length)) {
                 for (Object arg : args) {
                     na.dense[(int) na.length++] = arg;
                     na.modCount++;
@@ -1202,7 +1236,7 @@ public class NativeArray extends ScriptableObject implements List {
         Object result;
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly && na.length > 0) {
+            if (na.denseOnly && na.isWritableDense() && na.length > 0) {
                 na.length--;
                 na.modCount++;
                 result = na.dense[(int) na.length];
@@ -1236,7 +1270,7 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly && na.length > 0) {
+            if (na.denseOnly && na.isWritableDense() && na.length > 0) {
                 na.length--;
                 na.modCount++;
                 Object result = na.dense[0];
@@ -1280,7 +1314,9 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly && na.ensureCapacity((int) na.length + args.length)) {
+            if (na.denseOnly
+                    && na.isWritableDense()
+                    && na.ensureCapacity((int) na.length + args.length)) {
                 System.arraycopy(na.dense, 0, na.dense, args.length, (int) na.length);
                 System.arraycopy(args, 0, na.dense, 0, args.length);
                 na.length += args.length;
@@ -1814,7 +1850,7 @@ public class NativeArray extends ScriptableObject implements List {
         // and other non-default options then we won't get here.
         if ((o instanceof NativeArray) && (count <= Integer.MAX_VALUE)) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly) {
+            if (na.denseOnly && na.isWritableDense()) {
                 for (; count > 0; count--) {
                     na.dense[(int) to] = na.dense[(int) from];
                     from += direction;

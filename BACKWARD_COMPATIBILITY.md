@@ -541,6 +541,17 @@ Number.prototype[Symbol.match] = function () { return "custom"; };
   `Symbol.match`/`matchAll`/`replace`/`search`/`split` method of their argument only when it is an object.
 - **Why:** ECMA-262 2025 and later, §22.1.3 (the "If regexp is an Object" steps).
 
+### 2.26 Array methods on frozen objects
+
+```js
+Object.freeze([1]).push(2);                    // before: 2 (nothing changed)   now: TypeError
+Array.prototype.pop.call("abc");               // before: "c"   now: TypeError (length is read-only)
+```
+
+- From `VERSION_ES6`: the Array methods that write (`push`, `pop`, `shift`, `unshift`, `splice`, `reverse`,
+  `fill`, `copyWithin`, …) throw a TypeError when an element or the length cannot be written or deleted.
+- **Why:** ECMA-262 2026, §23.1.3 (the methods use Set(O, P, V, true) and DeletePropertyOrThrow).
+
 ---
 
 ## 3. Platform and embedding
