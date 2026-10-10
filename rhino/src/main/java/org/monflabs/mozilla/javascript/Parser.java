@@ -5816,7 +5816,7 @@ public class Parser {
             } else {
                 reportError("msg.bad.prop");
             }
-            propStart = ts.tokenBeg;
+            // the source text of an accessor starts with get/set
             pname = objliteralProperty();
             if (pname == null) {
                 reportError("msg.bad.prop");

@@ -539,7 +539,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setMilliseconds);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -549,7 +554,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCMilliseconds);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -559,7 +569,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setSeconds);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -569,7 +584,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCSeconds);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -579,7 +599,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setMinutes);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -589,7 +614,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCMinutes);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -599,7 +629,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setHours);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -609,7 +644,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCHours);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -619,7 +659,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setDate);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -629,7 +674,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setUTCDate);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -639,7 +689,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setMonth);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }
@@ -649,7 +704,12 @@ final class NativeDate extends ScriptableObject {
         var realThis = realThis(thisObj);
         double t = realThis.date;
 
+        boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setUTCMonth);
+        if (invalid) {
+            // the date value was read before the arguments were converted
+            return ScriptRuntime.NaNobj;
+        }
         realThis.date = t;
         return ScriptRuntime.wrapNumber(t);
     }

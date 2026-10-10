@@ -51,4 +51,31 @@ class BuiltinsResidualsTest {
                         + " t(() => Array.prototype.pop.call(''));"
                         + " r.join('|')");
     }
+
+    @Test
+    void objectPrototypeMethods() {
+        assertBoth(
+                "TypeError|function|true|false|[object Object]|[object Array]",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => Object.prototype.__defineGetter__.call(Object.freeze({}), 'x', function () {}));"
+                        + " t(() => { var o = {}; o.__defineGetter__('x', function () {});"
+                        + " return typeof Object.create(o).__lookupGetter__('x'); });"
+                        + " t(() => ({ [Symbol.iterator]: 1 }).hasOwnProperty({ toString() { return Symbol.iterator; } }));"
+                        + " t(() => Object.prototype.isPrototypeOf.call(null, 1));"
+                        + " t(() => { var p = new Promise(() => {}); delete Promise.prototype[Symbol.toStringTag];"
+                        + " return Object.prototype.toString.call(p); });"
+                        + " t(() => Object.prototype.toString.call(new Proxy([], {})));"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void dateSettersAndIndexOf() {
+        assertBoth(
+                "NaN,0|-1|get a() {}",
+                "var d = new Date(NaN); var v = d.setDate({ valueOf() { d.setTime(0); return 1; } });"
+                        + " var r = [[v, d.getTime()].join()];"
+                        + " r.push([].indexOf(1, { valueOf() { throw new Error('converted'); } }));"
+                        + " r.push(String(Object.getOwnPropertyDescriptor(class { get a() {} }.prototype, 'a').get));"
+                        + " r.join('|')");
+    }
 }

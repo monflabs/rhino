@@ -161,6 +161,13 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_hasOwnProperty(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // ToPropertyKey, then ToObject (20.1.3.2)
+            Object key =
+                    ScriptRuntime.toPropertyKey(args.length < 1 ? Undefined.instance : args[0]);
+            ScriptRuntime.toObject(cx, s, thisObj);
+            return AbstractEcmaObjectOperations.hasOwnProperty(cx, thisObj, key);
+        }
         if (cx.getLanguageVersion() >= Context.VERSION_1_8
                 && (thisObj == null || Undefined.isUndefined(thisObj))) {
             throw ScriptRuntime.typeErrorById(
@@ -174,6 +181,16 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_propertyIsEnumerable(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // ToPropertyKey, ToObject, then [[GetOwnProperty]] (20.1.3.4)
+            Object key =
+                    ScriptRuntime.toPropertyKey(args.length < 1 ? Undefined.instance : args[0]);
+            Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+            if (o instanceof ScriptableObject) {
+                DescriptorInfo desc = ((ScriptableObject) o).getOwnPropertyDescriptor(cx, key);
+                return ScriptRuntime.wrapBoolean(desc != null && desc.isEnumerable(true));
+            }
+        }
         if (cx.getLanguageVersion() >= Context.VERSION_1_8
                 && (thisObj == null || Undefined.isUndefined(thisObj))) {
             throw ScriptRuntime.typeErrorById(
@@ -219,6 +236,11 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_isPrototypeOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6
+                && (args.length == 0 || !ScriptRuntime.isObject(args[0]))) {
+            // a primitive argument gives false before this is converted (20.1.3.3)
+            return Boolean.FALSE;
+        }
         if (cx.getLanguageVersion() >= Context.VERSION_1_8
                 && (thisObj == null || Undefined.isUndefined(thisObj))) {
             throw ScriptRuntime.typeErrorById(
@@ -286,6 +308,28 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_defineGetterOrSetter(
             Context cx, VarScope scope, boolean isSetter, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // B.2.2.2 and B.2.2.3
+            Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
+            Object fn = args.length > 1 ? args[1] : Undefined.instance;
+            if (!(fn instanceof Callable)) {
+                throw ScriptRuntime.notFunctionError(fn);
+            }
+            Object key =
+                    ScriptRuntime.toPropertyKey(args.length > 0 ? args[0] : Undefined.instance);
+            DescriptorInfo desc =
+                    new DescriptorInfo(
+                            Boolean.TRUE,
+                            NOT_FOUND,
+                            Boolean.TRUE,
+                            isSetter ? NOT_FOUND : fn,
+                            isSetter ? fn : NOT_FOUND,
+                            NOT_FOUND);
+            if (o instanceof ScriptableObject) {
+                ((ScriptableObject) o).defineOwnProperty(cx, key, desc);
+            }
+            return Undefined.instance;
+        }
         if (args.length < 2 || !(args[1] instanceof Callable)) {
             Object badArg = (args.length >= 2 ? args[1] : Undefined.instance);
             throw ScriptRuntime.notFunctionError(badArg);
@@ -318,6 +362,26 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_lookupGetterOrSetter(
             Context cx, VarScope scope, boolean isSetter, Object thisObj, Object[] args) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // B.2.2.4 and B.2.2.5
+            Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
+            Object key =
+                    ScriptRuntime.toPropertyKey(args.length > 0 ? args[0] : Undefined.instance);
+            while (o != null) {
+                if (o instanceof ScriptableObject) {
+                    DescriptorInfo desc = ((ScriptableObject) o).getOwnPropertyDescriptor(cx, key);
+                    if (desc != null) {
+                        Object fn =
+                                desc.isAccessorDescriptor()
+                                        ? (isSetter ? desc.setter : desc.getter)
+                                        : null;
+                        return fn == null || fn == NOT_FOUND ? Undefined.instance : fn;
+                    }
+                }
+                o = o.getPrototype();
+            }
+            return Undefined.instance;
+        }
         if (args.length < 1 || !(thisObj instanceof ScriptableObject)) return Undefined.instance;
 
         ScriptableObject so = (ScriptableObject) thisObj;

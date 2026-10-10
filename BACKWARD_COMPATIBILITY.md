@@ -552,6 +552,24 @@ Array.prototype.pop.call("abc");               // before: "c"   now: TypeError (
   `fill`, `copyWithin`, …) throw a TypeError when an element or the length cannot be written or deleted.
 - **Why:** ECMA-262 2026, §23.1.3 (the methods use Set(O, P, V, true) and DeletePropertyOrThrow).
 
+### 2.27 Object.prototype residuals and Date setters
+
+```js
+var d = new Date(NaN); d.setDate({ valueOf() { d.setTime(0); return 1; } });
+d.getTime();                                       // before: NaN   now: 0 (an invalid date is left unchanged)
+Object.prototype.__defineGetter__.call(Object.freeze({}), "x", f);   // before: ignored   now: TypeError
+Object.prototype.toString.call(new Proxy([], {}));                  // before: "[object Object]"   now: "[object Array]"
+```
+
+- All versions: a Date setter does not store a new value when the date was invalid before its arguments were
+  converted.
+- From `VERSION_ES6`: `__defineGetter__` and `__defineSetter__` define the accessor with DefinePropertyOrThrow (a
+  TypeError on a frozen or non-extensible object) and convert `this` with ToObject; `__lookupGetter__`/`Setter__`
+  use the [[GetOwnProperty]] of each object; `hasOwnProperty`, `propertyIsEnumerable` and `isPrototypeOf` follow
+  the order of their spec steps; `Object.prototype.toString` gives `Object` for a standard object whose
+  `Symbol.toStringTag` was removed (before, its class name) and `Array` for a proxy of an array.
+- **Why:** ECMA-262 2026, §21.4.4 (Date setters), §20.1.3 (Object.prototype), Annex B.2.2.
+
 ---
 
 ## 3. Platform and embedding

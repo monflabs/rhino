@@ -1612,39 +1612,31 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_indexOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        // 23.1.3.17
         Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
-
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
         long length = getLengthProperty(cx, o);
-        /*
-         * From http://developer.mozilla.org/en/docs/Core_JavaScript_1.5_Reference:Objects:Array:indexOf
-         * The index at which to begin the search. Defaults to 0, i.e. the
-         * whole array will be searched. If the index is greater than or
-         * equal to the length of the array, -1 is returned, i.e. the array
-         * will not be searched. If negative, it is taken as the offset from
-         * the end of the array. Note that even when the index is negative,
-         * the array is still searched from front to back. If the calculated
-         * index is less than 0, the whole array will be searched.
-         */
-        long start;
-        if (args.length < 2) {
-            // default
-            start = 0;
-        } else {
-            start = (long) ScriptRuntime.toInteger(args[1]);
-            if (start < 0) {
-                start += length;
-                if (start < 0) start = 0;
+        if (length == 0) {
+            return NEGATIVE_ONE;
+        }
+        long start = 0;
+        if (args.length >= 2) {
+            double n = ScriptRuntime.toInteger(args[1]);
+            if (n >= length) {
+                return NEGATIVE_ONE;
             }
-            if (start > length - 1) return NEGATIVE_ONE;
+            start = n >= 0 ? (long) n : (long) Math.max(length + n, 0);
         }
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly) {
+            // the conversion of fromIndex may have changed the array
+            if (na.denseOnly && na.length == length && length <= na.dense.length) {
                 Scriptable proto = na.getPrototype();
                 for (int i = (int) start; i < length; i++) {
                     Object val = na.dense[i];
-                    if (val == NOT_FOUND && proto != null) {
+                    if (val == NOT_FOUND
+                            && proto != null
+                            && ScriptableObject.hasProperty(proto, i)) {
                         val = ScriptableObject.getProperty(proto, i);
                     }
                     if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
@@ -1655,48 +1647,46 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
         for (long i = start; i < length; i++) {
-            Object val = getRawElem(o, i);
-            if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
+            if (hasElem(o, i) && ScriptRuntime.shallowEq(getElem(cx, o, i), compareTo)) {
                 return Long.valueOf(i);
             }
         }
         return NEGATIVE_ONE;
     }
 
+    /** HasProperty(O, ToString(index)). */
+    private static boolean hasElem(Scriptable o, long index) {
+        return index > Integer.MAX_VALUE
+                ? ScriptableObject.hasProperty(o, Long.toString(index))
+                : ScriptableObject.hasProperty(o, (int) index);
+    }
+
     private static Object js_lastIndexOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        // 23.1.3.20
         Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
-
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
         long length = getLengthProperty(cx, o);
-        /*
-         * From http://developer.mozilla.org/en/docs/Core_JavaScript_1.5_Reference:Objects:Array:lastIndexOf
-         * The index at which to start searching backwards. Defaults to the
-         * array's length, i.e. the whole array will be searched. If the
-         * index is greater than or equal to the length of the array, the
-         * whole array will be searched. If negative, it is taken as the
-         * offset from the end of the array. Note that even when the index
-         * is negative, the array is still searched from back to front. If
-         * the calculated index is less than 0, -1 is returned, i.e. the
-         * array will not be searched.
-         */
-        long start;
-        if (args.length < 2) {
-            // default
-            start = length - 1;
-        } else {
-            start = (long) ScriptRuntime.toInteger(args[1]);
-            if (start >= length) start = length - 1;
-            else if (start < 0) start += length;
-            if (start < 0) return NEGATIVE_ONE;
+        if (length == 0) {
+            return NEGATIVE_ONE;
+        }
+        long start = length - 1;
+        if (args.length >= 2) {
+            double n = ScriptRuntime.toInteger(args[1]);
+            if (n == Double.NEGATIVE_INFINITY) {
+                return NEGATIVE_ONE;
+            }
+            start = n >= 0 ? (long) Math.min(n, length - 1) : (long) (length + n);
         }
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly) {
+            if (na.denseOnly && na.length == length && length <= na.dense.length) {
                 Scriptable proto = na.getPrototype();
                 for (int i = (int) start; i >= 0; i--) {
                     Object val = na.dense[i];
-                    if (val == NOT_FOUND && proto != null) {
+                    if (val == NOT_FOUND
+                            && proto != null
+                            && ScriptableObject.hasProperty(proto, i)) {
                         val = ScriptableObject.getProperty(proto, i);
                     }
                     if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
@@ -1707,8 +1697,7 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
         for (long i = start; i >= 0; i--) {
-            Object val = getRawElem(o, i);
-            if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
+            if (hasElem(o, i) && ScriptRuntime.shallowEq(getElem(cx, o, i), compareTo)) {
                 return Long.valueOf(i);
             }
         }
@@ -2128,6 +2117,11 @@ public class NativeArray extends ScriptableObject implements List {
     private static Object js_isArrayMethod(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         return Boolean.valueOf(args.length > 0 && js_isArray(args[0]));
+    }
+
+    /** IsArray (7.2.2), also through proxies. */
+    static boolean isArray(Object o) {
+        return js_isArray(o);
     }
 
     private static boolean js_isArray(Object o) {

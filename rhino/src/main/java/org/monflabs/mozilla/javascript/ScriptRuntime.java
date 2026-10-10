@@ -1220,8 +1220,62 @@ public class ScriptRuntime {
             return "[object " + tagValue + "]";
         }
 
-        return "[object " + ((Scriptable) obj).getClassName() + "]";
+        String className = ((Scriptable) obj).getClassName();
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // builtinTag (20.1.3.6): the standard objects that have a @@toStringTag otherwise
+            if (NativeArray.isArray(obj)) {
+                return "[object Array]";
+            }
+            if (TAGGED_BUILTIN_CLASSES.contains(className)) {
+                return "[object Object]";
+            }
+        }
+        return "[object " + className + "]";
     }
+
+    /** Class names of the standard objects whose tag is their @@toStringTag property. */
+    private static final java.util.Set<String> TAGGED_BUILTIN_CLASSES =
+            java.util.Set.of(
+                    "Math",
+                    "JSON",
+                    "Reflect",
+                    "Atomics",
+                    "Symbol",
+                    "BigInt",
+                    "Promise",
+                    "Map",
+                    "Set",
+                    "WeakMap",
+                    "WeakSet",
+                    "WeakRef",
+                    "FinalizationRegistry",
+                    "ArrayBuffer",
+                    "SharedArrayBuffer",
+                    "DataView",
+                    "Int8Array",
+                    "Uint8Array",
+                    "Uint8ClampedArray",
+                    "Int16Array",
+                    "Uint16Array",
+                    "Int32Array",
+                    "Uint32Array",
+                    "Float16Array",
+                    "Float32Array",
+                    "Float64Array",
+                    "BigInt64Array",
+                    "BigUint64Array",
+                    "Generator",
+                    "AsyncGenerator",
+                    "GeneratorFunction",
+                    "AsyncFunction",
+                    "AsyncGeneratorFunction",
+                    "Array Iterator",
+                    "String Iterator",
+                    "Map Iterator",
+                    "Set Iterator",
+                    "RegExp String Iterator",
+                    "Iterator");
 
     public static String toString(Object[] args, int index) {
         return (index < args.length) ? toString(args[index]) : "undefined";
@@ -3899,6 +3953,15 @@ public class ScriptRuntime {
                 kind.substring(1),
                 cx,
                 scope);
+    }
+
+    /** ToPropertyKey (7.1.19): a symbol, or a string (converting an object may run code). */
+    public static Object toPropertyKey(Object key) {
+        if (isSymbol(key)) {
+            return key;
+        }
+        Object prim = toPrimitive(key, StringClass);
+        return isSymbol(prim) ? prim : toString(prim);
     }
 
     /**

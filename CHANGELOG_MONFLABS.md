@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: Date setters, Object.prototype methods (2026-10-10, plan 1.8c, part 3)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.27) unless stated:
+
+- All versions: the Date setters (`setDate`, `setHours`, …, not `setFullYear`) read the date value before converting
+  their arguments, and leave an invalid date unchanged (ES2023).
+- `__defineGetter__`/`__defineSetter__`/`__lookupGetter__`/`__lookupSetter__` follow Annex B (ToObject, ToPropertyKey,
+  DefinePropertyOrThrow; the lookups walk [[GetOwnProperty]]/[[GetPrototypeOf]], so proxies are consulted);
+  `hasOwnProperty` and `propertyIsEnumerable` convert the key with ToPropertyKey (a symbol from an object) before
+  `this`; `isPrototypeOf` returns false for a primitive argument before converting `this`.
+- `Object.prototype.toString` uses the builtinTag when `Symbol.toStringTag` is absent or not a string: `Object` for
+  the standard objects that rely on the tag (Promise, Map, Symbol, Math, …), `Array` for a proxy of an array.
+- All versions: the source text of a class getter or setter starts with `get`/`set`.
+- `Array.prototype.indexOf`/`lastIndexOf` return -1 for an empty array before converting `fromIndex`, use
+  HasProperty before Get, and take the generic path when the conversion changed the array.
+- test262: 57 more files pass; 29,405 of 42,616 in-scope files (69.0%).
+
 ### Array methods throw when a write fails (2026-10-10, plan 1.8c, part 2)
 
 From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.26; `js1_6/Array/regress-304828.js` keeps the 1.x behavior):
