@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-ins residuals: Object, array length (2026-10-10, plan 1.8c, part 7)
+
+From `VERSION_ES6` (`BACKWARD_COMPATIBILITY.md` 2.31) unless stated:
+
+- ArraySetLength deletes the elements from the end and stops at a non-configurable one: the length stays above
+  it and the definition fails (`Object.defineProperty` throws, a strict assignment throws). An array index at or
+  above a read-only `length` cannot be defined, and `length` grows only once the element is defined.
+- `Object.prototype` is an immutable prototype exotic object: changing its prototype throws (`Object.setPrototypeOf`,
+  `__proto__`) or returns false (`Reflect.setPrototypeOf`).
+- The index properties of a String object are read-only: a strict assignment throws, and `Object.assign` onto a
+  string throws a TypeError (it writes with [[Set]]).
+- The `__proto__` getter throws on `undefined`/`null`; an accessor defined with only a setter reports `get:
+  undefined` in its descriptor.
+- All versions: `Object.freeze`/`seal` of a proxy call its `defineProperty` trap with the partial descriptors of
+  SetIntegrityLevel and throw when it refuses; `Object.keys`/`values`/`entries` of a proxy call
+  `getOwnPropertyDescriptor` then `get` for each key; `Object.assign` from a proxy source copies index keys as
+  indexes.
+- test262: 39 more files pass; 29,557 of 42,616 in-scope files (69.4%).
+
 ### Built-ins residuals: Promise, String, conversions (2026-10-10, plan 1.8c, part 6)
 
 All versions unless stated (`BACKWARD_COMPATIBILITY.md` 2.30):

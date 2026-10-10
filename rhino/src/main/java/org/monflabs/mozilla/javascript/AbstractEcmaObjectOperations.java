@@ -155,6 +155,25 @@ public class AbstractEcmaObjectOperations {
         try (var map = obj.startCompoundOp(false)) {
             ids = obj.getIds(map, true, true);
         }
+        if (obj instanceof NativeProxy) {
+            // the trap sees the partial descriptors of the spec, and a refusal throws
+            for (Object key : ids) {
+                DescriptorInfo partial =
+                        new DescriptorInfo(
+                                NOT_FOUND, NOT_FOUND, false, NOT_FOUND, NOT_FOUND, NOT_FOUND);
+                if (level == INTEGRITY_LEVEL.FROZEN) {
+                    DescriptorInfo current = obj.getOwnPropertyDescriptor(cx, key);
+                    if (current == null) {
+                        continue;
+                    }
+                    if (!current.isAccessorDescriptor()) {
+                        partial.writable = false;
+                    }
+                }
+                obj.defineOwnProperty(cx, key, partial, true);
+            }
+            return true;
+        }
         for (Object key : ids) {
             DescriptorInfo desc = obj.getOwnPropertyDescriptor(cx, key);
 
@@ -660,5 +679,30 @@ public class AbstractEcmaObjectOperations {
         }
         ((Function) setter).call(cx, s, receiver, new Object[] {v});
         return true;
+    }
+
+    /** EnumerableOwnProperties(obj, key) (ECMA-262 7.3.23). */
+    static List<String> enumerableOwnKeys(Context cx, Scriptable obj) {
+        List<String> keys = new ArrayList<>();
+        if (obj instanceof NativeProxy) {
+            NativeProxy proxy = (NativeProxy) obj;
+            for (Object id : proxy.getAllIds()) {
+                if (id instanceof Symbol) {
+                    continue;
+                }
+                String key = ScriptRuntime.toString(id);
+                DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, key);
+                if (desc != null && Boolean.TRUE.equals(desc.enumerable)) {
+                    keys.add(key);
+                }
+            }
+        } else {
+            for (Object id : obj.getIds()) {
+                if (!(id instanceof Symbol)) {
+                    keys.add(ScriptRuntime.toString(id));
+                }
+            }
+        }
+        return keys;
     }
 }

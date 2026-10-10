@@ -484,9 +484,15 @@ public class NativeArray extends ScriptableObject implements List {
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
         long index = toArrayIndex(id);
-        if (index >= length) {
-            length = index + 1;
-            modCount++;
+        boolean grows = index >= length;
+        if (grows
+                && (lengthAttr & READONLY) != 0
+                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            // ArrayDefineOwnProperty (10.4.2.1) step 1.e: no index at or above a read-only length
+            if (checkValid) {
+                throw ScriptRuntime.typeErrorById("msg.modify.readonly", "length");
+            }
+            return false;
         }
 
         if (index != -1 && dense != null) {
@@ -506,7 +512,11 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
 
-        super.defineOwnProperty(cx, id, desc, checkValid);
+        boolean defined = super.defineOwnProperty(cx, id, desc, checkValid);
+        if (grows && defined) {
+            length = index + 1;
+            modCount++;
+        }
 
         if ("length".equals(id)) {
             lengthAttr =
@@ -569,6 +579,17 @@ public class NativeArray extends ScriptableObject implements List {
             d = ScriptRuntime.toNumber(value);
         }
         try (var map = builtIn.startCompoundOp(true)) {
+            if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                long reached = builtIn.deleteDownTo(map, (long) d);
+                if (reached > d) {
+                    builtIn.setLength(map, reached);
+                    if (isThrow) {
+                        throw ScriptRuntime.typeErrorById(
+                                "msg.delete.property.with.configurable.false", reached - 1);
+                    }
+                    return true;
+                }
+            }
             builtIn.setLength(map, d);
         }
         return true;
@@ -630,6 +651,25 @@ public class NativeArray extends ScriptableObject implements List {
             if (writable != NOT_FOUND) {
                 newWritable = isTrue(writable);
                 info.writable = true;
+            }
+
+            Context cx = Context.getCurrentContext();
+            if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                long reached = builtIn.deleteDownTo(map, newLength);
+                if (reached > newLength) {
+                    // 10.4.2.4 step 17.b: the length stops above the element that stayed
+                    info.value = (double) reached;
+                    ScriptableObject.defineOrdinaryProperty(
+                            descSetter, builtIn, map, id, info, false, key, index);
+                    if (!newWritable) {
+                        current.setAttributes(current.getAttributes() | READONLY);
+                    }
+                    if (checkValid) {
+                        throw ScriptRuntime.typeErrorById(
+                                "msg.delete.property.with.configurable.false", reached - 1);
+                    }
+                    return false;
+                }
             }
 
             // The standard set path that will be done by this call will
@@ -838,6 +878,41 @@ public class NativeArray extends ScriptableObject implements List {
         length = longVal;
         modCount++;
         return true;
+    }
+
+    /**
+     * ArraySetLength (10.4.2.4) step 17: deletes the elements from the end down to newLength, and
+     * stops at the first one that is not configurable. Returns the resulting length, above
+     * newLength when the deletion stopped.
+     */
+    private long deleteDownTo(CompoundOperationMap<Scriptable> compoundOp, long newLength) {
+        if (denseOnly || newLength >= length) {
+            return newLength;
+        }
+        ArrayList<Long> indexes = new ArrayList<>();
+        for (Object id : getIds(compoundOp, true, false)) {
+            long index =
+                    id instanceof Integer ? ((Integer) id).longValue() : toArrayIndex((String) id);
+            if (index >= newLength && index < length) {
+                indexes.add(index);
+            }
+        }
+        indexes.sort(Comparator.reverseOrder());
+        for (long index : indexes) {
+            Slot<Scriptable> slot =
+                    index > Integer.MAX_VALUE
+                            ? compoundOp.query(Long.toString(index), 0)
+                            : compoundOp.query(null, (int) index);
+            if (slot != null && (slot.getAttributes() & PERMANENT) != 0) {
+                return index + 1;
+            }
+            if (index > Integer.MAX_VALUE) {
+                deleteInternal(compoundOp, Long.toString(index));
+            } else {
+                deleteInternal(compoundOp, (int) index);
+            }
+        }
+        return newLength;
     }
 
     private static long checkLength(Object val) {

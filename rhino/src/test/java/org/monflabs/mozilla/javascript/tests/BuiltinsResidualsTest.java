@@ -195,4 +195,30 @@ class BuiltinsResidualsTest {
                         + " return new h.proxy(); });"
                         + " r.join('|')");
     }
+
+    @Test
+    void objectResiduals() {
+        assertBoth(
+                "TypeError,2|TypeError|get,set|TypeError|TypeError|TypeError|ownKeys,gopd:a,get:a|9",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => { var a = [0, 1, 2]; a.length = 10; a[5] = 5;"
+                        + " Object.defineProperty(a, '1', { configurable: false }); var e;"
+                        + " try { Object.defineProperty(a, 'length', { value: 0 }); } catch (x) { e = x.name; }"
+                        + " return [e, a.length]; });"
+                        + " t(() => { var a = [1]; Object.defineProperty(a, 'length', { writable: false });"
+                        + " Object.defineProperty(a, 1, { value: 2 }); });"
+                        + " t(() => { var o = {}; Object.defineProperty(o, 'x', { set: undefined });"
+                        + " return Object.keys(Object.getOwnPropertyDescriptor(o, 'x')).slice(0, 2); });"
+                        + " t(() => Object.setPrototypeOf(Object.prototype, {}));"
+                        + " t(() => Object.assign('a', [1]));"
+                        + " t(() => Object.getOwnPropertyDescriptor(Object.prototype, '__proto__').get.call(undefined));"
+                        + " t(() => { var log = []; Object.values(new Proxy({ a: 1 }, {"
+                        + " ownKeys(t) { log.push('ownKeys'); return Reflect.ownKeys(t); },"
+                        + " getOwnPropertyDescriptor(t, k) { log.push('gopd:' + k);"
+                        + " return Reflect.getOwnPropertyDescriptor(t, k); },"
+                        + " get(t, k) { log.push('get:' + k); return t[k]; } })); return log; });"
+                        + " t(() => { var tg = [7]; Object.assign(tg, new Proxy({ length: 0, 1: 9 },"
+                        + " { ownKeys() { return ['length', '1']; } })); return tg[1]; });"
+                        + " r.join('|')");
+    }
 }

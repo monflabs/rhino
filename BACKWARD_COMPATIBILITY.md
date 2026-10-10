@@ -623,6 +623,22 @@ Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now:
 - **Why:** ECMA-262 2026, §27.2.4 (Promise combinators), §7.4.11 (IteratorClose), §7.2.6 (IsRegExp), §7.1.1.1
   (OrdinaryToPrimitive), §20.2.3.2 (Function.prototype.bind).
 
+### 2.31 Array length truncation, Object.prototype, String indexes
+
+```js
+var a = [0, 1, 2]; Object.defineProperty(a, "1", { configurable: false });
+a.length = 0;                               // before: length 0   now: length 2 (TypeError in strict mode)
+Object.setPrototypeOf(Object.prototype, {}); // before: allowed   now: TypeError
+"use strict"; new String("ab")[0] = "x";     // before: ignored   now: TypeError
+```
+
+- From `VERSION_ES6`: truncating an array stops at a non-configurable element; an index cannot be defined at or
+  above a read-only `length`; the prototype of `Object.prototype` cannot be changed; assigning an index of a String
+  object throws in strict mode, also from `Object.assign` (`Object.assign("a", [1])`); the `__proto__`
+  getter throws for `undefined`/`null`; a setter-only accessor's descriptor has `get: undefined`.
+- **Why:** ECMA-262 2026, §10.4.2 (Array exotic objects), §10.4.7 (immutable prototype exotic objects), §10.4.3
+  (String exotic objects), §20.1.2.1 (Object.assign), §20.1.3.8.1 (`__proto__`).
+
 ---
 
 ## 3. Platform and embedding

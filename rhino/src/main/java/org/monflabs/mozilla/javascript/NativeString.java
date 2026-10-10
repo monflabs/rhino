@@ -515,6 +515,11 @@ final class NativeString extends ScriptableObject {
     @Override
     public void put(int index, Scriptable start, Object value) {
         if (0 <= index && index < string.length()) {
+            // the index properties are read-only (10.4.3.5)
+            Context cx = Context.getCurrentContext();
+            if (cx != null && cx.isStrictMode() && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                throw ScriptRuntime.typeErrorById("msg.modify.readonly", Integer.toString(index));
+            }
             return;
         }
         super.put(index, start, value);

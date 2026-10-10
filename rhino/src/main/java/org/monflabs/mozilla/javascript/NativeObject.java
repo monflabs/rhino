@@ -35,6 +35,18 @@ public class NativeObject extends ScriptableObject implements Map {
     private static final String CLASS_NAME = "Object";
 
     public static final String PROTO_PROPERTY = "__proto__";
+
+    /** Whether this is Object.prototype, whose [[SetPrototypeOf]] only accepts its prototype. */
+    boolean immutableProto;
+
+    @Override
+    public boolean setPrototypeOf(Context cx, Scriptable proto) {
+        if (immutableProto) {
+            return proto == getPrototype();
+        }
+        return super.setPrototypeOf(cx, proto);
+    }
+
     public static final String PARENT_PROPERTY = "__parent__";
 
     private static ClassDescriptor LEGACY_DESCRIPTOR;
@@ -97,7 +109,10 @@ public class NativeObject extends ScriptableObject implements Map {
 
     static JSFunction init(Context cx, VarScope s, boolean sealed) {
         var desc = cx.version >= Context.VERSION_ES6 ? ES6_DESCRIPTOR : LEGACY_DESCRIPTOR;
-        return desc.buildConstructor(cx, s, new NativeObject(), sealed);
+        NativeObject proto = new NativeObject();
+        // Object.prototype is an immutable prototype exotic object (10.4.7)
+        proto.immutableProto = cx.version >= Context.VERSION_ES6;
+        return desc.buildConstructor(cx, s, proto, sealed);
     }
 
     @Override
@@ -266,6 +281,10 @@ public class NativeObject extends ScriptableObject implements Map {
         Let O be ? ToObject(this value).
         2. Return ? O.[[GetPrototypeOf]]().
         */
+        if (thisObj == null || Undefined.isUndefined(thisObj)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.called.null.or.undefined", CLASS_NAME, "__proto__");
+        }
         return thisObj.getPrototype();
     }
 
@@ -454,6 +473,10 @@ public class NativeObject extends ScriptableObject implements Map {
         if (thisScriptable.getPrototype() == proto) {
             return thisObj;
         }
+        if (thisScriptable instanceof NativeObject
+                && ((NativeObject) thisScriptable).immutableProto) {
+            throw ScriptRuntime.typeErrorById("msg.object.immutable.prototype");
+        }
         if (!thisScriptable.isExtensible()) {
             throw ScriptRuntime.typeErrorById("msg.not.extensible");
         }
@@ -475,6 +498,11 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, f.getDeclarationScope(), arg);
+        if (obj instanceof NativeProxy) {
+            return cx.newArray(
+                    f.getDeclarationScope(),
+                    AbstractEcmaObjectOperations.enumerableOwnKeys(cx, obj).toArray());
+        }
         Object[] ids = obj.getIds();
         for (int i = 0; i < ids.length; i++) {
             ids[i] = ScriptRuntime.toString(ids[i]);
@@ -486,6 +514,9 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, s, arg);
+        if (obj instanceof NativeProxy) {
+            return cx.newArray(s, proxyEnumerableOwnProperties(cx, s, (NativeProxy) obj, true));
+        }
         Object[] ids = obj.getIds();
         int j = 0;
         for (int i = 0; i < ids.length; i++) {
@@ -508,6 +539,30 @@ public class NativeObject extends ScriptableObject implements Map {
             ids = Arrays.copyOf(ids, j);
         }
         return cx.newArray(s, ids);
+    }
+
+    /**
+     * EnumerableOwnProperties (7.3.23) of a proxy, kind value or key+value: [[OwnPropertyKeys]],
+     * then [[GetOwnProperty]] and Get for each key.
+     */
+    private static Object[] proxyEnumerableOwnProperties(
+            Context cx, VarScope s, NativeProxy proxy, boolean entries) {
+        ArrayList<Object> result = new ArrayList<>();
+        for (Object id : proxy.getAllIds()) {
+            if (id instanceof Symbol) {
+                continue;
+            }
+            String key = ScriptRuntime.toString(id);
+            DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, key);
+            if (desc != null && Boolean.TRUE.equals(desc.enumerable)) {
+                Object value = ScriptableObject.getProperty(proxy, key);
+                if (value == NOT_FOUND) {
+                    value = Undefined.instance;
+                }
+                result.add(entries ? cx.newArray(s, new Object[] {key, value}) : value);
+            }
+        }
+        return result.toArray();
     }
 
     private static Object js_fromEntries(
@@ -537,6 +592,9 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, s, arg);
+        if (obj instanceof NativeProxy) {
+            return cx.newArray(s, proxyEnumerableOwnProperties(cx, s, (NativeProxy) obj, false));
+        }
         Object[] ids = obj.getIds();
         int j = 0;
         for (int i = 0; i < ids.length; i++) {
@@ -778,6 +836,13 @@ public class NativeObject extends ScriptableObject implements Map {
         }
     }
 
+    /** Set(O, P, V, true) (7.3.4). */
+    private static void setOrThrow(Context cx, Scriptable o, Object key, Object value) {
+        if (!AbstractEcmaObjectOperations.set(cx, o, key, value, o)) {
+            throw ScriptRuntime.typeErrorById("msg.modify.readonly", ScriptRuntime.toString(key));
+        }
+    }
+
     private static Object assign(Context cx, VarScope s, Object[] args) {
         Scriptable targetObj;
         if (args.length > 0) {
@@ -807,8 +872,14 @@ public class NativeObject extends ScriptableObject implements Map {
                         Object val = ScriptableObject.getProperty(proxy, (Symbol) k);
                         ScriptableObject.putProperty(targetObj, (Symbol) k, val);
                     } else {
-                        Object val = ScriptableObject.getProperty(proxy, (String) k);
-                        ScriptableObject.putProperty(targetObj, (String) k, val);
+                        ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(k);
+                        if (soi.stringId == null) {
+                            Object val = ScriptableObject.getProperty(proxy, soi.index);
+                            ScriptableObject.putProperty(targetObj, soi.index, val);
+                        } else {
+                            Object val = ScriptableObject.getProperty(proxy, soi.stringId);
+                            ScriptableObject.putProperty(targetObj, soi.stringId, val);
+                        }
                     }
                 }
                 continue;
@@ -836,6 +907,10 @@ public class NativeObject extends ScriptableObject implements Map {
                         Object val = sourceObj.get(intId, sourceObj);
                         if (targetIsArray) {
                             targetObj.put(intId, targetObj, val);
+                        } else if (targetObj instanceof NativeString
+                                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                            // the virtual, read-only index properties of a String object
+                            setOrThrow(cx, targetObj, intId, val);
                         } else {
                             AbstractEcmaObjectOperations.put(cx, targetObj, intId, val, true);
                         }
@@ -846,6 +921,10 @@ public class NativeObject extends ScriptableObject implements Map {
                         Object val = sourceObj.get(stringId, sourceObj);
                         if (targetIsArray) {
                             targetObj.put(stringId, targetObj, val);
+                        } else if (targetObj instanceof NativeString
+                                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                            // the virtual, read-only index properties of a String object
+                            setOrThrow(cx, targetObj, stringId, val);
                         } else {
                             AbstractEcmaObjectOperations.put(cx, targetObj, stringId, val, true);
                         }

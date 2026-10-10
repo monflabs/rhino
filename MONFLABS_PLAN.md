@@ -551,7 +551,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
-| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | in progress | 68.5% → 69.3% (1.8a–c6)      | (this) |
+| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | in progress | 68.5% → 69.4% (1.8a–c7)      | (this) |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |

@@ -18,7 +18,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import org.monflabs.mozilla.javascript.json.JsonParser;
 import org.monflabs.mozilla.javascript.xml.XMLObject;
@@ -118,7 +117,7 @@ public final class NativeJSON extends ScriptableObject {
                     reviveKey(cx, scope, reviver, obj, Long.toString(i));
                 }
             } else {
-                for (String key : enumerableOwnKeys(cx, obj)) {
+                for (String key : AbstractEcmaObjectOperations.enumerableOwnKeys(cx, obj)) {
                     reviveKey(cx, scope, reviver, obj, key);
                 }
             }
@@ -156,31 +155,6 @@ public final class NativeJSON extends ScriptableObject {
                         ? ScriptableObject.getProperty(obj, soi.index)
                         : ScriptableObject.getProperty(obj, soi.stringId);
         return v == Scriptable.NOT_FOUND ? Undefined.instance : v;
-    }
-
-    /** EnumerableOwnProperties(obj, key) (ECMA-262 7.3.23). */
-    private static List<String> enumerableOwnKeys(Context cx, Scriptable obj) {
-        List<String> keys = new ArrayList<>();
-        if (obj instanceof NativeProxy) {
-            NativeProxy proxy = (NativeProxy) obj;
-            for (Object id : proxy.getAllIds()) {
-                if (id instanceof Symbol) {
-                    continue;
-                }
-                String key = ScriptRuntime.toString(id);
-                DescriptorInfo desc = proxy.getOwnPropertyDescriptor(cx, key);
-                if (desc != null && Boolean.TRUE.equals(desc.enumerable)) {
-                    keys.add(key);
-                }
-            }
-        } else {
-            for (Object id : obj.getIds()) {
-                if (!(id instanceof Symbol)) {
-                    keys.add(ScriptRuntime.toString(id));
-                }
-            }
-        }
-        return keys;
     }
 
     private static Object walk(
@@ -504,7 +478,7 @@ public final class NativeJSON extends ScriptableObject {
         if (state.propertyList != null) {
             k = state.propertyList;
         } else if (value instanceof NativeProxy) {
-            k = enumerableOwnKeys(state.cx, value).toArray();
+            k = AbstractEcmaObjectOperations.enumerableOwnKeys(state.cx, value).toArray();
         } else {
             k = value.getIds();
         }

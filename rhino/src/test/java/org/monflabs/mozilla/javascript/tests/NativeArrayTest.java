@@ -147,18 +147,23 @@ public class NativeArrayTest {
                         + "  configurable: false\n"
                         + "});\n"
                         + "\n"
-                        + "Object.defineProperties(arr, {\n"
-                        + "  length: {\n"
-                        + "    value: 1\n"
-                        + "  }\n"
-                        + "});\n";
+                        + "try {\n"
+                        + "  Object.defineProperties(arr, {\n"
+                        + "    length: {\n"
+                        + "      value: 1\n"
+                        + "    }\n"
+                        + "  });\n"
+                        + "} catch (e) {\n"
+                        + "  e.name + ' ' + arr.length;\n"
+                        + "}\n";
 
         var contextFactory = Utils.contextFactoryWithFeatures(Context.FEATURE_THREAD_SAFE_OBJECTS);
         try (Context cx = contextFactory.enterContext()) {
             cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
             TopLevel scope = cx.initSafeStandardObjects(new TopLevel());
 
-            assertNotNull(cx.evaluateString(scope, script, "test", 1, null));
+            // the non-configurable element stops the truncation (ArraySetLength)
+            assertEquals("TypeError 2", cx.evaluateString(scope, script, "test", 1, null));
         }
     }
 }
