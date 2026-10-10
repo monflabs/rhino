@@ -386,8 +386,16 @@ Steps (2026-10-10, from a run of the in-scope built-ins failures: 435 files):
   Part 1 (done): [[Set]], proxy `set`/`getOwnPropertyDescriptor`, proxies in prototype chains. Part 2 (done):
   `deleteProperty`/`defineProperty`/`setPrototypeOf` results, proxies as targets, `get` receiver. Left: `with` and
   proxies (name resolution through the `has` trap), `ownKeys` order of a proxy target.
-- *1.8c* `Object.*`, `Array.prototype`, `String.prototype`, `Function.prototype`, `JSON`, `Date`, `Promise`
-  residuals, by directory.
+- *1.8c (done)* `Object.*`, `Array.prototype`, `String.prototype`, `Function.prototype`, `JSON`, `Date`, `Promise`
+  residuals, by directory, in 9 parts (Set methods, typed arrays, BigInt, Error included).
+- Left for other items: the primitive `this` of methods called on primitives (`"a".f()` and
+  `Function.prototype.call` box it, so strict functions and built-ins see an object), cross-realm tests (need
+  `$262.createRealm`), `with` and proxies, `Function.prototype.arguments`/`caller` as %ThrowTypeError% accessors
+  (sloppy functions would need own `arguments`/`caller`), index setters of `Array.prototype` bypassed by the dense
+  fast paths of `push`/`unshift`, JSON source access (12.6), `Array.fromAsync` (12.7), `SharedArrayBuffer` (3.x),
+  Iterator helpers, RegExp (1.9).
+- Perf gate (2026-10-10, end of 1.8): no regression; `evalcache` is +4% to +9% over `perf-baseline` (within
+  tolerance on 7 rounds, flagged once at +12% on 3 rounds) — to watch.
 
 **1.9 RegExp (ES2015).** `u` flag (code point semantics, `\u{...}`, case folding), `y` sticky, `flags`, the four
 symbol methods (`@@match`, `@@replace`, `@@search`, `@@split`) with observable spec steps, `RegExp` subclassing,
@@ -551,7 +559,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | done        | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
-| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | in progress | 68.5% → 69.5% (1.8a–c9)      | (this) |
+| 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |
