@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Classes: super and derived constructors (2026-10-09, plan 1.7b)
+
+All versions from `VERSION_ES6` (additive):
+
+- A derived class constructor (`JSDescriptor.isDerivedConstructor`) runs with a this binding
+  (`ClassDefinition.DerivedThis`) as the `this` of its frame, also captured by its arrow functions. `this` in it
+  (`Node.DERIVED_THIS_PROP`, `Icode.DERIVED_THIS`) throws a `ReferenceError` until `super(...)` has returned.
+- `super(...)` calls the super constructor (the constructor's current `[[Prototype]]`, looked up before the
+  arguments) with `new.target`, then binds `this` (`ReferenceError` when called twice); it is also allowed in
+  arrow functions and direct `eval` in a derived constructor, and a `SyntaxError` elsewhere.
+- [[Construct]] of a derived constructor returns an object result, else the bound `this`; any other result is a
+  `TypeError`. The default derived constructor follows the same path.
+- The home object of a class constructor is the prototype and that of a static method is the constructor, for
+  `super.x`; `super.x` in a derived constructor uses the bound `this`.
+- The instance of a base class takes the `prototype` of any new.target (GetPrototypeFromConstructor, e.g.
+  `Reflect.construct(C, [], Object)`), not only of an interpreted function.
+- The `SyntaxError` message of `super()` outside a derived constructor changed (`msg.class.super.call`).
+- test262: 87 more files pass; 26,491 of 42,616 in-scope files (62.2%).
+
 ### Classes: syntax and definition (2026-10-09, plan 1.7a)
 
 All versions from `VERSION_ES6` (additive: `class` was a reserved word):

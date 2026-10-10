@@ -12,7 +12,7 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
     private final JSDescriptor<JSFunction> descriptor;
     private final Object lexicalThis;
     private final Object lexicalNewTarget;
-    private final Scriptable homeObject;
+    private Scriptable homeObject;
 
     public JSFunction(
             Context cx,
@@ -191,7 +191,15 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         if (nt == null || Undefined.isUndefined(nt)) {
             nt = this;
         }
-        var thisObj = homeObject == null ? this.createObject(cx, s, nt) : null;
+        if (descriptor.isDerivedConstructor()) {
+            var binding = new ClassDefinition.DerivedThis(this, nt);
+            return binding.result(
+                    descriptor.getConstructor().execute(cx, this, nt, s, binding, args));
+        }
+        var thisObj =
+                descriptor.isClassConstructor()
+                        ? ClassDefinition.createInstance(this, cx, s, nt)
+                        : homeObject == null ? this.createObject(cx, s, nt) : null;
         // Pass `this` in as new.target for now. This can change when
         // the public `construct` signature changes.
         var res = descriptor.getConstructor().execute(cx, this, nt, s, thisObj, args);
@@ -236,6 +244,11 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
     @Override
     public void setHomeObject(Scriptable homeObject) {
         throw new UnsupportedOperationException("Cannot set home object on JS function.");
+    }
+
+    /** The home object of a class constructor or static method, known once the class is defined. */
+    void initClassHomeObject(Scriptable homeObject) {
+        this.homeObject = homeObject;
     }
 
     public Object getFunctionThis(Scriptable functionThis) {

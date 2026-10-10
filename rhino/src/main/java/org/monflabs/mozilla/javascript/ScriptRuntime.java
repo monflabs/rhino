@@ -1924,6 +1924,7 @@ public class ScriptRuntime {
 
     public static Object getSuperElem(
             Object superObject, Object elem, Context cx, VarScope scope, Object thisObject) {
+        thisObject = derivedThis(thisObject);
         Scriptable superScriptable =
                 asScriptableOrThrowUndefReadError(cx, scope, superObject, elem);
         Scriptable thisScriptable = asScriptableOrThrowUndefReadError(cx, scope, thisObject, elem);
@@ -2017,6 +2018,7 @@ public class ScriptRuntime {
             VarScope scope,
             Object thisObject,
             boolean noWarn) {
+        thisObject = derivedThis(thisObject);
         Scriptable superScriptable =
                 asScriptableOrThrowUndefReadError(cx, scope, superObject, property);
         Scriptable thisScriptable =
@@ -2078,6 +2080,7 @@ public class ScriptRuntime {
 
     public static Object getSuperIndex(
             Object superObject, double dblIndex, Context cx, VarScope scope, Object thisObject) {
+        thisObject = derivedThis(thisObject);
         Scriptable superScriptable =
                 asScriptableOrThrowUndefReadError(cx, scope, superObject, dblIndex);
         Scriptable thisScriptable =
@@ -2144,6 +2147,7 @@ public class ScriptRuntime {
             Context cx,
             VarScope scope,
             Object thisObject) {
+        thisObject = derivedThis(thisObject);
         Scriptable superScriptable =
                 asScriptableOrThrowUndefWriteError(cx, scope, superObject, elem, value);
         Scriptable thisScriptable =
@@ -2204,6 +2208,7 @@ public class ScriptRuntime {
             Context cx,
             VarScope scope,
             Object thisObject) {
+        thisObject = derivedThis(thisObject);
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(superObject, property, value, cx);
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(thisObject, property, value, cx);
 
@@ -2261,6 +2266,7 @@ public class ScriptRuntime {
             Context cx,
             VarScope scope,
             Object thisObject) {
+        thisObject = derivedThis(thisObject);
         Scriptable superScriptable =
                 asScriptableOrThrowUndefWriteError(cx, scope, superObject, dblIndex, value);
         Scriptable thisScriptable =
@@ -3767,6 +3773,8 @@ public class ScriptRuntime {
                             scope instanceof NativeCall
                                     && ((NativeCall) scope).getHomeObject() != null;
                     compilerEnvs.setAllowSuper(isInsideMethod);
+                    compilerEnvs.setInDerivedConstructor(
+                            thisArg instanceof ClassDefinition.DerivedThis);
                     compilerEnvs.setInEval(true);
                     compilerEnvs.setHomeObject(homeObject);
                     compilerEnvs.setEvalForbiddenVarNames(
@@ -3782,10 +3790,8 @@ public class ScriptRuntime {
                         1,
                         null,
                         compilerEnvironsProcessor);
-        Scriptable thisObject =
-                thisArg == Undefined.instance
-                        ? Undefined.SCRIPTABLE_UNDEFINED
-                        : (Scriptable) thisArg;
+        Object thisObject =
+                thisArg == Undefined.instance ? Undefined.SCRIPTABLE_UNDEFINED : thisArg;
         VarScope evalScope;
         if (isStrict
                 || (script instanceof JSScript && ((JSScript) script).getDescriptor().isStrict())) {
@@ -3861,6 +3867,25 @@ public class ScriptRuntime {
                 kind.substring(1),
                 cx,
                 scope);
+    }
+
+    /**
+     * The value of this in a derived class constructor (Node#DERIVED_THIS_PROP), where the frame
+     * holds the this binding: a ReferenceError before super() is called.
+     */
+    public static Object derivedThis(Object thisObj) {
+        if (thisObj instanceof ClassDefinition.DerivedThis) {
+            return ((ClassDefinition.DerivedThis) thisObj).get();
+        }
+        return thisObj;
+    }
+
+    /** The function called by super(...) in a derived class constructor. */
+    public static Object superCallee(Object thisObj) {
+        if (thisObj instanceof ClassDefinition.DerivedThis) {
+            return ((ClassDefinition.DerivedThis) thisObj).superCallee();
+        }
+        throw Kit.codeBug();
     }
 
     /** The arguments of a call with spread arguments, built as an array (Node#SPREAD_ARGS_PROP). */

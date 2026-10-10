@@ -339,7 +339,7 @@ public class ClassCompiler {
         cfw.add(builder.requiresActivationFrame ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.requiresArgumentObject ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.declaredAsFunctionExpression ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
-        cfw.add(ByteCode.ICONST_0);
+        cfw.add(builder.derivedConstructor ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.namedByLiteral ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.classConstructor ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(ByteCode.ACONST_NULL);

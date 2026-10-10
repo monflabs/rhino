@@ -281,6 +281,15 @@ public class CompilerEnvirons {
         return allowSuper;
     }
 
+    /** Whether the code is a direct eval in a derived class constructor (this bound by super()). */
+    public void setInDerivedConstructor(boolean inDerivedConstructor) {
+        this.inDerivedConstructor = inDerivedConstructor;
+    }
+
+    public boolean isInDerivedConstructor() {
+        return inDerivedConstructor;
+    }
+
     public void setInEval(boolean inEval) {
         this.inEval = inEval;
     }
@@ -360,6 +369,7 @@ public class CompilerEnvirons {
     private boolean ideMode;
     private boolean allowSharpComments;
     private boolean allowSuper;
+    private boolean inDerivedConstructor;
     Set<String> activationNames;
     private boolean inEval;
     private Predicate<String> evalForbiddenVarNames;

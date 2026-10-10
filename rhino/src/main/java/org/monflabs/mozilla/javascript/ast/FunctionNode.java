@@ -85,6 +85,7 @@ public class FunctionNode extends ScriptNode {
     private boolean isShorthand;
     private boolean namedByLiteral;
     private boolean classConstructor;
+    private boolean derivedConstructor;
 
     @Override
     public List<Object> getDefaultParams() {
@@ -373,6 +374,15 @@ public class FunctionNode extends ScriptNode {
 
     public boolean isClassConstructor() {
         return classConstructor;
+    }
+
+    /** Marks the constructor of a class with an extends clause: this is bound by super(). */
+    public void setDerivedConstructor() {
+        derivedConstructor = true;
+    }
+
+    public boolean isDerivedConstructor() {
+        return derivedConstructor;
     }
 
     /** Marks a function written as the value of an object literal property (see JSDescriptor). */

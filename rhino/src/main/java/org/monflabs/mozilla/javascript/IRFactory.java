@@ -1115,12 +1115,37 @@ public final class IRFactory {
     }
 
     private Node transformLiteral(AstNode node) {
-        // Trying to call super as a function. See 15.4.2 Static Semantics: HasDirectSuper
-        // Note that this will need to change when classes are implemented, because in a class
-        // constructor calling "super()" _is_ allowed.
-        if (node.getParent() instanceof FunctionCall && node.getType() == Token.SUPER)
-            parser.reportError("msg.super.shorthand.function");
+        if (node.getType() == Token.SUPER
+                && node.getParent() instanceof FunctionCall
+                && ((FunctionCall) node.getParent()).getTarget() == node) {
+            // super(...) is allowed only in a derived constructor (15.7.1 Static Semantics:
+            // Early Errors), where it calls the super constructor and binds this
+            if (node.getParent() instanceof NewExpression || !isInDerivedConstructor(node)) {
+                parser.reportError("msg.class.super.call");
+                return node;
+            }
+            Node callee = new Node(Token.THIS);
+            callee.putIntProp(Node.DERIVED_THIS_PROP, Node.SUPER_CALLEE);
+            callee.setLineColumnNumber(node.getLineno(), node.getColumn());
+            return callee;
+        }
+        if (node.getType() == Token.THIS && isInDerivedConstructor(node)) {
+            node.putIntProp(Node.DERIVED_THIS_PROP, Node.DERIVED_THIS_VALUE);
+        }
         return node;
+    }
+
+    /** Whether this, in the node, is the this binding of a derived class constructor. */
+    private boolean isInDerivedConstructor(AstNode node) {
+        for (AstNode p = node.getParent(); p != null; p = p.getParent()) {
+            if (p instanceof FunctionNode) {
+                FunctionNode fn = (FunctionNode) p;
+                if (fn.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+                    return fn.isDerivedConstructor();
+                }
+            }
+        }
+        return parser.compilerEnv.isInDerivedConstructor();
     }
 
     private Node transformName(Name node) {

@@ -361,8 +361,8 @@ Steps:
   node (constructor, heritage, prototype and static members as object literals) evaluated by
   `ClassDefinition.define`; class constructors throw when called; default constructors; inner name binding;
   `class` removed from `UNSUPPORTED_FEATURES`.
-- *1.7b* `super()`, derived-constructor `this` bound by `super()`, `super.x` in methods and static methods (home
-  object of statics), `new.target`.
+- *1.7b (done)* `super()`, derived-constructor `this` bound by `super()`, `super.x` in methods and static
+  methods (home object of statics), `new.target`.
 - *1.7c* subclassing built-ins via `NewTarget`.
 
 **1.8 Well-known symbols and built-in protocol conformance.** `Symbol.species`, `toStringTag`, `unscopables`
@@ -532,7 +532,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
 | 1.6  | Generators completion                           | in progress | 60.5% → 61.1% (1.6a–c)       | ab6194c9e |
-| 1.7  | Classes                                         | in progress | 61.1% → 62.0% (1.7a)         | (this) |
+| 1.7  | Classes                                         | in progress | 61.1% → 62.2% (1.7a–b)       | (this) |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | todo        |                              |        |
 | 1.9  | RegExp ES2015                                   | todo        |                              |        |
 | 1.10 | Templates and syntax residuals                  | todo        |                              |        |

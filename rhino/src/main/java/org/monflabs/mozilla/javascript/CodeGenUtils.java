@@ -64,6 +64,9 @@ public class CodeGenUtils {
         if (fn.isClassConstructor()) {
             builder.classConstructor = true;
         }
+        if (fn.isDerivedConstructor()) {
+            builder.derivedConstructor = true;
+        }
         fillInCommon(builder, fn);
     }
 

@@ -1189,6 +1189,16 @@ class BodyCodegen {
 
             case Token.THIS:
                 cfw.addALoad(thisObjLocal);
+                switch (node.getIntProp(Node.DERIVED_THIS_PROP, 0)) {
+                    case Node.DERIVED_THIS_VALUE:
+                        addScriptRuntimeInvoke(
+                                "derivedThis", "(Ljava/lang/Object;)Ljava/lang/Object;");
+                        break;
+                    case Node.SUPER_CALLEE:
+                        addScriptRuntimeInvoke(
+                                "superCallee", "(Ljava/lang/Object;)Ljava/lang/Object;");
+                        break;
+                }
                 break;
 
             case Token.SUPER:
@@ -2983,6 +2993,7 @@ class BodyCodegen {
                     "getCallable",
                     "()Lorg/monflabs/mozilla/javascript/Callable;");
             cfw.addALoad(thisObjLocal);
+            addScriptRuntimeInvoke("derivedThis", "(Ljava/lang/Object;)Ljava/lang/Object;");
         } else {
             popFunctionAndThis();
         }

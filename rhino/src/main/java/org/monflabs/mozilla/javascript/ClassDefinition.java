@@ -51,9 +51,7 @@ final class ClassDefinition {
         if (constructor instanceof BaseFunction) {
             f = (BaseFunction) constructor;
         } else {
-            f =
-                    new DefaultConstructor(
-                            scope, name, hasHeritage && heritage != null ? heritage : null);
+            f = new DefaultConstructor(scope, name, hasHeritage);
             ScriptRuntime.setFunctionProtoAndParent(f, cx, scope);
         }
         f.setPrototype(constructorParent);
@@ -71,6 +69,9 @@ final class ClassDefinition {
         }
         // the methods are non-enumerable
         makeNonEnumerable(proto);
+        if (f instanceof JSFunction) {
+            ((JSFunction) f).initClassHomeObject(proto);
+        }
         f.setPrototypeProperty(proto);
         f.setPrototypePropertyAttributes(
                 ScriptableObject.DONTENUM | ScriptableObject.READONLY | ScriptableObject.PERMANENT);
@@ -79,6 +80,13 @@ final class ClassDefinition {
         for (Object id : ownKeys(statics)) {
             ScriptableObject.DescriptorInfo desc = statics.getOwnPropertyDescriptor(cx, id);
             desc.enumerable = Boolean.FALSE;
+            // the home object of a static method is the constructor
+            for (Object method : new Object[] {desc.value, desc.getter, desc.setter}) {
+                if (method instanceof JSFunction
+                        && ((JSFunction) method).getHomeObject() == statics) {
+                    ((JSFunction) method).initClassHomeObject(f);
+                }
+            }
             f.defineOwnProperty(cx, id, desc);
         }
         return f;
@@ -112,17 +120,85 @@ final class ClassDefinition {
         }
     }
 
+    /**
+     * The this binding of a derived constructor (ECMA-262 9.1.1.3): the frame of the constructor
+     * and of the arrow functions in it hold this object as their this, unbound until super()
+     * returns.
+     */
+    static final class DerivedThis {
+        private final BaseFunction constructor;
+        private final Object newTarget;
+        private Object value;
+
+        DerivedThis(BaseFunction constructor, Object newTarget) {
+            this.constructor = constructor;
+            this.newTarget = newTarget;
+        }
+
+        Object get() {
+            if (value == null) {
+                throw ScriptRuntime.constructError(
+                        "ReferenceError",
+                        ScriptRuntime.getMessageById("msg.class.this.before.super"));
+            }
+            return value;
+        }
+
+        /** The super constructor, looked up before the arguments of super(...) are evaluated. */
+        Callable superCallee() {
+            Object parent = constructor.getPrototype();
+            return (cx, scope, thisObj, args) -> {
+                if (!(parent instanceof Constructable) || !isConstructor(parent)) {
+                    throw ScriptRuntime.typeErrorById(
+                            "msg.class.super.not.ctor", constructor.getFunctionName());
+                }
+                Scriptable result = ((Constructable) parent).construct(cx, newTarget, scope, args);
+                if (value != null) {
+                    throw ScriptRuntime.constructError(
+                            "ReferenceError",
+                            ScriptRuntime.getMessageById("msg.class.super.twice"));
+                }
+                value = result;
+                return result;
+            };
+        }
+
+        /** The result of [[Construct]] for the value returned by the constructor body. */
+        Scriptable result(Object returned) {
+            if (returned instanceof Scriptable) {
+                return (Scriptable) returned;
+            }
+            if (!Undefined.isUndefined(returned)) {
+                throw ScriptRuntime.typeErrorById("msg.class.derived.return");
+            }
+            return (Scriptable) get();
+        }
+    }
+
+    /** OrdinaryCreateFromConstructor(newTarget, "%Object.prototype%") for a base class. */
+    static Scriptable createInstance(BaseFunction f, Context cx, VarScope scope, Object nt) {
+        if (nt instanceof JSFunction || !(nt instanceof Scriptable)) {
+            return f.createObject(cx, scope, nt);
+        }
+        Scriptable instance = f.createObject(cx, scope, nt);
+        Object proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");
+        if (proto instanceof Scriptable) {
+            instance.setPrototype((Scriptable) proto);
+        }
+        return instance;
+    }
+
     /** The constructor of a class that has none (ECMA-262 15.7.14 step 14.a). */
     static final class DefaultConstructor extends BaseFunction {
         private static final long serialVersionUID = 1L;
 
         private final String name;
-        private final Object parent;
+        private final boolean derived;
 
-        DefaultConstructor(VarScope scope, String name, Object parent) {
+        DefaultConstructor(VarScope scope, String name, boolean derived) {
             super(scope);
             this.name = name;
-            this.parent = parent;
+            this.derived = derived;
         }
 
         @Override
@@ -150,11 +226,12 @@ final class ClassDefinition {
             if (nt == null || Undefined.isUndefined(nt)) {
                 nt = this;
             }
-            if (parent instanceof Constructable) {
+            if (derived) {
                 // constructor(...args) { super(...args); }
-                return ((Constructable) parent).construct(cx, nt, scope, args);
+                return (Scriptable)
+                        new DerivedThis(this, nt).superCallee().call(cx, scope, null, args);
             }
-            return createObject(cx, scope, nt);
+            return createInstance(this, cx, scope, nt);
         }
     }
 }

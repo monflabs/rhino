@@ -1178,8 +1178,20 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 break;
 
-            case Token.NULL:
             case Token.THIS:
+                addToken(type);
+                stackChange(1);
+                switch (node.getIntProp(Node.DERIVED_THIS_PROP, 0)) {
+                    case Node.DERIVED_THIS_VALUE:
+                        addIcode(Icode.DERIVED_THIS);
+                        break;
+                    case Node.SUPER_CALLEE:
+                        addIcode(Icode.SUPER_CALLEE);
+                        break;
+                }
+                break;
+
+            case Token.NULL:
             case Token.SUPER:
             case Token.THISFN:
             case Token.NEW_TARGET:

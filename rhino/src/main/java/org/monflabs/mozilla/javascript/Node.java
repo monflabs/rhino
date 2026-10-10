@@ -74,8 +74,13 @@ public class Node implements Iterable<Node> {
             TDZ_CHECKED_PROP = 35, // name reference already classified for the TDZ
             LEXICAL_PROP = 36, // NAME of a block scope that is a let/const binding
             SPREAD_ARGS_PROP = 37, // CALL or NEW whose only argument is the array of its arguments
-            LAST_PROP = SPREAD_ARGS_PROP,
+            DERIVED_THIS_PROP =
+                    38, // THIS of a derived constructor: DERIVED_THIS_VALUE or SUPER_CALLEE
+            LAST_PROP = DERIVED_THIS_PROP,
             FIRST_PROP = FUNCTION_PROP;
+
+    /** Values of DERIVED_THIS_PROP. */
+    public static final int DERIVED_THIS_VALUE = 1, SUPER_CALLEE = 2;
 
     // values of ISNUMBER_PROP to specify
     // which of the children are Number types
@@ -473,6 +478,8 @@ public class Node implements Iterable<Node> {
                 return "spread_args_prop";
             case LEXICAL_PROP:
                 return "lexical_prop";
+            case DERIVED_THIS_PROP:
+                return "derived_this_prop";
 
             default:
                 Kit.codeBug();

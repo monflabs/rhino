@@ -201,9 +201,12 @@ abstract class Icode {
 
             // Class definition: constructor, heritage, prototype and static members
             CLASS_DEFINE = ENUM_CLOSE_ABRUPT - 1,
+            // this of a derived constructor, and the super constructor called by super(...)
+            DERIVED_THIS = CLASS_DEFINE - 1,
+            SUPER_CALLEE = DERIVED_THIS - 1,
 
             // Last icode
-            MIN_ICODE = CLASS_DEFINE;
+            MIN_ICODE = SUPER_CALLEE;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -433,6 +436,10 @@ abstract class Icode {
                 return "ENUM_CLOSE_ABRUPT";
             case CLASS_DEFINE:
                 return "CLASS_DEFINE";
+            case DERIVED_THIS:
+                return "DERIVED_THIS";
+            case SUPER_CALLEE:
+                return "SUPER_CALLEE";
         }
 
         // icode without name

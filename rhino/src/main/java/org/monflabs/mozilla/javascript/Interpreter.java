@@ -789,6 +789,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.NEW_SPREAD] = new DoCallSpread();
         instructionObjs[base + Icode.ENUM_CLOSE] = new DoEnumClose();
         instructionObjs[base + Icode.CLASS_DEFINE] = new DoClassDefine();
+        instructionObjs[base + Icode.DERIVED_THIS] = new DoDerivedThis();
+        instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
@@ -2678,7 +2680,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 // used to lookup the function. Now that that's done, we
                 // discard it and invoke the function with the current
                 // "this".
-                funThisObj = frame.thisObj;
+                funThisObj = ScriptRuntime.derivedThis(frame.thisObj);
             }
 
             if (op == Token.REF_CALL) {
@@ -2924,7 +2926,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
 
             Object lhs = frame.stack[frame.stackTop];
             if (lhs instanceof JSFunction
-                    && ((JSFunction) lhs).getConstructor() instanceof InterpreterData) {
+                    && ((JSFunction) lhs).getConstructor() instanceof InterpreterData
+                    && !((JSFunction) lhs).getDescriptor().isClassConstructor()) {
                 JSFunction f = (JSFunction) lhs;
 
                 JSDescriptor<JSFunction> desc = f.getDescriptor();
@@ -3544,9 +3547,27 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 ScriptRuntime.LookupResult result = (ScriptRuntime.LookupResult) target;
                 Callable fun = result.getCallable();
                 Object thisObj =
-                        op == Icode.CALL_SPREAD_ON_SUPER ? frame.thisObj : result.getThis();
+                        op == Icode.CALL_SPREAD_ON_SUPER
+                                ? ScriptRuntime.derivedThis(frame.thisObj)
+                                : result.getThis();
                 frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
             }
+            return null;
+        }
+    }
+
+    private static class DoDerivedThis extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] = ScriptRuntime.derivedThis(frame.stack[frame.stackTop]);
+            return null;
+        }
+    }
+
+    private static class DoSuperCallee extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] = ScriptRuntime.superCallee(frame.stack[frame.stackTop]);
             return null;
         }
     }

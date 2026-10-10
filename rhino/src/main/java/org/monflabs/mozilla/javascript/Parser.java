@@ -5800,6 +5800,9 @@ public class Parser {
             FunctionNode ctor = function(FunctionNode.FUNCTION_EXPRESSION, true);
             ctor.setMethodDefinition(false);
             ctor.setClassConstructor();
+            if (cls.getHeritage() != null) {
+                ctor.setDerivedConstructor();
+            }
             ctor.setInStrictMode(true);
             if (cls.getClassName() != null) {
                 ctor.setFunctionName(

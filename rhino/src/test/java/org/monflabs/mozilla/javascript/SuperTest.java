@@ -31,7 +31,7 @@ class SuperTest {
         @Test
         void isSyntaxErrorIfHasSuperCall() {
             Utils.assertEvaluatorExceptionES6(
-                    "super should be inside a shorthand function (test#1)",
+                    "super() is only valid in the constructor of a class with an extends clause (test#1)",
                     "({ method() { super(); }});");
         }
 
@@ -1286,7 +1286,8 @@ class SuperTest {
                             + "o.f();";
 
             Utils.assertEcmaErrorES6(
-                    "SyntaxError: super should be inside a shorthand function (test#3(eval)#1)",
+                    "SyntaxError: super() is only valid in the constructor of a class with an extends"
+                            + " clause (test#3(eval)#1)",
                     script);
         }
 
