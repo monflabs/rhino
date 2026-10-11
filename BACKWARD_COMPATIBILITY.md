@@ -224,6 +224,26 @@ var NaN;                  // VERSION_ES6: TypeError (redeclaration of const)   V
   non-writable global (`NaN`); a global function redefines a configurable property of the same name.
 - **Why:** ECMA-262 2026, §16.1.7 (GlobalDeclarationInstantiation), §9.1.1.4.15–18.
 
+### 1.12 Early errors
+
+```js
+f() &&= 1;                 // VERSION_ES6: ReferenceError at run time   VERSION_ECMASCRIPT: SyntaxError
+"use strict"; delete x;    // VERSION_ES6: false or true                VERSION_ECMASCRIPT: SyntaxError
+const x;                   // VERSION_ES6: x is undefined               VERSION_ECMASCRIPT: SyntaxError
+l: { for (;;) continue l; } // VERSION_ES6: continues the loop          VERSION_ECMASCRIPT: SyntaxError
+var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES6: 'l'   VERSION_ECMASCRIPT: 'g'
+```
+
+- Code that the specification rejects with an early error no longer compiles: invalid assignment targets, strict
+  mode restrictions (`delete` of an identifier, `eval++`, octal escapes), escaped keywords, a numeric literal
+  directly followed by an identifier, `08n`, `const` without an initializer, declarations as the body of a
+  label, `if`, `with` or a loop, a catch parameter redeclared by a lexical declaration, `continue` to a label
+  that is not a loop, a tagged template in an optional chain. The full list is in CHANGELOG_MONFLABS.md (plan
+  1.10e).
+- `eval?.()` and a tagged template on `eval` are indirect evals.
+- **Why:** ECMA-262 2026, the "Static Semantics: Early Errors" of §13–§14, §12.9.3 (numeric literals), §13.3.6.1
+  (direct eval is a CallExpression only).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`

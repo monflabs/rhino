@@ -157,6 +157,9 @@ public class Context implements Closeable {
      *   <li>The declarations of a script are validated before any binding is created; a {@code var}
      *       may name a non-writable global ({@code var NaN}) and a global function redefines a
      *       configurable property of the same name.
+     *   <li>The early errors of the specification are reported at compile time (invalid assignment
+     *       targets, strict mode restrictions, escaped keywords, {@code const} without initializer,
+     *       declarations in statement positions, ...), and {@code eval?.()} is an indirect eval.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

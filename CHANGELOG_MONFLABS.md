@@ -6,6 +6,26 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Early errors (2026-10-10, plan 1.10e)
+
+- `VERSION_ECMASCRIPT`: the static semantics early errors are reported at compile time (before, most of them were
+  accepted, and some failed at run time):
+  - AssignmentTargetType: `f() = 1` in strict code, `f() &&= 1`, `({}) = 1`, `a?.b = 1`, `` f()`` = 1 ``,
+    `() => {} = 1`, and the same targets for `++`/`--` and as `for-in`/`for-of` heads;
+  - strict code: `delete x`, `eval++`/`arguments--`, legacy octal (`"\1"`) and `\8`, `\9` escapes in string
+    literals, including a string of the directive prologue before `"use strict"`;
+  - escaped keywords (`tru\u0065`, `n\u0065w.target`, `new.t\u0061rget`, `o\u0066` in `for-of`);
+  - numeric literals: `3in []` (a literal followed by an identifier), `08n`/`00n`, `08_0`;
+  - `const x;` without an initializer, `l: const x = 1`, `l: let x`, `l: function* g() {}`, `l: function f() {}` in
+    strict code, `if (a) let [x] = y`, `with (o) function f() {}`, `if (a) function* g() {}`, `if (a) l: function
+    f() {}`;
+  - `catch (e) { let e; }` and `catch (e) { function e() {} }`;
+  - `continue l` where `l` labels a block (before, it continued the inner loop);
+  - `a?.b`` ` `` (a tagged template in an optional chain);
+  - the right-hand side of `for-of` is an AssignmentExpression (`for (x of a, b)`).
+- `VERSION_ECMASCRIPT`: `eval?.(x)` and `` eval`x` `` are indirect calls of eval.
+- test262: 30,056/42,616 (70.5%), 111 more tests pass.
+
 ### Global declarations, supplementary identifiers (2026-10-10, plan 1.10d)
 
 - `VERSION_ECMASCRIPT`: GlobalDeclarationInstantiation of scripts: the global let/const/class are checked

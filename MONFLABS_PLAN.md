@@ -422,6 +422,8 @@ Steps:
   destructuring assignment, `for-in` patterns (gated).
 - *1.10c (done)* `let` as an identifier in sloppy code (gated), strict `eval`/`arguments` destructuring targets.
 - *1.10d (done)* GlobalDeclarationInstantiation of scripts (gated), supplementary characters in identifiers.
+- *1.10e (done)* early errors (gated): assignment targets, strict mode, escaped keywords, numeric literals,
+  `const` initializers, declarations in statement positions, catch parameters, `continue` labels; `eval?.()`.
 
 **1.11 Annex B (ES2015 parts).** Block-level function declarations in sloppy mode (B.3.3), `__proto__`,
 `__defineGetter__` and kin, HTML-like comments, legacy octal, `RegExp` legacy syntax (`annexB/language`,
@@ -578,7 +580,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
-| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.3% (1.10a–d)      | (this) |
+| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.5% (1.10a–e)      | (this) |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |
 | 1.12 | ES modules                                      | todo        |                              |        |
 | 2.x  | ES2016                                          | todo        |                              |        |

@@ -158,6 +158,7 @@ public class Parser {
     private boolean letInSingleStatement;
 
     protected boolean inUseStrictDirective;
+    private boolean legacyEscapeInPrologue;
 
     // The following are per function variables and should be saved/restored
     // during function parsing.  See PerFunctionVariables class below.
@@ -720,6 +721,7 @@ public class Parser {
         int end = pos; // in case source is empty
 
         boolean inDirectivePrologue = true;
+        legacyEscapeInPrologue = false;
         boolean savedStrictMode = inUseStrictDirective;
 
         inUseStrictDirective = compilerEnv.isStrictMode();
@@ -759,6 +761,7 @@ public class Parser {
                         if (directive == null) {
                             inDirectivePrologue = false;
                         } else if ("use strict".equals(directive)) {
+                            checkLegacyEscapeInPrologue();
                             inUseStrictDirective = true;
                             applyStrictToPeekedToken();
                             root.setInStrictMode(true);
@@ -828,6 +831,7 @@ public class Parser {
         // if the last argument is a String that when processed is a FunctionBody
         // that begins with a Directive Prologue that contains a Use Strict Directive.
         boolean inDirectivePrologue = true;
+        legacyEscapeInPrologue = false;
         boolean savedStrictMode = inUseStrictDirective;
 
         pn.setLineColumnNumber(lineNumber(), columnNumber());
@@ -881,6 +885,7 @@ public class Parser {
                                     if (fnNode.getProp(Node.DESTRUCTURING_PARAMS) != null) {
                                         reportError("msg.destruct.param.use.strict");
                                     }
+                                    checkLegacyEscapeInPrologue();
                                     inUseStrictDirective = true;
                                     applyStrictToPeekedToken();
                                     fnNode.setInStrictMode(true);
@@ -903,6 +908,13 @@ public class Parser {
 
         getAndResetJsDoc();
         return pn;
+    }
+
+    /** "\1"; "use strict": a legacy escape before the directive is an error too. */
+    private void checkLegacyEscapeInPrologue() {
+        if (legacyEscapeInPrologue && compilerEnv.isLatestEcmaScript()) {
+            reportError("msg.no.octal.escape.strict");
+        }
     }
 
     private static String getDirective(AstNode n) {
@@ -1483,6 +1495,22 @@ public class Parser {
         }
     }
 
+    /** catch (e) { let e; }: a lexical declaration of the block cannot redeclare a parameter. */
+    private void checkCatchParameterRedeclaration(AstNode param, Scope block) {
+        Map<String, Symbol> symbols = block.getSymbolTable();
+        if (symbols == null) {
+            return;
+        }
+        List<String> names = new ArrayList<>();
+        collectBoundNames(param, names);
+        for (String name : names) {
+            Symbol sym = symbols.get(name);
+            if (sym != null && sym.getDeclType() != Symbol.Type.VAR) {
+                reportError("msg.let.redecl", name);
+            }
+        }
+    }
+
     private static void collectBoundNames(AstNode pattern, List<String> names) {
         if (pattern instanceof Name) {
             names.add(((Name) pattern).getIdentifier());
@@ -1644,6 +1672,8 @@ public class Parser {
     private AstNode statementHelper() throws IOException {
         // If the statement is set, then it's been told its label by now.
         if (currentLabel != null && currentLabel.getStatement() != null) currentLabel = null;
+        boolean labelledItem = letInSingleStatement;
+        letInSingleStatement = false;
 
         AstNode pn = null;
         int tt = peekToken(), pos = ts.tokenBeg;
@@ -1696,6 +1726,9 @@ public class Parser {
             case Token.CONST:
             case Token.VAR:
                 consumeToken();
+                if (tt == Token.CONST && labelledItem && compilerEnv.isLatestEcmaScript()) {
+                    reportError("msg.const.decl.not.in.block");
+                }
                 lineno = lineNumber();
                 column = columnNumber();
                 pn = variables(currentToken, ts.tokenBeg, true);
@@ -1703,8 +1736,7 @@ public class Parser {
                 break;
 
             case Token.LET:
-                boolean letSingle = inSingleStatementContext || letInSingleStatement;
-                letInSingleStatement = false;
+                boolean letSingle = inSingleStatementContext || labelledItem;
                 if (letIsIdentifier(letSingle)) {
                     // an expression statement starting with the identifier let
                     letAsName();
@@ -1713,6 +1745,10 @@ public class Parser {
                     pn = new ExpressionStatement(expr(false), !insideFunctionBody());
                     pn.setLineColumnNumber(lineno, column);
                     break;
+                }
+                if (letSingle && compilerEnv.isLatestEcmaScript()) {
+                    // if (a) let [x] = y: a lexical declaration is not a statement
+                    reportError("msg.let.decl.not.in.block");
                 }
                 pn = letStatement();
                 if (pn instanceof VariableDeclaration) break;
@@ -1874,6 +1910,7 @@ public class Parser {
                         parentForComments != null
                                 ? getNextStatementAfterInlineComments(parentForComments)
                                 : statement();
+                checkStatementBody(stmt, true);
                 implicitBlock.addChild(stmt);
                 implicitBlock.setLength(getNodeEnd(stmt) - blockPos);
                 return implicitBlock;
@@ -1883,9 +1920,12 @@ public class Parser {
                 inSingleStatementDeclContext = savedDecl;
             }
         }
-        return parentForComments != null
-                ? getNextStatementAfterInlineComments(parentForComments)
-                : statement();
+        AstNode stmt =
+                parentForComments != null
+                        ? getNextStatementAfterInlineComments(parentForComments)
+                        : statement();
+        checkStatementBody(stmt, true);
+        return stmt;
     }
 
     private SwitchStatement switchStatement() throws IOException {
@@ -1993,6 +2033,7 @@ public class Parser {
             inSingleStatementContext = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
             inSingleStatementDeclContext = false;
             AstNode body = getNextStatementAfterInlineComments(pn);
+            checkStatementBody(body, false);
             inSingleStatementContext = savedInSingleStatementContext;
             inSingleStatementDeclContext = savedInSingleStatementDeclContext;
             pn.setLength(getNodeEnd(body) - pos);
@@ -2017,6 +2058,7 @@ public class Parser {
             inSingleStatementContext = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
             inSingleStatementDeclContext = false;
             AstNode body = getNextStatementAfterInlineComments(pn);
+            checkStatementBody(body, false);
             inSingleStatementContext = savedInSingleStatementContext;
             inSingleStatementDeclContext = savedInSingleStatementDeclContext;
             mustMatchToken(Token.WHILE, "msg.no.while.do", true);
@@ -2109,10 +2151,12 @@ public class Parser {
             } else if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
                     && matchToken(Token.NAME, true)
                     && "of".equals(ts.getString())) {
+                checkEscapedKeyword();
                 isForOf = true;
                 inPos = ts.tokenBeg - forPos;
                 markDestructuring(init);
-                cond = expr(false); // object over which we're iterating
+                // object over which we're iterating, an AssignmentExpression
+                cond = compilerEnv.isLatestEcmaScript() ? assignExpr() : expr(false);
             } else { // ordinary for-loop
                 // For ordinary for loops, destructuring declarations must have initializers
                 if (init instanceof VariableDeclaration) {
@@ -2120,6 +2164,10 @@ public class Parser {
                     for (VariableInitializer vi : varDecl.getVariables()) {
                         if (vi.isDestructuring() && vi.getInitializer() == null) {
                             reportError("msg.destruct.assign.no.init");
+                        } else if (vi.getInitializer() == null
+                                && varDecl.getType() == Token.CONST
+                                && compilerEnv.isLatestEcmaScript()) {
+                            reportError("msg.const.no.init");
                         }
                     }
                 }
@@ -2171,6 +2219,11 @@ public class Parser {
                 if (isForOf && isForEach) {
                     reportError("msg.invalid.for.each");
                 }
+                if (!(init instanceof VariableDeclaration)
+                        && compilerEnv.isLatestEcmaScript()
+                        && !isValidAssignmentTarget(init, true, false)) {
+                    reportError("msg.bad.for.in.lhs");
+                }
                 fis.setIterator(init);
                 fis.setIteratedObject(cond);
                 fis.setInPosition(inPos);
@@ -2200,6 +2253,7 @@ public class Parser {
                 inSingleStatementContext = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
                 inSingleStatementDeclContext = false;
                 AstNode body = getNextStatementAfterInlineComments(pn);
+                checkStatementBody(body, false);
                 inSingleStatementContext = savedInSingleStatementContext;
                 inSingleStatementDeclContext = savedInSingleStatementDeclContext;
                 pn.setLength(getNodeEnd(body) - forPos);
@@ -2377,6 +2431,9 @@ public class Parser {
                     hasUndefinedBeenRedefined = previous;
                     popScope();
                 }
+                if (varName != null && compilerEnv.isLatestEcmaScript()) {
+                    checkCatchParameterRedeclaration(varName, catchScope);
+                }
 
                 tryEnd = getNodeEnd(catchScope);
                 catchNode.setVarName(varName);
@@ -2552,6 +2609,7 @@ public class Parser {
             }
             letInSingleStatement = true;
             AstNode body = getNextStatementAfterInlineComments(pn);
+            checkStatementBody(body, false);
             letInSingleStatement = false;
 
             pn.setLength(getNodeEnd(body) - pos);
@@ -2828,9 +2886,23 @@ public class Parser {
                 if (peekToken() == Token.RESERVED && isClassKeyword()) {
                     reportError("msg.class.not.statement");
                 }
+                int stt = peekToken();
+                if (compilerEnv.isLatestEcmaScript()
+                        && stt != Token.FOR
+                        && stt != Token.WHILE
+                        && stt != Token.DO
+                        && stt != Token.COMMENT) {
+                    // continue label needs a labelled iteration statement
+                    currentLabel = null;
+                }
                 letInSingleStatement = true;
                 stmt = statementHelper();
                 letInSingleStatement = false;
+                if (stmt instanceof FunctionNode
+                        && compilerEnv.isLatestEcmaScript()
+                        && (inUseStrictDirective || ((FunctionNode) stmt).isGenerator())) {
+                    reportError("msg.function.decl.not.in.block");
+                }
                 int ntt = peekToken();
                 if (ntt == Token.COMMENT
                         && stmt.getLineno()
@@ -2926,6 +2998,8 @@ public class Parser {
             if (matchToken(Token.ASSIGN, true)) {
                 init = assignExpr();
                 end = getNodeEnd(init);
+            } else if (declType == Token.CONST && !inForInit && compilerEnv.isLatestEcmaScript()) {
+                reportError("msg.const.no.init");
             }
 
             VariableInitializer vi = new VariableInitializer(kidPos, end - kidPos);
@@ -3320,7 +3394,9 @@ public class Parser {
 
             markDestructuring(pn);
             int opPos = ts.tokenBeg;
-            if (isNotValidSimpleAssignmentTarget(pn))
+            if (compilerEnv.isLatestEcmaScript()
+                    ? !isValidAssignmentTarget(pn, tt == Token.ASSIGN, isLogicalAssignment(tt))
+                    : isNotValidSimpleAssignmentTarget(pn))
                 reportError("msg.syntax.invalid.assignment.lhs");
             if (inUseStrictDirective && pn instanceof Name) {
                 String id = ((Name) pn).getIdentifier();
@@ -3352,6 +3428,84 @@ public class Parser {
             }
         }
         return pn;
+    }
+
+    /**
+     * The body of an if, a with or a loop cannot be a labelled function or a generator, and only an
+     * if (Annex B.3.3) can have a plain function declaration.
+     */
+    private void checkStatementBody(AstNode body, boolean isIf) {
+        if (!compilerEnv.isLatestEcmaScript()) {
+            return;
+        }
+        AstNode stmt = body;
+        boolean labelled = false;
+        while (stmt instanceof LabeledStatement) {
+            stmt = ((LabeledStatement) stmt).getStatement();
+            labelled = true;
+        }
+        if (stmt instanceof FunctionNode) {
+            FunctionNode fn = (FunctionNode) stmt;
+            int type = fn.getFunctionType();
+            if ((type == FunctionNode.FUNCTION_STATEMENT
+                            || type == FunctionNode.FUNCTION_BLOCK_SCOPED)
+                    && (labelled || !isIf || fn.isGenerator())) {
+                reportError("msg.function.decl.not.in.block");
+            }
+        }
+    }
+
+    /** A keyword (or the {@code target} of {@code new.target}) cannot contain escapes. */
+    private void checkEscapedKeyword() {
+        if (ts.nameHadEscape && compilerEnv.isLatestEcmaScript()) {
+            reportError("msg.invalid.escape");
+        }
+    }
+
+    private static boolean isLogicalAssignment(int tt) {
+        return tt == Token.ASSIGN_LOGICAL_AND
+                || tt == Token.ASSIGN_LOGICAL_OR
+                || tt == Token.ASSIGN_NULLISH;
+    }
+
+    /**
+     * AssignmentTargetType (ECMA-262 13.15.1): false when the target is an early error. A call is a
+     * target only in sloppy code, outside logical assignment (web compatibility).
+     */
+    private boolean isValidAssignmentTarget(AstNode pn, boolean allowPattern, boolean logical) {
+        if (pn instanceof ParenthesizedExpression) {
+            return isValidAssignmentTarget(
+                    ((ParenthesizedExpression) pn).getExpression(), false, logical);
+        }
+        if (pn instanceof Name || pn instanceof XmlRef || pn instanceof XmlMemberGet) {
+            return true;
+        }
+        if (pn instanceof ArrayLiteral || pn instanceof ObjectLiteral) {
+            return allowPattern;
+        }
+        if (pn instanceof PropertyGet || pn instanceof ElementGet) {
+            return !isInOptionalChain(pn);
+        }
+        if (pn.getClass() == FunctionCall.class) {
+            return !inUseStrictDirective && !logical && !isInOptionalChain(pn);
+        }
+        return pn.getType() == Token.GET_REF || pn.getType() == Token.UNDEFINED;
+    }
+
+    private static boolean isInOptionalChain(AstNode pn) {
+        for (; ; ) {
+            if (pn.getType() == Token.QUESTION_DOT) return true;
+            if (pn instanceof FunctionCall) {
+                if (((FunctionCall) pn).isOptionalCall()) return true;
+                pn = ((FunctionCall) pn).getTarget();
+            } else if (pn instanceof PropertyGet) {
+                pn = ((PropertyGet) pn).getTarget();
+            } else if (pn instanceof ElementGet) {
+                pn = ((ElementGet) pn).getTarget();
+            } else {
+                return false;
+            }
+        }
     }
 
     private static boolean isNotValidSimpleAssignmentTarget(AstNode pn) {
@@ -3620,6 +3774,11 @@ public class Parser {
                 line = lineNumber();
                 column = columnNumber();
                 node = new UnaryExpression(tt, ts.tokenBeg, unaryExpr());
+                if (inUseStrictDirective
+                        && compilerEnv.isLatestEcmaScript()
+                        && removeParens(((UnaryExpression) node).getOperand()) instanceof Name) {
+                    reportError("msg.delete.name.strict");
+                }
                 node.setLineColumnNumber(line, column);
                 return node;
 
@@ -3737,6 +3896,7 @@ public class Parser {
             pn = primaryExpr();
         } else {
             consumeToken();
+            checkEscapedKeyword();
             int pos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
 
             // Detect new.target meta-property
@@ -3746,6 +3906,7 @@ public class Parser {
                 if ((nestingOfFunction > 0 || compilerEnv.isAllowNewTarget())
                         && matchToken(Token.NAME, true)
                         && "target".equals(ts.getString())) {
+                    checkEscapedKeyword();
                     int end = ts.tokenEnd;
                     KeywordLiteral nt = new KeywordLiteral(pos, end - pos, Token.NEW_TARGET);
                     nt.setLineColumnNumber(lineno, column);
@@ -3859,6 +4020,9 @@ public class Parser {
                     break;
                 case Token.TEMPLATE_LITERAL:
                     consumeToken();
+                    if (isOptionalChain && compilerEnv.isLatestEcmaScript()) {
+                        reportError("msg.optional.chain.template");
+                    }
                     pn = taggedTemplateLiteral(pn);
                     break;
                 default:
@@ -4273,6 +4437,7 @@ public class Parser {
             case Token.TRUE:
                 {
                     consumeToken();
+                    checkEscapedKeyword();
                     pos = ts.tokenBeg;
                     end = ts.tokenEnd;
                     KeywordLiteral keywordLiteral = new KeywordLiteral(pos, end - pos, tt);
@@ -5125,6 +5290,12 @@ public class Parser {
     }
 
     private StringLiteral createStringLiteral() {
+        if (ts.stringHadLegacyEscape) {
+            if (inUseStrictDirective && compilerEnv.isLatestEcmaScript()) {
+                reportError("msg.no.octal.escape.strict");
+            }
+            legacyEscapeInPrologue = true;
+        }
         int pos = ts.tokenBeg, end = ts.tokenEnd;
         StringLiteral s = new StringLiteral(pos, end - pos);
         s.setLineColumnNumber(lineNumber(), columnNumber());
@@ -5283,6 +5454,18 @@ public class Parser {
     }
 
     private void checkBadIncDec(UpdateExpression expr) {
+        if (compilerEnv.isLatestEcmaScript()) {
+            AstNode target = expr.getOperand();
+            if (!isValidAssignmentTarget(target, false, false)) {
+                reportError(expr.getType() == Token.INC ? "msg.bad.incr" : "msg.bad.decr");
+            } else if (inUseStrictDirective && removeParens(target) instanceof Name) {
+                String id = ((Name) removeParens(target)).getIdentifier();
+                if ("eval".equals(id) || "arguments".equals(id)) {
+                    reportError("msg.bad.id.strict", id);
+                }
+            }
+            return;
+        }
         AstNode op = removeParens(expr.getOperand());
         int tt = op.getType();
         if (!(tt == Token.NAME

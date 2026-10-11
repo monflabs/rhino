@@ -959,6 +959,10 @@ public final class IRFactory {
         try {
             Node transformedTarget = transform(node.getTarget());
             Node call = createCallOrNew(Token.CALL, transformedTarget);
+            if (node.isOptionalCall() && parser.compilerEnv.isLatestEcmaScript()) {
+                // eval?.(x) is an indirect eval
+                call.removeProp(Node.SPECIALCALL_PROP);
+            }
             if (node.isInParameters()
                     && call.getIntProp(Node.SPECIALCALL_PROP, 0) == Node.SPECIALCALL_EVAL) {
                 call.putIntProp(Node.SPECIALCALL_PROP, Node.SPECIALCALL_EVAL_IN_PARAMS);
@@ -1420,6 +1424,10 @@ public final class IRFactory {
     private Node transformTemplateLiteralCall(TaggedTemplateLiteral node) {
         Node transformedTarget = transform(node.getTarget());
         Node call = createCallOrNew(Token.CALL, transformedTarget);
+        if (parser.compilerEnv.isLatestEcmaScript()) {
+            // eval`x` is an indirect eval
+            call.removeProp(Node.SPECIALCALL_PROP);
+        }
         call.setLineColumnNumber(node.getLineno(), node.getColumn());
         if (transformedTarget.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1) {
             call.putIntProp(Node.SUPER_PROPERTY_ACCESS, 1);

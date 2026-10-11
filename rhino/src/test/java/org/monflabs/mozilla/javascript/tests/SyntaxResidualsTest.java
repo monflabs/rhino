@@ -110,6 +110,31 @@ class SyntaxResidualsTest {
     }
 
     @Test
+    void earlyErrors() {
+        Utils.assertGatedBehavior(
+                "ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok,ok",
+                "SyntaxError,SyntaxError,SyntaxError,SyntaxError,SyntaxError,SyntaxError,"
+                        + "SyntaxError,SyntaxError,SyntaxError,SyntaxError,SyntaxError,SyntaxError,"
+                        + "SyntaxError,SyntaxError,SyntaxError,SyntaxError",
+                "['f() &&= 1', '\"use strict\"; f() = 1', '\"use strict\"; delete x',"
+                        + " '\"use strict\"; eval++', 'a?.b`c`', 'tru\\\\u0065',"
+                        + " 'for (x o\\\\u0066 []) ;', '3in []', '08n', '\"use strict\"; \"\\\\1\"',"
+                        + " '\"\\\\1\"; \"use strict\";', 'l: const x = 1;',"
+                        + " 'l: { for (;;) continue l; }', 'try {} catch (e) { let e; }', 'const x;',"
+                        + " 'with ({}) function g() {}'].map(function (src) {"
+                        + " try { eval('(function () { ' + src + ' })'); return 'ok'; }"
+                        + " catch (e) { return e.name; } }).join()");
+    }
+
+    @Test
+    void optionalCallOfEvalIsIndirect() {
+        Utils.assertGatedBehavior(
+                "local",
+                "global",
+                "var r = 'global'; (function () { var r = 'local'; return eval?.('r'); })()");
+    }
+
+    @Test
     void supplementaryIdentifiers() {
         assertBoth(
                 "3",

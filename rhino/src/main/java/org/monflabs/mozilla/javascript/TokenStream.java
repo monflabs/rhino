@@ -807,6 +807,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                             && !parser.inUseStrictDirective()) {
                         // l\u0065t is an identifier, never the start of a let declaration
                         this.string = internString(str);
+                        nameHadEscape = true;
                         return Token.NAME;
                     }
                     if (result != Token.EOF) {
@@ -819,6 +820,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         // Save the string in case we need to use in
                         // object literal definitions.
                         this.string = internString(str);
+                        nameHadEscape = containsEscape;
                         if (result != Token.RESERVED) {
                             return result;
                         } else if (parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
@@ -917,6 +919,10 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 boolean isBigInt = false;
 
                 if (es6 && c == 'n') {
+                    if (isOldOctal && parser.compilerEnv.isLatestEcmaScript()) {
+                        parser.addError("msg.no.old.octal.bigint");
+                        return Token.ERROR;
+                    }
                     isBigInt = true;
                     c = getChar();
                 } else if (base == 10 && (c == '.' || c == 'e' || c == 'E')) {
@@ -953,6 +959,22 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 ungetChar(c);
                 String numString = getStringFromBuffer();
                 this.string = numString;
+                if (parser.compilerEnv.isLatestEcmaScript()) {
+                    if (c == '\\'
+                            || c == '$'
+                            || c == '_'
+                            || isDigit(c)
+                            || (c != EOF_CHAR && Character.isUnicodeIdentifierStart(c))) {
+                        // 3in []: a numeric literal cannot be followed by an identifier or digit
+                        parser.addError("msg.ident.after.number");
+                        return Token.ERROR;
+                    }
+                    if (isOldOctal && numString.indexOf(NUMERIC_SEPARATOR) != -1) {
+                        // 08_0: no separator in a NonOctalDecimalIntegerLiteral
+                        parser.addError("msg.caught.nfe");
+                        return Token.ERROR;
+                    }
+                }
 
                 // try to remove the separator in a fast way
                 int pos = numString.indexOf(NUMERIC_SEPARATOR);
@@ -997,6 +1019,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
                 quoteChar = c;
                 stringBufferTop = 0;
+                stringHadLegacyEscape = false;
 
                 c = getCharIgnoreLineEnd(false);
                 strLoop:
@@ -1128,9 +1151,15 @@ class TokenStream implements Parser.CurrentPositionReporter {
                                 continue strLoop;
 
                             default:
+                                if (c == '8' || c == '9') {
+                                    stringHadLegacyEscape = true;
+                                }
                                 if ('0' <= c && c < '8') {
                                     int val = c - '0';
                                     c = getChar();
+                                    if (val != 0 || isDigit(c)) {
+                                        stringHadLegacyEscape = true;
+                                    }
                                     if ('0' <= c && c < '8') {
                                         val = 8 * val + c - '0';
                                         c = getChar();
@@ -2592,9 +2621,13 @@ class TokenStream implements Parser.CurrentPositionReporter {
     private String string = "";
 
     /**
-     * Whether the last NAME token contained a Unicode escape (it cannot be a contextual keyword).
+     * Whether the last NAME or keyword token contained a Unicode escape (it cannot be a keyword or
+     * a contextual keyword).
      */
     boolean nameHadEscape;
+
+    /** Whether the last string literal contained a legacy octal or \8, \9 escape. */
+    boolean stringHadLegacyEscape;
 
     private double number;
     private BigInteger bigInt;
