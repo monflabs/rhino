@@ -244,6 +244,8 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
 - Also (plan 1.10f): `let`/`const` redeclaring a parameter (`function f(p) { let p; }`), `yield` in the
   parameters of a generator or in a non-generator nested in one (strict code), `new.target` in an arrow function
   that is not inside a function.
+- Also (plan 1.10g): an object or array literal containing a CoverInitializedName (`{ x = 1 }`) that is not an
+  assignment pattern (`({ x = 1 }).y`, `[{ x = 1 }] + 1`).
 - **Why:** ECMA-262 2026, the "Static Semantics: Early Errors" of §13–§14, §12.9.3 (numeric literals), §13.3.6.1
   (direct eval is a CallExpression only).
 
@@ -826,6 +828,19 @@ function f() { try { return 1; } catch (e) {} finally { n++; throw 'f'; } }   //
   `try` whose block ends with an unreachable `return` keeps covering its `catch` block with the `finally`.
 - **Why:** ECMA-262 2026, §15.5.4 (generator method definitions), §13.9.3 (unsigned right shift), §14.15.3
   (try statement).
+
+### 2.38 `for-in` shadowing, Use Strict Directives
+
+```js
+var o = Object.create({ p: 1 }, { p: { value: 0, enumerable: false } });
+for (var k in o) print(k);                  // before: p   now: (nothing)
+function f() { 'use str\
+ict'; return this; }                        // before: strict   now: sloppy (the directive is not exact)
+```
+
+- All versions: a non-enumerable property hides the enumerable property of the same name of a prototype from
+  `for-in`; only the exact source text `'use strict'` or `"use strict"` is a Use Strict Directive.
+- **Why:** ECMA-262 2026, §14.7.5.9 (EnumerateObjectProperties), §11.2.1 (directive prologues).
 
 ---
 

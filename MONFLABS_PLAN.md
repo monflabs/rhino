@@ -427,6 +427,10 @@ Steps:
 - *1.10f (done)* parameter redeclarations, `yield` in parameters, `new.target` in arrows (gated); generator
   method prototypes, `>>>` operand order; compiled-mode `finally` exception ranges. Left: `__proto__` in object
   literals (computed and shorthand forms define an own property; needs a runtime flag in both backends).
+- *1.10g (done)* nested CoverInitializedName in patterns (the misuse gated), `for-in` shadowing, exact Use Strict
+  Directives. Left for later (scope residuals, with the for-in/of head TDZ and paramsbody scopes): the switch
+  discriminant and catch parameter evaluated outside the block's lexical scope; completion value of a `break`
+  in `finally`.
 
 **1.11 Annex B (ES2015 parts).** Block-level function declarations in sloppy mode (B.3.3), `__proto__`,
 `__defineGetter__` and kin, HTML-like comments, legacy octal, `RegExp` legacy syntax (`annexB/language`,
@@ -583,7 +587,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
-| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.6% (1.10a–f)      | (this) |
+| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.6% (1.10a–g)      | (this) |
 | 1.11 | Annex B (ES2015)                                | todo        |                              |        |
 | 1.12 | ES modules                                      | todo        |                              |        |
 | 2.x  | ES2016                                          | todo        |                              |        |

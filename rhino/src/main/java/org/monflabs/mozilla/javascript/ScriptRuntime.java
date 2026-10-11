@@ -2890,6 +2890,8 @@ public class ScriptRuntime {
         Scriptable obj;
         Object[] ids;
         HashSet<Object> used;
+        // the objects already enumerated: their non-enumerable properties shadow the prototypes'
+        ArrayList<Scriptable> visited;
         Object currentId;
         int index;
         int enumType; /* one of ENUM_INIT_KEYS, ENUM_INIT_VALUES,
@@ -3043,6 +3045,7 @@ public class ScriptRuntime {
                 return Boolean.FALSE;
             }
             if (x.index == x.ids.length) {
+                addVisited(x, x.obj);
                 x.obj = x.obj.getPrototype();
                 enumChangeObject(x);
                 continue;
@@ -3056,10 +3059,12 @@ public class ScriptRuntime {
             } else if (id instanceof String) {
                 String strId = (String) id;
                 if (!x.obj.has(strId, x.obj)) continue; // must have been deleted
+                if (isShadowed(x, strId, 0)) continue;
                 x.currentId = strId;
             } else {
                 int intId = ((Number) id).intValue();
                 if (!x.obj.has(intId, x.obj)) continue; // must have been deleted
+                if (isShadowed(x, null, intId)) continue;
                 x.currentId = x.enumNumbers ? Integer.valueOf(intId) : String.valueOf(intId);
             }
             return Boolean.TRUE;
@@ -3108,6 +3113,29 @@ public class ScriptRuntime {
         return result;
     }
 
+    private static void addVisited(IdEnumeration x, Scriptable obj) {
+        if (x.visited == null) {
+            x.visited = new ArrayList<>();
+        }
+        x.visited.add(obj);
+    }
+
+    /** A property of an object already enumerated, enumerable or not, hides the prototype's. */
+    private static boolean isShadowed(IdEnumeration x, String name, int index) {
+        if (x.visited == null) {
+            return false;
+        }
+        for (Scriptable o : x.visited) {
+            if (o instanceof NativeProxy) {
+                continue; // has would call a trap
+            }
+            if (name != null ? o.has(name, o) : o.has(index, o)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void enumChangeObject(IdEnumeration x) {
         Object[] ids = null;
         while (x.obj != null) {
@@ -3115,6 +3143,7 @@ public class ScriptRuntime {
             if (ids.length != 0) {
                 break;
             }
+            addVisited(x, x.obj);
             x.obj = x.obj.getPrototype();
         }
         if (x.obj != null && x.ids != null) {

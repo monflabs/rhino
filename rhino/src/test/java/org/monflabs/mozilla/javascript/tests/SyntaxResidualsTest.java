@@ -162,6 +162,28 @@ class SyntaxResidualsTest {
     }
 
     @Test
+    void nestedCoverInitializedNames() {
+        assertBoth(
+                "3", "var x, y; [{ x = 1 }] = [{}]; ({ a: { y = 2 } } = { a: {} }); String(x + y)");
+        Utils.assertGatedBehavior(
+                "ok,ok",
+                "SyntaxError,SyntaxError",
+                "['[{x = 1}].length', 'var a = {x = 1} + 1'].map(function (s) {"
+                        + " try { eval(s); return 'ok'; } catch (e) { return e.name; } }).join()");
+    }
+
+    @Test
+    void forInShadowingAndEscapedDirective() {
+        assertBoth(
+                "q|false",
+                "var keys = [];"
+                        + " var o = Object.create({ p: 1, q: 2 }, { p: { value: 0, enumerable: false } });"
+                        + " for (var k in o) keys.push(k);"
+                        + " function f() { 'use str\\\nict'; return this === undefined; }"
+                        + " keys.join() + '|' + f()");
+    }
+
+    @Test
     void optionalCallOfEvalIsIndirect() {
         Utils.assertGatedBehavior(
                 "local",

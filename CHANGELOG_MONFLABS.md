@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Cover initializers, `for-in` shadowing, directives (2026-10-11, plan 1.10g)
+
+- All versions from `VERSION_ES6`: a CoverInitializedName nested in an array or object literal that becomes an
+  assignment pattern is accepted (`[{ x = 1 }] = [{}]`, `({ a: { x = 1 } } = o)`; before, a SyntaxError).
+- `VERSION_ECMASCRIPT`: a literal containing a CoverInitializedName that is not used as a pattern is a
+  SyntaxError (`({ x = 1 }).y`, `[{ x = 1 }] + 1`; before, accepted).
+- All versions: `for-in` skips a property of a prototype that is shadowed by a non-enumerable property of an
+  object already enumerated; a directive containing an escape or a line continuation (`'use str\<LF>ict'`) is
+  not a Use Strict Directive.
+- test262: 30,076/42,616 (70.6%), 10 more tests pass. Perf gate: no regression (v8-regexp re-measured).
+
 ### Parameters, generators, `finally` in compiled code (2026-10-11, plan 1.10f)
 
 - `VERSION_ECMASCRIPT`: early errors for `let`/`const` redeclaring a parameter, `yield` in the parameters of a

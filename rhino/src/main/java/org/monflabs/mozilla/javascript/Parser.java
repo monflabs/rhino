@@ -922,7 +922,10 @@ public class Parser {
         if (n instanceof ExpressionStatement) {
             AstNode e = ((ExpressionStatement) n).getExpression();
             if (e instanceof StringLiteral) {
-                return ((StringLiteral) e).getValue();
+                String value = ((StringLiteral) e).getValue();
+                // 'use str\<LF>ict' is a directive, but not a Use Strict Directive: that is the
+                // exact source text "use strict"
+                return e.getLength() == value.length() + 2 ? value : "";
             }
         }
         return null;
@@ -3468,6 +3471,27 @@ public class Parser {
         }
     }
 
+    /**
+     * A literal containing a CoverInitializedName ({x = 1}) must become an assignment pattern: it
+     * can only be followed by =, by the end of an enclosing literal, parameter list or for head.
+     */
+    private AstNode checkCoverLiteral(AstNode literal) throws IOException {
+        if (literal.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
+                && compilerEnv.isLatestEcmaScript()) {
+            int tt = peekToken();
+            if (!(tt == Token.ASSIGN
+                    || tt == Token.COMMA
+                    || tt == Token.RB
+                    || tt == Token.RC
+                    || tt == Token.RP
+                    || tt == Token.IN
+                    || (tt == Token.NAME && "of".equals(ts.getString())))) {
+                reportError("msg.syntax");
+            }
+        }
+        return literal;
+    }
+
     /** new.target needs a function that is not an arrow function (an arrow uses the outer one). */
     private boolean insideNonArrowFunction() {
         return nonArrowFunctionDepth > 0;
@@ -3872,6 +3896,8 @@ public class Parser {
         List<AstNode> result = new ArrayList<>();
         boolean wasInForInit = inForInit;
         inForInit = false;
+        boolean wasInCover = inParenthesizedCover;
+        inParenthesizedCover = false;
         try {
             do {
                 if (peekToken() == Token.RP) {
@@ -3895,6 +3921,7 @@ public class Parser {
             } while (matchToken(Token.COMMA, true));
         } finally {
             inForInit = wasInForInit;
+            inParenthesizedCover = wasInCover;
         }
 
         mustMatchToken(Token.RP, "msg.no.paren.arg", true);
@@ -4386,11 +4413,11 @@ public class Parser {
 
             case Token.LB:
                 consumeToken();
-                return arrayLiteral();
+                return checkCoverLiteral(arrayLiteral());
 
             case Token.LC:
                 consumeToken();
-                return objectLiteral();
+                return checkCoverLiteral(objectLiteral());
 
             case Token.LET:
                 if (compilerEnv.isLatestEcmaScript() && !inUseStrictDirective) {
@@ -4615,10 +4642,21 @@ public class Parser {
         // the in operator is allowed inside brackets, also in a for head
         boolean wasInForInit = inForInit;
         inForInit = false;
+        // [{ x = 1 }] = a: a CoverInitializedName nested in a literal is valid if the literal
+        // becomes a pattern
+        boolean wasInCover = inParenthesizedCover;
+        int pendingBefore = pendingCoverInitializedNames;
+        inParenthesizedCover = true;
         try {
-            return arrayLiteralImpl();
+            AstNode literal = arrayLiteralImpl();
+            if (pendingCoverInitializedNames != pendingBefore) {
+                literal.putIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 1);
+            }
+            return literal;
         } finally {
             inForInit = wasInForInit;
+            inParenthesizedCover = wasInCover;
+            pendingCoverInitializedNames = pendingBefore;
         }
     }
 
@@ -4889,10 +4927,21 @@ public class Parser {
     private ObjectLiteral objectLiteral() throws IOException {
         boolean wasInForInit = inForInit;
         inForInit = false;
+        // [{ x = 1 }] = a: a CoverInitializedName nested in a literal is valid if the literal
+        // becomes a pattern
+        boolean wasInCover = inParenthesizedCover;
+        int pendingBefore = pendingCoverInitializedNames;
+        inParenthesizedCover = true;
         try {
-            return objectLiteralImpl();
+            ObjectLiteral literal = objectLiteralImpl();
+            if (pendingCoverInitializedNames != pendingBefore) {
+                literal.putIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 1);
+            }
+            return literal;
         } finally {
             inForInit = wasInForInit;
+            inParenthesizedCover = wasInCover;
+            pendingCoverInitializedNames = pendingBefore;
         }
     }
 
@@ -5587,8 +5636,13 @@ public class Parser {
         private List<Jump> savedLoopAndSwitchSet;
         private boolean savedHasUndefinedBeenRedefined;
         private int savedNonArrowFunctionDepth;
+        private boolean savedInParenthesizedCover;
+        private int savedPendingCoverInitializedNames;
 
         PerFunctionVariables(FunctionNode fnNode) {
+            savedInParenthesizedCover = Parser.this.inParenthesizedCover;
+            savedPendingCoverInitializedNames = Parser.this.pendingCoverInitializedNames;
+            Parser.this.inParenthesizedCover = false;
             savedNonArrowFunctionDepth = Parser.this.nonArrowFunctionDepth;
             if (fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
                 Parser.this.nonArrowFunctionDepth++;
@@ -5628,6 +5682,8 @@ public class Parser {
             Parser.this.inForInit = savedInForInit;
             Parser.this.hasUndefinedBeenRedefined = savedHasUndefinedBeenRedefined;
             Parser.this.nonArrowFunctionDepth = savedNonArrowFunctionDepth;
+            Parser.this.inParenthesizedCover = savedInParenthesizedCover;
+            Parser.this.pendingCoverInitializedNames = savedPendingCoverInitializedNames;
         }
     }
 
