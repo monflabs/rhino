@@ -1898,10 +1898,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             final Object[] stack = frame.stack;
             final double[] sDbl = frame.doubleStack;
-            double lDbl = stack_double(frame, frame.stackTop - 1);
-            int rIntValue = stack_int32(frame, frame.stackTop) & 0x1F;
+            Number lNum = stack_numeric(frame, frame.stackTop - 1);
+            Number rNum = stack_numeric(frame, frame.stackTop);
             stack[--frame.stackTop] = DOUBLE_MARK;
-            sDbl[frame.stackTop] = ScriptRuntime.toUint32(lDbl) >>> rIntValue;
+            sDbl[frame.stackTop] = ScriptRuntime.unsignedRightShift(lNum, rNum);
             return null;
         }
     }

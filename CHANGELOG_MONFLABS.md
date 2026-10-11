@@ -6,6 +6,19 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Parameters, generators, `finally` in compiled code (2026-10-11, plan 1.10f)
+
+- `VERSION_ECMASCRIPT`: early errors for `let`/`const` redeclaring a parameter, `yield` in the parameters of a
+  generator or in a non-generator function nested in a generator (strict code; compiled mode failed with an
+  internal error), `new.target` in an arrow function outside any function.
+- All versions: generator methods of object literals have a `prototype` (inheriting %GeneratorPrototype%);
+  `>>>` converts both operands before throwing for a BigInt.
+- Compiled mode, all versions: a `finally` block inlined for a `return` in a `try` with a `catch` is no longer
+  covered by the `finally` handler (an exception thrown by it ran the `finally` block a second time); the class
+  file writer keeps the live part of an exception range that starts in dead code (a `try` ending with an
+  unreachable `return` lost the `finally` handler of its `catch` block).
+- test262: 30,066/42,616 (70.6%), 10 more tests pass. Perf gate: no regression (v8-earley-boyer compiled +11%, within tolerance; v8-crypto compiled -10%).
+
 ### Early errors (2026-10-10, plan 1.10e)
 
 - `VERSION_ECMASCRIPT`: the static semantics early errors are reported at compile time (before, most of them were

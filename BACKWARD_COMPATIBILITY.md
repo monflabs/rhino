@@ -241,6 +241,9 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
   that is not a loop, a tagged template in an optional chain. The full list is in CHANGELOG_MONFLABS.md (plan
   1.10e).
 - `eval?.()` and a tagged template on `eval` are indirect evals.
+- Also (plan 1.10f): `let`/`const` redeclaring a parameter (`function f(p) { let p; }`), `yield` in the
+  parameters of a generator or in a non-generator nested in one (strict code), `new.target` in an arrow function
+  that is not inside a function.
 - **Why:** ECMA-262 2026, the "Static Semantics: Early Errors" of §13–§14, §12.9.3 (numeric literals), §13.3.6.1
   (direct eval is a CallExpression only).
 
@@ -808,6 +811,21 @@ var f = ({ x = 1 }) => x;                   // before: SyntaxError   now: an arr
   is not callable and has no `Symbol.hasInstance`.
 - **Why:** ECMA-262 2026, §13.10.2 (InstanceofOperator), §15.3 (ArrowParameters cover grammar), §19.2.1.1
   (direct eval), §12.4 (comments).
+
+### 2.37 Generator methods, `>>>` with BigInt, `finally` in compiled code
+
+```js
+({ *g() {} }).g.prototype;                  // before: undefined   now: an object inheriting %GeneratorPrototype%
+0n >>> { [Symbol.toPrimitive]() { throw 'mine'; } };   // before: TypeError   now: throws 'mine'
+function f() { try { return 1; } catch (e) {} finally { n++; throw 'f'; } }   // compiled: before n += 2, now n += 1
+```
+
+- All versions: a generator method has a `prototype` property; both operands of `>>>` are converted
+  (ToNumeric) before a BigInt operand throws; in compiled mode, an exception thrown by a `finally` block inlined
+  for a `return` (or `break`/`continue`) in a `try` with a `catch` no longer runs the `finally` block again, and a
+  `try` whose block ends with an unreachable `return` keeps covering its `catch` block with the `finally`.
+- **Why:** ECMA-262 2026, §15.5.4 (generator method definitions), §13.9.3 (unsigned right shift), §14.15.3
+  (try statement).
 
 ---
 

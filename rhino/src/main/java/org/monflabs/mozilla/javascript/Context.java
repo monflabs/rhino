@@ -159,7 +159,8 @@ public class Context implements Closeable {
      *       configurable property of the same name.
      *   <li>The early errors of the specification are reported at compile time (invalid assignment
      *       targets, strict mode restrictions, escaped keywords, {@code const} without initializer,
-     *       declarations in statement positions, ...), and {@code eval?.()} is an indirect eval.
+     *       declarations in statement positions, parameters redeclared by {@code let}, ...), and
+     *       {@code eval?.()} is an indirect eval.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

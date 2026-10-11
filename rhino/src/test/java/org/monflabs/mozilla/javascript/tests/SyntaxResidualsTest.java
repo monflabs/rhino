@@ -127,6 +127,41 @@ class SyntaxResidualsTest {
     }
 
     @Test
+    void moreEarlyErrors() {
+        Utils.assertGatedBehavior(
+                "ok,ok,ok",
+                "SyntaxError,SyntaxError,SyntaxError",
+                "['\"use strict\"; function* g() { 0, function (x = yield) {}; }',"
+                        + " 'function f(p) { let p; }', '() => new.target'].map(function (src) {"
+                        + " try { (0, eval)(src); return 'ok'; } catch (e) { return e.name; } }).join()");
+    }
+
+    @Test
+    void finallyAfterReturnRunsOnce() {
+        assertBoth(
+                "f|1|c",
+                "var r = []; var c = 0;"
+                        + " function f1() { try { return 1; } catch (e) { } finally { c++; throw 'f'; } }"
+                        + " try { f1(); } catch (e) { r.push(e, c); }"
+                        + " function f2() { try { throw 'a'; return 1; } catch (e) { throw 'b'; }"
+                        + " finally { throw 'c'; } }"
+                        + " try { f2(); } catch (e) { r.push(e); }"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void generatorMethodPrototypeAndShiftOrder() {
+        assertBoth(
+                "true|mine",
+                "var r = [];"
+                        + " r.push(Object.getPrototypeOf({ *g() {} }.g.prototype)"
+                        + " === Object.getPrototypeOf(function* () {}).prototype);"
+                        + " try { 0n >>> { [Symbol.toPrimitive]() { throw 'mine'; } }; }"
+                        + " catch (e) { r.push(e); }"
+                        + " r.join('|')");
+    }
+
+    @Test
     void optionalCallOfEvalIsIndirect() {
         Utils.assertGatedBehavior(
                 "local",

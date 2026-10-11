@@ -4443,6 +4443,13 @@ public class ScriptRuntime {
     @SuppressWarnings("AndroidJdkLibsChecker")
     // java.math.BigInteger#intValueExact() available in API-level 31
     // https://developer.android.com/reference/java/math/BigInteger#intValueExact()
+    public static double unsignedRightShift(Number val1, Number val2) {
+        if (val1 instanceof BigInteger || val2 instanceof BigInteger) {
+            throw ScriptRuntime.typeErrorById("msg.cant.convert.to.number", "BigInt");
+        }
+        return toUint32(val1.doubleValue()) >>> (toInt32(val2.doubleValue()) & 0x1F);
+    }
+
     public static Number signedRightShift(Number val1, Number val2) {
         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
             try {

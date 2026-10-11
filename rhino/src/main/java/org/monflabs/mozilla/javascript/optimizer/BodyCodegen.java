@@ -3763,12 +3763,14 @@ class BodyCodegen {
             Iterator<ExceptionInfo> iter = exceptionInfo.descendingIterator();
             while (iter.hasNext()) {
                 ExceptionInfo ei = iter.next();
-                for (int i = 0; i < EXCEPTION_MAX; i++) {
-                    if (ei.handlerLabels[i] != 0 && ei.currentFinally == null) {
-                        endCatch(ei, i, finallyStart);
-                        ei.exceptionStarts[i] = 0;
-                        ei.currentFinally = finallyBlock;
+                if (ei.currentFinally == null) {
+                    for (int i = 0; i < EXCEPTION_MAX; i++) {
+                        if (ei.handlerLabels[i] != 0) {
+                            endCatch(ei, i, finallyStart);
+                            ei.exceptionStarts[i] = 0;
+                        }
                     }
+                    ei.currentFinally = finallyBlock;
                 }
                 if (ei.finallyBlock == finallyBlock) {
                     break;
@@ -3789,11 +3791,13 @@ class BodyCodegen {
             Iterator<ExceptionInfo> iter = exceptionInfo.descendingIterator();
             while (iter.hasNext()) {
                 ExceptionInfo ei = iter.next();
-                for (int i = 0; i < EXCEPTION_MAX; i++) {
-                    if (ei.handlerLabels[i] != 0 && ei.currentFinally == finallyBlock) {
-                        ei.exceptionStarts[i] = finallyEnd;
-                        ei.currentFinally = null;
+                if (ei.currentFinally == finallyBlock) {
+                    for (int i = 0; i < EXCEPTION_MAX; i++) {
+                        if (ei.handlerLabels[i] != 0) {
+                            ei.exceptionStarts[i] = finallyEnd;
+                        }
                     }
+                    ei.currentFinally = null;
                 }
                 if (ei.finallyBlock == finallyBlock) {
                     break;
@@ -4418,18 +4422,13 @@ class BodyCodegen {
         // that we can return a 32-bit unsigned value, and call
         // toUint32 instead of toInt32.
         if (type == Token.URSH) {
+            // both operands are converted (ToNumeric) before a BigInt operand throws
             generateExpression(child.getNext(), node);
             cfw.add(ByteCode.SWAP);
-            addDynamicInvoke("MATH:TOUINT32", Signatures.MATH_TO_UINT32);
-            cfw.add(ByteCode.DUP2_X1);
-            cfw.add(ByteCode.POP2);
-            addDynamicInvoke("MATH:TOINT32", Signatures.MATH_TO_INT32);
-            // Looks like we need to explicitly mask the shift to 5 bits -
-            // LUSHR takes 6 bits.
-            cfw.addPush(31);
-            cfw.add(ByteCode.IAND);
-            cfw.add(ByteCode.LUSHR);
-            cfw.add(ByteCode.L2D);
+            addObjectToNumeric();
+            cfw.add(ByteCode.SWAP);
+            addObjectToNumeric();
+            addScriptRuntimeInvoke("unsignedRightShift", "(Ljava/lang/Number;Ljava/lang/Number;)D");
             addDoubleWrap();
             return;
         }

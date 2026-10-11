@@ -141,6 +141,7 @@ public class Parser {
     private Comment currentJsDocComment;
 
     protected int nestingOfFunction;
+    private int nonArrowFunctionDepth;
     protected int nestingOfFunctionParams;
     private FunctionNode functionOfParams;
     private LabeledStatement currentLabel;
@@ -2686,6 +2687,14 @@ public class Parser {
     private AstNode returnOrYield(int tt, boolean exprContext) throws IOException {
         if (!insideFunctionBody()) {
             reportError(tt == Token.RETURN ? "msg.bad.return" : "msg.bad.yield");
+        } else if (tt == Token.YIELD
+                && compilerEnv.isLatestEcmaScript()
+                && (!(currentScriptOrFn instanceof FunctionNode
+                                && ((FunctionNode) currentScriptOrFn).isES6Generator())
+                        || functionOfParams == currentScriptOrFn)) {
+            // a yield expression only in the body of a generator; in strict code, yield is
+            // reserved elsewhere
+            reportError("msg.bad.yield");
         }
         consumeToken();
         int lineno = lineNumber(), column = columnNumber(), pos = ts.tokenBeg, end = ts.tokenEnd;
@@ -3326,6 +3335,10 @@ public class Parser {
             Scope currentScope,
             Scope definingScope) {
         return (currentScope == definingScope && Symbol.isDeclTypeLexical(oldDeclType))
+                || (oldDeclType == Symbol.Type.LP
+                        && (newDeclType == Symbol.Type.LET || newDeclType == Symbol.Type.CONST)
+                        && currentScope == currentScriptOrFn
+                        && compilerEnv.isLatestEcmaScript())
                 || ((symbol != null
                                 && symbol.isDeclTypeLexical()
                                 && !Symbol.isDeclTypeLexical(newDeclType))
@@ -3453,6 +3466,11 @@ public class Parser {
                 reportError("msg.function.decl.not.in.block");
             }
         }
+    }
+
+    /** new.target needs a function that is not an arrow function (an arrow uses the outer one). */
+    private boolean insideNonArrowFunction() {
+        return nonArrowFunctionDepth > 0;
     }
 
     /** A keyword (or the {@code target} of {@code new.target}) cannot contain escapes. */
@@ -3903,7 +3921,10 @@ public class Parser {
             if (peekToken() == Token.DOT) {
                 consumeToken(); // consume '.'
 
-                if ((nestingOfFunction > 0 || compilerEnv.isAllowNewTarget())
+                if ((compilerEnv.isAllowNewTarget()
+                                || (compilerEnv.isLatestEcmaScript()
+                                        ? insideNonArrowFunction()
+                                        : nestingOfFunction > 0))
                         && matchToken(Token.NAME, true)
                         && "target".equals(ts.getString())) {
                     checkEscapedKeyword();
@@ -5565,8 +5586,13 @@ public class Parser {
         private List<Loop> savedLoopSet;
         private List<Jump> savedLoopAndSwitchSet;
         private boolean savedHasUndefinedBeenRedefined;
+        private int savedNonArrowFunctionDepth;
 
         PerFunctionVariables(FunctionNode fnNode) {
+            savedNonArrowFunctionDepth = Parser.this.nonArrowFunctionDepth;
+            if (fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+                Parser.this.nonArrowFunctionDepth++;
+            }
             savedCurrentScriptOrFn = Parser.this.currentScriptOrFn;
             Parser.this.currentScriptOrFn = fnNode;
 
@@ -5601,6 +5627,7 @@ public class Parser {
             Parser.this.endFlags = savedEndFlags;
             Parser.this.inForInit = savedInForInit;
             Parser.this.hasUndefinedBeenRedefined = savedHasUndefinedBeenRedefined;
+            Parser.this.nonArrowFunctionDepth = savedNonArrowFunctionDepth;
         }
     }
 

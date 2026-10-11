@@ -1719,6 +1719,16 @@ public class ClassFileWriter {
             for (int i = 0; i < itsExceptionTableTop; i++) {
                 ExceptionTableEntry ete = itsExceptionTable[i];
                 int eteStart = getLabelPC(ete.itsStartLabel);
+                if (eteStart == sb.getStart()
+                        && getLabelPC(ete.itsHandlerLabel) != sb.getStart()
+                        && getLabelPC(ete.itsEndLabel) > sb.getEnd()) {
+                    // The range continues past the killed block: keep the rest of it (a later
+                    // killed block starting there is handled the same way).
+                    int label = acquireLabel();
+                    itsLabelTable[label & 0x7FFFFFFF] = sb.getEnd();
+                    ete.itsStartLabel = label;
+                    continue;
+                }
                 if (eteStart == sb.getStart() || getLabelPC(ete.itsHandlerLabel) == sb.getStart()) {
                     for (int j = i + 1; j < itsExceptionTableTop; j++) {
                         itsExceptionTable[j - 1] = itsExceptionTable[j];
