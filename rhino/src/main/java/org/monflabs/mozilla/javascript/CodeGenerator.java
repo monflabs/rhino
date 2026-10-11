@@ -1809,6 +1809,9 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         } else if (childType == Token.METHOD) {
             visitExpression(child.getFirstChild(), 0);
             addIcode(Icode.LITERAL_SET);
+        } else if (child.getIntProp(Node.PROTO_SETTER_PROP, 0) == 1) {
+            visitExpression(child, 0);
+            addIcode(Icode.LITERAL_PROTO);
         } else {
             visitExpression(child, 0);
             addIcode(Icode.LITERAL_SET);

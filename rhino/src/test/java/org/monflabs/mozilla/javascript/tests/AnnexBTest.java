@@ -4,7 +4,11 @@
 
 package org.monflabs.mozilla.javascript.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.TopLevel;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /** Annex B (plan 1.11). */
@@ -47,6 +51,33 @@ class AnnexBTest {
     @Test
     void htmlCloseCommentAfterBlockComment() {
         assertBoth("0", "var n = 0;\n/*\n*/--> n += 1;\n/* c */ --> n += 1;\nString(n)");
+    }
+
+    @Test
+    void protoInObjectLiteralsAndGlobalVars() {
+        Utils.assertGatedBehavior(
+                "true,false,true,[object Object],function",
+                "false,true,true,2,undefined",
+                "var p = {}; var x = '__proto__'; var __proto__ = 2; var toString;"
+                        + " [Object.getPrototypeOf({ ['__proto__']: p }) === p,"
+                        + " ({ [x]: 1 }).hasOwnProperty('__proto__'),"
+                        + " Object.getPrototypeOf({ __proto__: p }) === p,"
+                        + " ({ __proto__ }).__proto__, typeof toString].join()");
+    }
+
+    @Test
+    void globalVarKeepsSharedScopeBinding() {
+        Utils.runWithAllModes(
+                cx -> {
+                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                    TopLevel shared = cx.initStandardObjects();
+                    cx.evaluateString(shared, "var config = 'shared';", "shared", 1, null);
+                    TopLevel request = TopLevel.createIsolate(shared);
+                    assertEquals(
+                            "shared",
+                            cx.evaluateString(request, "var config; config", "request", 1, null));
+                    return null;
+                });
     }
 
     @Test

@@ -2763,7 +2763,7 @@ class BodyCodegen {
             case Token.SET:
                 return "pushSetter";
             default:
-                return "pushValue";
+                return child.getIntProp(Node.PROTO_SETTER_PROP, 0) == 1 ? "pushProto" : "pushValue";
         }
     }
 

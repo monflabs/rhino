@@ -81,7 +81,9 @@ public class Node implements Iterable<Node> {
             DESTRUCTURING_TARGET_PROP = 40,
             // SCRIPT: its global let/const declarations, as in Token#GLOBAL_LEXICALS
             GLOBAL_LEXICALS_PROP = 41,
-            LAST_PROP = GLOBAL_LEXICALS_PROP,
+            // the value of a __proto__: v entry of an object literal (sets the prototype)
+            PROTO_SETTER_PROP = 42,
+            LAST_PROP = PROTO_SETTER_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /** Values of DERIVED_THIS_PROP. */
@@ -491,6 +493,8 @@ public class Node implements Iterable<Node> {
                 return "destructuring_target_prop";
             case GLOBAL_LEXICALS_PROP:
                 return "global_lexicals_prop";
+            case PROTO_SETTER_PROP:
+                return "proto_setter_prop";
 
             default:
                 Kit.codeBug();

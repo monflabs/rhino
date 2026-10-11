@@ -5072,13 +5072,19 @@ public class Parser {
                         elems.add(objectProp);
                     }
                 } else {
-                    if (peeked == Token.COLON
-                            && "__proto__".equals(propertyName)
-                            && (pname instanceof Name || pname instanceof StringLiteral)) {
+                    boolean protoSetter =
+                            peeked == Token.COLON
+                                    && "__proto__".equals(propertyName)
+                                    && (pname instanceof Name || pname instanceof StringLiteral);
+                    if (protoSetter) {
                         ++protoDefinitions;
                     }
                     pname.setJsDocNode(jsdocNode);
-                    elems.add(plainProperty(pname, tt));
+                    ObjectProperty plain = plainProperty(pname, tt);
+                    if (protoSetter) {
+                        plain.putIntProp(Node.PROTO_SETTER_PROP, 1);
+                    }
+                    elems.add(plain);
                 }
                 if (pname instanceof GeneratorMethodDefinition && entryKind != METHOD_ENTRY) {
                     reportError("msg.bad.prop");

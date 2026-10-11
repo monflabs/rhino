@@ -47,6 +47,12 @@ public abstract class NewLiteralStorage {
         pushValue(value);
     }
 
+    /** The value of a {@code __proto__: value} entry, which sets the prototype. */
+    public void pushProto(Object value) {
+        getterSetters[index] = 2;
+        pushValue(value);
+    }
+
     public void pushSetter(Object value) {
         getterSetters[index] = +1;
         pushValue(value);

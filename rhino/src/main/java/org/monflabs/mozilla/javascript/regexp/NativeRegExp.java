@@ -448,6 +448,7 @@ public class NativeRegExp extends ScriptableObject {
         ScriptRuntime.setBuiltinProtoAndParent(obj, f, newTarget, s, TopLevel.Builtins.RegExp);
         // [[LegacyFeaturesEnabled]] (B.2.4): false for an instance of a subclass
         obj.legacyFeaturesDisabled = newTarget != f;
+        obj.realm = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
         String source =
                 Undefined.isUndefined(p)
                         ? ""
@@ -4551,8 +4552,11 @@ public class NativeRegExp extends ScriptableObject {
     private static Object js_compile(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeRegExp re = realThis(thisObj, f);
-        if (re.legacyFeaturesDisabled) {
-            throw ScriptRuntime.typeErrorById("msg.regexp.legacy.disabled", "compile");
+        TopLevel thisRealm = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
+        if (re.legacyFeaturesDisabled || (re.realm != null && re.realm != thisRealm)) {
+            // B.2.4.1: not for an instance of a subclass or of another realm
+            throw ScriptRuntime.typeErrorInRealm(
+                    cx, thisRealm, "msg.regexp.legacy.disabled", "compile");
         }
         return re.compile(cx, s, args);
     }
@@ -5271,6 +5275,8 @@ public class NativeRegExp extends ScriptableObject {
 
     private RECompiled re;
     private boolean legacyFeaturesDisabled;
+    // the realm of the constructor (from ES6), for RegExp.prototype.compile
+    private TopLevel realm;
     Object lastIndex = ScriptRuntime.zeroObj; /* index after last match, for //g iterator */
     private int lastIndexAttr = DONTENUM | PERMANENT;
 } // class NativeRegExp

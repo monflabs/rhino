@@ -793,6 +793,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.FN_NAME_ASSIGN] = new DoFnNameAssign();
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
+        instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
@@ -3941,6 +3942,19 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             --frame.stackTop;
             var store = (NewLiteralStorage) frame.stack[frame.stackTop];
             store.pushValue(value);
+            return null;
+        }
+    }
+
+    private static class DoLiteralProto extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK)
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            --frame.stackTop;
+            var store = (NewLiteralStorage) frame.stack[frame.stackTop];
+            store.pushProto(value);
             return null;
         }
     }

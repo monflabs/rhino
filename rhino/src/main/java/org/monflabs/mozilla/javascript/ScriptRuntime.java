@@ -1592,6 +1592,17 @@ public class ScriptRuntime {
         return ctor.construct(cx, scope, args);
     }
 
+    /** A TypeError of the given realm (the realm of a built-in function, not the caller's). */
+    public static JavaScriptException typeErrorInRealm(
+            Context cx, VarScope realm, String messageId, Object... args) {
+        String message = getMessageById(messageId, args);
+        int[] linep = {0};
+        String filename = Context.getSourcePositionFromStack(linep);
+        Scriptable error =
+                newNativeError(cx, realm, TopLevel.NativeErrors.TypeError, new Object[] {message});
+        return new JavaScriptException(error, filename, linep[0]);
+    }
+
     static Scriptable newNativeError(
             Context cx, VarScope scope, TopLevel.NativeErrors type, Object[] args) {
         scope = ScriptableObject.getTopLevelScope(scope);
@@ -2746,6 +2757,22 @@ public class ScriptRuntime {
                 throw constructError("SyntaxError", getMessageById("msg.global.redecl", name));
             }
         }
+    }
+
+    /**
+     * Whether a global var already has a binding: an own property of the global object, or of a
+     * shared global it inherits from (Rhino's shared scopes), but not of Object.prototype.
+     */
+    private static boolean hasOwnGlobal(TopLevel top, String name) {
+        Scriptable objectPrototype = ScriptableObject.getObjectPrototype(top);
+        for (Scriptable o = top.getGlobalThis();
+                o != null && o != objectPrototype;
+                o = o.getPrototype()) {
+            if (o.has(name, o)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -5585,8 +5612,13 @@ public class ScriptRuntime {
                 String name = desc.getParamOrVarName(i);
                 boolean isConst = desc.getParamOrVarConst(i);
                 // Don't overwrite existing def if already defined in object
-                // or prototypes of object.
-                if (!ScriptableObject.hasProperty(scope, name)) {
+                // or prototypes of object; a global var only looks at own properties
+                // (CreateGlobalVarBinding: var __proto__ shadows Object.prototype.__proto__)
+                boolean exists =
+                        globalInstantiation && !isConst
+                                ? hasOwnGlobal((TopLevel) varScope, name)
+                                : ScriptableObject.hasProperty(scope, name);
+                if (!exists) {
                     if (isConst) {
                         ScriptableObject.defineConstProperty(varScope, name);
                     } else if (!evalScript) {
@@ -6293,7 +6325,14 @@ public class ScriptRuntime {
             int getterSetter = getterSetters == null ? 0 : getterSetters[i];
             Object value = propertyValues[i];
 
-            if (getterSetter == 0) {
+            if (getterSetter == 2) {
+                // __proto__: value (B.3.1): sets the prototype to an object or null
+                if (value == null) {
+                    object.setPrototype(null);
+                } else if (value instanceof Scriptable) {
+                    NativeObject.js_protoSetter(object, value);
+                }
+            } else if (getterSetter == 0) {
                 if (id instanceof Symbol) {
                     Symbol sym = (Symbol) id;
                     SymbolScriptable so = (SymbolScriptable) object;
@@ -6311,6 +6350,10 @@ public class ScriptRuntime {
                                 && isSpecialProperty(stringId)) {
                             Ref ref = specialRef(object, stringId, cx, scope);
                             ref.set(cx, scope, value);
+                        } else if (cx.isLatestEcmaScript()
+                                && NativeObject.PROTO_PROPERTY.equals(stringId)) {
+                            // a computed or shorthand __proto__ is an own data property
+                            ((ScriptableObject) object).defineProperty(stringId, value, 0);
                         } else if (cx.getLanguageVersion() >= Context.VERSION_ES6
                                 && NativeObject.PROTO_PROPERTY.equals(stringId)) {
                             if (value == null) {

@@ -1366,6 +1366,12 @@ public final class IRFactory {
                                         : prop.isSetterMethod() ? "set " : null);
                     }
 
+                    if (prop.getIntProp(Node.PROTO_SETTER_PROP, 0) == 1
+                            && parser.compilerEnv.isLatestEcmaScript()) {
+                        // __proto__: v sets the prototype; a computed or shorthand __proto__
+                        // defines a property
+                        right.putIntProp(Node.PROTO_SETTER_PROP, 1);
+                    }
                     if (prop.isGetterMethod()) {
                         right = createUnary(Token.GET, right);
                     } else if (prop.isSetterMethod()) {

@@ -208,9 +208,11 @@ abstract class Icode {
             FN_NAME_ASSIGN = SUPER_CALLEE - 1,
             // ToPropertyKey of an object key, before the get and the set of a compound assignment
             ELEM_KEY = FN_NAME_ASSIGN - 1,
+            // the value of a __proto__: v entry of an object literal
+            LITERAL_PROTO = ELEM_KEY - 1,
 
             // Last icode
-            MIN_ICODE = ELEM_KEY;
+            MIN_ICODE = LITERAL_PROTO;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -448,6 +450,8 @@ abstract class Icode {
                 return "FN_NAME_ASSIGN";
             case ELEM_KEY:
                 return "ELEM_KEY";
+            case LITERAL_PROTO:
+                return "LITERAL_PROTO";
         }
 
         // icode without name
