@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Annex B: built-ins, RegExp, comments, calls as targets (2026-10-11, plan 1.11a)
+
+- All versions: `String.prototype.trimLeft`/`trimRight` are the same functions as `trimStart`/`trimEnd`;
+  `anchor`, `fontcolor`, `fontsize` and `link` have length 1; `Date.prototype.setYear` applies the two-digit rule
+  to ToIntegerOrInfinity(year) (`setYear(-0.5)` is 1900).
+- All versions: the legacy static accessors of `RegExp` (`input`, `$_`, `lastMatch`, `$1`–`$9`, ...) are
+  non-enumerable and configurable; from `VERSION_ES6`, their receiver must be the `RegExp` of their own realm.
+  `RegExp.prototype.compile` throws a TypeError for an instance of a subclass and for a RegExp pattern with
+  flags.
+- `VERSION_ECMASCRIPT`, RegExp patterns without `u` (B.1.2): `\x` and `\u` need all their hex digits (`/\xa/`
+  matches `"xa"`), `\c` followed by a digit or `_` in a class is a control character, a legacy octal escape has
+  three digits at most (`/\0022/` is `\x02` then `2`).
+- All versions: `-->` after a block comment at the start of a line is an HTML-like comment.
+- `VERSION_ECMASCRIPT`: a block function is not hoisted (B.3.3) when a destructured catch parameter binds its
+  name; `f() = v` (and `f()++`, `f() += v`, `for (f() in o)`) calls `f` before throwing the ReferenceError;
+  `for (var a = 0 in o)` is a SyntaxError in strict code and with a pattern.
+- test262: 30,152/42,616 (70.8%), 76 more tests pass. Perf gate: no regression (RegExp and properties benchmarks re-measured).
+
 ### Cover initializers, `for-in` shadowing, directives (2026-10-11, plan 1.10g)
 
 - All versions from `VERSION_ES6`: a CoverInitializedName nested in an array or object literal that becomes an

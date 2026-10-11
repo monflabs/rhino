@@ -348,6 +348,9 @@ public class ScriptNode extends Scope {
             start = start.getParentScope();
         }
         for (Scope s = start; s != null; s = s.getParentScope()) {
+            if (s.isCatchPatternName(name)) {
+                return true;
+            }
             Symbol existing = s.getSymbol(name);
             if (existing != null && existing != sym) {
                 Symbol.Type dt = existing.getDeclType();

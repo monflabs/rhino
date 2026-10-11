@@ -2215,7 +2215,10 @@ public class Parser {
                     // legacy "for (var x = 1 in obj)" form is still tolerated.
                     for (VariableInitializer vi : varDecl.getVariables()) {
                         if (vi.getInitializer() != null
-                                && (isForOf || varDecl.getType() != Token.VAR)) {
+                                && (isForOf
+                                        || varDecl.getType() != Token.VAR
+                                        || ((inUseStrictDirective || vi.isDestructuring())
+                                                && compilerEnv.isLatestEcmaScript()))) {
                             reportError("msg.for.in.of.init");
                         }
                     }
@@ -2428,6 +2431,13 @@ public class Parser {
                 Scope catchScope = new Scope(catchPos);
                 CatchClause catchNode = new CatchClause(catchPos);
                 catchNode.setLineColumnNumber(catchLine, catchColumn);
+                if (varName != null
+                        && !(varName instanceof Name)
+                        && compilerEnv.isLatestEcmaScript()) {
+                    List<String> names = new ArrayList<>();
+                    collectBoundNames(varName, names);
+                    catchScope.setCatchPatternNames(names);
+                }
                 pushScope(catchScope);
                 try {
                     statements(catchScope);

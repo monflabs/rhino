@@ -161,6 +161,9 @@ public class Context implements Closeable {
      *       targets, strict mode restrictions, escaped keywords, {@code const} without initializer,
      *       declarations in statement positions, parameters redeclared by {@code let}, ...), and
      *       {@code eval?.()} is an indirect eval.
+     *   <li>Annex B: RegExp patterns without {@code u} follow B.1.2 ({@code /\xa/} matches "xa"), a
+     *       call as an assignment target is evaluated before the ReferenceError, B.3.3 hoisting is
+     *       skipped for names of destructured catch parameters.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

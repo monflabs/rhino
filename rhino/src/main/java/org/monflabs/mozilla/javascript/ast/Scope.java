@@ -32,11 +32,23 @@ public class Scope extends Jump {
 
     private List<Scope> childScopes;
 
+    // The names bound by the destructuring pattern of a catch parameter, when this is the block
+    // of that catch clause (they block Annex B.3.3 function hoisting)
+    private List<String> catchPatternNames;
+
     {
         this.type = Token.BLOCK;
     }
 
     public Scope() {}
+
+    public void setCatchPatternNames(List<String> names) {
+        this.catchPatternNames = names;
+    }
+
+    public boolean isCatchPatternName(String name) {
+        return catchPatternNames != null && catchPatternNames.contains(name);
+    }
 
     public Scope(int pos) {
         this.position = pos;

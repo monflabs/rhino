@@ -249,6 +249,20 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
 - **Why:** ECMA-262 2026, the "Static Semantics: Early Errors" of §13–§14, §12.9.3 (numeric literals), §13.3.6.1
   (direct eval is a CallExpression only).
 
+### 1.13 Annex B: RegExp patterns, calls as assignment targets
+
+```js
+/\xa/.test('\n');              // VERSION_ES6: true (\xa is \x0a)   VERSION_ECMASCRIPT: false (matches "xa")
+/\0022/.test('\x02');          // VERSION_ES6: true                  VERSION_ECMASCRIPT: false (\x02 then 2)
+f() = 1;                       // VERSION_ES6: ReferenceError, f not called   VERSION_ECMASCRIPT: f called first
+```
+
+- RegExp patterns without the `u` flag follow the Annex B.1.2 grammar for incomplete hex escapes, class control
+  letters and legacy octal escapes; a call as an assignment target is evaluated before the ReferenceError; Annex
+  B.3.3 does not hoist a block function named by a destructured catch parameter; `for (var a = 0 in o)` is a
+  SyntaxError in strict code.
+- **Why:** ECMA-262 2026, B.1.2 (RegExp patterns), §13.15.1 (web-compat AssignmentTargetType), B.3.3, B.3.5.
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -841,6 +855,20 @@ ict'; return this; }                        // before: strict   now: sloppy (the
 - All versions: a non-enumerable property hides the enumerable property of the same name of a prototype from
   `for-in`; only the exact source text `'use strict'` or `"use strict"` is a Use Strict Directive.
 - **Why:** ECMA-262 2026, §14.7.5.9 (EnumerateObjectProperties), §11.2.1 (directive prologues).
+
+### 2.39 Annex B built-ins and HTML-like comments
+
+```js
+String.prototype.trimLeft === String.prototype.trimStart;   // before: false   now: true
+Object.getOwnPropertyDescriptor(RegExp, '$1').enumerable;   // before: true    now: false
+/a/.compile(/b/, 'g');                                      // before (ES6): recompiled   now: TypeError
+/* comment
+*/ --> the rest of this line is a comment                   // before: SyntaxError   now: a comment
+```
+
+- All versions: the Annex B aliases, lengths and descriptors of String and RegExp; `setYear` rounding;
+  `compile` rejects subclass instances and a RegExp with flags; HTML close comments after block comments.
+- **Why:** ECMA-262 2026, B.2.2 (String), B.2.3.4 (setYear), B.2.4 (RegExp), B.1.1 (HTML-like comments).
 
 ---
 

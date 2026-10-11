@@ -6,6 +6,7 @@
 
 package org.monflabs.mozilla.javascript;
 
+import static org.monflabs.mozilla.javascript.ClassDescriptor.Builder.alias;
 import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.CTOR;
 import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.PROTO;
 import static org.monflabs.mozilla.javascript.ScriptRuntime.rangeError;
@@ -116,10 +117,10 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "blink", 0, NativeString::js_blink)
                         .withMethod(PROTO, "sup", 0, NativeString::js_sup)
                         .withMethod(PROTO, "sub", 0, NativeString::js_sub)
-                        .withMethod(PROTO, "fontsize", 0, NativeString::js_fontsize)
-                        .withMethod(PROTO, "fontcolor", 0, NativeString::js_fontcolor)
-                        .withMethod(PROTO, "link", 0, NativeString::js_link)
-                        .withMethod(PROTO, "anchor", 0, NativeString::js_anchor)
+                        .withMethod(PROTO, "fontsize", 1, NativeString::js_fontsize)
+                        .withMethod(PROTO, "fontcolor", 1, NativeString::js_fontcolor)
+                        .withMethod(PROTO, "link", 1, NativeString::js_link)
+                        .withMethod(PROTO, "anchor", 1, NativeString::js_anchor)
                         .withMethod(PROTO, "equals", 1, NativeString::js_equals)
                         .withMethod(PROTO, "equalsIgnoreCase", 1, NativeString::js_equalsIgnoreCase)
                         .withMethod(PROTO, "match", 1, NativeString::js_match)
@@ -134,10 +135,10 @@ final class NativeString extends ScriptableObject {
                         .withMethod(
                                 PROTO, "toLocaleUpperCase", 0, NativeString::js_toLocaleUpperCase)
                         .withMethod(PROTO, "trim", 0, NativeString::js_trim)
-                        .withMethod(PROTO, "trimLeft", 0, NativeString::js_trimLeft)
                         .withMethod(PROTO, "trimStart", 0, NativeString::js_trimLeft)
-                        .withMethod(PROTO, "trimRight", 0, NativeString::js_trimRight)
+                        .withProp(PROTO, "trimLeft", alias("trimStart", DONTENUM))
                         .withMethod(PROTO, "trimEnd", 0, NativeString::js_trimRight)
+                        .withProp(PROTO, "trimRight", alias("trimEnd", DONTENUM))
                         .withMethod(PROTO, "includes", 1, NativeString::js_includes)
                         .withMethod(PROTO, "startsWith", 1, NativeString::js_startsWith)
                         .withMethod(PROTO, "endsWith", 1, NativeString::js_endsWith)

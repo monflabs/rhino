@@ -437,6 +437,14 @@ Steps:
 `annexB/built-ins`). *Gating:* B.3.3 changes how existing Rhino scripts resolve functions declared in blocks →
 `VERSION_ECMASCRIPT` (decision).
 
+Steps:
+- *1.11a (done)* `trimLeft`/`trimRight` aliases, HTML method lengths, `setYear`, the legacy RegExp accessors
+  (non-enumerable, configurable, receiver checked against their own realm), `compile` (subclass instances,
+  flags with a RegExp), RegExp pattern grammar (`\xa`, `[\c0]`, three-digit octal escapes; gated), HTML-like
+  comments after block comments, B.3.3 hoisting skipped for destructured catch parameters, `f() = v` evaluates
+  the call, `for (var a = 0 in o)` in strict code (gated). Left: IsHTMLDDA (`emulates-undefined`), async
+  functions in eval, `compile` on a cross-realm instance.
+
 **1.12 ES modules.** Module parsing (`import`/`export` in all forms, `default`, namespace objects, live bindings,
 cyclic graphs, `language/module-code`, `language/import`, `language/export`), a pluggable **module-loader API**
 (`ModuleLoader` resolving a specifier relative to a referrer and returning source, registered on the
@@ -587,8 +595,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.7  | Classes                                         | done        | 61.1% → 68.3% (1.7a–c)       | c8e10cff9 |
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
-| 1.10 | Templates and syntax residuals                  | in progress | 69.7% → 70.6% (1.10a–g)      | (this) |
-| 1.11 | Annex B (ES2015)                                | todo        |                              |        |
+| 1.10 | Templates and syntax residuals                  | done        | 69.7% → 70.6% (1.10a–g)      | 162371592 |
+| 1.11 | Annex B (ES2015)                                | in progress | 70.6% → 70.8% (1.11a)        | (this) |
 | 1.12 | ES modules                                      | todo        |                              |        |
 | 2.x  | ES2016                                          | todo        |                              |        |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |

@@ -241,13 +241,19 @@ public class NativeRegExp extends ScriptableObject {
     static Object init(Context cx, VarScope scope, boolean sealed) {
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
             // RegExp.prototype is an ordinary object (22.2.6)
-            return DESCRIPTOR.buildConstructor(cx, scope, new RegExpPrototype(), sealed);
+            return DESCRIPTOR.buildConstructor(
+                    cx,
+                    scope,
+                    new RegExpPrototype(),
+                    sealed,
+                    (c, ctor) -> defineLegacyAccessors(c, scope, ctor));
         }
 
         NativeRegExp proto = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
         proto.re = compileRE(cx, "", null, false);
 
-        return DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+        return DESCRIPTOR.buildConstructor(
+                cx, scope, proto, sealed, (c, ctor) -> defineLegacyAccessors(c, scope, ctor));
     }
 
     /** %RegExp.prototype% from ES6: an ordinary object (22.2.6), marked by its class. */
@@ -340,78 +346,51 @@ public class NativeRegExp extends ScriptableObject {
                                 "$*",
                                 (c) -> ScriptRuntime.wrapBoolean(getImpl().multiline),
                                 (c, v) -> getImpl().multiline = ScriptRuntime.toBoolean(v),
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "input",
-                                (c) -> legacyStr(c, getImpl().input),
-                                (c, v) -> getImpl().input = legacyStr(c, ScriptRuntime.toString(v)),
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "$_",
-                                (c) -> legacyStr(c, getImpl().input),
-                                (c, v) -> getImpl().input = legacyStr(c, ScriptRuntime.toString(v)),
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "lastMatch",
-                                (c) -> legacyStr(c, getImpl().lastMatch),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "$&",
-                                (c) -> legacyStr(c, getImpl().lastMatch),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "lastParen",
-                                (c) -> legacyStr(c, getImpl().lastParen),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "$+",
-                                (c) -> legacyStr(c, getImpl().lastParen),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "leftContext",
-                                (c) -> legacyStr(c, getImpl().leftContext),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "$`",
-                                (c) -> legacyStr(c, getImpl().leftContext),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "rightContext",
-                                (c) -> legacyStr(c, getImpl().rightContext),
-                                null,
-                                PERMANENT)
-                        .withProp(
-                                CTOR,
-                                "$'",
-                                (c) -> legacyStr(c, getImpl().rightContext),
-                                null,
                                 PERMANENT);
-
-        for (int i = 1; i < 10; i++) {
-            int c = i - 1;
-            builder.withProp(
-                    CTOR,
-                    String.format("$%d", i),
-                    (x) -> legacyStr(x, getImpl().getParenSubString(c)),
-                    null,
-                    PERMANENT);
-        }
         return builder;
+    }
+
+    /**
+     * The legacy static accessors (B.2.4 proposal, RegExp legacy features): their getters check
+     * that the receiver is the RegExp constructor of their own realm.
+     */
+    private static void defineLegacyAccessors(Context cx, VarScope scope, JSFunction ctor) {
+        ScriptableObject.LambdaSetterFunction inputSetter =
+                (c, v) -> getImpl().input = legacyStr(ctor, c, ScriptRuntime.toString(v));
+        for (String name : new String[] {"input", "$_"}) {
+            ctor.defineProperty(
+                    cx,
+                    scope,
+                    name,
+                    (c) -> legacyStr(ctor, c, getImpl().input),
+                    inputSetter,
+                    DONTENUM);
+        }
+        for (String name : new String[] {"lastMatch", "$&"}) {
+            ctor.defineProperty(
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastMatch), DONTENUM);
+        }
+        for (String name : new String[] {"lastParen", "$+"}) {
+            ctor.defineProperty(
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastParen), DONTENUM);
+        }
+        for (String name : new String[] {"leftContext", "$`"}) {
+            ctor.defineProperty(
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().leftContext), DONTENUM);
+        }
+        for (String name : new String[] {"rightContext", "$'"}) {
+            ctor.defineProperty(
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().rightContext), DONTENUM);
+        }
+        for (int i = 1; i < 10; i++) {
+            int n = i - 1;
+            ctor.defineProperty(
+                    cx,
+                    scope,
+                    "$" + i,
+                    (c) -> legacyStr(ctor, c, getImpl().getParenSubString(n)),
+                    DONTENUM);
+        }
     }
 
     private static Scriptable js_constructCall(
@@ -467,6 +446,8 @@ public class NativeRegExp extends ScriptableObject {
         // RegExpAlloc, then RegExpInitialize
         NativeRegExp obj = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
         ScriptRuntime.setBuiltinProtoAndParent(obj, f, newTarget, s, TopLevel.Builtins.RegExp);
+        // [[LegacyFeaturesEnabled]] (B.2.4): false for an instance of a subclass
+        obj.legacyFeaturesDisabled = newTarget != f;
         String source =
                 Undefined.isUndefined(p)
                         ? ""
@@ -510,16 +491,9 @@ public class NativeRegExp extends ScriptableObject {
      * The value of a legacy static property (Annex B, RegExp legacy features): a TypeError when
      * read through another constructor than RegExp, such as a subclass.
      */
-    private static String legacyStr(Scriptable receiver, Object value) {
+    private static String legacyStr(JSFunction ctor, Scriptable receiver, Object value) {
         Context cx = Context.getCurrentContext();
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6
-                && (!(receiver instanceof Function)
-                        || receiver
-                                != TopLevel.getBuiltinCtor(
-                                        cx,
-                                        ScriptableObject.getTopLevelScope(
-                                                ((Function) receiver).getDeclarationScope()),
-                                        TopLevel.Builtins.RegExp))) {
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6 && receiver != ctor) {
             throw ScriptRuntime.typeErrorById("msg.regexp.legacy.receiver");
         }
         return value instanceof SubString ? toStr((SubString) value) : toStr((String) value);
@@ -609,12 +583,8 @@ public class NativeRegExp extends ScriptableObject {
                             ? ScriptRuntime.toString(args[1])
                             : null;
 
-            // Passing a regex and flags is allowed in ES6, but forbidden in ES5 and lower.
-            // Spec ref: 15.10.4.1 in ES5, 22.2.4.1 in ES6
-            if (args.length > 0
-                    && args[0] instanceof NativeRegExp
-                    && flags != null
-                    && cx.getLanguageVersion() < Context.VERSION_ES6) {
+            // compile(regexp, flags) is a TypeError (B.2.4.1; the constructor accepts it)
+            if (args.length > 0 && args[0] instanceof NativeRegExp && flags != null) {
                 throw ScriptRuntime.typeErrorById("msg.bad.regexp.compile");
             }
 
@@ -1879,8 +1849,11 @@ public class NativeRegExp extends ScriptableObject {
 
         for (int i = 0; i < nDigits; i++) {
             if (state.cp >= state.cpend) {
-                // in unicode mode, we need exact number of digits
-                if (params.unicodeMode || i == 0) {
+                // in unicode mode, we need exact number of digits; Annex B.1.2 too (\xa is an
+                // identity escape followed by a)
+                if (params.unicodeMode
+                        || i == 0
+                        || Context.getCurrentContext().isLatestEcmaScript()) {
                     state.cp = termBegin;
                     return -1;
                 } else {
@@ -2233,6 +2206,14 @@ public class NativeRegExp extends ScriptableObject {
                 } else {
                     if (!parseCharacterAndCharacterClassEscape(state, params)) {
                         if (src[state.cp] == 'c'
+                                && !params.unicodeMode
+                                && state.cp + 1 < state.cpend
+                                && (isDigit(src[state.cp + 1]) || src[state.cp + 1] == '_')
+                                && Context.getCurrentContext().isLatestEcmaScript()) {
+                            // ClassControlLetter (Annex B.1.2): [\c0] is \x10
+                            thisCodePoint = src[state.cp + 1] % 32;
+                            state.cp += 2;
+                        } else if (src[state.cp] == 'c'
                                 && !params.unicodeMode) { // when lookahead=c, parse the \\ as a
                             // literal
                             thisCodePoint = '\\';
@@ -2399,7 +2380,13 @@ public class NativeRegExp extends ScriptableObject {
 
                                     // follow spidermonkey and allow multiple leading zeros,
                                     // e.g. let /\0000/ match the string "\0"
-                                    parseMultipleLeadingZerosAsOctalEscape(state);
+                                    if (Context.getCurrentContext().isLatestEcmaScript()) {
+                                        // LegacyOctalEscapeSequence: 3 digits at most (B.1.2)
+                                        state.cp--;
+                                        parseLegacyOctalEscapeSequence(state);
+                                    } else {
+                                        parseMultipleLeadingZerosAsOctalEscape(state);
+                                    }
                                 }
                                 break;
                             }
@@ -4563,7 +4550,11 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Object js_compile(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return realThis(thisObj, f).compile(cx, s, args);
+        NativeRegExp re = realThis(thisObj, f);
+        if (re.legacyFeaturesDisabled) {
+            throw ScriptRuntime.typeErrorById("msg.regexp.legacy.disabled", "compile");
+        }
+        return re.compile(cx, s, args);
     }
 
     private static Object js_toString(
@@ -5279,6 +5270,7 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private RECompiled re;
+    private boolean legacyFeaturesDisabled;
     Object lastIndex = ScriptRuntime.zeroObj; /* index after last match, for //g iterator */
     private int lastIndexAttr = DONTENUM | PERMANENT;
 } // class NativeRegExp

@@ -681,6 +681,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                     tokenEnd = cursor;
                     return Token.EOL;
                 } else if (!isJSSpace(c)) {
+                    dirtyBeforeToken = dirtyLine;
                     if (c != '-') {
                         dirtyLine = true;
                     }
@@ -1394,6 +1395,9 @@ class TokenStream implements Parser.CurrentPositionReporter {
                                 if (lookForSlash) {
                                     cursor = sourceCursor;
                                     tokenEnd = cursor;
+                                    // a comment does not make the line dirty, and one with a line
+                                    // terminator starts a new line (B.1.1 HTML-like comments)
+                                    dirtyLine = !commentHasLineTerminator && dirtyBeforeToken;
                                     return Token.COMMENT;
                                 }
                             } else {
@@ -2549,6 +2553,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
     // stuff other than whitespace since start of line
     private boolean dirtyLine;
+    private boolean dirtyBeforeToken;
 
     /**
      * The source text after the current token, without consuming it: the next significant character

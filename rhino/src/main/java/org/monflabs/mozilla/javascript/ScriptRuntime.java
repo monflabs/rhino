@@ -3670,6 +3670,11 @@ public class ScriptRuntime {
             }
             return ref;
         }
+        if (cx.isLatestEcmaScript() && thisObj instanceof Scriptable) {
+            // f() = v (web compatibility, 13.15.1): the call is evaluated, then the assignment
+            // throws
+            function.call(cx, getTopCallScope(cx), (Scriptable) thisObj, args);
+        }
         // No runtime support for now
         String msg = getMessageById("msg.no.ref.from.function", toString(function));
         throw constructError("ReferenceError", msg);
