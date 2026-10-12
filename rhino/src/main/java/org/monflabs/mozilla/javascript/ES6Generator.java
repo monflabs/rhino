@@ -88,6 +88,16 @@ public final class ES6Generator extends ScriptableObject {
         return "Generator";
     }
 
+    /** Resumes the body with the strictness of the generator function, whoever resumes it. */
+    private Object resume(Context cx, VarScope scope, int op, Object value) {
+        boolean parentStrict = ScriptRuntime.enterFunctionStrictness(cx, function.isStrict());
+        try {
+            return function.resumeGenerator(cx, scope, op, savedState, value);
+        } finally {
+            ScriptRuntime.exitFunctionStrictness(cx, parentStrict);
+        }
+    }
+
     boolean isStrict() {
         return function.isStrict();
     }
@@ -255,9 +265,7 @@ public final class ES6Generator extends ScriptableObject {
         state = State.EXECUTING;
 
         try {
-            Object r =
-                    function.resumeGenerator(
-                            cx, scope, NativeGenerator.GENERATOR_SEND, savedState, value);
+            Object r = resume(cx, scope, NativeGenerator.GENERATOR_SEND, value);
 
             if (r instanceof YieldStarResult) {
                 // This special result tells us that we are executing a "yield *"
@@ -354,7 +362,7 @@ public final class ES6Generator extends ScriptableObject {
         }
 
         try {
-            Object r = function.resumeGenerator(cx, scope, op, savedState, throwValue);
+            Object r = resume(cx, scope, op, throwValue);
             ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, r);
             // If we get here without an exception we can still run.
             state = State.SUSPENDED_YIELD;

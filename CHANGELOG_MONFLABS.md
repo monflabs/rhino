@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### SharedArrayBuffer and Atomics (2026-10-12, plan 3.3)
+
+- New: `SharedArrayBuffer` (growable with `maxByteLength`, `grow`, `slice`, `@@species`), and the `Atomics` object:
+  `add`, `and`, `compareExchange`, `exchange`, `isLockFree`, `load`, `notify`, `or`, `pause`, `store`, `sub`,
+  `xor` over integer and BigInt typed arrays, shared or not. Not yet: `Atomics.wait`, `Atomics.waitAsync` and
+  the `$262.agent` harness (3.4); `notify` wakes nobody until then.
+- A SharedArrayBuffer is an ArrayBuffer over a storage record (the bytes, allocated up to the maximum length of a
+  growable buffer, and the current length), so typed arrays and DataView work on it unchanged. An atomic
+  operation holds the lock of its storage, then revalidates the access (RevalidateAtomicAccess), since converting
+  the arguments may have detached or shrunk the buffer. `ArrayBuffer.prototype` methods reject a
+  SharedArrayBuffer.
+- All versions: a strict generator or async function body runs in strict mode when sloppy code resumes it (before,
+  a direct `eval` in it was sloppy); see BACKWARD_COMPATIBILITY.md 2.42.
+- test262: `SharedArrayBuffer` and `Atomics` are no longer unsupported features, and the `built-ins/AsyncFunction`,
+  `async-function` and `await` directories, which 3.1a had left skipped, run: 31,469/42,616 (73.8%), 617 more
+  tests pass. The 93 newly failing tests need `$262.agent` or `Atomics.wait`/`waitAsync` (3.4), immutable
+  ArrayBuffers, or async iteration (M4). Perf gate: no regression against 3.1b.
+
 ### Async functions: early errors; optional chains (2026-10-12, plan 3.1b)
 
 - Early errors: `label: async function f() {}`, and an `await` expression in the parameters of an arrow function

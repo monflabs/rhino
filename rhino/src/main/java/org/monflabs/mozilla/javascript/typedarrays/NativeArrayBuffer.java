@@ -110,13 +110,19 @@ public class NativeArrayBuffer extends ScriptableObject {
         }
     }
 
+    /** A buffer over existing storage (a SharedArrayBuffer). */
+    NativeArrayBuffer(ByteBuffer bytes) {
+        byteOrder = bytes.order();
+        buffer = bytes;
+    }
+
     private ByteBuffer allocateBuffer(int len) {
         var buf = ByteBuffer.allocate(len);
         buf.order(byteOrder);
         return buf;
     }
 
-    private static ByteOrder defaultByteOrder(Context cx) {
+    static ByteOrder defaultByteOrder(Context cx) {
         return cx.hasFeature(Context.FEATURE_LITTLE_ENDIAN)
                 ? ByteOrder.LITTLE_ENDIAN
                 : ByteOrder.BIG_ENDIAN;
@@ -164,6 +170,10 @@ public class NativeArrayBuffer extends ScriptableObject {
     }
 
     private static NativeArrayBuffer getSelf(Object thisObj) {
+        if (thisObj instanceof NativeSharedArrayBuffer) {
+            // the methods of ArrayBuffer.prototype reject a SharedArrayBuffer
+            throw ScriptRuntime.typeErrorById("msg.this.not.instance", "NativeArrayBuffer");
+        }
         return LambdaConstructor.convertThisObject(thisObj, NativeArrayBuffer.class);
     }
 

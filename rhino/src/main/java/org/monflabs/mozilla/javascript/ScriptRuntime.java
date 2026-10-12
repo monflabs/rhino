@@ -39,6 +39,7 @@ import org.monflabs.mozilla.javascript.lc.type.TypeInfo;
 import org.monflabs.mozilla.javascript.lc.type.impl.factory.ClassValueCacheFactory;
 import org.monflabs.mozilla.javascript.lc.type.impl.factory.LegacyCacheFactory;
 import org.monflabs.mozilla.javascript.typedarrays.NativeArrayBuffer;
+import org.monflabs.mozilla.javascript.typedarrays.NativeAtomics;
 import org.monflabs.mozilla.javascript.typedarrays.NativeBigInt64Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeBigUint64Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeDataView;
@@ -48,6 +49,7 @@ import org.monflabs.mozilla.javascript.typedarrays.NativeFloat64Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeInt16Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeInt32Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeInt8Array;
+import org.monflabs.mozilla.javascript.typedarrays.NativeSharedArrayBuffer;
 import org.monflabs.mozilla.javascript.typedarrays.NativeUint16Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeUint32Array;
 import org.monflabs.mozilla.javascript.typedarrays.NativeUint8Array;
@@ -313,6 +315,12 @@ public class ScriptRuntime {
             new LazilyLoadedCtor<>(scope, "Float32Array", sealed, true, NativeFloat32Array::init);
             new LazilyLoadedCtor<>(scope, "Float64Array", sealed, true, NativeFloat64Array::init);
             new LazilyLoadedCtor<>(scope, "DataView", sealed, true, NativeDataView::init);
+        }
+
+        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            new LazilyLoadedCtor<>(
+                    scope, "SharedArrayBuffer", sealed, true, NativeSharedArrayBuffer::init);
+            new LazilyLoadedCtor<>(scope, "Atomics", sealed, true, NativeAtomics::init);
         }
 
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {

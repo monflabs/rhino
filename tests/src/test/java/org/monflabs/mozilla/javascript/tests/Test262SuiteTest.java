@@ -154,12 +154,10 @@ public class Test262SuiteTest {
     static final Set<String> UNSUPPORTED_FEATURES =
             new HashSet<>(
                     Arrays.asList(
-                            "Atomics",
                             "IsHTMLDDA",
                             "async-iteration",
                             "class-fields-private",
                             "class-fields-public",
-                            "SharedArrayBuffer",
                             "tail-call-optimization",
                             "top-level-await",
                             "dynamic-import",

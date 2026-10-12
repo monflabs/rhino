@@ -907,6 +907,17 @@ a?.b[f()];        // before: f is called   now: f is not called
 - ES6 and later versions: a `[...]` access after `?.` in the same chain is short-circuited like a `.name` access.
 - **Why:** ECMA-262 2026, §13.3.9 (Optional Chains).
 
+### 2.42 Strict generators resumed from sloppy code
+
+```js
+var g = (function () { 'use strict'; return function* () { eval('var x = 010'); }; })();
+g().next();       // before: no error (the eval was sloppy)   now: SyntaxError (the eval is strict)
+```
+
+- ES6 and later versions: the body of a strict generator (or async function) runs in strict mode whoever resumes
+  it; before, it took the strictness of the code that called `next()`, which a direct `eval` in it inherited.
+- **Why:** ECMA-262 2026, §11.2.2 (strict mode code), §19.2.1.1 (PerformEval: the strictness of the caller).
+
 ---
 
 ## 3. Platform and embedding
