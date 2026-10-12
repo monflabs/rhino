@@ -627,8 +627,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
 | 1.10 | Templates and syntax residuals                  | done        | 69.7% → 70.6% (1.10a–g)      | 162371592 |
 | 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
-| 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | (this) |
-| 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | (this) |
+| 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
+| 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
