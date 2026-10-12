@@ -649,7 +649,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | bdba199cf |
-| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | in progress | 74.0% → 83.3% (4.1)           | (this) |
+| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | in progress | 74.0% → 83.3% (4.1)           | 7a8679b60 |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
 | 6.x  | ES2020                                          | todo        |                              |        |
 | 7.x  | ES2021                                          | todo        |                              |        |
