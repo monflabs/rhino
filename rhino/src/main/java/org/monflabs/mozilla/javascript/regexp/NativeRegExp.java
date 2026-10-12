@@ -241,12 +241,16 @@ public class NativeRegExp extends ScriptableObject {
     static Object init(Context cx, VarScope scope, boolean sealed) {
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
             // RegExp.prototype is an ordinary object (22.2.6)
+            RegExpPrototype prototype = new RegExpPrototype();
             return DESCRIPTOR.buildConstructor(
                     cx,
                     scope,
-                    new RegExpPrototype(),
+                    prototype,
                     sealed,
-                    (c, ctor) -> defineLegacyAccessors(c, scope, ctor));
+                    (c, ctor) -> {
+                        defineLegacyAccessors(c, scope, ctor);
+                        defineRealmGetters(c, scope, prototype);
+                    });
         }
 
         NativeRegExp proto = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
@@ -254,6 +258,54 @@ public class NativeRegExp extends ScriptableObject {
 
         return DESCRIPTOR.buildConstructor(
                 cx, scope, proto, sealed, (c, ctor) -> defineLegacyAccessors(c, scope, ctor));
+    }
+
+    private static final Object[][] FLAG_GETTERS = {
+        {"global", JSREG_GLOB},
+        {"ignoreCase", JSREG_FOLD},
+        {"multiline", JSREG_MULTILINE},
+        {"dotAll", JSREG_DOTALL},
+        {"sticky", JSREG_STICKY},
+        {"unicode", JSREG_UNICODE}
+    };
+
+    /**
+     * The flag and source getters answer for the %RegExp.prototype% of their own realm only
+     * (22.2.6.4.1 RegExpHasFlag): the RegExp.prototype of another realm is not a RegExp.
+     */
+    private static void defineRealmGetters(Context cx, VarScope scope, RegExpPrototype prototype) {
+        for (Object[] flag : FLAG_GETTERS) {
+            String name = (String) flag[0];
+            int bit = (Integer) flag[1];
+            prototype.defineProperty(
+                    cx,
+                    scope,
+                    name,
+                    c ->
+                            c == prototype
+                                    ? Undefined.instance
+                                    : ScriptRuntime.wrapBoolean(
+                                            (regExpInRealm(c, "get " + name, scope).re.flags & bit)
+                                                    != 0),
+                    null,
+                    DONTENUM | READONLY);
+        }
+        prototype.defineProperty(
+                cx,
+                scope,
+                "source",
+                c -> c == prototype ? "(?:)" : sourceText(regExpInRealm(c, "get source", scope)),
+                null,
+                DONTENUM | READONLY);
+    }
+
+    /** The receiver of a getter, which throws a TypeError of its own realm otherwise. */
+    private static NativeRegExp regExpInRealm(Object thisObj, String name, VarScope realm) {
+        if (thisObj instanceof NativeRegExp) {
+            return (NativeRegExp) thisObj;
+        }
+        throw ScriptRuntime.typeErrorInRealm(
+                Context.getCurrentContext(), realm, "msg.incompat.call", name);
     }
 
     /** %RegExp.prototype% from ES6: an ordinary object (22.2.6), marked by its class. */
@@ -274,10 +326,14 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private static Object sourceGetter(Scriptable c) {
-        if (isRegExpPrototype(c)) {
+        if (isRegExpPrototype(c) && !(c instanceof RegExpPrototype)) {
             return "(?:)";
         }
-        String source = new String(realThis(c, "get source").re.source);
+        return sourceText(realThis(c, "get source"));
+    }
+
+    private static String sourceText(NativeRegExp regExp) {
+        String source = new String(regExp.re.source);
         Context cx = Context.getCurrentContext();
         return cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6
                 ? escapePattern(source)

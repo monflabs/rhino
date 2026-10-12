@@ -942,6 +942,18 @@ it.next();      // now: { value: 9, done: true }
   the `finally` rethrows when the generator is resumed (before, it escaped the generator).
 - **Why:** ECMA-262 2026, §27.5.3.3 (GeneratorResume), §14.15.3 (try statement evaluation).
 
+### 2.44 RegExp flag getters and another realm's RegExp.prototype
+
+```js
+var other = /* the global object of another realm */;
+Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').get.call(other.RegExp.prototype);
+// before: undefined   now: TypeError
+```
+
+- ES6 and later versions: the getters of the flags and `source` answer `undefined` (`"(?:)"`) only for the
+  RegExp.prototype of their own realm; another object that is not a RegExp is a TypeError of the getter's realm.
+- **Why:** ECMA-262 2026, §22.2.6.4.1 (RegExpHasFlag), §22.2.6.13 (get RegExp.prototype.source).
+
 ---
 
 ## 3. Platform and embedding

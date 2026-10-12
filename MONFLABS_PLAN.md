@@ -38,6 +38,7 @@ existing code and without slowing the engine down.
 | 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
 | 2026-10-12 | **3.1: async functions reuse the generator machinery**: an async body is compiled like a generator in both backends, `await` is an internal suspension, and a Java driver resumes it from promise reactions on the `Context` microtask queue (no threads; spec tick order). Nashorn's `AsyncSupport` drives the same kind of suspension, but on virtual threads. |
 | 2026-10-12 | 3.4: every agent can block in `Atomics.wait`, the main thread included (as in Nashorn, and as fits a server); the two `CanBlockIsFalse` tests are skipped as written for another host. `Atomics.waitAsync` is deferred to its edition (10.3). |
+| 2026-10-12 | **4.3: Unicode property escapes use the JDK's data only** (as Nashorn): no bundled UCD; `Script_Extensions`, the binary properties the JDK does not carry and the Unicode-version gap of the generated tests are documented limits. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -529,6 +530,11 @@ compact tables from the UCD at build time vs JDK-only with documented hold-outs.
 Steps:
 - *4.1 (done)* async generators, `yield*` in them, `for await`, the async iteration intrinsics; generators can yield
   in a `finally` run by `return()`, and compiled generators keep the handlers of nested `try` statements.
+- *4.2 (done)* nothing to do: what fails needs private names (M8).
+- *4.3 (done)* RegExp flag getters answer for their own realm only. Unicode property escapes keep the JDK's data
+  (decision 4.3): `Script_Extensions` (175 generated tests) and the ~40 binary properties the JDK does not carry
+  stay unsupported, and the generated General_Category/Script tests follow a newer Unicode than JDK 25's.
+- *4.4 (done)* nothing to do. M4 is done.
 
 ### M5 — ES2019
 
@@ -649,7 +655,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | bdba199cf |
-| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | in progress | 74.0% → 83.3% (4.1)           | 7a8679b60 |
+| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | done        | 74.0% → 83.3% (4.1–4.4)       | (this) |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
 | 6.x  | ES2020                                          | todo        |                              |        |
 | 7.x  | ES2021                                          | todo        |                              |        |

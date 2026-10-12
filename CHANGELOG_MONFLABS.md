@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### ES2018 residuals; M4 done (2026-10-12, plans 4.2-4.4)
+
+- 4.2 (object rest/spread) and 4.4 (`Promise.prototype.finally`, template literal revision) needed no work: every
+  in-scope test passes but those needing private names (M8).
+- 4.3 (RegExp ES2018): dotAll, named groups and lookbehind pass. Unicode property escapes keep the JDK's data
+  (decision 4.3): `Script_Extensions` and the binary properties the JDK does not carry are not supported, and the
+  generated General_Category and Script tests follow a newer Unicode version than the JDK's.
+- All versions: the getters of the RegExp flags and `source` answer for the RegExp.prototype of their own realm only;
+  see BACKWARD_COMPATIBILITY.md 2.44.
+- test262: 35,503/42,616 (83.3%), 7 more tests pass. Perf gate: no regression against 4.1 (the RegExp benchmarks re-measured
+  on an idle machine).
+
 ### Async iteration (2026-10-12, plan 4.1)
 
 - New: async generators (`async function*`, async generator methods), `yield*` in them, `for await`,
