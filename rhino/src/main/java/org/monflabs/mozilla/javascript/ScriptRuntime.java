@@ -2265,6 +2265,9 @@ public class ScriptRuntime {
             Object value,
             Context cx) {
         // No XML support for super
+        if (thisScriptable instanceof ModuleNamespace) {
+            return setSuperOnNamespace(superScriptable, thisScriptable, elem, value, cx);
+        }
         if (isSymbol(elem)) {
             ScriptableObject.putSuperProperty(
                     superScriptable, thisScriptable, (Symbol) elem, value);
@@ -2329,7 +2332,26 @@ public class ScriptRuntime {
             String property,
             Object value,
             Context cx) {
+        if (thisScriptable instanceof ModuleNamespace) {
+            return setSuperOnNamespace(superScriptable, thisScriptable, property, value, cx);
+        }
         ScriptableObject.putSuperProperty(superScriptable, thisScriptable, property, value);
+        return value;
+    }
+
+    /**
+     * super[key] = value with a module namespace as the receiver (OrdinarySetWithOwnDescriptor):
+     * the receiver's [[GetOwnProperty]] reads the binding, and its [[DefineOwnProperty]] fails.
+     */
+    private static Object setSuperOnNamespace(
+            Scriptable superScriptable,
+            Scriptable namespace,
+            Object key,
+            Object value,
+            Context cx) {
+        if (!AbstractEcmaObjectOperations.set(cx, superScriptable, key, value, namespace)) {
+            throw typeErrorById("msg.modify.readonly", toString(key));
+        }
         return value;
     }
 
@@ -2389,6 +2411,9 @@ public class ScriptRuntime {
             int index,
             Object value,
             Context cx) {
+        if (thisScriptable instanceof ModuleNamespace) {
+            return setSuperOnNamespace(superScriptable, thisScriptable, index, value, cx);
+        }
         ScriptableObject.putSuperProperty(superScriptable, thisScriptable, index, value);
         return value;
     }

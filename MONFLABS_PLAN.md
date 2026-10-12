@@ -36,6 +36,7 @@ existing code and without slowing the engine down.
 | 2026-10-10 | 1.8: typed arrays are little endian by default under `VERSION_ECMASCRIPT` (`FEATURE_LITTLE_ENDIAN`), as Nashorn and test262 assume; gated because embedders may read buffer bytes. |
 | 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
 | 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
+| 2026-10-12 | **3.1: async functions reuse the generator machinery**: an async body is compiled like a generator in both backends, `await` is an internal suspension, and a Java driver resumes it from promise reactions on the `Context` microtask queue (no threads; spec tick order). Nashorn's `AsyncSupport` drives the same kind of suspension, but on virtual threads. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -474,11 +475,18 @@ Steps:
 - *1.12b (done)* module early errors: HTML-like comments, lexical top-level functions, escaped `default`. Left:
   `super.x = v` with a namespace receiver, `arguments` at the top level of a module; the rest of the module tests
   need async functions (M3), class fields (M7) or later module features.
+- *1.12c (done)* `super.x = v` with a namespace receiver follows OrdinarySetWithOwnDescriptor (the binding is
+  read: ReferenceError before initialization, TypeError after). 1.12 is done. Residual, not covered by test262:
+  `arguments` at the top level of a module is the generator's `arguments` object rather than an unresolvable
+  reference. `await` as an identifier in scripts belongs to M3.
 
 ### M2 — ES2016
 
 **2.1** `**` and `**=` (72%: precedence and unary-operand early errors, BigInt). **2.2** `Array.prototype.includes`
 (64%: `SameValueZero`, typed arrays, length coercion).
+
+Status (2026-10-12, done): both features pass every in-scope test after M1; the remaining tagged tests need class
+fields (M8), Atomics (3.3) or `import()` (M6).
 
 ### M3 — ES2017
 
@@ -619,8 +627,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
 | 1.10 | Templates and syntax residuals                  | done        | 69.7% → 70.6% (1.10a–g)      | 162371592 |
 | 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
-| 1.12 | ES modules                                      | in progress | 70.8% → 71.6% (1.12a–b)      | (this) |
-| 2.x  | ES2016                                          | todo        |                              |        |
+| 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | (this) |
+| 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | (this) |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |

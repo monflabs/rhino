@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### ES modules: `super` assignment to a namespace (2026-10-12, plan 1.12c)
+
+- `super.x = v` in a method whose `this` is a module namespace reads the binding (a ReferenceError before its
+  initialization) and then fails with a TypeError, as OrdinarySetWithOwnDescriptor specifies (before, always a
+  TypeError).
+- test262: 30,493/42,616 (71.6%), 1 more test passes. Perf gate: no regression.
+
 ### ES modules: early errors (2026-10-11, plan 1.12b)
 
 - Module code: HTML-like comments are not comments, top-level function declarations are lexical (a duplicate

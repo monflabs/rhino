@@ -195,6 +195,31 @@ class ModuleTest {
     }
 
     @Test
+    void superSetWithNamespaceReceiver() {
+        ModuleLoader loader =
+                (specifier, referrer) ->
+                        "self".equals(specifier)
+                                ? Module.source(
+                                        "self",
+                                        "import * as ns from 'self';\n"
+                                                + "class A { constructor() { return ns; } }\n"
+                                                + "class B extends A {"
+                                                + " constructor() { super(); super.x = 1; } }\n"
+                                                + "export let r = [];\n"
+                                                + "try { new B(); } catch (e) { r.push(e.name); }\n"
+                                                + "export let x = 0;\n"
+                                                + "try { new B(); } catch (e) { r.push(e.name); }\n"
+                                                + "r = r.join();\n")
+                                : null;
+        inAllModes(
+                loader,
+                (cx, scope) -> {
+                    Scriptable ns = cx.evaluateModule(scope, "export * from 'self';", "main");
+                    assertEquals("ReferenceError,TypeError", get(ns, "r"));
+                });
+    }
+
+    @Test
     void evaluatedOnceAndFactoryLoaders() {
         ModuleLoader loader =
                 (specifier, referrer) -> {
