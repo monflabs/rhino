@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Atomics.wait and notify, test262 agents (2026-10-12, plan 3.4)
+
+- New: `Atomics.wait` and `Atomics.notify`. The waiter lists of a SharedArrayBuffer belong to its storage and are
+  used under its lock, so a wait cannot miss a notify between reading the value and suspending. Every agent can
+  block, the main thread included. Not yet: `Atomics.waitAsync` (ES2024, 10.3). The test262 tests flagged `CanBlockIsFalse`
+  are written for hosts whose main agent cannot block, and are skipped.
+- New API: `NativeSharedArrayBuffer.share(scope, buffer)` returns a SharedArrayBuffer of another realm (another
+  context, possibly on another thread) over the same memory.
+- test262 harness: `$262.agent` (start, broadcast, getReport, sleep, monotonicNow; receiveBroadcast, report,
+  leaving in an agent). An agent is a daemon thread with a context and a realm of its own; the agents of a test are
+  interrupted when it ends. `$262` is installed before the harness files, which use it (atomicsHelper.js).
+- test262: 31,547/42,616 (74.0%), 80 more tests pass. Perf gate: no regression against 3.3 (properties and deltablue re-measured on
+  an idle machine).
+
 ### SharedArrayBuffer and Atomics (2026-10-12, plan 3.3)
 
 - New: `SharedArrayBuffer` (growable with `maxByteLength`, `grow`, `slice`, `@@species`), and the `Atomics` object:

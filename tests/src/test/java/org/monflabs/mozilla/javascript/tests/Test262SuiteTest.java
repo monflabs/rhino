@@ -28,9 +28,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -43,6 +50,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.monflabs.mozilla.javascript.Callable;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.EvaluatorException;
@@ -69,6 +77,7 @@ import org.monflabs.mozilla.javascript.testutils.TestSource;
 import org.monflabs.mozilla.javascript.tools.SourceReader;
 import org.monflabs.mozilla.javascript.tools.shell.ShellContextFactory;
 import org.monflabs.mozilla.javascript.typedarrays.NativeArrayBuffer;
+import org.monflabs.mozilla.javascript.typedarrays.NativeSharedArrayBuffer;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.error.YAMLException;
 
@@ -91,6 +100,9 @@ public class Test262SuiteTest {
 
     /** The test is asynchronous: it reports its result through {@code $DONE}. */
     private static final String FLAG_ASYNC = "async";
+
+    /** The test is for a host whose main agent cannot block in Atomics.wait. */
+    private static final String FLAG_CAN_BLOCK_IS_FALSE = "CanBlockIsFalse";
 
     private static final File testDir;
     private static final String testHarnessDir;
@@ -155,6 +167,7 @@ public class Test262SuiteTest {
             new HashSet<>(
                     Arrays.asList(
                             "IsHTMLDDA",
+                            "CanBlockIsFalse",
                             "async-iteration",
                             "class-fields-private",
                             "class-fields-public",
@@ -407,13 +420,198 @@ public class Test262SuiteTest {
             return Undefined.instance;
         }
 
+        private Scriptable agent;
+
         public static Object getAgent(Scriptable scriptable) {
-            throw new UnsupportedOperationException("$262.agent property not yet implemented");
+            $262 self = ($262) scriptable;
+            if (self.agent == null) {
+                self.agent = AgentHost.agentObject(Context.getCurrentContext(), self);
+            }
+            return self.agent;
         }
 
         @Override
         public String getClassName() {
             return "__262__";
+        }
+    }
+
+    private static final ThreadLocal<AgentHost> AGENT_HOST = new ThreadLocal<>();
+
+    /**
+     * The agents of a test ($262.agent, INTERPRETING.md): each one a thread with a context and a
+     * realm of its own, which share memory through SharedArrayBuffers over the same storage.
+     */
+    static final class AgentHost {
+        private static final ThreadLocal<Agent> CURRENT = new ThreadLocal<>();
+
+        final TestMode mode;
+        final long deadline;
+        final List<Agent> agents = new CopyOnWriteArrayList<>();
+        final Queue<String> reports = new ConcurrentLinkedQueue<>();
+
+        AgentHost(TestMode mode, long deadline) {
+            this.mode = mode;
+            this.deadline = deadline;
+        }
+
+        static final class Agent {
+            final AgentHost host;
+            final BlockingQueue<Object[]> inbox = new LinkedBlockingQueue<>();
+            volatile Callable callback;
+            Thread thread;
+
+            Agent(AgentHost host) {
+                this.host = host;
+            }
+        }
+
+        void stop() {
+            for (Agent agent : agents) {
+                agent.thread.interrupt();
+            }
+        }
+
+        /** $262.agent: the API of the main agent, or of an agent the test started. */
+        static Scriptable agentObject(Context cx, $262 owner) {
+            VarScope scope = (VarScope) owner.getParentScope();
+            Scriptable agent = cx.newObject(scope);
+            Agent current = CURRENT.get();
+            AgentHost host = current != null ? current.host : AGENT_HOST.get();
+            if (host == null) {
+                host = new AgentHost(TestMode.INTERPRETED, Long.MAX_VALUE);
+            }
+            AgentHost theHost = host;
+            define(agent, scope, "sleep", 1, args -> sleep(ScriptRuntime.toNumber(args, 0)));
+            define(agent, scope, "monotonicNow", 0, args -> System.nanoTime() / 1_000_000.0);
+            if (current == null) {
+                define(agent, scope, "start", 1, args -> theHost.start(Context.toString(args[0])));
+                define(
+                        agent,
+                        scope,
+                        "broadcast",
+                        2,
+                        args -> theHost.broadcast(args[0], args.length > 1 ? args[1] : 0));
+                define(
+                        agent,
+                        scope,
+                        "getReport",
+                        0,
+                        args -> {
+                            String report = theHost.reports.poll();
+                            return report == null ? null : report;
+                        });
+            } else {
+                define(
+                        agent,
+                        scope,
+                        "receiveBroadcast",
+                        1,
+                        args -> {
+                            current.callback = (Callable) args[0];
+                            return Undefined.instance;
+                        });
+                define(
+                        agent,
+                        scope,
+                        "report",
+                        1,
+                        args -> {
+                            theHost.reports.add(Context.toString(args[0]));
+                            return Undefined.instance;
+                        });
+                define(agent, scope, "leaving", 0, args -> Undefined.instance);
+            }
+            return agent;
+        }
+
+        private static void define(
+                Scriptable target,
+                VarScope scope,
+                String name,
+                int length,
+                Function<Object[], Object> body) {
+            ScriptableObject.putProperty(
+                    target,
+                    name,
+                    new LambdaFunction(
+                            scope, name, length, (lcx, ls, thisObj, args) -> body.apply(args)));
+        }
+
+        private static Object sleep(double millis) {
+            try {
+                Thread.sleep((long) Math.max(millis, 0));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return Undefined.instance;
+        }
+
+        private Object start(String source) {
+            Agent agent = new Agent(this);
+            agent.thread =
+                    new Thread(
+                            () -> {
+                                CURRENT.set(agent);
+                                try (Context cx = Context.enter()) {
+                                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                                    cx.setInstructionObserverThreshold(10_000);
+                                    cx.putThreadLocal(DEADLINE_KEY, deadline);
+                                    mode.setup(cx);
+                                    TopLevel realm = cx.initSafeStandardObjects(new TopLevel());
+                                    $262.install(realm, $262.init(cx, realm));
+                                    cx.evaluateString(realm, source, "agent", 1, null);
+                                    Callable callback = agent.callback;
+                                    if (callback != null) {
+                                        Object[] message = agent.inbox.take();
+                                        Object shared =
+                                                NativeSharedArrayBuffer.share(
+                                                        realm,
+                                                        (NativeSharedArrayBuffer) message[0]);
+                                        ((CountDownLatch) message[2]).countDown();
+                                        callback.call(
+                                                cx,
+                                                realm,
+                                                Undefined.SCRIPTABLE_UNDEFINED,
+                                                new Object[] {shared, message[1]});
+                                        cx.processMicrotasks();
+                                    }
+                                } catch (Throwable t) {
+                                    // a failed agent sends no report: the test fails waiting
+                                } finally {
+                                    for (Object[] message : agent.inbox) {
+                                        ((CountDownLatch) message[2]).countDown();
+                                    }
+                                    CURRENT.remove();
+                                }
+                            },
+                            "test262-agent");
+            agent.thread.setDaemon(true);
+            agents.add(agent);
+            agent.thread.start();
+            return Undefined.instance;
+        }
+
+        /** Hands the buffer to every agent, and returns once each of them has it. */
+        private Object broadcast(Object buffer, Object id) {
+            if (!(buffer instanceof NativeSharedArrayBuffer)) {
+                throw ScriptRuntime.typeError("$262.agent.broadcast needs a SharedArrayBuffer");
+            }
+            CountDownLatch received = new CountDownLatch(agents.size());
+            for (Agent agent : agents) {
+                if (agent.thread.isAlive()) {
+                    agent.inbox.add(new Object[] {buffer, id, received});
+                } else {
+                    received.countDown();
+                }
+            }
+            try {
+                long remaining = deadline - System.nanoTime();
+                received.await(Math.max(remaining, 0), TimeUnit.NANOSECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return Undefined.instance;
         }
     }
 
@@ -436,6 +634,10 @@ public class Test262SuiteTest {
                         }),
                 ScriptableObject.DONTENUM);
 
+        // the harness (atomicsHelper.js) uses $262
+        $262 proto = $262.init(cx, scope);
+        $262.install(scope, proto);
+
         for (String harnessFile : testCase.harnessFiles) {
             String harnessKey = harnessFile + '-' + mode.keyPart();
             Script harnessScript =
@@ -454,9 +656,6 @@ public class Test262SuiteTest {
                             });
             harnessScript.exec(cx, scope, scope.getGlobalThis());
         }
-
-        $262 proto = $262.init(cx, scope);
-        $262.install(scope, proto);
         return scope;
     }
 
@@ -487,9 +686,12 @@ public class Test262SuiteTest {
             cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
             cx.setGeneratingDebug(true);
             cx.setInstructionObserverThreshold(10_000);
-            cx.putThreadLocal(DEADLINE_KEY, System.nanoTime() + TIMEOUT_NANOS);
+            long deadline = System.nanoTime() + TIMEOUT_NANOS;
+            cx.putThreadLocal(DEADLINE_KEY, deadline);
 
             testMode.setup(cx);
+            AgentHost agentHost = new AgentHost(testMode, deadline);
+            AGENT_HOST.set(agentHost);
             if (!ON_REFERENCE_JDK && isUnicodeDependent(testCase.file)) {
                 markedAsFailing = true;
             }
@@ -592,6 +794,9 @@ public class Test262SuiteTest {
                 if (markedAsFailing) return;
 
                 fail(ex.getMessage());
+            } finally {
+                AGENT_HOST.remove();
+                agentHost.stop();
             }
         }
     }
@@ -922,6 +1127,10 @@ public class Test262SuiteTest {
             Set<String> features = new HashSet<>();
             if (metadata.containsKey("features")) {
                 features.addAll((Collection<String>) metadata.get("features"));
+            }
+            if (flags.contains(FLAG_CAN_BLOCK_IS_FALSE)) {
+                // a test for hosts whose main agent cannot block: not this one
+                features.add(FLAG_CAN_BLOCK_IS_FALSE);
             }
 
             if (flags.contains(FLAG_RAW) && metadata.containsKey("includes")) {

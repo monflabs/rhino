@@ -115,7 +115,7 @@ def main(argv):
             if rel.startswith(OUT_OF_SCOPE_DIRS) or OUT_OF_SCOPE_FEATURES.intersection(feats):
                 out_of_scope += 1
                 continue
-            if rel.startswith(skipped) or unsupported.intersection(feats):
+            if rel.startswith(skipped) or unsupported.intersection(feats + flags):
                 state = 3
             elif rel in fail_files or rel.startswith(fail_dirs):
                 state = 1

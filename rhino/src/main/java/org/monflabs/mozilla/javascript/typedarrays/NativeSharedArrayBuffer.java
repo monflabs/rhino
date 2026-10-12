@@ -10,6 +10,10 @@ import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.PROTO;
 
 import java.io.Serial;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 import org.monflabs.mozilla.javascript.AbstractEcmaObjectOperations;
 import org.monflabs.mozilla.javascript.ClassDescriptor;
 import org.monflabs.mozilla.javascript.Constructable;
@@ -70,11 +74,47 @@ public final class NativeSharedArrayBuffer extends NativeArrayBuffer {
                         .build();
     }
 
-    /** The shared data block: what the agents that share a buffer have in common. */
+    /**
+     * The shared data block: what the agents that share a buffer have in common. Its monitor is the
+     * lock of the atomic operations on it, and of its waiter lists (WaiterList, 25.4.1.2).
+     */
     static final class Storage {
         final ByteBuffer bytes;
         final int maxByteLength; // -1 if not growable
         volatile int byteLength;
+        private final Map<Integer, Deque<Waiter>> waiters = new HashMap<>();
+
+        /** The waiters on a byte index, oldest first; to be used holding the monitor. */
+        Deque<Waiter> waiters(int byteIndex) {
+            return waiters.computeIfAbsent(byteIndex, k -> new ArrayDeque<>());
+        }
+
+        void removeWaiter(int byteIndex, Waiter waiter) {
+            Deque<Waiter> list = waiters.get(byteIndex);
+            if (list != null) {
+                list.remove(waiter);
+                if (list.isEmpty()) {
+                    waiters.remove(byteIndex);
+                }
+            }
+        }
+
+        /** Wakes up to count waiters on a byte index; to be used holding the monitor. */
+        int notifyWaiters(int byteIndex, double count) {
+            Deque<Waiter> list = waiters.get(byteIndex);
+            int woken = 0;
+            while (list != null && woken < count && !list.isEmpty()) {
+                list.removeFirst().notified = true;
+                woken++;
+            }
+            if (list != null && list.isEmpty()) {
+                waiters.remove(byteIndex);
+            }
+            if (woken > 0) {
+                notifyAll();
+            }
+            return woken;
+        }
 
         Storage(ByteBuffer bytes, int byteLength, int maxByteLength) {
             this.bytes = bytes;
@@ -83,11 +123,26 @@ public final class NativeSharedArrayBuffer extends NativeArrayBuffer {
         }
     }
 
+    /** An agent suspended in Atomics.wait. */
+    static final class Waiter {
+        boolean notified;
+    }
+
     private final Storage storage;
 
     private NativeSharedArrayBuffer(Storage storage) {
         super(storage.bytes);
         this.storage = storage;
+    }
+
+    /**
+     * A SharedArrayBuffer of the realm of scope over the same memory as buffer: how memory is
+     * shared between agents (threads with contexts and realms of their own).
+     */
+    public static NativeSharedArrayBuffer share(VarScope scope, NativeSharedArrayBuffer buffer) {
+        NativeSharedArrayBuffer shared = new NativeSharedArrayBuffer(buffer.storage);
+        ScriptRuntime.setBuiltinProtoAndParent(shared, scope, TopLevel.Builtins.SharedArrayBuffer);
+        return shared;
     }
 
     public static Object init(Context cx, VarScope scope, boolean sealed) {

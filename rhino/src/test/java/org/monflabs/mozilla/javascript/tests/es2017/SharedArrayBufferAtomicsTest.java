@@ -4,10 +4,17 @@
 
 package org.monflabs.mozilla.javascript.tests.es2017;
 
-import org.junit.jupiter.api.Test;
-import org.monflabs.mozilla.javascript.testutils.Utils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-/** SharedArrayBuffer and Atomics (plan 3.3). */
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.TopLevel;
+import org.monflabs.mozilla.javascript.testutils.Utils;
+import org.monflabs.mozilla.javascript.typedarrays.NativeSharedArrayBuffer;
+
+/** SharedArrayBuffer and Atomics (plans 3.3 and 3.4). */
 class SharedArrayBufferAtomicsTest {
 
     @Test
@@ -66,6 +73,66 @@ class SharedArrayBufferAtomicsTest {
                         + "t(() => Atomics.notify(new Uint32Array(4), 0));\n"
                         + "r.push(Atomics.isLockFree(4));\n"
                         + "r.join()");
+    }
+
+    @Test
+    void waitWithoutNotify() {
+        Utils.assertWithAllModes_ES6(
+                "not-equal,timed-out,TypeError,TypeError",
+                "var ta = new Int32Array(new SharedArrayBuffer(8));\n"
+                        + "var r = [Atomics.wait(ta, 0, 1), Atomics.wait(ta, 0, 0, 10)];\n"
+                        + "try { Atomics.wait(new Int32Array(4), 0, 0, 0); } catch (e) { r.push(e.name); }\n"
+                        + "try { Atomics.wait(new Uint32Array(ta.buffer), 0, 0, 0); }"
+                        + " catch (e) { r.push(e.name); }\n"
+                        + "r.join()");
+    }
+
+    @Test
+    void waitAndNotifyAcrossThreads() throws Exception {
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+            TopLevel scope = cx.initStandardObjects();
+            NativeSharedArrayBuffer sab =
+                    (NativeSharedArrayBuffer)
+                            cx.evaluateString(
+                                    scope, "var sab = new SharedArrayBuffer(8); sab", "t", 1, null);
+            AtomicReference<Object> woken = new AtomicReference<>();
+            Thread notifier =
+                    new Thread(
+                            () -> {
+                                try (Context other = Context.enter()) {
+                                    other.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                                    TopLevel realm = other.initStandardObjects();
+                                    ScriptableObject.putProperty(
+                                            realm,
+                                            "sab",
+                                            NativeSharedArrayBuffer.share(realm, sab));
+                                    // notify until the waiter is woken
+                                    woken.set(
+                                            other.evaluateString(
+                                                    realm,
+                                                    "var ta = new Int32Array(sab); var n = 0;\n"
+                                                            + "while (n === 0) { Atomics.store(ta, 1, 7);"
+                                                            + " n = Atomics.notify(ta, 0); }\n"
+                                                            + "n",
+                                                    "notifier",
+                                                    1,
+                                                    null));
+                                }
+                            });
+            notifier.start();
+            Object result =
+                    cx.evaluateString(
+                            scope,
+                            "var ta = new Int32Array(sab);"
+                                    + " Atomics.wait(ta, 0, 0) + ',' + Atomics.load(ta, 1)",
+                            "waiter",
+                            1,
+                            null);
+            notifier.join(10_000);
+            assertEquals("ok,7", result);
+            assertEquals(1, ((Number) woken.get()).intValue());
+        }
     }
 
     @Test

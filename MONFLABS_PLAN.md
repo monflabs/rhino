@@ -37,6 +37,7 @@ existing code and without slowing the engine down.
 | 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
 | 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
 | 2026-10-12 | **3.1: async functions reuse the generator machinery**: an async body is compiled like a generator in both backends, `await` is an internal suspension, and a Java driver resumes it from promise reactions on the `Context` microtask queue (no threads; spec tick order). Nashorn's `AsyncSupport` drives the same kind of suspension, but on virtual threads. |
+| 2026-10-12 | 3.4: every agent can block in `Atomics.wait`, the main thread included (as in Nashorn, and as fits a server); the two `CanBlockIsFalse` tests are skipped as written for another host. `Atomics.waitAsync` is deferred to its edition (10.3). |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -509,6 +510,10 @@ Steps:
 - *3.2 (done)* nothing to do: every in-scope test passes.
 - *3.3 (done)* `SharedArrayBuffer` and `Atomics` except `wait`/`waitAsync`; atomic operations lock the storage of
   their buffer (shared by every agent over the same bytes, for 3.4); strict generators resumed by sloppy code.
+- *3.4 (done)* `Atomics.wait`/`notify` (waiter lists on the storage, under its lock; every agent can block, the main
+  thread included) and the `$262.agent` harness (agents are threads with a context and a realm each, sharing
+  storage through `NativeSharedArrayBuffer.share`). `Atomics.waitAsync` (ES2024) is left to 10.3, with the
+  question of how a host delivers its timeouts. M3 is done.
 
 ### M4 — ES2018
 
@@ -639,7 +644,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
 | 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
-| 3.x  | ES2017 (async functions, SAB/Atomics)           | in progress | 71.6% → 73.8% (3.1a–3.3)      | 016fb8c66 |
+| 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | 016fb8c66 |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
 | 6.x  | ES2020                                          | todo        |                              |        |

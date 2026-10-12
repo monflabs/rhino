@@ -21,9 +21,9 @@ import org.monflabs.mozilla.javascript.Undefined;
 import org.monflabs.mozilla.javascript.VarScope;
 
 /**
- * The Atomics object (ECMA-262 25.4), except wait and waitAsync. An atomic operation holds the lock
- * of the storage of its buffer: the operations on a location are totally ordered, and plain
- * accesses of the same bytes race with them, as the memory model allows.
+ * The Atomics object (ECMA-262 25.4), except waitAsync. An atomic operation holds the lock of the
+ * storage of its buffer: the operations on a location are totally ordered, and plain accesses of
+ * the same bytes race with them, as the memory model allows.
  */
 public final class NativeAtomics extends ScriptableObject {
     @Serial private static final long serialVersionUID = 1L;
@@ -47,6 +47,7 @@ public final class NativeAtomics extends ScriptableObject {
                         .withMethod(CTOR, "or", 3, (cx, f, nt, s, t, a) -> rmw(cx, a, Op.OR))
                         .withMethod(CTOR, "pause", 0, NativeAtomics::pause)
                         .withMethod(CTOR, "store", 3, NativeAtomics::store)
+                        .withMethod(CTOR, "wait", 4, NativeAtomics::doWait)
                         .withMethod(CTOR, "sub", 3, (cx, f, nt, s, t, a) -> rmw(cx, a, Op.SUB))
                         .withMethod(CTOR, "xor", 3, (cx, f, nt, s, t, a) -> rmw(cx, a, Op.XOR))
                         .withProp(
@@ -200,6 +201,11 @@ public final class NativeAtomics extends ScriptableObject {
      * validated before the index is converted.
      */
     private static Access validate(Object array, Object index, boolean waitable) {
+        return validate(array, index, waitable, false);
+    }
+
+    private static Access validate(
+            Object array, Object index, boolean waitable, boolean mustBeShared) {
         int width;
         boolean signed = true;
         boolean bigint = false;
@@ -233,6 +239,9 @@ public final class NativeAtomics extends ScriptableObject {
         NativeTypedArrayView<?> view = (NativeTypedArrayView<?>) array;
         if (view.isTypedArrayOutOfBounds()) {
             throw ScriptRuntime.typeErrorById("msg.typed.array.out.of.bounds");
+        }
+        if (mustBeShared && !(view.arrayBuffer instanceof NativeSharedArrayBuffer)) {
+            throw ScriptRuntime.typeErrorById("msg.atomics.not.shared");
         }
         int length = view.getLength();
         int accessIndex = ScriptRuntime.toIndex(index);
@@ -309,17 +318,70 @@ public final class NativeAtomics extends ScriptableObject {
     }
 
     /**
-     * Atomics.notify ( typedArray, index, count ) (25.4.15): no agent of this implementation waits
-     * yet, so nobody is woken.
+     * Atomics.wait ( typedArray, index, value, timeout ) (25.4.13, DoWait): every agent can
+     * suspend, the main thread included, as on a server.
      */
+    private static Object doWait(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Access at = validate(arg(args, 0), arg(args, 1), true, true);
+        long expected =
+                at.bigint
+                        ? ScriptRuntime.toBigIntStrict(arg(args, 2)).longValue()
+                        : ScriptRuntime.toInt32(arg(args, 2));
+        double q = ScriptRuntime.toNumber(arg(args, 3));
+        double millis = Double.isNaN(q) ? Double.POSITIVE_INFINITY : Math.max(q, 0);
+        NativeSharedArrayBuffer.Storage storage =
+                ((NativeSharedArrayBuffer) at.view.arrayBuffer).getStorage();
+        synchronized (storage) {
+            if (at.read(storage.bytes) != expected) {
+                return "not-equal";
+            }
+            NativeSharedArrayBuffer.Waiter waiter = new NativeSharedArrayBuffer.Waiter();
+            storage.waiters(at.byteIndex).addLast(waiter);
+            long deadline =
+                    millis == Double.POSITIVE_INFINITY
+                            ? Long.MAX_VALUE
+                            : System.nanoTime() + (long) Math.min(millis * 1e6, Long.MAX_VALUE / 2);
+            try {
+                while (!waiter.notified) {
+                    if (deadline == Long.MAX_VALUE) {
+                        storage.wait();
+                    } else {
+                        long remaining = deadline - System.nanoTime();
+                        if (remaining <= 0) {
+                            break;
+                        }
+                        storage.wait(remaining / 1_000_000, (int) (remaining % 1_000_000));
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                if (!waiter.notified) {
+                    storage.removeWaiter(at.byteIndex, waiter);
+                }
+            }
+            return waiter.notified ? "ok" : "timed-out";
+        }
+    }
+
+    /** Atomics.notify ( typedArray, index, count ) (25.4.15). */
     private static Object notify(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        validate(arg(args, 0), arg(args, 1), true);
+        Access at = validate(arg(args, 0), arg(args, 1), true);
         Object count = arg(args, 2);
-        if (!Undefined.isUndefined(count)) {
-            ScriptRuntime.toIntegerOrInfinity(count);
+        double c =
+                Undefined.isUndefined(count)
+                        ? Double.POSITIVE_INFINITY
+                        : Math.max(ScriptRuntime.toIntegerOrInfinity(count), 0);
+        if (!(at.view.arrayBuffer instanceof NativeSharedArrayBuffer)) {
+            return 0;
         }
-        return 0;
+        NativeSharedArrayBuffer.Storage storage =
+                ((NativeSharedArrayBuffer) at.view.arrayBuffer).getStorage();
+        synchronized (storage) {
+            return storage.notifyWaiters(at.byteIndex, c);
+        }
     }
 
     /** Atomics.pause ( [ N ] ) (25.4.10): a hint for a spin-wait loop. */
