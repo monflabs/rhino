@@ -444,7 +444,10 @@ Steps:
   flags with a RegExp), RegExp pattern grammar (`\xa`, `[\c0]`, three-digit octal escapes; gated), HTML-like
   comments after block comments, B.3.3 hoisting skipped for destructured catch parameters, `f() = v` evaluates
   the call, `for (var a = 0 in o)` in strict code (gated). Left: IsHTMLDDA (`emulates-undefined`), async
-  functions in eval, `compile` on a cross-realm instance.
+  functions in eval.
+- *1.11b (done)* `__proto__` in object literals (only `__proto__: v` sets the prototype; gated), global `var`
+  bindings shadowing Object.prototype (gated; shared scopes keep their bindings), `compile` on a cross-realm
+  instance. Annex B is complete except IsHTMLDDA (not supported) and async functions (M3).
 
 **1.12 ES modules.** Module parsing (`import`/`export` in all forms, `default`, namespace objects, live bindings,
 cyclic graphs, `language/module-code`, `language/import`, `language/export`), a pluggable **module-loader API**
@@ -463,8 +466,11 @@ module's getters (live bindings, TDZ, immutable). `ModuleRecord` links (ResolveE
 builds the namespace object and evaluates the graph depth first.
 
 Steps:
-- *1.12a* API (`modules` package, `ContextFactory`/`Context` registration, `Context.evaluateModule`), module
-  goal parsing, rewriting, records, linking, namespace objects, evaluation; test262 runs the `module` tests.
+- *1.12a (done)* API (`modules` package, `ContextFactory`/`Context` registration, `Context.evaluateModule`),
+  module goal parsing, rewriting, records, linking, namespace objects, evaluation; test262 runs the `module`
+  tests. Left: `super.x = v` with a namespace receiver (OrdinarySet does not use [[GetOwnProperty]]), early
+  errors of module code not tied to import/export (HTML-like comments, duplicate top-level functions, escaped
+  keywords in exports), `arguments` at the top level of a module.
 
 ### M2 — ES2016
 

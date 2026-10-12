@@ -6,6 +6,37 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### ES modules (2026-10-11, plan 1.12a)
+
+- New: ES2015 modules. `import` and `export` in their ES2015-ES2022 forms (named, default, namespace,
+  `export * from`, `export * as ns from`, string export names), live bindings, cycles, module scope, namespace
+  objects, link before evaluation, a module evaluated once per realm. Not yet: dynamic `import()` and
+  `import.meta` (M6), top-level `await` (M8), import attributes and JSON modules (M11).
+- New API, a port of Nashorn's `api.modules`: package `org.monflabs.mozilla.javascript.modules` with
+  `ModuleLoader` (a chain, first answer wins), `Module` (`source`, `values`, `referrer`), `PathModuleLoader`,
+  `ResourceModuleLoader` and `JavaModuleLoader`. The chain is set with `ContextFactory.setModuleLoaders` and can
+  be overridden with `Context.setModuleLoaders`; with no loader, a specifier is a file path relative to the
+  importing module. `Context.evaluateModule` returns the namespace object; `Context.loadModule` returns a
+  `ModuleRecord` (`link`, `evaluate`, `getNamespace`).
+- Implementation: a module is parsed with the module goal and rewritten into a strict generator function whose
+  scope resolves the imports; no change to the backends.
+- test262: the `module` tests run (once each: modules are strict); `top-level-await`, `dynamic-import`,
+  `import-attributes` and `json-modules` are unsupported features until their milestones.
+- test262: 30,484/42,616 (71.5%); 340 module tests in scope, 336 pass. Perf gate: no regression (compiled
+  regexp, strbuild and splay re-measured).
+
+### `__proto__` in object literals, global vars (2026-10-11, plan 1.11b)
+
+- `VERSION_ECMASCRIPT`: only `__proto__: value` sets the prototype of an object literal (B.3.1); a computed
+  `["__proto__"]`, a shorthand `{ __proto__ }` and a method define an own property (before, they set the
+  prototype).
+- `VERSION_ECMASCRIPT`: a global `var` creates a binding unless the global object (or a shared global it inherits
+  from) has the property: `var __proto__` and `var toString` shadow the properties of Object.prototype
+  (CreateGlobalVarBinding).
+- From `VERSION_ES6`: `RegExp.prototype.compile` throws a TypeError of its own realm for an instance of another
+  realm.
+- test262: 30,156/42,616 (70.8%), 4 more tests pass. Perf gate: no regression (strbuild re-measured).
+
 ### Annex B: built-ins, RegExp, comments, calls as targets (2026-10-11, plan 1.11a)
 
 - All versions: `String.prototype.trimLeft`/`trimRight` are the same functions as `trimStart`/`trimEnd`;

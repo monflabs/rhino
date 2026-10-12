@@ -166,7 +166,9 @@ public class Context implements Closeable {
      *       {@code eval?.()} is an indirect eval.
      *   <li>Annex B: RegExp patterns without {@code u} follow B.1.2 ({@code /\xa/} matches "xa"), a
      *       call as an assignment target is evaluated before the ReferenceError, B.3.3 hoisting is
-     *       skipped for names of destructured catch parameters.
+     *       skipped for names of destructured catch parameters; only {@code __proto__: v} sets the
+     *       prototype of an object literal; a global {@code var} shadows the properties of
+     *       Object.prototype.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

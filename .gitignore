@@ -31,3 +31,4 @@ rhino.iws
 .kotlin
 
 local.properties
+__pycache__/

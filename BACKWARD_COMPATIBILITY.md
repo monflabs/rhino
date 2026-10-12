@@ -263,6 +263,19 @@ f() = 1;                       // VERSION_ES6: ReferenceError, f not called   VE
   SyntaxError in strict code.
 - **Why:** ECMA-262 2026, B.1.2 (RegExp patterns), §13.15.1 (web-compat AssignmentTargetType), B.3.3, B.3.5.
 
+### 1.14 `__proto__` in object literals, global vars shadowing Object.prototype
+
+```js
+Object.getPrototypeOf({ ['__proto__']: p }) === p;   // VERSION_ES6: true   VERSION_ECMASCRIPT: false (own property)
+var toString; typeof toString;                       // VERSION_ES6: "function"   VERSION_ECMASCRIPT: "undefined"
+```
+
+- Only the non-computed, non-shorthand `__proto__: value` form sets the prototype. A global `var` is created
+  unless the global object has the property itself or through a shared global it inherits from (Rhino's shared
+  scopes keep working: `var x` in a per-request scope still sees the shared `x`); properties of Object.prototype
+  no longer prevent the binding.
+- **Why:** ECMA-262 2026, B.3.1 (`__proto__` property names), §9.1.1.4.17 (CreateGlobalVarBinding).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
