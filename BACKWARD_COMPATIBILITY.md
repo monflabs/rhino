@@ -883,6 +883,19 @@ Object.getOwnPropertyDescriptor(RegExp, '$1').enumerable;   // before: true    n
   `compile` rejects subclass instances and a RegExp with flags; HTML close comments after block comments.
 - **Why:** ECMA-262 2026, B.2.2 (String), B.2.3.4 (setYear), B.2.4 (RegExp), B.1.1 (HTML-like comments).
 
+### 2.40 `await` is an identifier in scripts; async functions
+
+```js
+var await = 1;                     // before (ES6): SyntaxError (reserved word)   now: a variable
+async function f() { return 1; }   // before: SyntaxError   now: an async function
+var o = { async m() {} };          // before: SyntaxError   now: an async method
+```
+
+- ES6 and later versions: `await` is reserved only in async functions and modules, and `async` starts an async
+  function, arrow function or method. Neither form parsed before; `async` stays an ordinary identifier elsewhere
+  (`async(x)` is still a call). Rhino only reserved `await` under ES6: it was already an identifier in earlier versions.
+- **Why:** ECMA-262 2026, §13.1.1 (Static Semantics: Early Errors, `await`), §15.8 (async function definitions).
+
 ---
 
 ## 3. Platform and embedding

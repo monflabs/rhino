@@ -133,6 +133,7 @@ public class FunctionNode extends ScriptNode {
     private boolean requiresArgumentObject;
     private boolean isGenerator;
     private boolean isES6Generator;
+    private boolean isAsync;
     // ES2024, B.3.2.1: block-scoped function that should also be var-hoisted
     private boolean annexBHoisted;
     private List<Node> generatorResumePoints;
@@ -341,6 +342,21 @@ public class FunctionNode extends ScriptNode {
 
     public boolean isES6Generator() {
         return isES6Generator;
+    }
+
+    /** Whether this is an async function, compiled as a generator whose yields are awaits. */
+    public boolean isAsync() {
+        return isAsync;
+    }
+
+    /** Whether this is a generator function of the source (not an async function). */
+    public boolean isGeneratorFunction() {
+        return isES6Generator && !isAsync;
+    }
+
+    public void setIsAsync() {
+        isAsync = true;
+        setIsES6Generator();
     }
 
     public void setIsES6Generator() {

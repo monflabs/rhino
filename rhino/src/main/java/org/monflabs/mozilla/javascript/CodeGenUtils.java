@@ -70,6 +70,11 @@ public class CodeGenUtils {
         if (fn.hasSelfNameBinding()) {
             builder.selfNameBinding = true;
         }
+        if (fn.isAsync()) {
+            // an async function has no prototype property and is not a constructor
+            builder.isAsync = true;
+            builder.hasPrototype = false;
+        }
         fillInCommon(builder, fn);
     }
 

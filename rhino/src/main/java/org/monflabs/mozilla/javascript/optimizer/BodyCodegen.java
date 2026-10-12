@@ -119,7 +119,7 @@ class BodyCodegen {
                 !(scriptOrFn instanceof FunctionNode)
                         || ((FunctionNode) scriptOrFn).requiresArgumentObject());
         addScriptRuntimeInvoke(
-                "createFunctionActivation",
+                isArrowFunction() ? "createArrowFunctionActivation" : "createFunctionActivation",
                 "(Lorg/monflabs/mozilla/javascript/JSFunction;"
                         + "Lorg/monflabs/mozilla/javascript/Context;"
                         + "Lorg/monflabs/mozilla/javascript/VarScope;"
@@ -160,6 +160,30 @@ class BodyCodegen {
 
         cfw.add(ByteCode.ARETURN);
         cfw.stopMethod((short) (localsMax + 1));
+    }
+
+    private boolean isArrowFunction() {
+        return scriptOrFn instanceof FunctionNode
+                && ((FunctionNode) scriptOrFn).getFunctionType() == FunctionNode.ARROW_FUNCTION;
+    }
+
+    /**
+     * Pushes new.target. A generator is never a constructor: its new.target is undefined, and
+     * newTargetLocal holds its state; an async arrow function has the one of its closure.
+     */
+    private void loadNewTarget() {
+        if (!isGenerator) {
+            cfw.addALoad(newTargetLocal);
+        } else if (isArrowFunction()) {
+            cfw.addALoad(funObjLocal);
+            cfw.addInvoke(
+                    ByteCode.INVOKEVIRTUAL,
+                    Codegen.JSFUNCTION_CLASS_NAME,
+                    "getLexicalNewTarget",
+                    "()Ljava/lang/Object;");
+        } else {
+            Codegen.pushUndefined(cfw);
+        }
     }
 
     private void generateNestedFunctionInits() {
@@ -1261,13 +1285,7 @@ class BodyCodegen {
                 break;
 
             case Token.NEW_TARGET:
-                if (isGenerator) {
-                    // Generators cannot be constructors, so new.target is always undefined.
-                    // Also, newTargetLocal is repurposed as generatorStateLocal for generators.
-                    Codegen.pushUndefined(cfw);
-                } else {
-                    cfw.addALoad(newTargetLocal);
-                }
+                loadNewTarget();
                 break;
 
             case Token.NULL:
@@ -2288,13 +2306,7 @@ class BodyCodegen {
         cfw.add(ByteCode.AALOAD);
         if (functionType == FunctionNode.ARROW_FUNCTION) {
             cfw.addALoad(thisObjLocal);
-            if (isGenerator) {
-                // Generators cannot be constructors, so new.target is always undefined.
-                // Also, newTargetLocal is repurposed as generatorStateLocal for generators.
-                Codegen.pushUndefined(cfw);
-            } else {
-                cfw.addALoad(newTargetLocal);
-            }
+            loadNewTarget();
             cfw.addALoad(funObjLocal);
             cfw.addInvoke(
                     ByteCode.INVOKEVIRTUAL,

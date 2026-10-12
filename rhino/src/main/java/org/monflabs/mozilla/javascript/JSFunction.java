@@ -26,9 +26,24 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         this.lexicalThis = lexicalThis;
         this.lexicalNewTarget = lexicalNewTarget;
         this.homeObject = homeObject;
+        if (descriptor.isAsync()) {
+            initAsyncFunction(cx, scope);
+            return;
+        }
         ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, descriptor.isES6Generator());
         if (!descriptor.isShorthand() || descriptor.isES6Generator()) {
             setupDefaultPrototype(scope);
+        }
+    }
+
+    /** An async function inherits from %AsyncFunction.prototype% and has no prototype property. */
+    private void initAsyncFunction(Context cx, VarScope scope) {
+        setParentScope(scope);
+        setPrototype(
+                TopLevel.getBuiltinPrototype(
+                        ScriptableObject.getTopLevelScope(scope), TopLevel.Builtins.AsyncFunction));
+        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            setStandardPropertyAttributes(READONLY | DONTENUM);
         }
     }
 
@@ -100,7 +115,7 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
 
     @Override
     protected boolean isGeneratorFunction() {
-        return descriptor.isES6Generator();
+        return descriptor.isES6Generator() && !descriptor.isAsync();
     }
 
     @Override

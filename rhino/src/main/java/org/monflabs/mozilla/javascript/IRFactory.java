@@ -819,7 +819,7 @@ public final class IRFactory {
                                         null,
                                         body.getLineno(),
                                         body.getColumn());
-                        if (fn.isGenerator()) {
+                        if (fn.isGenerator() && !fn.isAsync()) {
                             if (paramInitBlock == null) {
                                 paramInitBlock = new Node(Token.BLOCK);
                             }
@@ -830,7 +830,7 @@ public final class IRFactory {
                     }
                     i -= 2;
                 }
-                if (fn.isGenerator() && paramInitBlock != null) {
+                if (fn.isGenerator() && !fn.isAsync() && paramInitBlock != null) {
                     fn.setGeneratorParamInitBlock(paramInitBlock);
                 }
             }
@@ -853,7 +853,7 @@ public final class IRFactory {
 
             if (destructuring != null) {
                 Node destructure = new Node(Token.EXPR_VOID, destructuring, lineno, column);
-                if (fn.isES6Generator()) {
+                if (fn.isGeneratorFunction()) {
                     // FunctionDeclarationInstantiation binds the parameters when the generator is
                     // called, before the generator object is created. The prologue of a compiled
                     // generator cannot hold a try: no guard closes the iterators on a throw.

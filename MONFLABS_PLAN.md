@@ -500,6 +500,10 @@ parameter and argument lists (residuals only).
 **3.4** `Atomics.wait`/`notify` and the `$262.agent` multi-agent harness (worker threads, a host that can block).
 Memory-model tests that need true parallel agents are verified here.
 
+Steps:
+- *3.1a (done)* async functions, arrows and methods, `await`, `%AsyncFunction%`; `AsyncFunctionDriver` over the
+  generator machinery of both backends; `await` an identifier in scripts; `async-functions` tests enabled.
+
 ### M4 — ES2018
 
 **4.1 Async iteration.** Async generators, `for await`, `Symbol.asyncIterator`, `%AsyncFromSyncIteratorPrototype%`,
@@ -629,7 +633,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
 | 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
-| 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
+| 3.x  | ES2017 (async functions, SAB/Atomics)           | in progress | 71.6% → 72.4% (3.1a)         | (this) |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
 | 6.x  | ES2020                                          | todo        |                              |        |

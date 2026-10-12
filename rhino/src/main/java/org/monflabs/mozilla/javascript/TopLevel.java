@@ -61,6 +61,8 @@ public class TopLevel extends ScopeObject {
         Symbol,
         /** The built-in GeneratorFunction type. */
         GeneratorFunction,
+        /** The built-in AsyncFunction type (not a global). */
+        AsyncFunction,
         /** The built-in BigInt type. */
         BigInt,
         /** The built-in Promise type. */
@@ -210,6 +212,12 @@ public class TopLevel extends ScopeObject {
                         (BaseFunction)
                                 BaseFunction.initAsGeneratorFunction(
                                         Context.getCurrentContext(), this, sealed));
+            } else if (builtin == Builtins.AsyncFunction) {
+                ctors.put(
+                        builtin,
+                        (BaseFunction)
+                                BaseFunction.initAsAsyncFunction(
+                                        Context.getCurrentContext(), this, sealed));
             }
         }
         errors = new EnumMap<>(NativeErrors.class);
@@ -258,6 +266,8 @@ public class TopLevel extends ScopeObject {
             // we end up falling back to this value then we have to
             // look this up using a hidden name.
             typeName = BaseFunction.GENERATOR_FUNCTION_CLASS;
+        } else if (type == Builtins.AsyncFunction) {
+            typeName = BaseFunction.ASYNC_FUNCTION_CLASS;
         } else {
             typeName = type.name();
         }
@@ -313,6 +323,8 @@ public class TopLevel extends ScopeObject {
             // we end up falling back to this value then we have to
             // look this up using a hidden name.
             typeName = BaseFunction.GENERATOR_FUNCTION_CLASS;
+        } else if (type == Builtins.AsyncFunction) {
+            typeName = BaseFunction.ASYNC_FUNCTION_CLASS;
         } else {
             typeName = type.name();
         }

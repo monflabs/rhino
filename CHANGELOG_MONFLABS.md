@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Async functions (2026-10-12, plan 3.1a)
+
+- New: `async function` declarations and expressions, async arrow functions, async methods (object literals and
+  classes), `await`, and `%AsyncFunction%` (the constructor reached from an async function). Not yet: async
+  generators and `for await` (M4), top-level `await` (M8).
+- Implementation (decision 3.1): an async body is compiled as a generator in both backends, and `await` is a
+  yield. `AsyncFunctionDriver` runs the body up to its first `await` before the call returns. It then resumes the
+  body from the reactions to each awaited promise (Await without a result capability, on the `Context` microtask
+  queue), and settles the promise that the call returned. Parameter initialization runs in the body, so an error
+  there rejects the promise.
+- `await` is an identifier outside async functions and modules (before, a reserved word in ES6 mode); see
+  BACKWARD_COMPATIBILITY.md 2.40.
+- Compiled mode: generator arrow functions (async arrows) get the arrow activation (no own `arguments`) and the
+  `new.target` of their closure.
+- test262: `async-functions` is no longer an unsupported feature: 30,849/42,616 (72.4%), 357 more tests pass. The 24
+  async private-method tests it unskips need private methods (M8). Perf gate: against 1.12c, no regression (compiled `instanceof` +7%, within
+  tolerance); against the baseline, compiled `instanceof` is at +15%, the drift of earlier milestones (+10-13%).
+
 ### ES modules: `super` assignment to a namespace (2026-10-12, plan 1.12c)
 
 - `super.x = v` in a method whose `this` is a module namespace reads the binding (a ReferenceError before its

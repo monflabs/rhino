@@ -30,6 +30,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static final String FUNCTION_CLASS = "Function";
     static final SymbolKey GENERATOR_FUNCTION_CLASS =
             new SymbolKey("GeneratorFunctionPrototype", REGULAR);
+    static final SymbolKey ASYNC_FUNCTION_CLASS = new SymbolKey("AsyncFunctionPrototype", REGULAR);
 
     private static final String APPLY_TAG = "APPLY_TAG";
     private static final String CALL_TAG = "CALL_TAG";
@@ -38,6 +39,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static final ClassDescriptor DESCRIPTOR;
     private static final ClassDescriptor ES6_DESCRIPTOR;
     private static final ClassDescriptor GENERATOR_DESCRIPTOR;
+    private static final ClassDescriptor ASYNC_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> APPLY_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> HAS_INSTANCE_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> CALL_DESCRIPTOR;
@@ -129,6 +131,19 @@ public class BaseFunction extends ScriptableObject implements Function {
                                 SymbolKey.TO_STRING_TAG,
                                 value("GeneratorFunction", READONLY | DONTENUM))
                         .build();
+
+        ASYNC_DESCRIPTOR =
+                new ClassDescriptor.Builder(
+                                ASYNC_FUNCTION_CLASS,
+                                "AsyncFunction",
+                                1,
+                                BaseFunction::js_async_constructor,
+                                BaseFunction::js_async_constructor)
+                        .withProp(
+                                PROTO,
+                                SymbolKey.TO_STRING_TAG,
+                                value("AsyncFunction", READONLY | DONTENUM))
+                        .build();
     }
 
     static JSFunction init(Context cx, VarScope scope, boolean sealed) {
@@ -186,6 +201,26 @@ public class BaseFunction extends ScriptableObject implements Function {
                             generatorPrototype.isSealed = wasSealed;
                         }
                     }
+                });
+    }
+
+    /** %AsyncFunction% (ECMA-262 27.7), not a global: reached through async functions. */
+    static Object initAsAsyncFunction(Context cx, VarScope scope, boolean sealed) {
+        var proto = new NativeObject();
+
+        return ASYNC_DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    var function = (Scriptable) ScriptableObject.getProperty(scope, FUNCTION_CLASS);
+                    var functionProto =
+                            (Scriptable)
+                                    ScriptableObject.getProperty(function, PROTOTYPE_PROPERTY_NAME);
+                    proto.setPrototype(functionProto);
+                    ctor.setPrototype(function);
+                    proto.setAttributes("constructor", DONTENUM | READONLY);
                 });
     }
 
@@ -544,12 +579,17 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static Scriptable js_constructor(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, false);
+        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, "function");
     }
 
     private static Scriptable js_gen_constructor(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, true);
+        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, "function*");
+    }
+
+    private static Scriptable js_async_constructor(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, "async function");
     }
 
     private static BaseFunction realFunction(Object thisObj, String functionName) {
@@ -870,17 +910,12 @@ public class BaseFunction extends ScriptableObject implements Function {
     void setArguments(Object caller) {}
 
     private static Scriptable jsConstructor(
-            Context cx,
-            JSFunction f,
-            Object nt,
-            VarScope scope,
-            Object[] args,
-            boolean isGeneratorFunction) {
+            Context cx, JSFunction f, Object nt, VarScope scope, Object[] args, String kind) {
         int arglen = args.length;
         StringBuilder sourceBuf = new StringBuilder();
 
         // CreateDynamicFunction: the parameters end with a line feed, the body is between two
-        sourceBuf.append(isGeneratorFunction ? "function* anonymous(" : "function anonymous(");
+        sourceBuf.append(kind).append(" anonymous(");
 
         // Append arguments as coma separated strings
         for (int i = 0; i < arglen - 1; i++) {
@@ -921,7 +956,10 @@ public class BaseFunction extends ScriptableObject implements Function {
                 (JSFunction)
                         cx.compileFunction(global, source, evaluator, reporter, sourceURI, 1, null);
 
-        if (res.getDescriptor().isES6Generator()) {
+        if (res.getDescriptor().isAsync()) {
+            ScriptRuntime.setBuiltinProtoAndParent(
+                    (ScriptableObject) res, f, nt, scope, TopLevel.Builtins.AsyncFunction);
+        } else if (res.getDescriptor().isES6Generator()) {
             ScriptRuntime.setBuiltinProtoAndParent(
                     (ScriptableObject) res, f, nt, scope, TopLevel.Builtins.GeneratorFunction);
         } else {

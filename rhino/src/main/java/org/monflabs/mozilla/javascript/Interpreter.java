@@ -1209,11 +1209,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             CallFrame generatorFrame = captureFrameForGenerator(frame);
             generatorFrame.frozen = true;
             if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                JSFunction fn = (JSFunction) generatorFrame.fnOrScript;
+                ES6Generator generator = new ES6Generator(frame.scope, fn, generatorFrame);
                 frame.result =
-                        new ES6Generator(
-                                frame.scope,
-                                (JSFunction) generatorFrame.fnOrScript,
-                                generatorFrame);
+                        fn.getDescriptor().isAsync()
+                                ? AsyncFunctionDriver.start(cx, frame.scope, generator)
+                                : generator;
             } else {
                 frame.result =
                         new NativeGenerator(

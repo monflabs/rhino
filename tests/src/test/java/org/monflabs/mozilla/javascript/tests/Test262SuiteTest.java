@@ -156,7 +156,6 @@ public class Test262SuiteTest {
                     Arrays.asList(
                             "Atomics",
                             "IsHTMLDDA",
-                            "async-functions",
                             "async-iteration",
                             "class-fields-private",
                             "class-fields-public",

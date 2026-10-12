@@ -495,6 +495,8 @@ public class Parser {
 
         if (tt == Token.YIELD && isYieldAnIdentifier()) {
             tt = Token.NAME;
+        } else if (tt == Token.AWAIT && isAwaitAnIdentifier()) {
+            tt = Token.NAME;
         }
         currentToken = tt;
         currentFlaggedToken = tt | (sawEOL ? TI_AFTER_EOL : 0);
@@ -509,7 +511,135 @@ public class Parser {
         return compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
                 && !inUseStrictDirective
                 && !(currentScriptOrFn instanceof FunctionNode
-                        && ((FunctionNode) currentScriptOrFn).isES6Generator());
+                        && ((FunctionNode) currentScriptOrFn).isGeneratorFunction());
+    }
+
+    /**
+     * await is an identifier outside async functions in scripts (ECMA-262 13.1.1); it is a keyword
+     * in the body and the parameters of an async function, and anywhere in a module.
+     */
+    private boolean isAwaitAnIdentifier() {
+        return moduleInfo == null && !inAsyncFunction();
+    }
+
+    private boolean inAsyncFunction() {
+        return currentScriptOrFn instanceof FunctionNode
+                && ((FunctionNode) currentScriptOrFn).isAsync();
+    }
+
+    /**
+     * Whether the peeked NAME token is the async of an async function declaration or expression:
+     * async, then function on the same line.
+     */
+    private boolean isAsyncFunctionStart() {
+        if (currentToken != Token.NAME
+                || ts.nameHadEscape
+                || !"async".equals(ts.getString())
+                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+            return false;
+        }
+        TokenStream.LookAhead next = ts.lookAhead();
+        return next != null && !next.lineBreak && "function".equals(next.word);
+    }
+
+    /** Consumes async and function, and parses an async function. */
+    private FunctionNode asyncFunction(int type) throws IOException {
+        consumeToken();
+        int asyncStart = ts.tokenBeg;
+        mustMatchToken(Token.FUNCTION, "msg.syntax", true);
+        functionIsAsync = true;
+        FunctionNode fn = function(type);
+        fn.setRawSourceBounds(asyncStart, fn.getRawSourceEnd());
+        return fn;
+    }
+
+    /** Set before function() parses an async function or method. */
+    private boolean functionIsAsync;
+
+    /**
+     * The async name just parsed before a ( on the same line: the call it starts is the cover of
+     * the parameters of an async arrow function when => follows (ECMA-262 15.9).
+     */
+    private AstNode asyncCallTarget;
+
+    /** Whether the peeked NAME is the async of async x => ...: an identifier on the same line. */
+    private boolean isAsyncArrowWithIdentifierStart() {
+        if (currentToken != Token.NAME
+                || ts.nameHadEscape
+                || !"async".equals(ts.getString())
+                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+            return false;
+        }
+        TokenStream.LookAhead next = ts.lookAhead();
+        return next != null
+                && !next.lineBreak
+                && next.startsIdentifier()
+                && !"function".equals(next.word)
+                && !"in".equals(next.word)
+                && !"instanceof".equals(next.word);
+    }
+
+    private AstNode asyncArrowWithIdentifier() throws IOException {
+        consumeToken();
+        int asyncStart = ts.tokenBeg;
+        int startLine = lineNumber(), startColumn = columnNumber();
+        if (peekToken() != Token.NAME) {
+            if (currentToken == Token.AWAIT) {
+                reportError("msg.bad.await");
+            }
+            reportError("msg.syntax");
+        }
+        consumeToken();
+        AstNode param = createNameNode(true, Token.NAME);
+        if (peekTokenOrEOL() != Token.ARROW) {
+            reportError("msg.syntax");
+        }
+        consumeToken();
+        functionIsAsync = true;
+        return arrowFunction(param, startLine, startColumn, asyncStart);
+    }
+
+    /** The parameters of async (...) => ..., from the call that covered them. */
+    private AstNode asyncArrowParams(FunctionCall call) {
+        int lp = call.getPosition() + call.getLp();
+        int rp = call.getPosition() + call.getRp();
+        List<AstNode> args = call.getArguments();
+        // await in the parameters of an async arrow function: as an identifier or an expression
+        for (AstNode arg : args) {
+            arg.visit(
+                    node -> {
+                        if (node instanceof FunctionNode
+                                && ((FunctionNode) node).getFunctionType()
+                                        != FunctionNode.ARROW_FUNCTION) {
+                            return false;
+                        }
+                        if ((node instanceof Name && "await".equals(((Name) node).getIdentifier()))
+                                || (node instanceof Yield && ((Yield) node).isAwait())) {
+                            reportError("msg.bad.await");
+                        }
+                        return true;
+                    });
+        }
+        if (!args.isEmpty()
+                && args.get(args.size() - 1) instanceof Spread
+                && call.getIntProp(Node.TRAILING_COMMA, 0) == 1) {
+            reportError("msg.parm.after.rest");
+        }
+        AstNode params = null;
+        for (AstNode arg : args) {
+            params =
+                    params == null
+                            ? arg
+                            : new InfixExpression(Token.COMMA, params, arg, arg.getPosition());
+        }
+        if (params == null) {
+            params = new EmptyExpression(lp + 1, 0);
+        }
+        ParenthesizedExpression parens = new ParenthesizedExpression(lp, rp + 1 - lp, params);
+        if (call.getIntProp(Node.TRAILING_COMMA, 0) == 1) {
+            parens.putIntProp(Node.TRAILING_COMMA, 1);
+        }
+        return parens;
     }
 
     /**
@@ -753,14 +883,17 @@ public class Parser {
                 }
 
                 AstNode n;
-                if (tt == Token.FUNCTION) {
-                    consumeToken();
+                boolean isAsync = tt == Token.NAME && isAsyncFunctionStart();
+                if (tt == Token.FUNCTION || isAsync) {
+                    if (!isAsync) {
+                        consumeToken();
+                    }
                     try {
-                        n =
-                                function(
-                                        calledByCompileFunction
-                                                ? FunctionNode.FUNCTION_EXPRESSION
-                                                : FunctionNode.FUNCTION_STATEMENT);
+                        int type =
+                                calledByCompileFunction
+                                        ? FunctionNode.FUNCTION_EXPRESSION
+                                        : FunctionNode.FUNCTION_STATEMENT;
+                        n = isAsync ? asyncFunction(type) : function(type);
                         if (calledByCompileFunction) {
                             ((FunctionNode) n).setCompiledByContext();
                         }
@@ -888,6 +1021,14 @@ public class Parser {
                         case Token.FUNCTION:
                             consumeToken();
                             n = function(FunctionNode.FUNCTION_STATEMENT);
+                            break;
+                        case Token.NAME:
+                            if (isAsyncFunctionStart()) {
+                                n = asyncFunction(FunctionNode.FUNCTION_STATEMENT);
+                                break;
+                            }
+                            n = statement();
+                            inDirectivePrologue = false;
                             break;
                         default:
                             n = statement();
@@ -1187,9 +1328,15 @@ public class Parser {
     private AstNode exportDefault(int start) throws IOException {
         int afterDefault = ts.tokenEnd;
         int tt = peekToken();
-        if (tt == Token.FUNCTION) {
-            consumeToken();
-            FunctionNode fn = function(FunctionNode.FUNCTION_STATEMENT);
+        boolean isAsync = tt == Token.NAME && isAsyncFunctionStart();
+        if (tt == Token.FUNCTION || isAsync) {
+            FunctionNode fn;
+            if (isAsync) {
+                fn = asyncFunction(FunctionNode.FUNCTION_STATEMENT);
+            } else {
+                consumeToken();
+                fn = function(FunctionNode.FUNCTION_STATEMENT);
+            }
             if (fn.getFunctionName() != null) {
                 addExport("default", null, null, fn.getFunctionName().getIdentifier());
                 moduleInfo.blank(start, afterDefault);
@@ -1201,7 +1348,9 @@ public class Parser {
                 moduleInfo.replace(
                         start,
                         lp,
-                        (fn.isES6Generator() ? "function* " : "function ")
+                        (fn.isAsync()
+                                        ? "async function "
+                                        : fn.isES6Generator() ? "function* " : "function ")
                                 + ModuleInfo.DEFAULT_BINDING);
             }
             return fn;
@@ -1452,6 +1601,8 @@ public class Parser {
         // a generator method (*m() {}) is known before its body is parsed: yield is a keyword there
         boolean isGenerator = isMethodDefiniton && methodIsGenerator;
         methodIsGenerator = false;
+        boolean isAsync = functionIsAsync;
+        functionIsAsync = false;
         int syntheticType = type;
         int baseLineno = lineNumber(); // line number where source starts
         int functionSourceStart = ts.tokenBeg; // start of "function" kwd
@@ -1516,7 +1667,7 @@ public class Parser {
             reportError("msg.syntax");
         }
 
-        defineFunctionSymbol(type, syntheticType, name, isGenerator);
+        defineFunctionSymbol(type, syntheticType, name, isGenerator || isAsync);
 
         FunctionNode fnNode = new FunctionNode(functionSourceStart, name);
         fnNode.setMethodDefinition(isMethodDefiniton);
@@ -1525,12 +1676,19 @@ public class Parser {
         // ES2024, B.3.2.1: register annexB candidate after FunctionNode is created.
         if (type == FunctionNode.FUNCTION_BLOCK_SCOPED
                 && !inUseStrictDirective
+                && !isAsync
                 && name != null
                 && name.length() > 0) {
             Symbol letSym = currentScope.getSymbol(name.getIdentifier());
             currentScriptOrFn.addAnnexBFunction(letSym, fnNode);
         }
-        if (isGenerator) {
+        if (isAsync) {
+            if (isGenerator) {
+                // async generators (ES2018) are not supported yet
+                reportError("msg.syntax");
+            }
+            fnNode.setIsAsync();
+        } else if (isGenerator) {
             fnNode.setIsES6Generator();
         }
         if (lpPos != -1) fnNode.setLp(lpPos - functionSourceStart);
@@ -1614,14 +1772,21 @@ public class Parser {
         }
     }
 
-    private AstNode arrowFunction(AstNode params, int startLine, int startColumn)
+    private AstNode arrowFunction(AstNode params, int startLine, int startColumn, int asyncStart)
             throws IOException {
+        boolean isAsync = functionIsAsync;
+        functionIsAsync = false;
         int baseLineno = lineNumber(); // line number where source starts
         int functionSourceStart =
-                params != null ? params.getPosition() : -1; // start of "function" kwd
+                asyncStart >= 0
+                        ? asyncStart
+                        : params != null ? params.getPosition() : -1; // start of "function" kwd
 
         FunctionNode fnNode = new FunctionNode(functionSourceStart);
         fnNode.setFunctionType(FunctionNode.ARROW_FUNCTION);
+        if (isAsync) {
+            fnNode.setIsAsync();
+        }
         fnNode.setJsDocNode(getAndResetJsDoc());
 
         // Would prefer not to call createDestructuringAssignment until codegen,
@@ -1682,7 +1847,7 @@ public class Parser {
             savedVars.restore();
         }
 
-        if (fnNode.isGenerator()) {
+        if (fnNode.isGenerator() && !fnNode.isAsync()) {
             reportError("msg.arrowfunction.generator");
             return makeErrorNode();
         }
@@ -2153,6 +2318,9 @@ public class Parser {
                 break;
 
             case Token.NAME:
+                if (isAsyncFunctionStart()) {
+                    return asyncFunction(FunctionNode.FUNCTION_BLOCK_SCOPED);
+                }
                 pn = nameOrLabel();
                 if (pn instanceof ExpressionStatement) break;
                 return pn; // LabeledStatement
@@ -3049,7 +3217,7 @@ public class Parser {
         } else if (tt == Token.YIELD
                 && compilerEnv.isLatestEcmaScript()
                 && (!(currentScriptOrFn instanceof FunctionNode
-                                && ((FunctionNode) currentScriptOrFn).isES6Generator())
+                                && ((FunctionNode) currentScriptOrFn).isGeneratorFunction())
                         || functionOfParams == currentScriptOrFn)) {
             // a yield expression only in the body of a generator; in strict code, yield is
             // reserved elsewhere
@@ -3790,7 +3958,20 @@ public class Parser {
             }
         } else if (!hasEOL && tt == Token.ARROW) {
             consumeToken();
-            pn = arrowFunction(pn, startLine, startColumn);
+            if (pn instanceof FunctionCall
+                    && asyncCallTarget != null
+                    && ((FunctionCall) pn).getTarget() == asyncCallTarget) {
+                asyncCallTarget = null;
+                functionIsAsync = true;
+                pn =
+                        arrowFunction(
+                                asyncArrowParams((FunctionCall) pn),
+                                startLine,
+                                startColumn,
+                                pn.getPosition());
+            } else {
+                pn = arrowFunction(pn, startLine, startColumn, -1);
+            }
         } else if (pn.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
                 && !inDestructuringAssignment) {
             if (inParenthesizedCover) {
@@ -4118,6 +4299,22 @@ public class Parser {
         return pn;
     }
 
+    /** AwaitExpression (ECMA-262 15.8): a suspension of the generator an async body runs as. */
+    private AstNode awaitExpr() throws IOException {
+        consumeToken();
+        int lineno = lineNumber(), column = columnNumber(), pos = ts.tokenBeg;
+        if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
+            // in a module outside an async function (top-level await is ES2022), or in the
+            // parameters of an async function
+            reportError("msg.bad.await");
+        }
+        AstNode operand = unaryExpr();
+        Yield node = new Yield(pos, getNodeEnd(operand) - pos, operand, false);
+        node.setIsAwait();
+        node.setLineColumnNumber(lineno, column);
+        return node;
+    }
+
     private AstNode unaryExpr() throws IOException {
         AstNode node;
         int tt = peekToken();
@@ -4128,6 +4325,9 @@ public class Parser {
         int line, column;
 
         switch (tt) {
+            case Token.AWAIT:
+                return awaitExpr();
+
             case Token.VOID:
             case Token.NOT:
             case Token.BITNOT:
@@ -4246,7 +4446,11 @@ public class Parser {
         }
     }
 
+    /** Set by argumentList when the list ends with a comma. */
+    private boolean argumentListTrailingComma;
+
     private List<AstNode> argumentList() throws IOException {
+        argumentListTrailingComma = false;
         if (matchToken(Token.RP, true)) return null;
 
         List<AstNode> result = new ArrayList<>();
@@ -4258,6 +4462,7 @@ public class Parser {
             do {
                 if (peekToken() == Token.RP) {
                     // Quick fix to handle scenario like f1(a,); but not f1(a,b
+                    argumentListTrailingComma = true;
                     break;
                 }
                 if (peekToken() == Token.YIELD
@@ -4449,6 +4654,9 @@ public class Parser {
         List<AstNode> args = argumentList();
         if (args != null && args.size() > ARGC_LIMIT) reportError("msg.too.many.function.args");
         f.setArguments(args);
+        if (argumentListTrailingComma && pn == asyncCallTarget) {
+            f.putIntProp(Node.TRAILING_COMMA, 1);
+        }
         f.setRp(ts.tokenBeg - pos);
         f.setLength(ts.tokenEnd - pos);
         if (isOptionalChain) {
@@ -4795,8 +5003,23 @@ public class Parser {
                 return attributeAccess();
 
             case Token.NAME:
+                if (isAsyncFunctionStart()) {
+                    return asyncFunction(FunctionNode.FUNCTION_EXPRESSION);
+                }
+                if (isAsyncArrowWithIdentifierStart()) {
+                    return asyncArrowWithIdentifier();
+                }
+                boolean asyncName =
+                        "async".equals(ts.getString())
+                                && !ts.nameHadEscape
+                                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
                 consumeToken();
-                return name(ttFlagged, tt);
+                AstNode nameNode = name(ttFlagged, tt);
+                if (asyncName && peekFlaggedToken() == Token.LP) {
+                    // async (...): a call, or the parameters of an async arrow function
+                    asyncCallTarget = nameNode;
+                }
+                return nameNode;
 
             case Token.NUMBER:
             case Token.BIGINT:
@@ -5318,6 +5541,7 @@ public class Parser {
         for (; ; ) {
             String propertyName = null;
             int entryKind = PROP_ENTRY;
+            boolean isAsyncMethod = false;
             int tt = peekToken();
             Comment jsdocNode = getAndResetJsDoc();
             if (tt == Token.COMMENT) {
@@ -5392,9 +5616,12 @@ public class Parser {
                             entryKind = GET_ENTRY;
                         } else if ("set".equals(propertyName)) {
                             entryKind = SET_ENTRY;
+                        } else if (isAsyncMethodStart(propertyName, pnameEscaped)) {
+                            entryKind = METHOD_ENTRY;
+                            isAsyncMethod = true;
                         }
                     }
-                    if (entryKind == GET_ENTRY || entryKind == SET_ENTRY) {
+                    if (entryKind == GET_ENTRY || entryKind == SET_ENTRY || isAsyncMethod) {
                         pname = objliteralProperty();
                         if (pname == null) {
                             reportError("msg.bad.prop");
@@ -5405,6 +5632,7 @@ public class Parser {
                         propertyName = null;
                     } else {
                         propertyName = ts.getString();
+                        functionIsAsync = isAsyncMethod;
                         // shorthand method definition
                         ObjectProperty objectProp =
                                 methodDefinition(
@@ -6570,11 +6798,15 @@ public class Parser {
                                 ? ((StringLiteral) pname).getValue()
                                 : null;
         int entryKind = METHOD_ENTRY;
+        boolean isAsync = false;
+        boolean escaped = ts.nameHadEscape;
         if (peekToken() != Token.LP && pname instanceof Name) {
             if ("get".equals(propertyName)) {
                 entryKind = GET_ENTRY;
             } else if ("set".equals(propertyName)) {
                 entryKind = SET_ENTRY;
+            } else if (isAsyncMethodStart(propertyName, escaped)) {
+                isAsync = true;
             } else {
                 reportError("msg.bad.prop");
             }
@@ -6597,7 +6829,7 @@ public class Parser {
             reportError("msg.class.static.prototype");
         }
         if (!isStatic && "constructor".equals(propertyName)) {
-            if (entryKind != METHOD_ENTRY || isGenerator) {
+            if (entryKind != METHOD_ENTRY || isGenerator || isAsync) {
                 reportError("msg.class.special.ctor");
             }
             if (cls.getConstructor() != null) {
@@ -6613,10 +6845,22 @@ public class Parser {
             cls.setConstructor(ctor);
             return;
         }
+        functionIsAsync = isAsync;
         ObjectProperty prop =
                 methodDefinition(ppos, propStart, pname, entryKind, isGenerator, true);
         ((FunctionNode) prop.getValue()).setInStrictMode(true);
         elems.add(prop);
+    }
+
+    /**
+     * Whether the property name just consumed is the async of an async method: an unescaped async,
+     * then the method name on the same line.
+     */
+    private boolean isAsyncMethodStart(String propertyName, boolean escaped) throws IOException {
+        return "async".equals(propertyName)
+                && !escaped
+                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                && (peekFlaggedToken() & TI_AFTER_EOL) == 0;
     }
 
     /** Set by methodDefinition for function(): the method being parsed is a generator. */

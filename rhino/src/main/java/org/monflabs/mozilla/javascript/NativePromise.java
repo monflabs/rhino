@@ -430,6 +430,41 @@ public class NativePromise extends ScriptableObject {
         return capability.promise;
     }
 
+    /**
+     * Await(value) (ECMA-262 27.7.5.3) for a Java continuation: PromiseResolve(%Promise%, value),
+     * then PerformPromiseThen with no result capability.
+     */
+    static void await(
+            Context cx, VarScope scope, Object value, Callable onFulfilled, Callable onRejected) {
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        NativePromise promise =
+                (NativePromise)
+                        resolveInternal(
+                                cx,
+                                top,
+                                TopLevel.getBuiltinCtor(cx, top, TopLevel.Builtins.Promise),
+                                value);
+        Reaction fulfillReaction = new Reaction(null, ReactionType.FULFILL, onFulfilled);
+        Reaction rejectReaction = new Reaction(null, ReactionType.REJECT, onRejected);
+        if (promise.state == State.PENDING) {
+            promise.fulfillReactions.add(fulfillReaction);
+            promise.rejectReactions.add(rejectReaction);
+        } else if (promise.state == State.FULFILLED) {
+            Object result = promise.result;
+            cx.enqueueMicrotask(() -> fulfillReaction.invoke(cx, top, result));
+        } else {
+            promise.markHandled(cx);
+            Object result = promise.result;
+            cx.enqueueMicrotask(() -> rejectReaction.invoke(cx, top, result));
+        }
+    }
+
+    /** A new promise of the realm of the scope, with its resolving functions. */
+    static Capability newCapability(Context cx, VarScope scope) {
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        return new Capability(cx, top, TopLevel.getBuiltinCtor(cx, top, TopLevel.Builtins.Promise));
+    }
+
     private void markHandled(Context cx) {
         if (!handled) {
             cx.getUnhandledPromiseTracker().promiseHandled(this);
@@ -719,6 +754,11 @@ public class NativePromise extends ScriptableObject {
 
         // Implementation of NewPromiseReactionJob
         void invoke(Context cx, VarScope scope, Object arg) {
+            if (capability == null) {
+                // an await: the handler resumes the function and has no result
+                handler.call(cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {arg});
+                return;
+            }
             try {
                 Object result = null;
                 if (handler == null) {
@@ -752,7 +792,7 @@ public class NativePromise extends ScriptableObject {
     // "Promise Capability Record"
     // This abstracts a promise from the specific native implementation by keeping track
     // of the "resolve" and "reject" functions.
-    private static class Capability {
+    static final class Capability {
         Object promise;
         private Object rawResolve = Undefined.instance;
         Callable resolve;

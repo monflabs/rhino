@@ -285,7 +285,10 @@ public final class OptRuntime extends ScriptRuntime {
             int maxStack) {
         GeneratorState gs = new GeneratorState(scope, thisObj, maxLocals, maxStack);
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
-            return new ES6Generator(scope, funObj, gs);
+            ES6Generator generator = new ES6Generator(scope, funObj, gs);
+            return funObj.getDescriptor().isAsync()
+                    ? ScriptRuntime.startAsyncFunction(cx, scope, generator)
+                    : generator;
         } else {
             return new NativeGenerator(scope, funObj, gs);
         }

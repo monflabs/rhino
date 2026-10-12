@@ -18,6 +18,7 @@ import org.monflabs.mozilla.javascript.Token;
 public class Yield extends AstNode {
 
     private AstNode value;
+    private boolean isAwait;
 
     public Yield() {
         type = Token.YIELD;
@@ -54,9 +55,19 @@ public class Yield extends AstNode {
         if (expr != null) expr.setParent(this);
     }
 
+    /** Whether this is an await expression, a suspension of the body of an async function. */
+    public boolean isAwait() {
+        return isAwait;
+    }
+
+    public void setIsAwait() {
+        isAwait = true;
+    }
+
     @Override
     public String toSource(int depth) {
-        return value == null ? "yield" : "yield " + value.toSource(0);
+        String keyword = isAwait ? "await" : "yield";
+        return value == null ? keyword : keyword + " " + value.toSource(0);
     }
 
     /** Visits this node, and if present, the yielded value. */

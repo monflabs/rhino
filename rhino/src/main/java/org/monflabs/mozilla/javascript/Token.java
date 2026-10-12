@@ -269,7 +269,9 @@ public class Token {
             CLASS = ENUM_CLOSE_ABRUPT + 1, // a class; in the IR: ScriptRuntime.defineClass
             // strict assignment to the name of a function expression: evaluates, then throws
             FN_NAME_ASSIGN = CLASS + 1,
-            LAST_TOKEN = FN_NAME_ASSIGN + 1;
+            // await in an async function or a module (an identifier elsewhere); parser only
+            AWAIT = FN_NAME_ASSIGN + 1,
+            LAST_TOKEN = AWAIT + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -654,6 +656,8 @@ public class Token {
                 return "CLASS";
             case FN_NAME_ASSIGN:
                 return "FN_NAME_ASSIGN";
+            case AWAIT:
+                return "AWAIT";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:
@@ -779,6 +783,8 @@ public class Token {
                 return "with";
             case Token.YIELD:
                 return "yield";
+            case Token.AWAIT:
+                return "await";
             case Token.SUPER:
                 return "super";
             case Token.CATCH:

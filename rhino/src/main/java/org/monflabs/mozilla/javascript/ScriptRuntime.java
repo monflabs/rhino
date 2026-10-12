@@ -5919,6 +5919,14 @@ public class ScriptRuntime {
         return catchScope;
     }
 
+    /**
+     * Starts the body of an async function, compiled as a generator, and returns the promise of the
+     * call (see {@link AsyncFunctionDriver}).
+     */
+    public static Scriptable startAsyncFunction(Context cx, VarScope scope, ES6Generator body) {
+        return (Scriptable) AsyncFunctionDriver.start(cx, scope, body);
+    }
+
     public static Scriptable wrapException(Throwable t, VarScope scope, Context cx) {
         RhinoException re;
         String errorName;
