@@ -48,6 +48,7 @@ import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.EvaluatorException;
 import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.LambdaFunction;
+import org.monflabs.mozilla.javascript.ModuleRecord;
 import org.monflabs.mozilla.javascript.RhinoException;
 import org.monflabs.mozilla.javascript.ScopeObject;
 import org.monflabs.mozilla.javascript.Script;
@@ -62,6 +63,8 @@ import org.monflabs.mozilla.javascript.debug.DebugFrame;
 import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 import org.monflabs.mozilla.javascript.debug.Debugger;
 import org.monflabs.mozilla.javascript.drivers.TestUtils;
+import org.monflabs.mozilla.javascript.modules.Module;
+import org.monflabs.mozilla.javascript.modules.PathModuleLoader;
 import org.monflabs.mozilla.javascript.testutils.TestSource;
 import org.monflabs.mozilla.javascript.tools.SourceReader;
 import org.monflabs.mozilla.javascript.tools.shell.ShellContextFactory;
@@ -77,6 +80,8 @@ public class Test262SuiteTest {
      * (in non-strict mode, only).
      */
     private static final String FLAG_RAW = "raw";
+
+    private static final String FLAG_MODULE = "module";
 
     /** The test must be executed just once--in strict mode, only. */
     private static final String FLAG_ONLY_STRICT = "onlyStrict";
@@ -157,6 +162,10 @@ public class Test262SuiteTest {
                             "class-fields-public",
                             "SharedArrayBuffer",
                             "tail-call-optimization",
+                            "top-level-await",
+                            "dynamic-import",
+                            "import-attributes",
+                            "json-modules",
                             "Temporal",
                             "upsert",
                             "u180e"));
@@ -500,10 +509,22 @@ public class Test262SuiteTest {
                 }
 
                 failedEarly = true;
-                Script caseScript = cx.compileString(str, testFilePath, line, null);
+                if (testCase.hasFlag(FLAG_MODULE)) {
+                    // a module: loaded, then linked (the early phases), then evaluated
+                    Path path = testCase.file.toPath().toAbsolutePath();
+                    cx.setModuleLoaders(new PathModuleLoader(path.getParent()));
+                    ModuleRecord module =
+                            cx.loadModule(
+                                    scope, Module.source(path.toString(), testCase.source, path));
+                    module.link(cx);
+                    failedEarly = false;
+                    module.evaluate(cx);
+                } else {
+                    Script caseScript = cx.compileString(str, testFilePath, line, null);
 
-                failedEarly = false; // not after this line
-                caseScript.exec(cx, scope, scope.getGlobalThis());
+                    failedEarly = false; // not after this line
+                    caseScript.exec(cx, scope, scope.getGlobalThis());
+                }
 
                 if (testCase.hasFlag(FLAG_ASYNC)) {
                     cx.processMicrotasks();
@@ -789,23 +810,6 @@ public class Test262SuiteTest {
                     continue fileLoop;
                 }
             }
-            // 2. it runs in an unsupported environment
-            if (testCase.hasFlag("module")) {
-                if (includeUnsupported) {
-                    TestResultTracker tracker =
-                            RESULT_TRACKERS.computeIfAbsent(
-                                    testCase, k -> new TestResultTracker(comment));
-                    tracker.setExpectations(
-                            TestMode.SKIPPED,
-                            true,
-                            testCase.hasFlag(FLAG_ONLY_STRICT),
-                            testCase.hasFlag(FLAG_NO_STRICT),
-                            true);
-                }
-
-                continue;
-            }
-
             for (TestMode testMode : TestMode.valuesShouldRun()) {
                 if (!testCase.hasFlag(FLAG_ONLY_STRICT) || testCase.hasFlag(FLAG_RAW)) {
                     result.add(
@@ -819,11 +823,13 @@ public class Test262SuiteTest {
                             testMode,
                             false,
                             testCase.hasFlag(FLAG_ONLY_STRICT),
-                            testCase.hasFlag(FLAG_NO_STRICT),
+                            testCase.hasFlag(FLAG_NO_STRICT) || testCase.hasFlag(FLAG_MODULE),
                             markedAsFailing);
                 }
 
-                if (!testCase.hasFlag(FLAG_NO_STRICT) && !testCase.hasFlag(FLAG_RAW)) {
+                if (!testCase.hasFlag(FLAG_NO_STRICT)
+                        && !testCase.hasFlag(FLAG_RAW)
+                        && !testCase.hasFlag(FLAG_MODULE)) {
                     result.add(
                             new Object[] {
                                 caseShortPath, testMode, true, testCase, markedAsFailing

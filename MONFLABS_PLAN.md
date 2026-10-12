@@ -35,6 +35,7 @@ existing code and without slowing the engine down.
 | 2026-10-08 | 1.2: `typeof this` in a strict function called without a receiver is `"undefined"` — all versions. |
 | 2026-10-10 | 1.8: typed arrays are little endian by default under `VERSION_ECMASCRIPT` (`FEATURE_LITTLE_ENDIAN`), as Nashorn and test262 assume; gated because embedders may read buffer bytes. |
 | 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
+| 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -453,6 +454,18 @@ records, linking and evaluation in both backends, `module` flag support in the t
 decision (recommended: modeled on Nashorn's `api.modules`). Later module features land in their editions: `export * as
 ns` and `import()`/`import.meta` (M6), top-level await (M8), import attributes and JSON modules (M11).
 
+Design (2026-10-11, no backend change): a module is parsed with the module goal (strict, top-level `import` and
+`export`), which records its imports and exports and rewrites its source, keeping the lines, into a strict
+generator function. The first `next()` instantiates it: declarations are hoisted and getter closures for the
+exported bindings are registered (InitializeEnvironment). The second `next()` evaluates the body. The
+generator's scope is a `ModuleScope` whose parent is the global: it resolves imported names to the exporting
+module's getters (live bindings, TDZ, immutable). `ModuleRecord` links (ResolveExport, ambiguity, cycles),
+builds the namespace object and evaluates the graph depth first.
+
+Steps:
+- *1.12a* API (`modules` package, `ContextFactory`/`Context` registration, `Context.evaluateModule`), module
+  goal parsing, rewriting, records, linking, namespace objects, evaluation; test262 runs the `module` tests.
+
 ### M2 — ES2016
 
 **2.1** `**` and `**=` (72%: precedence and unary-operand early errors, BigInt). **2.2** `Array.prototype.includes`
@@ -596,8 +609,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.8  | Well-known symbols, Proxy/Reflect, built-ins    | done        | 68.5% → 69.5% (1.8a–c9)      | be7ac7655 |
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
 | 1.10 | Templates and syntax residuals                  | done        | 69.7% → 70.6% (1.10a–g)      | 162371592 |
-| 1.11 | Annex B (ES2015)                                | in progress | 70.6% → 70.8% (1.11a)        | (this) |
-| 1.12 | ES modules                                      | todo        |                              |        |
+| 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
+| 1.12 | ES modules                                      | in progress | 70.8% → 71.5% (1.12a)        | (this) |
 | 2.x  | ES2016                                          | todo        |                              |        |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |

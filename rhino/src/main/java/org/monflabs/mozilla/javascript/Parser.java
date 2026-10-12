@@ -159,6 +159,10 @@ public class Parser {
     private boolean letInSingleStatement;
 
     protected boolean inUseStrictDirective;
+
+    /** The imports and exports of a module, when parsing with the module goal. */
+    ModuleInfo moduleInfo;
+
     private boolean legacyEscapeInPrologue;
 
     // The following are per function variables and should be saved/restored
@@ -690,6 +694,17 @@ public class Parser {
     }
 
     /**
+     * Parses a module (the module goal, ECMA-262 16.2): strict code with top-level import and
+     * export declarations, recorded in {@link #moduleInfo}.
+     */
+    AstRoot parseModule(String sourceString, String sourceURI, int lineno) {
+        moduleInfo = new ModuleInfo(sourceString);
+        AstRoot root = parse(sourceString, sourceURI, lineno);
+        checkModuleExports(root);
+        return root;
+    }
+
+    /**
      * Builds a parse tree from the given sourcereader.
      *
      * @see #parse(String,String,int)
@@ -725,7 +740,7 @@ public class Parser {
         legacyEscapeInPrologue = false;
         boolean savedStrictMode = inUseStrictDirective;
 
-        inUseStrictDirective = compilerEnv.isStrictMode();
+        inUseStrictDirective = compilerEnv.isStrictMode() || moduleInfo != null;
         if (inUseStrictDirective) {
             root.setInStrictMode(true);
         }
@@ -755,6 +770,11 @@ public class Parser {
                 } else if (tt == Token.COMMENT) {
                     n = scannedComments.get(scannedComments.size() - 1);
                     consumeToken();
+                } else if (moduleInfo != null
+                        && tt == Token.RESERVED
+                        && ("import".equals(ts.getString()) || "export".equals(ts.getString()))) {
+                    n = moduleItem();
+                    inDirectivePrologue = false;
                 } else {
                     n = statement();
                     if (inDirectivePrologue) {
@@ -916,6 +936,324 @@ public class Parser {
         if (legacyEscapeInPrologue && compilerEnv.isLatestEcmaScript()) {
             reportError("msg.no.octal.escape.strict");
         }
+    }
+
+    /** An import or export declaration (16.2.2, 16.2.3): the keyword is the peeked token. */
+    private AstNode moduleItem() throws IOException {
+        boolean isImport = "import".equals(ts.getString());
+        consumeToken();
+        int start = ts.tokenBeg;
+        int lineno = lineNumber(), column = columnNumber();
+        AstNode n = isImport ? importDeclaration(start) : exportDeclaration(start);
+        n.setLineColumnNumber(lineno, column);
+        return n;
+    }
+
+    private AstNode importDeclaration(int start) throws IOException {
+        List<String[]> bindings = new ArrayList<>(); // {importName, localName}
+        boolean hasClause = peekToken() != Token.STRING;
+        if (hasClause) {
+            if (peekToken() == Token.NAME) {
+                consumeToken();
+                bindings.add(new String[] {"default", importedBinding(ts.getString())});
+                if (!matchToken(Token.COMMA, true)) {
+                    return finishImport(start, bindings, true);
+                }
+            }
+            if (matchToken(Token.MUL, true)) {
+                expectContextualKeyword("as");
+                mustMatchToken(Token.NAME, "msg.syntax", true);
+                bindings.add(new String[] {ModuleInfo.NAMESPACE, importedBinding(ts.getString())});
+            } else if (mustMatchToken(Token.LC, "msg.syntax", true)) {
+                while (!matchToken(Token.RC, true)) {
+                    boolean isString = peekToken() == Token.STRING;
+                    String importName = moduleExportName();
+                    boolean isIdentifier = !isString && currentToken == Token.NAME;
+                    String localName;
+                    if (matchContextualKeyword("as")) {
+                        mustMatchToken(Token.NAME, "msg.syntax", true);
+                        localName = importedBinding(ts.getString());
+                    } else {
+                        if (!isIdentifier) {
+                            reportError("msg.syntax");
+                        }
+                        localName = importedBinding(importName);
+                    }
+                    bindings.add(new String[] {importName, localName});
+                    if (!matchToken(Token.COMMA, true)) {
+                        mustMatchToken(Token.RC, "msg.syntax", true);
+                        break;
+                    }
+                }
+            }
+        }
+        return finishImport(start, bindings, hasClause);
+    }
+
+    private AstNode finishImport(int start, List<String[]> bindings, boolean hasClause)
+            throws IOException {
+        if (hasClause) {
+            expectContextualKeyword("from");
+        }
+        mustMatchToken(Token.STRING, "msg.syntax", true);
+        String specifier = ts.getString();
+        moduleInfo.addRequest(specifier);
+        for (String[] b : bindings) {
+            moduleInfo.importEntries.add(new ModuleInfo.ImportEntry(specifier, b[0], b[1]));
+        }
+        return blankModuleItem(start, ts.tokenEnd);
+    }
+
+    /** The binding of an import (the current token): a const in the module scope. */
+    private String importedBinding(String name) {
+        if ("eval".equals(name) || "arguments".equals(name)) {
+            reportError("msg.bad.id.strict", name);
+        }
+        defineSymbol(Token.CONST, name);
+        return name;
+    }
+
+    /** An IdentifierName or a string literal (16.2.2 ModuleExportName). */
+    private String moduleExportName() throws IOException {
+        int tt = peekToken();
+        consumeToken();
+        if (tt == Token.STRING) {
+            String name = ts.getString();
+            for (int i = 0; i < name.length(); i++) {
+                char c = name.charAt(i);
+                if (Character.isHighSurrogate(c)
+                                && (i + 1 == name.length()
+                                        || !Character.isLowSurrogate(name.charAt(i + 1)))
+                        || Character.isLowSurrogate(c)
+                                && (i == 0 || !Character.isHighSurrogate(name.charAt(i - 1)))) {
+                    // IsStringWellFormedUnicode
+                    reportError("msg.syntax");
+                }
+            }
+            return name;
+        }
+        if (tt == Token.NAME || tt == Token.RESERVED) {
+            return ts.getString();
+        }
+        String keyword = Token.keywordToName(tt);
+        if (keyword == null) {
+            reportError("msg.syntax");
+            return "";
+        }
+        return keyword;
+    }
+
+    private boolean matchContextualKeyword(String word) throws IOException {
+        if (peekToken() == Token.NAME && word.equals(ts.getString()) && !ts.nameHadEscape) {
+            consumeToken();
+            return true;
+        }
+        return false;
+    }
+
+    private void expectContextualKeyword(String word) throws IOException {
+        if (!matchContextualKeyword(word)) {
+            reportError("msg.syntax");
+        }
+    }
+
+    /** The end of an import or export: a semicolon, or ASI; the statement is blanked out. */
+    private AstNode blankModuleItem(int start, int end) throws IOException {
+        int tt = peekFlaggedToken();
+        if ((tt & CLEAR_TI_MASK) == Token.SEMI) {
+            consumeToken();
+            end = ts.tokenEnd;
+        } else if ((tt & CLEAR_TI_MASK) != Token.EOF
+                && (tt & CLEAR_TI_MASK) != Token.RC
+                && (tt & TI_AFTER_EOL) == 0) {
+            reportError("msg.no.semi.stmt");
+        }
+        moduleInfo.blank(start, end);
+        EmptyStatement empty = new EmptyStatement(start, end - start);
+        return empty;
+    }
+
+    private void addExport(String exportName, String moduleRequest, String importName, String local)
+            throws IOException {
+        if (exportName != null) {
+            for (ModuleInfo.ExportEntry ee : moduleInfo.exportEntries) {
+                if (exportName.equals(ee.exportName())) {
+                    reportError("msg.module.dup.export", exportName);
+                }
+            }
+        }
+        moduleInfo.exportEntries.add(
+                new ModuleInfo.ExportEntry(exportName, moduleRequest, importName, local));
+    }
+
+    private AstNode exportDeclaration(int start) throws IOException {
+        int tt = peekToken();
+        if (tt == Token.MUL) {
+            consumeToken();
+            String exportName = null;
+            if (matchContextualKeyword("as")) {
+                exportName = moduleExportName();
+            }
+            expectContextualKeyword("from");
+            mustMatchToken(Token.STRING, "msg.syntax", true);
+            String specifier = ts.getString();
+            moduleInfo.addRequest(specifier);
+            addExport(
+                    exportName,
+                    specifier,
+                    exportName == null ? ModuleInfo.ALL_BUT_DEFAULT : ModuleInfo.NAMESPACE,
+                    null);
+            return blankModuleItem(start, ts.tokenEnd);
+        }
+        if (tt == Token.LC) {
+            consumeToken();
+            List<String[]> specs = new ArrayList<>(); // {local or import name, export name}
+            List<Boolean> localIsReference = new ArrayList<>();
+            while (!matchToken(Token.RC, true)) {
+                boolean isString = peekToken() == Token.STRING;
+                String name = moduleExportName();
+                localIsReference.add(!isString && currentToken == Token.NAME);
+                String exportName = matchContextualKeyword("as") ? moduleExportName() : name;
+                specs.add(new String[] {name, exportName});
+                if (!matchToken(Token.COMMA, true)) {
+                    mustMatchToken(Token.RC, "msg.syntax", true);
+                    break;
+                }
+            }
+            int rcEnd = ts.tokenEnd;
+            if (matchContextualKeyword("from")) {
+                mustMatchToken(Token.STRING, "msg.syntax", true);
+                String specifier = ts.getString();
+                moduleInfo.addRequest(specifier);
+                for (String[] spec : specs) {
+                    addExport(spec[1], specifier, spec[0], null);
+                }
+            } else {
+                for (int i = 0; i < specs.size(); i++) {
+                    if (!localIsReference.get(i)) {
+                        // export { "a" } or export { if }: a local binding must be an identifier
+                        reportError("msg.syntax");
+                    }
+                    addExport(specs.get(i)[1], null, null, specs.get(i)[0]);
+                }
+                return blankModuleItem(start, rcEnd);
+            }
+            return blankModuleItem(start, ts.tokenEnd);
+        }
+        if (tt == Token.DEFAULT) {
+            consumeToken();
+            return exportDefault(start);
+        }
+        // export VariableStatement / Declaration: the declared names are exported
+        int keywordEnd = start + "export".length();
+        AstNode decl;
+        List<String> names = new ArrayList<>();
+        if (tt == Token.VAR || tt == Token.CONST || tt == Token.LET) {
+            consumeToken();
+            VariableDeclaration vars = variables(tt, ts.tokenBeg, true);
+            autoInsertSemicolon(vars);
+            for (VariableInitializer vi : vars.getVariables()) {
+                collectBoundNames(vi.getTarget(), names);
+            }
+            decl = vars;
+        } else if (tt == Token.FUNCTION) {
+            consumeToken();
+            FunctionNode fn = function(FunctionNode.FUNCTION_STATEMENT);
+            if (fn.getFunctionName() == null) {
+                reportError("msg.syntax");
+            } else {
+                names.add(fn.getFunctionName().getIdentifier());
+            }
+            decl = fn;
+        } else if (tt == Token.RESERVED && isClassKeyword()) {
+            decl = classDeclaration();
+            collectBoundNames(
+                    ((VariableDeclaration) decl).getVariables().get(0).getTarget(), names);
+        } else {
+            reportError("msg.syntax");
+            return makeErrorNode();
+        }
+        for (String name : names) {
+            addExport(name, null, null, name);
+        }
+        moduleInfo.blank(start, keywordEnd);
+        return decl;
+    }
+
+    /** export default ... (16.2.3): a declaration, or an expression bound to *default*. */
+    private AstNode exportDefault(int start) throws IOException {
+        int afterDefault = ts.tokenEnd;
+        int tt = peekToken();
+        if (tt == Token.FUNCTION) {
+            consumeToken();
+            FunctionNode fn = function(FunctionNode.FUNCTION_STATEMENT);
+            if (fn.getFunctionName() != null) {
+                addExport("default", null, null, fn.getFunctionName().getIdentifier());
+                moduleInfo.blank(start, afterDefault);
+            } else {
+                // function () {}: a declaration of *default*, named "default"
+                addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
+                moduleInfo.anonymousDefaultFunction = true;
+                int lp = fn.getPosition() + fn.getLp();
+                moduleInfo.replace(
+                        start,
+                        lp,
+                        (fn.isES6Generator() ? "function* " : "function ")
+                                + ModuleInfo.DEFAULT_BINDING);
+            }
+            return fn;
+        }
+        if (tt == Token.RESERVED && isClassKeyword()) {
+            TokenStream.LookAhead next = ts.lookAhead();
+            if (next != null && next.startsIdentifier() && !"extends".equals(next.word)) {
+                AstNode decl = classDeclaration();
+                List<String> names = new ArrayList<>();
+                collectBoundNames(
+                        ((VariableDeclaration) decl).getVariables().get(0).getTarget(), names);
+                addExport("default", null, null, names.get(0));
+                moduleInfo.blank(start, afterDefault);
+                return decl;
+            }
+            // class {}: a declaration of *default*, named "default"
+            ClassNode cls = classDefinition(false);
+            addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
+            int end = getNodeEnd(cls);
+            moduleInfo.replace(
+                    start, afterDefault, "const " + ModuleInfo.DEFAULT_BINDING + " = {default: ");
+            moduleInfo.insert(end, "}.default;");
+            return cls;
+        }
+        // export default AssignmentExpression;
+        AstNode expr = assignExpr();
+        addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
+        int end = getNodeEnd(expr);
+        moduleInfo.replace(
+                start, afterDefault, "const " + ModuleInfo.DEFAULT_BINDING + " = {default: (");
+        moduleInfo.insert(end, ")}.default");
+        ExpressionStatement stmt = new ExpressionStatement(expr, false);
+        autoInsertSemicolon(stmt);
+        return stmt;
+    }
+
+    /**
+     * The early errors of a module (16.2.1.1): an exported local name must be declared, and the
+     * export entries are sorted.
+     */
+    private void checkModuleExports(AstRoot root) {
+        Set<String> imported = new HashSet<>();
+        for (ModuleInfo.ImportEntry ie : moduleInfo.importEntries) {
+            imported.add(ie.localName());
+        }
+        for (ModuleInfo.ExportEntry ee : moduleInfo.exportEntries) {
+            String local = ee.localName();
+            if (ee.moduleRequest() == null
+                    && !ModuleInfo.DEFAULT_BINDING.equals(local)
+                    && !imported.contains(local)
+                    && root.getSymbol(local) == null) {
+                reportError("msg.module.undeclared.export", local);
+            }
+        }
+        moduleInfo.sortExportEntries();
     }
 
     private static String getDirective(AstNode n) {

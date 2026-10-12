@@ -25,6 +25,7 @@ import java.util.ArrayDeque;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +42,8 @@ import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 import org.monflabs.mozilla.javascript.debug.Debugger;
 import org.monflabs.mozilla.javascript.lc.type.TypeInfo;
 import org.monflabs.mozilla.javascript.lc.type.TypeInfoFactory;
+import org.monflabs.mozilla.javascript.modules.Module;
+import org.monflabs.mozilla.javascript.modules.ModuleLoader;
 import org.monflabs.mozilla.javascript.sourcemap.SourceMapper;
 import org.monflabs.mozilla.javascript.xml.XMLLib;
 
@@ -667,6 +670,44 @@ public class Context implements Closeable {
     /** Return {@link ContextFactory} instance used to create this Context. */
     public final ContextFactory getFactory() {
         return factory;
+    }
+
+    /**
+     * Sets the chain of module loaders of this context, overriding the one of its {@link
+     * ContextFactory}.
+     */
+    public final void setModuleLoaders(ModuleLoader... loaders) {
+        this.moduleLoaders = List.of(loaders);
+    }
+
+    /** The module loaders of this context: its own, or else the ones of its factory. */
+    public final List<ModuleLoader> getModuleLoaders() {
+        return moduleLoaders != null ? moduleLoaders : factory.getModuleLoaders();
+    }
+
+    /**
+     * Loads a module and, transitively, the modules it imports, in the realm of {@code scope}. A
+     * module already loaded in that realm under the same name is returned as is. Parse errors are
+     * thrown here; {@link ModuleRecord#link} and {@link ModuleRecord#evaluate} follow.
+     */
+    public ModuleRecord loadModule(TopLevel scope, Module module) {
+        return ModuleRecord.load(this, scope, module);
+    }
+
+    /**
+     * Loads, links and evaluates a module in the realm of {@code scope}, and returns its namespace
+     * object (16.2.1.10): its exports are its properties.
+     */
+    public Scriptable evaluateModule(TopLevel scope, Module module) {
+        ModuleRecord record = loadModule(scope, module);
+        record.link(this);
+        record.evaluate(this);
+        return record.getNamespace();
+    }
+
+    /** {@link #evaluateModule(TopLevel, Module)} of a module given by its source and name. */
+    public Scriptable evaluateModule(TopLevel scope, String source, String name) {
+        return evaluateModule(scope, Module.source(name, source));
     }
 
     /**
@@ -3074,6 +3115,7 @@ public class Context implements Closeable {
     }
 
     private final ContextFactory factory;
+    private List<ModuleLoader> moduleLoaders;
     private boolean sealed;
     private Object sealKey;
 

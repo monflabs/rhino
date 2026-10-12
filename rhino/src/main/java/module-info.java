@@ -15,6 +15,7 @@ module org.monflabs.mozilla.rhino {
     exports org.monflabs.mozilla.javascript.xml;
     exports org.monflabs.mozilla.javascript.config;
     exports org.monflabs.mozilla.javascript.lc.type;
+    exports org.monflabs.mozilla.javascript.modules;
 
     uses org.monflabs.mozilla.javascript.RegExpLoader;
     uses org.monflabs.mozilla.javascript.xml.XMLLoader;

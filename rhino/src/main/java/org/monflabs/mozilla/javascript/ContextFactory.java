@@ -10,7 +10,9 @@ package org.monflabs.mozilla.javascript;
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.List;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
+import org.monflabs.mozilla.javascript.modules.ModuleLoader;
 
 /**
  * Factory class that Rhino runtime uses to create new {@link Context} instances. A {@code
@@ -110,6 +112,8 @@ public class ContextFactory {
     private static ContextFactory global = new ContextFactory();
 
     private volatile boolean sealed;
+
+    private volatile List<ModuleLoader> moduleLoaders = List.of();
 
     private final Object listenersLock = new Object();
     private volatile Object listeners;
@@ -299,6 +303,21 @@ public class ContextFactory {
      */
     public final ClassLoader getApplicationClassLoader() {
         return applicationClassLoader;
+    }
+
+    /**
+     * Sets the chain of module loaders of the contexts this factory creates (a {@link Context} can
+     * override it): every {@code import} asks each loader in order, and the first non-null answer
+     * wins. With no loader, a specifier is a file path, relative to the importing module.
+     */
+    public final void setModuleLoaders(ModuleLoader... loaders) {
+        checkNotSealed();
+        this.moduleLoaders = List.of(loaders);
+    }
+
+    /** The module loaders of the contexts this factory creates. */
+    public final List<ModuleLoader> getModuleLoaders() {
+        return moduleLoaders;
     }
 
     /**

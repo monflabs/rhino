@@ -51,11 +51,12 @@ public class AbstractEcmaObjectOperations {
      */
     static boolean hasOwnProperty(Context cx, Object o, Object property) {
         Scriptable obj = ScriptableObject.ensureScriptable(o);
-        if (obj instanceof NativeProxy) {
-            // HasOwnProperty uses [[GetOwnProperty]] (its trap), not [[HasProperty]]
+        if (obj instanceof NativeProxy || obj instanceof ModuleNamespace) {
+            // HasOwnProperty uses [[GetOwnProperty]] (a trap, or the read of a binding), not
+            // [[HasProperty]]
             Object key =
                     ScriptRuntime.isSymbol(property) ? property : ScriptRuntime.toString(property);
-            return ((NativeProxy) obj).getOwnPropertyDescriptor(cx, key) != null;
+            return ((ScriptableObject) obj).getOwnPropertyDescriptor(cx, key) != null;
         }
 
         // using instanceof is correct here
