@@ -542,6 +542,11 @@ Mostly present. **5.1** Residuals: `flat`/`flatMap`, `trimStart`/`trimEnd` (and 
 function objects), `Symbol.prototype.description`, well-formed `JSON.stringify`, stable sort, `Function.prototype.toString`
 (if not finished in 1.2).
 
+Status (2026-10-12, done): every ES2019 feature passes its in-scope tests. Residual, cross-cutting: a primitive
+`this` reaches callbacks and accessors as a wrapper object (`Callable.call` takes a `Scriptable` this), e.g. a strict
+`thisArg` callback of `flatMap`/`map`, the getter of `BigInt.prototype.toJSON` in `JSON.stringify`, `Symbol.asyncIterator`
+called on a primitive, the flag getters of RegExp on a primitive. To be fixed with the engine-wide call path, before M15.
+
 ### M6 — ES2020
 
 **6.1** `globalThis` (2%: property attributes, strict/sloppy access). **6.2** Optional chaining (64%) and nullish
@@ -656,7 +661,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | bdba199cf |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | done        | 74.0% → 83.3% (4.1–4.4)       | 9b7abd3ce |
-| 5.x  | ES2019 residuals                                | todo        |                              |        |
+| 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | (this) |
 | 6.x  | ES2020                                          | todo        |                              |        |
 | 7.x  | ES2021                                          | todo        |                              |        |
 | 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |

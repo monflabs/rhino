@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### M5 (ES2019) needs no work (2026-10-12, plan 5.1)
+
+- Every ES2019 feature passes its in-scope tests (`flat`/`flatMap`, `trimStart`/`trimEnd`, `Symbol.prototype.description`,
+  `Object.fromEntries`, well-formed `JSON.stringify`, stable sort, optional catch binding, JSON superset). The
+  remaining failures need private methods (M8), or a primitive `this` that reaches a callback or an accessor as a
+  wrapper object, a residual recorded in the plan.
+
 ### ES2018 residuals; M4 done (2026-10-12, plans 4.2-4.4)
 
 - 4.2 (object rest/spread) and 4.4 (`Promise.prototype.finally`, template literal revision) needed no work: every
