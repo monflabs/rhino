@@ -43,7 +43,7 @@ public final class PathModuleLoader implements ModuleLoader {
         } catch (InvalidPathException notAPath) {
             return null;
         }
-        if (!Files.isReadable(candidate)) {
+        if (!Files.isRegularFile(candidate) || !Files.isReadable(candidate)) {
             return null;
         }
         try {

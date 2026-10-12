@@ -557,6 +557,11 @@ comparisons, mixed-type errors). **6.4** `String.prototype.matchAll`, `Promise.a
 **6.6 Module additions:** `export * as ns from`, dynamic `import()`, `import.meta` (host-populated through the
 module-loader API).
 
+Status (2026-10-12, done): 6.1-6.5 pass but for later features and the primitive `this` residual (see M5).
+6.6: `import()` is an IR node (Token#IMPORT_CALL) whose promise job loads, links and evaluates; `import.meta` is
+rewritten in module code to an object the module record hands to the body, with a `url` (origin, or name) as in
+Nashorn, rather than populated by the host.
+
 ### M7 — ES2021
 
 **7.1** Logical assignment `&&=`, `||=`, `??=` (38%: short-circuit without assignment, named evaluation).
@@ -662,7 +667,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | bdba199cf |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | done        | 74.0% → 83.3% (4.1–4.4)       | 9b7abd3ce |
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
-| 6.x  | ES2020                                          | todo        |                              |        |
+| 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | (this) |
 | 7.x  | ES2021                                          | todo        |                              |        |
 | 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |

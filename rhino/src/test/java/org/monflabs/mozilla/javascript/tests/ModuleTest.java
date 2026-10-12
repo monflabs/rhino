@@ -220,6 +220,44 @@ class ModuleTest {
     }
 
     @Test
+    void dynamicImportAndImportMeta() throws IOException {
+        write("dep.js", "export const value = 42; export const url = import.meta.url;");
+        write(
+                "main.js",
+                "export let r;\n"
+                        + "import('./dep.js').then(ns => { r = ns.value + ',' + "
+                        + "(ns.url === import.meta.url.replace('main.js', 'dep.js')); });\n");
+        inAllModes(
+                new PathModuleLoader(dir),
+                (cx, scope) -> {
+                    Path main = dir.resolve("main.js");
+                    Scriptable ns =
+                            cx.evaluateModule(
+                                    scope,
+                                    Module.source(main.toString(), Files.readString(main), main));
+                    cx.processMicrotasks();
+                    assertEquals("42,true", get(ns, "r"));
+                    // from a script, and a load error rejects
+                    Object result =
+                            cx.evaluateString(
+                                    scope,
+                                    "var out = [];\n"
+                                            + "import('./dep.js').then(ns => out.push(ns.value));\n"
+                                            + "import('./missing.js').catch(e => out.push(e.name));\n"
+                                            + "out",
+                                    "script",
+                                    1,
+                                    null);
+                    assertEquals(
+                            "42,TypeError",
+                            cx.evaluateString(scope, "out.join()", "check", 1, null));
+                    assertThrows(
+                            EvaluatorException.class,
+                            () -> cx.evaluateString(scope, "import.meta", "s", 1, null));
+                });
+    }
+
+    @Test
     void evaluatedOnceAndFactoryLoaders() {
         ModuleLoader loader =
                 (specifier, referrer) -> {

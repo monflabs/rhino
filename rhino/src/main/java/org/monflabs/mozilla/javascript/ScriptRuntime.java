@@ -5993,6 +5993,74 @@ public class ScriptRuntime {
                 NativeAsyncFromSyncIterator.getAsyncIterator(cx, scope, value));
     }
 
+    /**
+     * import(specifier, options) (ECMA-262 13.3.10.1 EvaluateImportCall): the specifier is
+     * converted now, the module is loaded, linked and evaluated in a job, and the promise settles
+     * with its namespace object.
+     */
+    public static Object importCall(
+            Object referrer, Object specifier, Object options, Context cx, VarScope scope) {
+        NativePromise.Capability capability = NativePromise.newCapability(cx, scope);
+        TopLevel realm = ScriptableObject.getTopLevelScope(scope);
+        String spec;
+        try {
+            spec = toString(specifier);
+            if (!Undefined.isUndefined(options)) {
+                if (!isObject(options)) {
+                    throw typeErrorById("msg.arg.not.object", typeof(options));
+                }
+                Object with = ScriptableObject.getProperty((Scriptable) options, "with");
+                if (with != Scriptable.NOT_FOUND
+                        && !Undefined.isUndefined(with)
+                        && !isObject(with)) {
+                    throw typeErrorById("msg.arg.not.object", typeof(with));
+                }
+            }
+        } catch (RhinoException re) {
+            rejectWith(cx, realm, capability, re);
+            return capability.promise;
+        }
+        String referrerName = toString(referrer);
+        cx.enqueueMicrotask(
+                () -> {
+                    // the jobs that loading enqueues run once this import is settled
+                    cx.suspendMicrotaskProcessing();
+                    try {
+                        Scriptable namespace =
+                                ModuleRecord.importDynamic(cx, realm, referrerName, spec);
+                        capability.resolve.call(
+                                cx,
+                                realm,
+                                Undefined.SCRIPTABLE_UNDEFINED,
+                                new Object[] {namespace});
+                    } catch (RhinoException re) {
+                        rejectWith(cx, realm, capability, re);
+                    } finally {
+                        cx.resumeMicrotaskProcessing();
+                    }
+                });
+        return capability.promise;
+    }
+
+    private static void rejectWith(
+            Context cx, TopLevel realm, NativePromise.Capability capability, RhinoException re) {
+        Object error;
+        if (re instanceof JavaScriptException) {
+            error = ((JavaScriptException) re).getValue();
+        } else if (re instanceof EvaluatorException) {
+            // the imported module does not parse
+            error =
+                    newNativeError(
+                            cx,
+                            realm,
+                            TopLevel.NativeErrors.SyntaxError,
+                            new Object[] {re.details()});
+        } else {
+            error = wrapException(re, realm, cx);
+        }
+        capability.reject.call(cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
+    }
+
     /** GetIterator(value, async) for a for await loop (Node#AWAIT_ITER_OPEN). */
     public static Object asyncIterOpen(Object value, Context cx, VarScope scope) {
         return new AsyncIteration.Open(
@@ -6523,8 +6591,8 @@ public class ScriptRuntime {
     public static Object[] getArrayElements(Context cx, Scriptable object) {
         long longLen = NativeArray.getLengthProperty(cx, object);
         if (longLen > Integer.MAX_VALUE) {
-            // arrays beyond  MAX_INT is not in Java in any case
-            throw new IllegalArgumentException();
+            // arrays beyond MAX_INT is not in Java in any case
+            throw rangeErrorById("msg.arraylength.too.big", String.valueOf(longLen));
         }
         int len = (int) longLen;
         if (len == 0) {

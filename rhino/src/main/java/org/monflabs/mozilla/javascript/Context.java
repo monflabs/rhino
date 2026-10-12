@@ -694,7 +694,13 @@ public class Context implements Closeable {
      * thrown here; {@link ModuleRecord#link} and {@link ModuleRecord#evaluate} follow.
      */
     public ModuleRecord loadModule(TopLevel scope, Module module) {
-        return ModuleRecord.load(this, scope, module);
+        // no promise job runs while the graph is half loaded
+        suspendMicrotaskProcessing();
+        try {
+            return ModuleRecord.load(this, scope, module);
+        } finally {
+            resumeMicrotaskProcessing();
+        }
     }
 
     /**

@@ -1449,6 +1449,20 @@ class BodyCodegen {
                     break;
                 }
 
+            case Token.IMPORT_CALL:
+                generateExpression(child, node);
+                generateExpression(child.getNext(), node);
+                generateExpression(child.getNext().getNext(), node);
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                addScriptRuntimeInvoke(
+                        "importCall",
+                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;"
+                                + "Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + ")Ljava/lang/Object;");
+                break;
+
             case Token.ITER_OPEN:
             case Token.ITER_STEP:
             case Token.ITER_REST:

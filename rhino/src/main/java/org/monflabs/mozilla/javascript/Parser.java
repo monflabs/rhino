@@ -49,6 +49,7 @@ import org.monflabs.mozilla.javascript.ast.GeneratorExpressionLoop;
 import org.monflabs.mozilla.javascript.ast.GeneratorMethodDefinition;
 import org.monflabs.mozilla.javascript.ast.IdeErrorReporter;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
+import org.monflabs.mozilla.javascript.ast.ImportCall;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
@@ -921,7 +922,8 @@ public class Parser {
                     consumeToken();
                 } else if (moduleInfo != null
                         && tt == Token.RESERVED
-                        && ("import".equals(ts.getString()) || "export".equals(ts.getString()))) {
+                        && ("import".equals(ts.getString()) || "export".equals(ts.getString()))
+                        && !isImportExpressionStart()) {
                     n = moduleItem();
                     inDirectivePrologue = false;
                 } else {
@@ -1096,6 +1098,66 @@ public class Parser {
     }
 
     /** An import or export declaration (16.2.2, 16.2.3): the keyword is the peeked token. */
+    /** Whether the peeked import starts an expression: import(...) or import.meta. */
+    private boolean isImportExpressionStart() {
+        if (!"import".equals(ts.getString())) {
+            return false;
+        }
+        TokenStream.LookAhead next = ts.lookAhead();
+        return next != null && (next.next == '(' || next.next == '.');
+    }
+
+    /**
+     * ImportCall (13.3.10) or ImportMeta (13.3.12). import.meta is only in module code, where it is
+     * rewritten to the import.meta object the module record hands to the module body.
+     */
+    private AstNode importExpression() throws IOException {
+        consumeToken();
+        checkEscapedKeyword();
+        int pos = ts.tokenBeg;
+        int lineno = lineNumber(), column = columnNumber();
+        if (matchToken(Token.DOT, true)) {
+            if (!matchToken(Token.NAME, true)
+                    || !"meta".equals(ts.getString())
+                    || ts.nameHadEscape) {
+                reportError("msg.syntax");
+                return makeErrorNode();
+            }
+            if (moduleInfo == null) {
+                reportError("msg.import.meta");
+            } else {
+                // a call, which no assignment or destructuring can target
+                moduleInfo.replace(pos, ts.tokenEnd, ModuleInfo.RECORD_PARAM + ".importMeta()");
+            }
+            // not an assignment target (the rewritten body reads the record's property)
+            KeywordLiteral meta = new KeywordLiteral(pos, ts.tokenEnd - pos, Token.THIS);
+            meta.setLineColumnNumber(lineno, column);
+            return meta;
+        }
+        mustMatchToken(Token.LP, "msg.no.paren.arg", true);
+        boolean wasInForInit = inForInit;
+        inForInit = false;
+        ImportCall call = new ImportCall(pos, 0);
+        try {
+            if (peekToken() == Token.DOTDOTDOT || peekToken() == Token.RP) {
+                // the specifier is one AssignmentExpression: neither absent nor spread
+                reportError("msg.syntax");
+            }
+            call.setSpecifier(assignExpr());
+            if (matchToken(Token.COMMA, true) && peekToken() != Token.RP) {
+                call.setOptions(assignExpr());
+                matchToken(Token.COMMA, true);
+            }
+        } finally {
+            inForInit = wasInForInit;
+        }
+        mustMatchToken(Token.RP, "msg.no.paren.arg", true);
+        call.setLength(ts.tokenEnd - pos);
+        call.setReferrer(sourceURI);
+        call.setLineColumnNumber(lineno, column);
+        return call;
+    }
+
     private AstNode moduleItem() throws IOException {
         boolean isImport = "import".equals(ts.getString());
         consumeToken();
@@ -4585,6 +4647,15 @@ public class Parser {
                 reportError("msg.bad.new.dot");
                 return makeErrorNode();
             }
+            if (peekToken() == Token.RESERVED
+                    && "import".equals(ts.getString())
+                    && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                // new import(...): an ImportCall is not a MemberExpression
+                TokenStream.LookAhead next = ts.lookAhead();
+                if (next != null && next.next == '(') {
+                    reportError("msg.syntax");
+                }
+            }
 
             NewExpression nx = new NewExpression(pos);
 
@@ -5182,6 +5253,10 @@ public class Parser {
             case Token.RESERVED:
                 if (isClassKeyword()) {
                     return classDefinition(false);
+                }
+                if ("import".equals(ts.getString())
+                        && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    return importExpression();
                 }
                 consumeToken();
                 reportError("msg.reserved.id", ts.getString());

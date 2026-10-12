@@ -990,6 +990,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 stackChange(-3);
                 break;
 
+            case Token.IMPORT_CALL:
+                visitExpression(child, 0);
+                visitExpression(child.getNext(), 0);
+                visitExpression(child.getNext().getNext(), 0);
+                addIcode(Icode.IMPORT_CALL);
+                stackChange(-2);
+                break;
+
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:

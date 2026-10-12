@@ -954,6 +954,17 @@ Object.getOwnPropertyDescriptor(RegExp.prototype, 'global').get.call(other.RegEx
   RegExp.prototype of their own realm; another object that is not a RegExp is a TypeError of the getter's realm.
 - **Why:** ECMA-262 2026, §22.2.6.4.1 (RegExpHasFlag), §22.2.6.13 (get RegExp.prototype.source).
 
+### 2.45 Array-likes longer than 2^31 - 1
+
+```js
+new Int8Array({ length: 2 ** 53 });        // before: java.lang.IllegalArgumentException   now: RangeError
+f.apply(null, { length: 2 ** 32 });        // same
+```
+
+- All versions: an array-like whose length exceeds what a Java array holds is a RangeError, not a Java exception.
+- **Why:** ECMA-262 2026, §23.2.5.1.4 (InitializeTypedArrayFromArrayLike), §7.3.18 (CreateListFromArrayLike):
+  the specification's limit is memory; a JavaScript error is what a script can handle.
+
 ---
 
 ## 3. Platform and embedding

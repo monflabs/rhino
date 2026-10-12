@@ -4,6 +4,8 @@
 
 package org.monflabs.mozilla.javascript;
 
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,6 +62,40 @@ public final class ModuleRecord {
         this.info = info;
     }
 
+    /**
+     * The namespace of the module that import(specifier) names in the script or module of the given
+     * name, loaded, linked and evaluated.
+     */
+    static Scriptable importDynamic(
+            Context cx, TopLevel realm, String referrerName, String specifier) {
+        ModuleRecord referrerRecord = registry(realm).get(referrerName);
+        int generated = referrerName.indexOf('#');
+        if (referrerRecord == null && generated > 0) {
+            // eval code (file#line(eval)): the script or module that contains it is the referrer
+            referrerName = referrerName.substring(0, generated);
+            referrerRecord = registry(realm).get(referrerName);
+        }
+        Module referrer;
+        if (referrerRecord != null) {
+            referrer = referrerRecord.module;
+        } else {
+            Path origin = null;
+            try {
+                Path path = Path.of(referrerName);
+                if (Files.isRegularFile(path)) {
+                    origin = path.toAbsolutePath();
+                }
+            } catch (InvalidPathException notAPath) {
+                // a script that is not a file: specifiers resolve against the loaders' roots
+            }
+            referrer = origin == null ? null : Module.referrer(referrerName, origin);
+        }
+        ModuleRecord record = load(cx, realm, resolve(cx, specifier, referrer));
+        record.link(cx);
+        record.evaluate(cx);
+        return record.getNamespace();
+    }
+
     /** The name of the module (its identity in the realm). */
     public String getName() {
         return module.name();
@@ -87,12 +123,20 @@ public final class ModuleRecord {
         ModuleInfo info = parser.moduleInfo;
         record = new ModuleRecord(module, realm, info);
         registry.put(module.name(), record);
-        ModuleScope scope = new ModuleScope(realm);
-        record.generatorFunction =
-                (Callable) cx.evaluateString(scope, info.generatorSource(), module.name(), 1, null);
-        record.scope = scope;
-        for (String specifier : info.requestedModules) {
-            record.requested.put(specifier, load(cx, realm, resolve(cx, specifier, module)));
+        try {
+            ModuleScope scope = new ModuleScope(realm);
+            record.generatorFunction =
+                    (Callable)
+                            cx.evaluateString(
+                                    scope, info.generatorSource(), module.name(), 1, null);
+            record.scope = scope;
+            for (String specifier : info.requestedModules) {
+                record.requested.put(specifier, load(cx, realm, resolve(cx, specifier, module)));
+            }
+        } catch (RuntimeException e) {
+            // a module that could not be loaded is not kept: a later import tries again
+            registry.remove(module.name());
+            throw e;
         }
         return record;
     }
@@ -110,7 +154,8 @@ public final class ModuleRecord {
                 return m;
             }
         }
-        throw ScriptRuntime.typeErrorById("msg.module.not.found", specifier, referrer.name());
+        throw ScriptRuntime.typeErrorById(
+                "msg.module.not.found", specifier, referrer == null ? "" : referrer.name());
     }
 
     @SuppressWarnings("unchecked")
@@ -160,6 +205,16 @@ public final class ModuleRecord {
             }
         }
         Scriptable recordObject = cx.newObject(realm);
+        // import.meta (13.3.12.1): an ordinary object with a null prototype
+        NativeObject meta = new NativeObject();
+        meta.setParentScope(realm);
+        meta.setPrototype(null);
+        ScriptableObject.putProperty(
+                meta, "url", module.origin() == null ? getName() : module.origin().toString());
+        ScriptableObject.putProperty(
+                recordObject,
+                "importMeta",
+                new LambdaFunction(realm, "importMeta", 0, (lcx, ls, t, a) -> meta));
         ScriptableObject.putProperty(
                 recordObject,
                 "init",

@@ -41,6 +41,7 @@ import org.monflabs.mozilla.javascript.ast.GeneratorExpression;
 import org.monflabs.mozilla.javascript.ast.GeneratorExpressionLoop;
 import org.monflabs.mozilla.javascript.ast.GeneratorMethodDefinition;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
+import org.monflabs.mozilla.javascript.ast.ImportCall;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
@@ -340,6 +341,8 @@ public final class IRFactory {
             case Token.YIELD:
             case Token.YIELD_STAR:
                 return transformYield((Yield) node);
+            case Token.IMPORT_CALL:
+                return transformImportCall((ImportCall) node);
             default:
                 if (node instanceof ExpressionStatement) {
                     return transformExprStmt((ExpressionStatement) node);
@@ -1787,6 +1790,18 @@ public final class IRFactory {
         Node expr = transform(node.getExpression());
         Node stmt = transform(node.getStatement());
         return createWith(expr, stmt, node.getLineno(), node.getColumn());
+    }
+
+    private Node transformImportCall(ImportCall node) {
+        Node referrer = Node.newString(node.getReferrer() == null ? "" : node.getReferrer());
+        Node specifier = transform(node.getSpecifier());
+        Node options =
+                node.getOptions() == null
+                        ? new Node(Token.UNDEFINED)
+                        : transform(node.getOptions());
+        Node call = new Node(Token.IMPORT_CALL, referrer, specifier, options);
+        call.setLineColumnNumber(node.getLineno(), node.getColumn());
+        return call;
     }
 
     private Node transformYield(Yield node) {

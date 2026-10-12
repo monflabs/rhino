@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Dynamic import and import.meta; M6 done (2026-10-12, plan 6.x)
+
+- New: `import(specifier [, options])` in scripts and modules (IR: Token#IMPORT_CALL): the specifier is converted at
+  once, and a promise job loads (through the module loaders), links and evaluates the module, then settles with its
+  namespace; a module that does not parse rejects with a SyntaxError. The referrer is the script or module the call
+  is in (for eval code, the one that contains the eval). Import attributes are validated but not supported (M11).
+- New: `import.meta` in modules, an ordinary object with a null prototype whose `url` is the module's origin, or its
+  name (as in Nashorn); a SyntaxError in scripts.
+- Fixes: a module that fails to load is not kept in the realm's registry; promise jobs do not run while a module
+  graph is being loaded (`Context.loadModule`, `import()`); `PathModuleLoader` only loads regular files.
+- All versions: an array-like longer than 2^31 - 1 is a RangeError (before, a Java IllegalArgumentException); see
+  BACKWARD_COMPATIBILITY.md 2.45.
+- The other ES2020 items need no work: `globalThis`, optional chaining, nullish coalescing, BigInt, `matchAll`,
+  `allSettled`, for-in order, `export * as ns` pass but for later features (Iterator helpers, `waitAsync`, private
+  names) and the primitive `this` residual.
+- test262: `dynamic-import` is no longer an unsupported feature, its directories run, and every test gets a
+  `PathModuleLoader` rooted at its directory (import() from a script): 36,062/42,616 (84.6%), 559 more tests pass.
+  The newly failing tests need `import.defer`, source phase imports or import attributes. Perf gate: no regression against M5.
+
 ### M5 (ES2019) needs no work (2026-10-12, plan 5.1)
 
 - Every ES2019 feature passes its in-scope tests (`flat`/`flatMap`, `trimStart`/`trimEnd`, `Symbol.prototype.description`,

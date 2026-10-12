@@ -172,7 +172,6 @@ public class Test262SuiteTest {
                             "class-fields-public",
                             "tail-call-optimization",
                             "top-level-await",
-                            "dynamic-import",
                             "import-attributes",
                             "json-modules",
                             "Temporal",
@@ -707,10 +706,12 @@ public class Test262SuiteTest {
                 }
 
                 failedEarly = true;
+                // import() and module imports resolve against the directory of the test
+                cx.setModuleLoaders(
+                        new PathModuleLoader(testCase.file.toPath().toAbsolutePath().getParent()));
                 if (testCase.hasFlag(FLAG_MODULE)) {
                     // a module: loaded, then linked (the early phases), then evaluated
                     Path path = testCase.file.toPath().toAbsolutePath();
-                    cx.setModuleLoaders(new PathModuleLoader(path.getParent()));
                     ModuleRecord module =
                             cx.loadModule(
                                     scope, Module.source(path.toString(), testCase.source, path));

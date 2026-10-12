@@ -271,7 +271,9 @@ public class Token {
             FN_NAME_ASSIGN = CLASS + 1,
             // await in an async function or a module (an identifier elsewhere); parser only
             AWAIT = FN_NAME_ASSIGN + 1,
-            LAST_TOKEN = AWAIT + 1;
+            // import(specifier [, options]): the referrer name, the specifier and the options
+            IMPORT_CALL = AWAIT + 1,
+            LAST_TOKEN = IMPORT_CALL + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -658,6 +660,8 @@ public class Token {
                 return "FN_NAME_ASSIGN";
             case AWAIT:
                 return "AWAIT";
+            case IMPORT_CALL:
+                return "IMPORT_CALL";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

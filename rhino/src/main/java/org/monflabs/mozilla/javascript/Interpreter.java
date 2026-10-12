@@ -794,6 +794,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
+        instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
         for (int icode : Icode.AWAIT_ICODES) {
             instructionObjs[base + icode] = new DoIterator(icode);
         }
@@ -3963,6 +3964,27 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             var store = (NewLiteralStorage) frame.stack[frame.stackTop];
             store.pushValue(value);
             return null;
+        }
+    }
+
+    private static class DoImportCall extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object options = popValue(frame);
+            Object specifier = popValue(frame);
+            Object referrer = frame.stack[frame.stackTop];
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.importCall(referrer, specifier, options, cx, frame.scope);
+            return null;
+        }
+
+        private static Object popValue(CallFrame frame) {
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK) {
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            }
+            --frame.stackTop;
+            return value;
         }
     }
 
