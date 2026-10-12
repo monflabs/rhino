@@ -671,7 +671,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | done        | 74.0% → 83.3% (4.1–4.4)       | 9b7abd3ce |
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
-| 7.x  | ES2021                                          | done        | 84.6% (+11)                  | (this) |
+| 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
 | 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
