@@ -211,6 +211,15 @@ public class OptionalChainingOperatorTest {
     }
 
     @Test
+    public void elementAccessInAChainIsShortCircuited() {
+        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.b[0]");
+        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.[0][1]");
+        Utils.assertWithAllModes_ES6(0, "var n = 0, a; a?.b[n++]; a?.b.c[n++]; n");
+        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.b.c[0]()");
+        Utils.assertWithAllModes_ES6(2, "var a = {b: [1, 2]}; a?.b[1]");
+    }
+
+    @Test
     public void optionalChainingOperatorFollowedByDigitsIsAHook() {
         Utils.assertWithAllModes_ES6(0.5, "true ?.5 : false");
     }

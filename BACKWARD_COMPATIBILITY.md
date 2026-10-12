@@ -896,6 +896,17 @@ var o = { async m() {} };          // before: SyntaxError   now: an async method
   (`async(x)` is still a call). Rhino only reserved `await` under ES6: it was already an identifier in earlier versions.
 - **Why:** ECMA-262 2026, §13.1.1 (Static Semantics: Early Errors, `await`), §15.8 (async function definitions).
 
+### 2.41 Element accesses in an optional chain
+
+```js
+var a;
+a?.b[0];          // before: TypeError (cannot read property "0" of undefined)   now: undefined
+a?.b[f()];        // before: f is called   now: f is not called
+```
+
+- ES6 and later versions: a `[...]` access after `?.` in the same chain is short-circuited like a `.name` access.
+- **Why:** ECMA-262 2026, §13.3.9 (Optional Chains).
+
 ---
 
 ## 3. Platform and embedding

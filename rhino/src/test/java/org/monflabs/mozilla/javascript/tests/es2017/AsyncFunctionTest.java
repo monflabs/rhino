@@ -5,9 +5,11 @@
 package org.monflabs.mozilla.javascript.tests.es2017;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.EvaluatorException;
 import org.monflabs.mozilla.javascript.TopLevel;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
@@ -85,6 +87,34 @@ class AsyncFunctionTest {
                         + "try { new af(); } catch (e) { log.push(e.name); }\n"
                         + "log.push(af() instanceof Promise);\n"
                         + "AsyncFunction('a', 'return await a;')(5).then(v => log.push(v));");
+    }
+
+    @Test
+    void earlyErrors() {
+        for (String source :
+                new String[] {
+                    "async function f() { var await; }",
+                    "async function f(a = await 1) {}",
+                    "async (await) => {}",
+                    "async (a = await 1) => {}",
+                    "async (...a,) => {}",
+                    "async () => { (a = await 1) => {} }",
+                    "label: async function f() {}",
+                    "if (1) async function f() {}",
+                    "class C { async constructor() {} }",
+                    "await 1;"
+                }) {
+            Utils.runWithAllModes(
+                    cx -> {
+                        cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                        TopLevel scope = cx.initStandardObjects();
+                        assertThrows(
+                                EvaluatorException.class,
+                                () -> cx.evaluateString(scope, source, "test", 1, null),
+                                source);
+                        return null;
+                    });
+        }
     }
 
     @Test

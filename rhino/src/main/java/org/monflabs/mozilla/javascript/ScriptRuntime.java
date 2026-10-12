@@ -3449,6 +3449,9 @@ public class ScriptRuntime {
         if (isSymbol(elem)) {
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
+                if (isOptionalChainingCall) {
+                    return null;
+                }
                 throw undefCallError(obj, String.valueOf(elem));
             }
             value = ScriptableObject.getProperty(thisObj, (Symbol) elem);
@@ -3456,11 +3459,14 @@ public class ScriptRuntime {
         } else {
             StringIdOrIndex s = toStringIdOrIndex(elem);
             if (s.stringId != null) {
-                return getPropAndThis(obj, s.stringId, cx, scope);
+                return getPropAndThisInner(obj, s.stringId, cx, scope, isOptionalChainingCall);
             }
 
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
+                if (isOptionalChainingCall) {
+                    return null;
+                }
                 throw undefCallError(obj, String.valueOf(elem));
             }
 

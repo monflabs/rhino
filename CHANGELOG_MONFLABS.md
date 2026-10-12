@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Async functions: early errors; optional chains (2026-10-12, plan 3.1b)
+
+- Early errors: `label: async function f() {}`, and an `await` expression in the parameters of an arrow function
+  nested in an async function.
+- All versions: `a?.b[c]` short-circuits the element access when `a` is null or undefined (before: a TypeError,
+  and `c` was evaluated), and `a?.b[c]()` is undefined (before: a TypeError; `c` is still evaluated there);
+  see BACKWARD_COMPATIBILITY.md 2.41.
+- 3.2 needs no work: `Object.values`/`entries`/`getOwnPropertyDescriptors`, `padStart`/`padEnd` and trailing
+  commas pass every in-scope test.
+- test262: 30,852/42,616 (72.4%), 3 more tests pass. Perf gate: no regression against 3.1a (properties and regexptest re-measured
+  on an idle machine).
+
 ### Async functions (2026-10-12, plan 3.1a)
 
 - New: `async function` declarations and expressions, async arrow functions, async methods (object literals and

@@ -599,26 +599,35 @@ public class Parser {
         return arrowFunction(param, startLine, startColumn, asyncStart);
     }
 
+    /**
+     * The parameters of an arrow function cannot contain an await expression (ECMA-262 15.3.1),
+     * nor, for an async arrow function, await as an identifier (15.9.1).
+     */
+    private void checkAwaitInArrowParams(AstNode params, boolean isAsync) {
+        params.visit(
+                node -> {
+                    if (node instanceof FunctionNode
+                            && ((FunctionNode) node).getFunctionType()
+                                    != FunctionNode.ARROW_FUNCTION) {
+                        return false;
+                    }
+                    if ((node instanceof Yield && ((Yield) node).isAwait())
+                            || (isAsync
+                                    && node instanceof Name
+                                    && "await".equals(((Name) node).getIdentifier()))) {
+                        reportError("msg.bad.await");
+                    }
+                    return true;
+                });
+    }
+
     /** The parameters of async (...) => ..., from the call that covered them. */
     private AstNode asyncArrowParams(FunctionCall call) {
         int lp = call.getPosition() + call.getLp();
         int rp = call.getPosition() + call.getRp();
         List<AstNode> args = call.getArguments();
-        // await in the parameters of an async arrow function: as an identifier or an expression
         for (AstNode arg : args) {
-            arg.visit(
-                    node -> {
-                        if (node instanceof FunctionNode
-                                && ((FunctionNode) node).getFunctionType()
-                                        != FunctionNode.ARROW_FUNCTION) {
-                            return false;
-                        }
-                        if ((node instanceof Name && "await".equals(((Name) node).getIdentifier()))
-                                || (node instanceof Yield && ((Yield) node).isAwait())) {
-                            reportError("msg.bad.await");
-                        }
-                        return true;
-                    });
+            checkAwaitInArrowParams(arg, true);
         }
         if (!args.isEmpty()
                 && args.get(args.size() - 1) instanceof Spread
@@ -1786,6 +1795,8 @@ public class Parser {
         fnNode.setFunctionType(FunctionNode.ARROW_FUNCTION);
         if (isAsync) {
             fnNode.setIsAsync();
+        } else if (params != null && inAsyncFunction()) {
+            checkAwaitInArrowParams(params, false);
         }
         fnNode.setJsDocNode(getAndResetJsDoc());
 
@@ -3404,7 +3415,7 @@ public class Parser {
         bundle.setLineColumnNumber(expr.getLineno(), expr.getColumn());
         // look for more labels
         AstNode stmt = null;
-        while (peekToken() == Token.NAME) {
+        while (peekToken() == Token.NAME && !isAsyncFunctionStart()) {
             currentFlaggedToken |= TI_CHECK_LABEL;
             expr = expr(false);
             if (expr.getType() != Token.LABEL) {
@@ -4609,6 +4620,10 @@ public class Parser {
                 case Token.LB:
                     consumeToken();
                     pn = makeElemGet(pn, ts.tokenBeg);
+                    if (isOptionalChain) {
+                        // a?.b[c]: the element is not evaluated when a is null or undefined
+                        pn.setType(Token.QUESTION_DOT);
+                    }
                     break;
 
                 case Token.LP:
