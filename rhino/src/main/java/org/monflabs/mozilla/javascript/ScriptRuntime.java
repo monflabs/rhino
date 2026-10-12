@@ -6337,6 +6337,18 @@ public class ScriptRuntime {
             if (proto instanceof Scriptable) {
                 return (Scriptable) proto;
             }
+            // the intrinsic prototype of the realm of newTarget (10.1.14 step 4)
+            TopLevel realm =
+                    ScriptableObject.getTopLevelScope(((Function) nt).getDeclarationScope());
+            if (realm != ScriptableObject.getTopLevelScope(f.getDeclarationScope())) {
+                Object ctor = ScriptableObject.getProperty(realm, f.getFunctionName());
+                if (ctor instanceof JSFunction) {
+                    Object realmProto = ((JSFunction) ctor).getPrototypeProperty();
+                    if (realmProto instanceof Scriptable) {
+                        return (Scriptable) realmProto;
+                    }
+                }
+            }
         }
         return (Scriptable) f.getPrototypeProperty();
     }

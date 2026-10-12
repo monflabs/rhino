@@ -568,6 +568,9 @@ Nashorn, rather than populated by the host.
 **7.2** `String.prototype.replaceAll`, `Promise.any` + `AggregateError` residuals. **7.3** `WeakRef`/`FinalizationRegistry`
 residuals (cleanup callbacks scheduled on the job queue), numeric separators residuals.
 
+Status (2026-10-12, done): every ES2021 feature passes but for tests needing class fields (M8); the native errors,
+`WeakRef`, `FinalizationRegistry` and ordinary objects take their fallback prototype from newTarget's realm.
+
 ### M8 — ES2022
 
 **8.1 Class fields.** Public instance and static fields, computed keys, `NamedEvaluation`, initializer scope
@@ -668,7 +671,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | done        | 74.0% → 83.3% (4.1–4.4)       | 9b7abd3ce |
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
-| 7.x  | ES2021                                          | todo        |                              |        |
+| 7.x  | ES2021                                          | done        | 84.6% (+11)                  | (this) |
 | 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |

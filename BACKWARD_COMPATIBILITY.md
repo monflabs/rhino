@@ -965,6 +965,20 @@ f.apply(null, { length: 2 ** 32 });        // same
 - **Why:** ECMA-262 2026, §23.2.5.1.4 (InitializeTypedArrayFromArrayLike), §7.3.18 (CreateListFromArrayLike):
   the specification's limit is memory; a JavaScript error is what a script can handle.
 
+### 2.46 The prototype of objects constructed for a newTarget of another realm
+
+```js
+var nt = new other.Function(); nt.prototype = null;   // other: the global object of another realm
+Object.getPrototypeOf(Reflect.construct(TypeError, [], nt));
+// before: other.Error.prototype   now: other.TypeError.prototype
+Object.getPrototypeOf(Reflect.construct(function () {}, [], nt));
+// before: Object.prototype   now: other.Object.prototype
+```
+
+- All versions: when the `prototype` of newTarget is not an object, a native error, a `WeakRef`, a
+  `FinalizationRegistry` and an ordinary object get the intrinsic prototype of newTarget's realm.
+- **Why:** ECMA-262 2026, §10.1.14 (GetPrototypeFromConstructor).
+
 ---
 
 ## 3. Platform and embedding

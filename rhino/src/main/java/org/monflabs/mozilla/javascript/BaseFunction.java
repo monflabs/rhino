@@ -777,6 +777,12 @@ public class BaseFunction extends ScriptableObject implements Function {
 
         if (proto instanceof Scriptable) {
             newInstance.setPrototype((Scriptable) proto);
+        } else if (nt instanceof BaseFunction && nt != this) {
+            // %Object.prototype% of the realm of newTarget (10.1.14 GetPrototypeFromConstructor)
+            newInstance.setPrototype(
+                    ScriptableObject.getObjectPrototype(
+                            ScriptableObject.getTopLevelScope(
+                                    ((BaseFunction) nt).getDeclarationScope())));
         } else {
             newInstance.setPrototype(getClassPrototype());
         }

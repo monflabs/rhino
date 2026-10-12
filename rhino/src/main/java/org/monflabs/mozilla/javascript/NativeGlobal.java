@@ -60,12 +60,16 @@ public class NativeGlobal implements Serializable {
             if (e == TopLevel.NativeErrors.Error) continue;
             ClassDescriptor.Builder builder;
             if (e != TopLevel.NativeErrors.AggregateError) {
+                // the prototype of the realm of newTarget is the one of this error type
+                TopLevel.NativeErrors type = e;
                 builder =
                         new ClassDescriptor.Builder(
                                 e.name(),
                                 1,
-                                NativeError::js_constructor,
-                                NativeError::js_constructor);
+                                (c, f, nt, s, thisObj, args) ->
+                                        NativeError.make(c, f, nt, s, thisObj, args, type),
+                                (c, f, nt, s, thisObj, args) ->
+                                        NativeError.make(c, f, nt, s, thisObj, args, type));
             } else {
                 builder =
                         new ClassDescriptor.Builder(

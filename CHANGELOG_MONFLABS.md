@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Prototypes from another realm's newTarget; M7 done (2026-10-12, plan 7.x)
+
+- All versions: GetPrototypeFromConstructor falls back to the intrinsic of newTarget's realm for the native errors
+  (each constructor now passes its own type; before, the realm's Error.prototype), `WeakRef`,
+  `FinalizationRegistry` and ordinary objects; see BACKWARD_COMPATIBILITY.md 2.46.
+- The other ES2021 items need no work: logical assignment, `replaceAll`, `Promise.any`/`AggregateError`, numeric
+  separators pass but for tests that need class fields (M8).
+- test262: 36,073/42,616 (84.6%), 11 more tests pass. Perf gate: no regression against M6.
+
 ### Dynamic import and import.meta; M6 done (2026-10-12, plan 6.x)
 
 - New: `import(specifier [, options])` in scripts and modules (IR: Token#IMPORT_CALL): the specifier is converted at
