@@ -1142,6 +1142,9 @@ public class Parser {
         }
         if (tt == Token.DEFAULT) {
             consumeToken();
+            if (ts.nameHadEscape) {
+                reportError("msg.invalid.escape");
+            }
             return exportDefault(start);
         }
         // export VariableStatement / Declaration: the declared names are exported
@@ -1600,6 +1603,11 @@ public class Parser {
                             name.getIdentifier());
                     return;
                 }
+            }
+            if (moduleInfo != null && currentScope == currentScriptOrFn) {
+                // the top-level functions of a module are lexically declared (16.2.1.1)
+                defineSymbol(Symbol.Type.FUNCTION_LET, name.getIdentifier());
+                return;
             }
             // Function statements define a symbol in the enclosing scope
             defineSymbol(Symbol.Type.FUNCTION_VAR, name.getIdentifier());

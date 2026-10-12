@@ -1296,8 +1296,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
                     return Token.NOT;
 
                 case '<':
-                    /* NB:treat HTML begin-comment as comment-till-eol */
-                    if (matchChar('!')) {
+                    /* NB:treat HTML begin-comment as comment-till-eol (not in a module) */
+                    if (parser.moduleInfo == null && matchChar('!')) {
                         if (matchChar('-')) {
                             if (matchChar('-')) {
                                 tokenStartLastLineEnd = lastLineEnd;
@@ -1434,7 +1434,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                     if (matchChar('=')) {
                         c = Token.ASSIGN_SUB;
                     } else if (matchChar('-')) {
-                        if (!dirtyLine) {
+                        if (!dirtyLine && parser.moduleInfo == null) {
                             // treat HTML end-comment after possible whitespace
                             // after line start as comment-until-eol
                             if (matchChar('>')) {

@@ -171,6 +171,30 @@ class ModuleTest {
     }
 
     @Test
+    void moduleEarlyErrors() {
+        inAllModes(
+                null,
+                (cx, scope) -> {
+                    for (String source :
+                            new String[] {
+                                "function f() {} function f() {}",
+                                "var f; function f() {}",
+                                "x\n-->;",
+                                "export d\\u0065fault 0;",
+                                "export var a; export { a };",
+                                "import { x } from 'm'; let x;",
+                                "{ export var b; }",
+                                "new.target;"
+                            }) {
+                        assertThrows(
+                                EvaluatorException.class,
+                                () -> cx.evaluateModule(scope, source, "early"),
+                                source);
+                    }
+                });
+    }
+
+    @Test
     void evaluatedOnceAndFactoryLoaders() {
         ModuleLoader loader =
                 (specifier, referrer) -> {

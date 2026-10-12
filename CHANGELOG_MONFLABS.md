@@ -6,6 +6,12 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### ES modules: early errors (2026-10-11, plan 1.12b)
+
+- Module code: HTML-like comments are not comments, top-level function declarations are lexical (a duplicate
+  or a `var` of the same name is a SyntaxError), and `export d\u0065fault` is a SyntaxError.
+- test262: 30,492/42,616 (71.6%), 8 more tests pass. Perf gate: no regression (the flagged metrics re-measured on an idle machine).
+
 ### ES modules (2026-10-11, plan 1.12a)
 
 - New: ES2015 modules. `import` and `export` in their ES2015-ES2022 forms (named, default, namespace,

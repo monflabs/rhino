@@ -471,6 +471,9 @@ Steps:
   tests. Left: `super.x = v` with a namespace receiver (OrdinarySet does not use [[GetOwnProperty]]), early
   errors of module code not tied to import/export (HTML-like comments, duplicate top-level functions, escaped
   keywords in exports), `arguments` at the top level of a module.
+- *1.12b (done)* module early errors: HTML-like comments, lexical top-level functions, escaped `default`. Left:
+  `super.x = v` with a namespace receiver, `arguments` at the top level of a module; the rest of the module tests
+  need async functions (M3), class fields (M7) or later module features.
 
 ### M2 — ES2016
 
@@ -616,7 +619,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.9  | RegExp ES2015                                   | done        | 69.5% → 69.7% (1.9a)         | 13a800a18 |
 | 1.10 | Templates and syntax residuals                  | done        | 69.7% → 70.6% (1.10a–g)      | 162371592 |
 | 1.11 | Annex B (ES2015)                                | done        | 70.6% → 70.8% (1.11a–b)      | bf1e76df7 |
-| 1.12 | ES modules                                      | in progress | 70.8% → 71.5% (1.12a)        | (this) |
+| 1.12 | ES modules                                      | in progress | 70.8% → 71.6% (1.12a–b)      | (this) |
 | 2.x  | ES2016                                          | todo        |                              |        |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | todo        |                              |        |
 | 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
