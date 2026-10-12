@@ -994,15 +994,18 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             case Token.ITER_REST:
             case Token.ITER_CLOSE:
             case Token.REQUIRE_OBJECT:
+            case Token.AWAIT:
                 visitExpression(child, 0);
                 addIcode(
-                        type == Token.REQUIRE_OBJECT
-                                ? Icode.REQUIRE_OBJECT
-                                : type == Token.ITER_STEP
-                                        ? Icode.ITER_STEP
-                                        : type == Token.ITER_REST
-                                                ? Icode.ITER_REST
-                                                : Icode.ITER_CLOSE);
+                        type == Token.AWAIT
+                                ? Icode.AWAIT_ICODES[node.getIntProp(Node.AWAIT_KIND_PROP, 0)]
+                                : type == Token.REQUIRE_OBJECT
+                                        ? Icode.REQUIRE_OBJECT
+                                        : type == Token.ITER_STEP
+                                                ? Icode.ITER_STEP
+                                                : type == Token.ITER_REST
+                                                        ? Icode.ITER_REST
+                                                        : Icode.ITER_CLOSE);
                 break;
 
             case Token.POS:

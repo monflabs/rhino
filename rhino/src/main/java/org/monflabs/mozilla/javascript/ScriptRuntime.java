@@ -2965,6 +2965,9 @@ public class ScriptRuntime {
         // for-of: the iterator record and the scope of the loop
         IteratorRecord record;
         VarScope scope;
+
+        // for await
+        AsyncIteration.Loop asyncLoop;
     }
 
     public static Scriptable toIterator(Context cx, Scriptable obj, boolean keyOnly) {
@@ -3012,6 +3015,13 @@ public class ScriptRuntime {
 
     public static Object enumInit(Object value, Context cx, VarScope scope, int enumType) {
         IdEnumeration x = new IdEnumeration();
+        if (value instanceof AsyncIteration.Open) {
+            // for await (see Node#AWAIT_ITER_OPEN)
+            x.enumType = enumType;
+            x.asyncLoop = new AsyncIteration.Loop(((AsyncIteration.Open) value).record);
+            x.scope = scope;
+            return x;
+        }
         x.obj = toObjectOrNull(cx, value, scope);
         // "for of" loop
         if (enumType == ENUMERATE_VALUES_IN_ORDER) {
@@ -3133,6 +3143,9 @@ public class ScriptRuntime {
 
     public static Object enumId(Object enumObj, Context cx) {
         IdEnumeration x = (IdEnumeration) enumObj;
+        if (x.asyncLoop != null) {
+            return x.asyncLoop.value;
+        }
         if (x.iterator != null || x.record != null) {
             return x.currentId;
         }
@@ -5934,11 +5947,75 @@ public class ScriptRuntime {
     }
 
     /**
+     * GetMethod ( V, P ) (ECMA-262 7.3.11): null when the property is undefined or null, a
+     * TypeError when it is not callable.
+     */
+    static Callable getMethod(Context cx, VarScope scope, Object value, Object key) {
+        Scriptable o = toObject(cx, scope, value);
+        Object method =
+                key instanceof Symbol
+                        ? ScriptableObject.getProperty(o, (Symbol) key)
+                        : ScriptableObject.getProperty(o, (String) key);
+        if (method == Scriptable.NOT_FOUND || method == null || Undefined.isUndefined(method)) {
+            return null;
+        }
+        if (!(method instanceof Callable)) {
+            throw notFunctionError(method, key.toString());
+        }
+        return (Callable) method;
+    }
+
+    /**
      * Starts the body of an async function, compiled as a generator, and returns the promise of the
      * call (see {@link AsyncFunctionDriver}).
      */
     public static Scriptable startAsyncFunction(Context cx, VarScope scope, ES6Generator body) {
         return (Scriptable) AsyncFunctionDriver.start(cx, scope, body);
+    }
+
+    /** The async generator object a call of an async generator function returns. */
+    public static Scriptable createAsyncGenerator(
+            VarScope scope, ES6Generator body, JSFunction function) {
+        return NativeAsyncGenerator.create(scope, body, function);
+    }
+
+    /** The operand of an await in an async generator, as the generator yields it (Token#AWAIT). */
+    public static Object awaitRequest(Object value, Context cx, VarScope scope) {
+        return new NativeAsyncGenerator.AwaitRequest(value);
+    }
+
+    /**
+     * The operand of a yield* in an async generator: GetIterator(value, async), as the generator
+     * yields it for its delegation (Node#AWAIT_DELEGATE).
+     */
+    public static Object asyncDelegate(Object value, Context cx, VarScope scope) {
+        return new NativeAsyncGenerator.DelegateRequest(
+                NativeAsyncFromSyncIterator.getAsyncIterator(cx, scope, value));
+    }
+
+    /** GetIterator(value, async) for a for await loop (Node#AWAIT_ITER_OPEN). */
+    public static Object asyncIterOpen(Object value, Context cx, VarScope scope) {
+        return new AsyncIteration.Open(
+                NativeAsyncFromSyncIterator.getAsyncIterator(cx, scope, value));
+    }
+
+    /** The next step of a for await loop, for the driver (Node#AWAIT_ITER_NEXT). */
+    public static Object asyncIterNext(Object enumObj, Context cx, VarScope scope) {
+        return new AsyncIteration.Next(((IdEnumeration) enumObj).asyncLoop);
+    }
+
+    /** The close of a for await loop left by a jump (Node#AWAIT_ITER_CLOSE). */
+    public static Object asyncIterClose(Object enumObj, Context cx, VarScope scope) {
+        return new AsyncIteration.Close(asyncLoop(enumObj), false);
+    }
+
+    /** The close of a for await loop left by a throw (Node#AWAIT_ITER_CLOSE_ABRUPT). */
+    public static Object asyncIterCloseAbrupt(Object enumObj, Context cx, VarScope scope) {
+        return new AsyncIteration.Close(asyncLoop(enumObj), true);
+    }
+
+    private static AsyncIteration.Loop asyncLoop(Object enumObj) {
+        return enumObj instanceof IdEnumeration ? ((IdEnumeration) enumObj).asyncLoop : null;
     }
 
     public static Scriptable wrapException(Throwable t, VarScope scope, Context cx) {

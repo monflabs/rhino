@@ -231,7 +231,7 @@ public class NodeTransformer {
                                     || isForOf(n)) {
                                 Node unwind;
                                 if (isForOf(n)) {
-                                    unwind = enumClose(n);
+                                    unwind = enumClose(n, tree);
                                 } else if (elemtype == Token.TRY) {
                                     Jump jsrnode = new Jump(Token.JSR);
                                     jsrnode.target = ((Jump) n).getFinally();
@@ -285,14 +285,17 @@ public class NodeTransformer {
                             if (n == jumpStatement) {
                                 if (type == Token.BREAK && isForOf(n)) {
                                     previous =
-                                            addBeforeCurrent(parent, previous, node, enumClose(n));
+                                            addBeforeCurrent(
+                                                    parent, previous, node, enumClose(n, tree));
                                 }
                                 break;
                             }
 
                             int elemtype = n.getType();
                             if (isForOf(n)) {
-                                previous = addBeforeCurrent(parent, previous, node, enumClose(n));
+                                previous =
+                                        addBeforeCurrent(
+                                                parent, previous, node, enumClose(n, tree));
                             } else if (elemtype == Token.WITH
                                     || elemtype == Token.SCOPEEXPR
                                     || elemtype == Token.SCOPE_BLOCK) {
@@ -540,7 +543,19 @@ public class NodeTransformer {
         return loop.getType() == Token.LOOP && loop.getProp(Node.LOCAL_BLOCK_PROP) != null;
     }
 
-    private static Node enumClose(Node forOf) {
+    private static Node enumClose(Node forOf, ScriptNode tree) {
+        if (forOf.getIntProp(Node.AWAIT_KIND_PROP, -1) != -1) {
+            // a for await loop: AsyncIteratorClose, by the driver of the async body
+            Node yield =
+                    new Node(
+                            Token.YIELD,
+                            IRFactory.awaitNode(
+                                    Node.AWAIT_ITER_CLOSE,
+                                    IRFactory.createUseLocal(
+                                            (Node) forOf.getProp(Node.LOCAL_BLOCK_PROP))));
+            ((FunctionNode) tree).addResumptionPoint(yield);
+            return new Node(Token.EXPR_VOID, yield);
+        }
         Node close = new Node(Token.ENUM_CLOSE);
         close.putProp(Node.LOCAL_BLOCK_PROP, forOf.getProp(Node.LOCAL_BLOCK_PROP));
         return close;

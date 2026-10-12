@@ -526,6 +526,10 @@ but not all binary properties nor `Script_Extensions` (Nashorn held some out as 
 compact tables from the UCD at build time vs JDK-only with documented hold-outs.
 **4.4** `Promise.prototype.finally` (52%), template literal revision (invalid escapes in tagged templates).
 
+Steps:
+- *4.1 (done)* async generators, `yield*` in them, `for await`, the async iteration intrinsics; generators can yield
+  in a `finally` run by `return()`, and compiled generators keep the handlers of nested `try` statements.
+
 ### M5 — ES2019
 
 Mostly present. **5.1** Residuals: `flat`/`flatMap`, `trimStart`/`trimEnd` (and Annex B aliases as the same
@@ -645,7 +649,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 1.12 | ES modules                                      | done        | 70.8% → 71.6% (1.12a–c)      | 4d51232fe |
 | 2.x  | ES2016                                          | done        | 71.6% (no change needed)     | 4d51232fe |
 | 3.x  | ES2017 (async functions, SAB/Atomics)           | done        | 71.6% → 74.0% (3.1a–3.4)      | bdba199cf |
-| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | todo        |                              |        |
+| 4.x  | ES2018 (async iteration, rest/spread, RegExp)   | in progress | 74.0% → 83.3% (4.1)           | (this) |
 | 5.x  | ES2019 residuals                                | todo        |                              |        |
 | 6.x  | ES2020                                          | todo        |                              |        |
 | 7.x  | ES2021                                          | todo        |                              |        |

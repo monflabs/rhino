@@ -52,6 +52,8 @@ public final class NativeIterator extends ScriptableObject {
         // Generator
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
             ES6Generator.init(cx, scope, sealed);
+            NativeAsyncGenerator.init(cx, scope, sealed);
+            NativeAsyncFromSyncIterator.init(cx, scope, sealed);
         } else {
             NativeGenerator.init(cx, scope, sealed);
         }

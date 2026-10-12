@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Async iteration (2026-10-12, plan 4.1)
+
+- New: async generators (`async function*`, async generator methods), `yield*` in them, `for await`,
+  `Symbol.asyncIterator`, `%AsyncGeneratorFunction%`, `%AsyncGeneratorPrototype%`, `%AsyncIteratorPrototype%` and
+  `%AsyncFromSyncIteratorPrototype%`.
+- Implementation: an async generator body is a generator (decision 3.1) that yields its awaits as `AwaitRequest`s,
+  its `yield*` as a `DelegateRequest`, and the steps of its `for await` loops (next, close) as `AsyncIteration`
+  requests (IR: Token#AWAIT and its kinds). `NativeAsyncGenerator` queues next/return/throw requests and drives the
+  body, awaiting as the specification does (`return x` awaits `x`; a yielded promise is awaited before it is
+  produced; a `return()` at a yield awaits its value). An async function runs the `for await` requests the same way.
+- `VERSION_ECMASCRIPT`: `for (async of ...)` is a SyntaxError; see BACKWARD_COMPATIBILITY.md 1.15.
+- All versions: a `finally` block run by a generator's `return()` can yield (before, a TypeError in interpreted
+  mode), and the return value is kept when it completes; in compiled mode, a `catch` around a `try`/`finally` whose
+  `finally` yielded catches what the `finally` rethrows (the exception information of a generator's nested `try`
+  was not popped). See BACKWARD_COMPATIBILITY.md 2.43.
+- Known issue: in a compiled generator, a labeled `continue` out of a nested for-of loop whose loops both declare
+  `const` bindings fails (NullPointerException).
+- test262: `async-iteration` is no longer an unsupported feature, and its directories run: 35,496/42,616 (83.3%),
+  3,949 more tests pass. The newly failing tests need private methods (M8) or explicit resource management
+  (`Symbol.asyncDispose`), or are the 2 noted above. Perf gate: no regression against 3.4 (re-measured on an idle machine;
+  compiled typedarray +11%, within tolerance).
+
 ### Atomics.wait and notify, test262 agents (2026-10-12, plan 3.4)
 
 - New: `Atomics.wait` and `Atomics.notify`. The waiter lists of a SharedArrayBuffer belong to its storage and are

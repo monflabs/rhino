@@ -794,6 +794,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
+        for (int icode : Icode.AWAIT_ICODES) {
+            instructionObjs[base + icode] = new DoIterator(icode);
+        }
         instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
         instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
                 new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
@@ -1212,9 +1215,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 JSFunction fn = (JSFunction) generatorFrame.fnOrScript;
                 ES6Generator generator = new ES6Generator(frame.scope, fn, generatorFrame);
                 frame.result =
-                        fn.getDescriptor().isAsync()
-                                ? AsyncFunctionDriver.start(cx, frame.scope, generator)
-                                : generator;
+                        fn.getDescriptor().isAsyncGenerator()
+                                ? NativeAsyncGenerator.create(frame.scope, generator, fn)
+                                : fn.getDescriptor().isAsync()
+                                        ? AsyncFunctionDriver.start(cx, frame.scope, generator)
+                                        : generator;
             } else {
                 frame.result =
                         new NativeGenerator(
@@ -1238,8 +1243,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             InterpreterState state,
             GeneratorState generatorState,
             boolean yieldStar) {
-        if (generatorState.operation == NativeGenerator.GENERATOR_CLOSE) {
-            // Error: no yields when generator is closing
+        if (generatorState.operation == NativeGenerator.GENERATOR_CLOSE
+                && !frame.fnOrScript.getDescriptor().isES6Generator()) {
+            // Error: no yields when a legacy generator is closing (an ES6 generator can yield in
+            // a finally block run by return())
             throw ScriptRuntime.typeErrorById("msg.yield.closing");
         }
         // return to our caller (which should be a method of NativeGenerator)
@@ -3500,6 +3507,18 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                         case Icode.ITER_REST -> ScriptRuntime.iteratorRest(value, cx, frame.scope);
                         case Icode.REQUIRE_OBJECT ->
                                 ScriptRuntime.requireObject(value, cx, frame.scope);
+                        case Icode.AWAIT_REQUEST ->
+                                ScriptRuntime.awaitRequest(value, cx, frame.scope);
+                        case Icode.ASYNC_DELEGATE ->
+                                ScriptRuntime.asyncDelegate(value, cx, frame.scope);
+                        case Icode.ASYNC_ITER_OPEN ->
+                                ScriptRuntime.asyncIterOpen(value, cx, frame.scope);
+                        case Icode.ASYNC_ITER_NEXT ->
+                                ScriptRuntime.asyncIterNext(value, cx, frame.scope);
+                        case Icode.ASYNC_ITER_CLOSE ->
+                                ScriptRuntime.asyncIterClose(value, cx, frame.scope);
+                        case Icode.ASYNC_ITER_CLOSE_ABRUPT ->
+                                ScriptRuntime.asyncIterCloseAbrupt(value, cx, frame.scope);
                         default -> ScriptRuntime.iteratorClose(value, cx, frame.scope);
                     };
             return null;

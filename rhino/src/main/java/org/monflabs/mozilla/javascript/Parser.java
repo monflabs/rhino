@@ -522,6 +522,11 @@ public class Parser {
         return moduleInfo == null && !inAsyncFunction();
     }
 
+    private boolean inAsyncGenerator() {
+        return currentScriptOrFn instanceof FunctionNode
+                && ((FunctionNode) currentScriptOrFn).isAsyncGenerator();
+    }
+
     private boolean inAsyncFunction() {
         return currentScriptOrFn instanceof FunctionNode
                 && ((FunctionNode) currentScriptOrFn).isAsync();
@@ -576,7 +581,9 @@ public class Parser {
                 && next.startsIdentifier()
                 && !"function".equals(next.word)
                 && !"in".equals(next.word)
-                && !"instanceof".equals(next.word);
+                && !"instanceof".equals(next.word)
+                // for await (async of ...): async is the target of the loop
+                && !(inForInit && "of".equals(next.word) && !next.followedByArrow);
     }
 
     private AstNode asyncArrowWithIdentifier() throws IOException {
@@ -1667,6 +1674,13 @@ public class Parser {
         if (memberExprNode != null) {
             syntheticType = FunctionNode.FUNCTION_EXPRESSION;
         }
+        if (isAsync
+                && type == FunctionNode.FUNCTION_EXPRESSION
+                && name != null
+                && "await".equals(name.getIdentifier())) {
+            // the name of an async function expression is bound in it, where await is a keyword
+            reportError("msg.syntax");
+        }
         if (isGenerator
                 && type == FunctionNode.FUNCTION_EXPRESSION
                 && name != null
@@ -1691,11 +1705,9 @@ public class Parser {
             Symbol letSym = currentScope.getSymbol(name.getIdentifier());
             currentScriptOrFn.addAnnexBFunction(letSym, fnNode);
         }
-        if (isAsync) {
-            if (isGenerator) {
-                // async generators (ES2018) are not supported yet
-                reportError("msg.syntax");
-            }
+        if (isAsync && isGenerator) {
+            fnNode.setIsAsyncGenerator();
+        } else if (isAsync) {
             fnNode.setIsAsync();
         } else if (isGenerator) {
             fnNode.setIsES6Generator();
@@ -2648,7 +2660,7 @@ public class Parser {
         if (currentToken != Token.FOR) codeBug();
         consumeToken();
         int forPos = ts.tokenBeg, lineno = lineNumber(), column = columnNumber();
-        boolean isForEach = false, isForIn = false, isForOf = false;
+        boolean isForEach = false, isForIn = false, isForOf = false, isForAwait = false;
         int eachPos = -1, inPos = -1, lp = -1, rp = -1;
         AstNode init = null; // init is also foo in 'foo in object'
         AstNode cond = null; // cond is also object in 'foo in object'
@@ -2658,8 +2670,15 @@ public class Parser {
         Scope tempScope = new Scope();
         pushScope(tempScope); // decide below what AST class to use
         try {
+            if (matchToken(Token.AWAIT, true)) {
+                // for await (... of ...), in an async function (14.7.5)
+                if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
+                    reportError("msg.bad.await");
+                }
+                isForAwait = true;
+            }
             // See if this is a for each () instead of just a for ()
-            if (matchToken(Token.NAME, true)) {
+            if (!isForAwait && matchToken(Token.NAME, true)) {
                 if ("each".equals(ts.getString())) {
                     isForEach = true;
                     eachPos = ts.tokenBeg - forPos;
@@ -2670,6 +2689,8 @@ public class Parser {
 
             if (mustMatchToken(Token.LP, "msg.no.paren.for", true)) lp = ts.tokenBeg - forPos;
             int tt = peekToken();
+            boolean initIsAsync =
+                    tt == Token.NAME && "async".equals(ts.getString()) && !ts.nameHadEscape;
 
             init = forLoopInit(tt);
             if (matchToken(Token.IN, true)) {
@@ -2751,6 +2772,17 @@ public class Parser {
                 if (isForOf && isForEach) {
                     reportError("msg.invalid.for.each");
                 }
+                if (isForAwait && !isForOf) {
+                    reportError("msg.for.await.of");
+                }
+                if (isForOf
+                        && !isForAwait
+                        && initIsAsync
+                        && init instanceof Name
+                        && compilerEnv.isLatestEcmaScript()) {
+                    // for (async of ...): [lookahead != async of] (14.7.5)
+                    reportError("msg.syntax");
+                }
                 if (!(init instanceof VariableDeclaration)
                         && compilerEnv.isLatestEcmaScript()
                         && !isValidAssignmentTarget(init, true, false)) {
@@ -2762,8 +2794,12 @@ public class Parser {
                 fis.setIsForEach(isForEach);
                 fis.setEachPosition(eachPos);
                 fis.setIsForOf(isForOf);
+                fis.setIsForAwait(isForAwait);
                 pn = fis;
             } else {
+                if (isForAwait) {
+                    reportError("msg.for.await.of");
+                }
                 ForLoop fl = new ForLoop(forPos);
                 fl.setInitializer(init);
                 fl.setCondition(cond);
@@ -3283,6 +3319,13 @@ public class Parser {
         int before = endFlags;
         AstNode ret;
 
+        if (tt == Token.RETURN && e != null && inAsyncGenerator()) {
+            // return in an async generator awaits its operand (14.10.1)
+            Yield await = new Yield(e.getPosition(), e.getLength(), e, false);
+            await.setIsAwait();
+            await.setIsAwaitRequest();
+            e = await;
+        }
         if (tt == Token.RETURN) {
             endFlags |= e == null ? Node.END_RETURNS : Node.END_RETURNS_VALUE;
             ret = new ReturnStatement(pos, end - pos, e);
@@ -3294,6 +3337,10 @@ public class Parser {
             if (!insideFunctionBody()) reportError("msg.bad.yield");
             endFlags |= Node.END_YIELDS;
             ret = new Yield(pos, end - pos, e, yieldStar);
+            if (yieldStar && inAsyncGenerator()) {
+                // the delegation of an async generator is driven by NativeAsyncGenerator
+                ((Yield) ret).setIsAwaitRequest();
+            }
             setRequiresActivation();
             setIsGenerator();
             if (!exprContext) {
@@ -4322,6 +4369,9 @@ public class Parser {
         AstNode operand = unaryExpr();
         Yield node = new Yield(pos, getNodeEnd(operand) - pos, operand, false);
         node.setIsAwait();
+        if (inAsyncGenerator()) {
+            node.setIsAwaitRequest();
+        }
         node.setLineColumnNumber(lineno, column);
         return node;
     }

@@ -83,8 +83,22 @@ public class Node implements Iterable<Node> {
             GLOBAL_LEXICALS_PROP = 41,
             // the value of a __proto__: v entry of an object literal (sets the prototype)
             PROTO_SETTER_PROP = 42,
-            LAST_PROP = PROTO_SETTER_PROP,
+            // the kind of a Token#AWAIT: one of the AWAIT_* below
+            AWAIT_KIND_PROP = 43,
+            LAST_PROP = AWAIT_KIND_PROP,
             FIRST_PROP = FUNCTION_PROP;
+
+    /**
+     * The kinds of Token#AWAIT, what the body of an async function or generator yields to its
+     * driver: an await (in an async generator), the iterator of a yield*, and the steps of a for
+     * await loop (its operand is then the enumeration of the loop, see AsyncIteration).
+     */
+    public static final int AWAIT_REQUEST = 0,
+            AWAIT_DELEGATE = 1,
+            AWAIT_ITER_OPEN = 2,
+            AWAIT_ITER_NEXT = 3,
+            AWAIT_ITER_CLOSE = 4,
+            AWAIT_ITER_CLOSE_ABRUPT = 5;
 
     /** Values of DERIVED_THIS_PROP. */
     public static final int DERIVED_THIS_VALUE = 1, SUPER_CALLEE = 2;
@@ -495,6 +509,8 @@ public class Node implements Iterable<Node> {
                 return "global_lexicals_prop";
             case PROTO_SETTER_PROP:
                 return "proto_setter_prop";
+            case AWAIT_KIND_PROP:
+                return "await_kind_prop";
 
             default:
                 Kit.codeBug();

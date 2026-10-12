@@ -819,7 +819,7 @@ public final class IRFactory {
                                         null,
                                         body.getLineno(),
                                         body.getColumn());
-                        if (fn.isGenerator() && !fn.isAsync()) {
+                        if (fn.isGenerator() && !fn.isAsyncFunction()) {
                             if (paramInitBlock == null) {
                                 paramInitBlock = new Node(Token.BLOCK);
                             }
@@ -830,7 +830,7 @@ public final class IRFactory {
                     }
                     i -= 2;
                 }
-                if (fn.isGenerator() && !fn.isAsync() && paramInitBlock != null) {
+                if (fn.isGenerator() && !fn.isAsyncFunction() && paramInitBlock != null) {
                     fn.setGeneratorParamInitBlock(paramInitBlock);
                 }
             }
@@ -1791,6 +1791,14 @@ public final class IRFactory {
 
     private Node transformYield(Yield node) {
         Node kid = node.getValue() == null ? null : transform(node.getValue());
+        if (node.isAwaitRequest()) {
+            // an await in an async generator yields an AwaitRequest, a yield* a DelegateRequest
+            Node request = new Node(Token.AWAIT, kid, node.getLineno(), node.getColumn());
+            if (node.getType() == Token.YIELD_STAR) {
+                request.putIntProp(Node.AWAIT_KIND_PROP, Node.AWAIT_DELEGATE);
+            }
+            return new Node(Token.YIELD, request, node.getLineno(), node.getColumn());
+        }
         if (kid != null) return new Node(node.getType(), kid, node.getLineno(), node.getColumn());
         return new Node(node.getType(), node.getLineno(), node.getColumn());
     }
@@ -2217,10 +2225,24 @@ public final class IRFactory {
                                     : (destructuring != -1 && !keyPattern
                                             ? Token.ENUM_INIT_ARRAY
                                             : Token.ENUM_INIT_KEYS);
+            boolean isForAwait = ast instanceof ForInLoop && ((ForInLoop) ast).isForAwait();
+            if (isForAwait) {
+                // GetIterator(obj, async)
+                obj = awaitNode(Node.AWAIT_ITER_OPEN, obj);
+            }
             Node init = new Node(initType, obj);
             init.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
-            Node cond = new Node(Token.ENUM_NEXT);
-            cond.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+            Node cond;
+            if (isForAwait) {
+                // the driver awaits the next result, and resumes the body with whether to go on
+                cond =
+                        new Node(
+                                Token.YIELD,
+                                awaitNode(Node.AWAIT_ITER_NEXT, createUseLocal(localBlock)));
+            } else {
+                cond = new Node(Token.ENUM_NEXT);
+                cond.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+            }
             Node id = new Node(Token.ENUM_ID);
             id.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
 
@@ -2268,8 +2290,22 @@ public final class IRFactory {
                 Node clear = new Node(Token.ITER_GUARD_INIT);
                 clear.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
                 localBlock.addChildToBack(clear);
-                Node close = new Node(Token.ENUM_CLOSE_ABRUPT);
-                close.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+                Node close;
+                if (isForAwait) {
+                    // AsyncIteratorClose of a throw completion, by the driver
+                    loop.putIntProp(Node.AWAIT_KIND_PROP, Node.AWAIT_ITER_CLOSE);
+                    close =
+                            new Node(
+                                    Token.EXPR_VOID,
+                                    new Node(
+                                            Token.YIELD,
+                                            awaitNode(
+                                                    Node.AWAIT_ITER_CLOSE_ABRUPT,
+                                                    createUseLocal(localBlock))));
+                } else {
+                    close = new Node(Token.ENUM_CLOSE_ABRUPT);
+                    close.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
+                }
                 localBlock.addChildToBack(
                         createTryCatchFinally(
                                 new Node(Token.BLOCK, loop),
@@ -3064,7 +3100,14 @@ public final class IRFactory {
         return result;
     }
 
-    private static Node createUseLocal(Node localBlock) {
+    /** A Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), yielded to the driver of the body. */
+    static Node awaitNode(int kind, Node operand) {
+        Node node = new Node(Token.AWAIT, operand);
+        node.putIntProp(Node.AWAIT_KIND_PROP, kind);
+        return node;
+    }
+
+    static Node createUseLocal(Node localBlock) {
         if (Token.LOCAL_BLOCK != localBlock.getType()) throw Kit.codeBug();
         Node result = new Node(Token.LOCAL_LOAD);
         result.putProp(Node.LOCAL_BLOCK_PROP, localBlock);

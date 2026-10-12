@@ -31,6 +31,8 @@ public class BaseFunction extends ScriptableObject implements Function {
     static final SymbolKey GENERATOR_FUNCTION_CLASS =
             new SymbolKey("GeneratorFunctionPrototype", REGULAR);
     static final SymbolKey ASYNC_FUNCTION_CLASS = new SymbolKey("AsyncFunctionPrototype", REGULAR);
+    static final SymbolKey ASYNC_GENERATOR_FUNCTION_CLASS =
+            new SymbolKey("AsyncGeneratorFunctionPrototype", REGULAR);
 
     private static final String APPLY_TAG = "APPLY_TAG";
     private static final String CALL_TAG = "CALL_TAG";
@@ -40,6 +42,7 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static final ClassDescriptor ES6_DESCRIPTOR;
     private static final ClassDescriptor GENERATOR_DESCRIPTOR;
     private static final ClassDescriptor ASYNC_DESCRIPTOR;
+    private static final ClassDescriptor ASYNC_GENERATOR_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> APPLY_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> HAS_INSTANCE_DESCRIPTOR;
     private static final JSDescriptor<JSFunction> CALL_DESCRIPTOR;
@@ -144,6 +147,19 @@ public class BaseFunction extends ScriptableObject implements Function {
                                 SymbolKey.TO_STRING_TAG,
                                 value("AsyncFunction", READONLY | DONTENUM))
                         .build();
+
+        ASYNC_GENERATOR_DESCRIPTOR =
+                new ClassDescriptor.Builder(
+                                ASYNC_GENERATOR_FUNCTION_CLASS,
+                                "AsyncGeneratorFunction",
+                                1,
+                                BaseFunction::js_async_gen_constructor,
+                                BaseFunction::js_async_gen_constructor)
+                        .withProp(
+                                PROTO,
+                                SymbolKey.TO_STRING_TAG,
+                                value("AsyncGeneratorFunction", READONLY | DONTENUM))
+                        .build();
     }
 
     static JSFunction init(Context cx, VarScope scope, boolean sealed) {
@@ -221,6 +237,46 @@ public class BaseFunction extends ScriptableObject implements Function {
                     proto.setPrototype(functionProto);
                     ctor.setPrototype(function);
                     proto.setAttributes("constructor", DONTENUM | READONLY);
+                });
+    }
+
+    /**
+     * %AsyncGeneratorFunction% (ECMA-262 27.4), not a global: its prototype is the prototype of
+     * async generator functions, and that prototype's prototype property is
+     * %AsyncGeneratorPrototype%.
+     */
+    static Object initAsAsyncGeneratorFunction(Context cx, VarScope scope, boolean sealed) {
+        var proto = new NativeObject();
+
+        return ASYNC_GENERATOR_DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    VarScope top = ScriptableObject.getTopLevelScope(scope);
+                    var function = (Scriptable) ScriptableObject.getProperty(scope, FUNCTION_CLASS);
+                    var functionProto =
+                            (Scriptable)
+                                    ScriptableObject.getProperty(function, PROTOTYPE_PROPERTY_NAME);
+                    proto.setPrototype(functionProto);
+                    ctor.setPrototype(function);
+                    proto.setAttributes("constructor", DONTENUM | READONLY);
+                    Object generatorProto =
+                            ScriptableObject.getTopScopeValue(
+                                    top, NativeAsyncGenerator.ASYNC_GENERATOR_TAG);
+                    proto.defineProperty("prototype", generatorProto, READONLY | DONTENUM);
+                    if (generatorProto instanceof ScriptableObject) {
+                        ScriptableObject generatorPrototype = (ScriptableObject) generatorProto;
+                        boolean wasSealed = generatorPrototype.isSealed;
+                        generatorPrototype.isSealed = false;
+                        try {
+                            generatorPrototype.defineProperty(
+                                    "constructor", proto, READONLY | DONTENUM);
+                        } finally {
+                            generatorPrototype.isSealed = wasSealed;
+                        }
+                    }
                 });
     }
 
@@ -395,6 +451,14 @@ public class BaseFunction extends ScriptableObject implements Function {
     // Generated code will override this
     protected boolean isGeneratorFunction() {
         return isGeneratorFunction;
+    }
+
+    /**
+     * The tag of the intrinsic that the prototype property of a generator function inherits from,
+     * or null for a function that is not a generator.
+     */
+    SymbolKey generatorPrototypeTag() {
+        return isGeneratorFunction() ? ES6Generator.GENERATOR_TAG : null;
     }
 
     // Generated code will override this
@@ -585,6 +649,11 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static Scriptable js_gen_constructor(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, "function*");
+    }
+
+    private static Scriptable js_async_gen_constructor(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        return jsConstructor(cx, f, nt, f.getDeclarationScope(), args, "async function*");
     }
 
     private static Scriptable js_async_constructor(
@@ -853,12 +922,12 @@ public class BaseFunction extends ScriptableObject implements Function {
         // get an infinite loop trying to find the prototype.
         prototypeProperty = obj;
         Scriptable proto;
-        if (isGeneratorFunction()) {
+        SymbolKey generatorTag = generatorPrototypeTag();
+        if (generatorTag != null) {
             // For generator functions, the .prototype property's [[Prototype]]
-            // should be %GeneratorPrototype%, not Object.prototype
+            // should be %GeneratorPrototype% (%AsyncGeneratorPrototype%), not Object.prototype
             VarScope top = ScriptableObject.getTopLevelScope(scope);
-            Object generatorProto =
-                    ScriptableObject.getTopScopeValue(top, ES6Generator.GENERATOR_TAG);
+            Object generatorProto = ScriptableObject.getTopScopeValue(top, generatorTag);
             if (generatorProto instanceof Scriptable) {
                 proto = (Scriptable) generatorProto;
             } else {
@@ -872,7 +941,7 @@ public class BaseFunction extends ScriptableObject implements Function {
             obj.setPrototype(proto);
         }
 
-        if (!isGeneratorFunction()) {
+        if (generatorTag == null) {
             // the prototype of a generator function has no constructor (ECMA-262 15.5.4)
             obj.defineProperty("constructor", this, DONTENUM);
         }
@@ -956,7 +1025,10 @@ public class BaseFunction extends ScriptableObject implements Function {
                 (JSFunction)
                         cx.compileFunction(global, source, evaluator, reporter, sourceURI, 1, null);
 
-        if (res.getDescriptor().isAsync()) {
+        if (res.getDescriptor().isAsyncGenerator()) {
+            ScriptRuntime.setBuiltinProtoAndParent(
+                    (ScriptableObject) res, f, nt, scope, TopLevel.Builtins.AsyncGeneratorFunction);
+        } else if (res.getDescriptor().isAsync()) {
             ScriptRuntime.setBuiltinProtoAndParent(
                     (ScriptableObject) res, f, nt, scope, TopLevel.Builtins.AsyncFunction);
         } else if (res.getDescriptor().isES6Generator()) {

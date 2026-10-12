@@ -210,9 +210,27 @@ abstract class Icode {
             ELEM_KEY = FN_NAME_ASSIGN - 1,
             // the value of a __proto__: v entry of an object literal
             LITERAL_PROTO = ELEM_KEY - 1,
+            // the operand of an await in an async generator, as yielded (Token#AWAIT)
+            AWAIT_REQUEST = LITERAL_PROTO - 1,
+            // the other kinds of Token#AWAIT (Node#AWAIT_KIND_PROP)
+            ASYNC_DELEGATE = AWAIT_REQUEST - 1,
+            ASYNC_ITER_OPEN = ASYNC_DELEGATE - 1,
+            ASYNC_ITER_NEXT = ASYNC_ITER_OPEN - 1,
+            ASYNC_ITER_CLOSE = ASYNC_ITER_NEXT - 1,
+            ASYNC_ITER_CLOSE_ABRUPT = ASYNC_ITER_CLOSE - 1,
 
             // Last icode
-            MIN_ICODE = LITERAL_PROTO;
+            MIN_ICODE = ASYNC_ITER_CLOSE_ABRUPT;
+
+    /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
+    static final int[] AWAIT_ICODES = {
+        AWAIT_REQUEST,
+        ASYNC_DELEGATE,
+        ASYNC_ITER_OPEN,
+        ASYNC_ITER_NEXT,
+        ASYNC_ITER_CLOSE,
+        ASYNC_ITER_CLOSE_ABRUPT
+    };
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -452,6 +470,18 @@ abstract class Icode {
                 return "ELEM_KEY";
             case LITERAL_PROTO:
                 return "LITERAL_PROTO";
+            case AWAIT_REQUEST:
+                return "AWAIT_REQUEST";
+            case ASYNC_DELEGATE:
+                return "ASYNC_DELEGATE";
+            case ASYNC_ITER_OPEN:
+                return "ASYNC_ITER_OPEN";
+            case ASYNC_ITER_NEXT:
+                return "ASYNC_ITER_NEXT";
+            case ASYNC_ITER_CLOSE:
+                return "ASYNC_ITER_CLOSE";
+            case ASYNC_ITER_CLOSE_ABRUPT:
+                return "ASYNC_ITER_CLOSE_ABRUPT";
         }
 
         // icode without name

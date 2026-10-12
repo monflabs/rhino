@@ -29,6 +29,7 @@ public class ForInLoop extends Loop {
     protected int eachPosition = -1;
     protected boolean isForEach;
     protected boolean isForOf;
+    protected boolean isForAwait;
 
     {
         type = Token.FOR;
@@ -95,6 +96,15 @@ public class ForInLoop extends Loop {
     /** Sets whether the loop is a for-each loop */
     public void setIsForOf(boolean isForOf) {
         this.isForOf = isForOf;
+    }
+
+    /** Whether this is a for await loop (ES2018). */
+    public boolean isForAwait() {
+        return isForAwait;
+    }
+
+    public void setIsForAwait(boolean isForAwait) {
+        this.isForAwait = isForAwait;
     }
 
     /** Returns position of "in" or "of" keyword */

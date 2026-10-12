@@ -162,6 +162,16 @@ class BodyCodegen {
         cfw.stopMethod((short) (localsMax + 1));
     }
 
+    /** The ScriptRuntime methods of the kinds of Token#AWAIT (Node#AWAIT_KIND_PROP). */
+    private static final String[] AWAIT_METHODS = {
+        "awaitRequest",
+        "asyncDelegate",
+        "asyncIterOpen",
+        "asyncIterNext",
+        "asyncIterClose",
+        "asyncIterCloseAbrupt"
+    };
+
     private boolean isArrowFunction() {
         return scriptOrFn instanceof FunctionNode
                 && ((FunctionNode) scriptOrFn).getFunctionType() == FunctionNode.ARROW_FUNCTION;
@@ -1444,19 +1454,22 @@ class BodyCodegen {
             case Token.ITER_REST:
             case Token.ITER_CLOSE:
             case Token.REQUIRE_OBJECT:
+            case Token.AWAIT:
                 generateExpression(child, node);
                 cfw.addALoad(contextLocal);
                 cfw.addALoad(variableObjectLocal);
                 addScriptRuntimeInvoke(
-                        type == Token.REQUIRE_OBJECT
-                                ? "requireObject"
-                                : type == Token.ITER_OPEN
-                                        ? "iteratorOpen"
-                                        : type == Token.ITER_STEP
-                                                ? "iteratorStep"
-                                                : type == Token.ITER_REST
-                                                        ? "iteratorRest"
-                                                        : "iteratorClose",
+                        type == Token.AWAIT
+                                ? AWAIT_METHODS[node.getIntProp(Node.AWAIT_KIND_PROP, 0)]
+                                : type == Token.REQUIRE_OBJECT
+                                        ? "requireObject"
+                                        : type == Token.ITER_OPEN
+                                                ? "iteratorOpen"
+                                                : type == Token.ITER_STEP
+                                                        ? "iteratorStep"
+                                                        : type == Token.ITER_REST
+                                                                ? "iteratorRest"
+                                                                : "iteratorClose",
                         "(Ljava/lang/Object;"
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"
@@ -3609,9 +3622,8 @@ class BodyCodegen {
         releaseWordLocal(savedVariableObject);
         cfw.markLabel(realEnd);
 
-        if (!isGenerator) {
-            exceptionManager.popExceptionInfo();
-        }
+        // also in a generator: the catch of an enclosing try finds its own handlers on top
+        exceptionManager.popExceptionInfo();
     }
 
     private static final int JAVASCRIPT_EXCEPTION = 0;

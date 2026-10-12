@@ -169,6 +169,7 @@ public class Context implements Closeable {
      *       skipped for names of destructured catch parameters; only {@code __proto__: v} sets the
      *       prototype of an object literal; a global {@code var} shadows the properties of
      *       Object.prototype.
+     *   <li>{@code for (async of ...)} is a SyntaxError.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

@@ -36,15 +36,33 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         }
     }
 
-    /** An async function inherits from %AsyncFunction.prototype% and has no prototype property. */
+    /**
+     * An async function inherits from %AsyncFunction.prototype% and has no prototype property; an
+     * async generator function inherits from %AsyncGeneratorFunction.prototype%, and its prototype
+     * property from %AsyncGeneratorPrototype%.
+     */
     private void initAsyncFunction(Context cx, VarScope scope) {
+        boolean generator = descriptor.isAsyncGenerator();
         setParentScope(scope);
         setPrototype(
                 TopLevel.getBuiltinPrototype(
-                        ScriptableObject.getTopLevelScope(scope), TopLevel.Builtins.AsyncFunction));
+                        ScriptableObject.getTopLevelScope(scope),
+                        generator
+                                ? TopLevel.Builtins.AsyncGeneratorFunction
+                                : TopLevel.Builtins.AsyncFunction));
         if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
             setStandardPropertyAttributes(READONLY | DONTENUM);
         }
+        if (generator) {
+            setupDefaultPrototype(scope);
+        }
+    }
+
+    @Override
+    SymbolKey generatorPrototypeTag() {
+        return descriptor.isAsyncGenerator()
+                ? NativeAsyncGenerator.ASYNC_GENERATOR_TAG
+                : super.generatorPrototypeTag();
     }
 
     JSFunction(

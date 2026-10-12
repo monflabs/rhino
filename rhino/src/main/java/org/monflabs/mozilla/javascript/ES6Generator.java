@@ -295,7 +295,9 @@ public final class ES6Generator extends ScriptableObject {
             ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, r);
 
         } catch (NativeGenerator.GeneratorClosedException gce) {
+            // a return() whose finally block yielded completes now, with its value
             state = State.COMPLETED;
+            ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, gce.getValue());
         } catch (JavaScriptException jse) {
             state = State.COMPLETED;
             if (jse.getValue() instanceof NativeIterator.StopIteration) {

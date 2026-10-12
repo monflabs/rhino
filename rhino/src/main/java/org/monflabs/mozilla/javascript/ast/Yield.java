@@ -19,6 +19,7 @@ public class Yield extends AstNode {
 
     private AstNode value;
     private boolean isAwait;
+    private boolean isAwaitRequest;
 
     public Yield() {
         type = Token.YIELD;
@@ -62,6 +63,15 @@ public class Yield extends AstNode {
 
     public void setIsAwait() {
         isAwait = true;
+    }
+
+    /** Whether this await is in an async generator, which also yields: see Token#AWAIT. */
+    public boolean isAwaitRequest() {
+        return isAwaitRequest;
+    }
+
+    public void setIsAwaitRequest() {
+        isAwaitRequest = true;
     }
 
     @Override

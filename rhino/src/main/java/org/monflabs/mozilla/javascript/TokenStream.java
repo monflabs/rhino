@@ -2592,10 +2592,13 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 int start = i;
                 while (i < sourceEnd && Character.isJavaIdentifierPart(src.charAt(i))) i++;
                 String word = src.substring(start, i);
-                return new LookAhead(c, word, lineBreak);
+                int j = i;
+                while (j < sourceEnd && isJSSpace(src.charAt(j))) j++;
+                boolean arrow = src.startsWith("=>", j);
+                return new LookAhead(c, word, lineBreak, arrow);
             }
         }
-        return new LookAhead((char) 0, "", lineBreak);
+        return new LookAhead((char) 0, "", lineBreak, false);
     }
 
     static final class LookAhead {
@@ -2603,10 +2606,14 @@ class TokenStream implements Parser.CurrentPositionReporter {
         final String word;
         final boolean lineBreak;
 
-        LookAhead(char next, String word, boolean lineBreak) {
+        /** Whether => follows the word on the same line. */
+        final boolean followedByArrow;
+
+        LookAhead(char next, String word, boolean lineBreak, boolean followedByArrow) {
             this.next = next;
             this.word = word;
             this.lineBreak = lineBreak;
+            this.followedByArrow = followedByArrow;
         }
 
         boolean startsIdentifier() {

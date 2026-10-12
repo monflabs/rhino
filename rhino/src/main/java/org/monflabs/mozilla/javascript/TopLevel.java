@@ -63,6 +63,8 @@ public class TopLevel extends ScopeObject {
         GeneratorFunction,
         /** The built-in AsyncFunction type (not a global). */
         AsyncFunction,
+        /** The built-in AsyncGeneratorFunction type (not a global). */
+        AsyncGeneratorFunction,
         /** The built-in BigInt type. */
         BigInt,
         /** The built-in Promise type. */
@@ -213,6 +215,12 @@ public class TopLevel extends ScopeObject {
                         (BaseFunction)
                                 BaseFunction.initAsGeneratorFunction(
                                         Context.getCurrentContext(), this, sealed));
+            } else if (builtin == Builtins.AsyncGeneratorFunction) {
+                ctors.put(
+                        builtin,
+                        (BaseFunction)
+                                BaseFunction.initAsAsyncGeneratorFunction(
+                                        Context.getCurrentContext(), this, sealed));
             } else if (builtin == Builtins.AsyncFunction) {
                 ctors.put(
                         builtin,
@@ -269,6 +277,8 @@ public class TopLevel extends ScopeObject {
             typeName = BaseFunction.GENERATOR_FUNCTION_CLASS;
         } else if (type == Builtins.AsyncFunction) {
             typeName = BaseFunction.ASYNC_FUNCTION_CLASS;
+        } else if (type == Builtins.AsyncGeneratorFunction) {
+            typeName = BaseFunction.ASYNC_GENERATOR_FUNCTION_CLASS;
         } else {
             typeName = type.name();
         }
@@ -326,6 +336,8 @@ public class TopLevel extends ScopeObject {
             typeName = BaseFunction.GENERATOR_FUNCTION_CLASS;
         } else if (type == Builtins.AsyncFunction) {
             typeName = BaseFunction.ASYNC_FUNCTION_CLASS;
+        } else if (type == Builtins.AsyncGeneratorFunction) {
+            typeName = BaseFunction.ASYNC_GENERATOR_FUNCTION_CLASS;
         } else {
             typeName = type.name();
         }

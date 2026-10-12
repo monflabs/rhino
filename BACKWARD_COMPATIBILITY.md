@@ -276,6 +276,16 @@ var toString; typeof toString;                       // VERSION_ES6: "function" 
   no longer prevent the binding.
 - **Why:** ECMA-262 2026, B.3.1 (`__proto__` property names), §9.1.1.4.17 (CreateGlobalVarBinding).
 
+### 1.15 `for (async of ...)`
+
+```js
+for (async of []);   // VERSION_ES6: a for-of loop assigning to `async`   VERSION_ECMASCRIPT: SyntaxError
+```
+
+- The target of a for-of loop cannot be an unescaped, unparenthesized `async` (it would be ambiguous with an async
+  arrow function); `for ((async) of [])`, `for (\u0061sync of [])` and `for await (async of [])` stay valid.
+- **Why:** ECMA-262 2026, §14.7.5 (for-in, for-of and for-await statements: `[lookahead ≠ async of]`).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`
@@ -917,6 +927,20 @@ g().next();       // before: no error (the eval was sloppy)   now: SyntaxError (
 - ES6 and later versions: the body of a strict generator (or async function) runs in strict mode whoever resumes
   it; before, it took the strictness of the code that called `next()`, which a direct `eval` in it inherited.
 - **Why:** ECMA-262 2026, §11.2.2 (strict mode code), §19.2.1.1 (PerformEval: the strictness of the caller).
+
+### 2.43 Generators: yield in a finally run by return(), catch after a resumed finally
+
+```js
+function* g() { try { yield 1; } finally { yield 2; } }
+var it = g(); it.next();
+it.return(9);   // before (interpreted): TypeError "Yield from closing generator"   now: { value: 2, done: false }
+it.next();      // now: { value: 9, done: true }
+```
+
+- ES6 and later versions: a `finally` block run by `return()` can yield; the return completes when the generator is
+  resumed. In compiled mode, a `catch` around a `try`/`finally` whose `finally` yielded catches the exception that
+  the `finally` rethrows when the generator is resumed (before, it escaped the generator).
+- **Why:** ECMA-262 2026, §27.5.3.3 (GeneratorResume), §14.15.3 (try statement evaluation).
 
 ---
 

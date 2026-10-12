@@ -459,6 +459,40 @@ public class NativePromise extends ScriptableObject {
         }
     }
 
+    /**
+     * PromiseResolve(%Promise%, value), then PerformPromiseThen with the handlers and the
+     * capability.
+     */
+    static void then(
+            Context cx,
+            VarScope scope,
+            Object value,
+            Callable onFulfilled,
+            Callable onRejected,
+            Capability capability) {
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        NativePromise promise =
+                (NativePromise)
+                        resolveInternal(
+                                cx,
+                                top,
+                                TopLevel.getBuiltinCtor(cx, top, TopLevel.Builtins.Promise),
+                                value);
+        Reaction fulfillReaction = new Reaction(capability, ReactionType.FULFILL, onFulfilled);
+        Reaction rejectReaction = new Reaction(capability, ReactionType.REJECT, onRejected);
+        if (promise.state == State.PENDING) {
+            promise.fulfillReactions.add(fulfillReaction);
+            promise.rejectReactions.add(rejectReaction);
+        } else if (promise.state == State.FULFILLED) {
+            Object result = promise.result;
+            cx.enqueueMicrotask(() -> fulfillReaction.invoke(cx, top, result));
+        } else {
+            promise.markHandled(cx);
+            Object result = promise.result;
+            cx.enqueueMicrotask(() -> rejectReaction.invoke(cx, top, result));
+        }
+    }
+
     /** A new promise of the realm of the scope, with its resolving functions. */
     static Capability newCapability(Context cx, VarScope scope) {
         TopLevel top = ScriptableObject.getTopLevelScope(scope);

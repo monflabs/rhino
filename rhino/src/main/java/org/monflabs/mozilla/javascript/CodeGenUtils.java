@@ -70,7 +70,10 @@ public class CodeGenUtils {
         if (fn.hasSelfNameBinding()) {
             builder.selfNameBinding = true;
         }
-        if (fn.isAsync()) {
+        if (fn.isAsyncGenerator()) {
+            builder.isAsync = true;
+            builder.isAsyncGenerator = true;
+        } else if (fn.isAsync()) {
             // an async function has no prototype property and is not a constructor
             builder.isAsync = true;
             builder.hasPrototype = false;

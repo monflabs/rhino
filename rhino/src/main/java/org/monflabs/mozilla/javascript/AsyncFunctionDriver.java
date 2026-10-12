@@ -45,6 +45,67 @@ final class AsyncFunctionDriver {
         return capability.promise;
     }
 
+    private final AsyncIteration.Driver iterationDriver =
+            new AsyncIteration.Driver() {
+                @Override
+                public void resume(Context cx, Object value) {
+                    step(cx, NativeGenerator.GENERATOR_SEND, value);
+                }
+
+                @Override
+                public void resumeThrow(Context cx, Object error) {
+                    step(cx, NativeGenerator.GENERATOR_THROW, error);
+                }
+
+                @Override
+                public void await(
+                        Context cx,
+                        Object value,
+                        AsyncIteration.Continuation onValue,
+                        AsyncIteration.Continuation onError) {
+                    try {
+                        NativePromise.await(
+                                cx,
+                                scope,
+                                value,
+                                (lcx, ls, t, args) -> {
+                                    inTopCall(lcx, onValue, args[0]);
+                                    return Undefined.instance;
+                                },
+                                (lcx, ls, t, args) -> {
+                                    inTopCall(lcx, onError, args[0]);
+                                    return Undefined.instance;
+                                });
+                    } catch (RhinoException re) {
+                        onError.run(cx, errorValue(cx, re));
+                    }
+                }
+
+                @Override
+                public Object errorValue(Context cx, RhinoException re) {
+                    return re instanceof JavaScriptException
+                            ? ((JavaScriptException) re).getValue()
+                            : ScriptRuntime.wrapException(re, scope, cx);
+                }
+            };
+
+    private void inTopCall(Context cx, AsyncIteration.Continuation continuation, Object value) {
+        if (ScriptRuntime.hasTopCall(cx)) {
+            continuation.run(cx, value);
+            return;
+        }
+        ScriptRuntime.doTopCall(
+                (lcx, ls, t, args) -> {
+                    continuation.run(lcx, value);
+                    return Undefined.instance;
+                },
+                cx,
+                scope,
+                Undefined.SCRIPTABLE_UNDEFINED,
+                ScriptRuntime.emptyArgs,
+                generator.isStrict());
+    }
+
     private void step(Context cx, int op, Object value) {
         if (!ScriptRuntime.hasTopCall(cx)) {
             // resumed by a promise job, which runs outside of any script
@@ -79,6 +140,11 @@ final class AsyncFunctionDriver {
                 ScriptableObject.getProperty(result, ES6Iterator.DONE_PROPERTY))) {
             capability.resolve.call(
                     cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {awaited});
+            return;
+        }
+        if (awaited instanceof AsyncIteration.Request) {
+            // a step of a for await loop
+            ((AsyncIteration.Request) awaited).run(cx, scope, iterationDriver);
             return;
         }
         NativePromise.await(
