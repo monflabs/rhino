@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Parameters, toString, eval and destructuring only under VERSION_ECMASCRIPT (2026-10-13, plan G3)
+
+- `BACKWARD_COMPATIBILITY.md` 2.10-2.14 are gated, with the undocumented changes of the same commits: under
+  `VERSION_ES6`, only already-strict code rejects duplicate simple parameters, rest parameters are names,
+  `arguments` in a default value needs no activation, destructuring parameters are desugared in hash order; method
+  and `Function` constructor source texts, proxy `toString`, built-in names and the internal `[Symbol.getSize]` of
+  Map/Set prototypes are those of stock Rhino; eval in parameters and indirect eval behave as before.
+- Destructuring under `VERSION_ES6` is stock again: `Parser.destructuringArrayLegacy` keeps index access and the
+  partial iterator path of parameters (global `Symbol`, holes skipped, closed with the old ternary, lazy default);
+  defaults apply when the target is undefined too; object patterns do not check null, computed keys are evaluated
+  first; no names for default functions; `for ({x = 1} of ...)` and member targets with defaults are syntax errors;
+  `for (const x = ...;;)` is rejected by the interpreter, as in stock; the array iterator reads own holes only.
+- test262: unchanged (41,080/42,616, 96.4%). Perf gate: no regression.
+
 ### Lexical declarations and functions only under VERSION_ECMASCRIPT (2026-10-13, plan G2)
 
 - `BACKWARD_COMPATIBILITY.md` 2.1-2.9 are gated: `VERSION_ES6` keeps the stock behavior of `const` in loops

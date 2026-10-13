@@ -641,7 +641,9 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (thisObj instanceof NativeProxy && thisObj instanceof Callable) {
+        if (cx.isLatestEcmaScript()
+                && thisObj instanceof NativeProxy
+                && thisObj instanceof Callable) {
             return "function () {\n\t[native code]\n}\n";
         }
         BaseFunction realf = realFunction(thisObj, "toString");
@@ -810,7 +812,11 @@ public class BaseFunction extends ScriptableObject implements Function {
         boolean justbody = flags.contains(DecompilerFlag.ONLY_BODY);
         if (!justbody) {
             sb.append("function ");
-            sb.append(nativeFunctionName(getFunctionName()));
+            Context cx = Context.getCurrentContext();
+            sb.append(
+                    cx != null && cx.isLatestEcmaScript()
+                            ? nativeFunctionName(getFunctionName())
+                            : getFunctionName());
             sb.append("() {\n\t");
         }
         sb.append("[native code]\n");
@@ -1001,8 +1007,12 @@ public class BaseFunction extends ScriptableObject implements Function {
         int arglen = args.length;
         StringBuilder sourceBuf = new StringBuilder();
 
-        // CreateDynamicFunction: the parameters end with a line feed, the body is between two
-        sourceBuf.append(kind).append(" anonymous(");
+        // CreateDynamicFunction: the parameters end with a line feed, the body is between two;
+        // before VERSION_ECMASCRIPT, "function anonymous(a) {" + body
+        boolean latest = cx.isLatestEcmaScript();
+        sourceBuf
+                .append(!latest && "function*".equals(kind) ? "function *" : kind)
+                .append(" anonymous(");
 
         // Append arguments as coma separated strings
         for (int i = 0; i < arglen - 1; i++) {
@@ -1011,7 +1021,7 @@ public class BaseFunction extends ScriptableObject implements Function {
             }
             sourceBuf.append(ScriptRuntime.toString(args[i]));
         }
-        sourceBuf.append("\n) {\n");
+        sourceBuf.append(latest ? "\n) {\n" : ") {");
         if (arglen != 0) {
             sourceBuf.append(ScriptRuntime.toString(args[arglen - 1]));
         }

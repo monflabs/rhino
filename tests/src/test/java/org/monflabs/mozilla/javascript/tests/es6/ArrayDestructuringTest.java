@@ -334,6 +334,45 @@ public class ArrayDestructuringTest {
     }
 
     /**
+     * Test that shadowing Symbol breaks array destructuring (expected behavior). If user shadows
+     * Symbol, destructuring should behave like manually written obj[Symbol.iterator]() code.
+     */
+    @Test
+    public void arrayDestructuringShadowedSymbolFails() {
+        Utils.runWithAllModes(
+                cx -> {
+                    cx.setLanguageVersion(org.monflabs.mozilla.javascript.Context.VERSION_ES6);
+                    TopLevel scope = cx.initStandardObjects();
+
+                    // Shadow Symbol with a plain object - should cause iterator access to fail
+                    String script =
+                            "let Symbol = { iterator: 'not a symbol' };\n"
+                                    + "var f = ([x, y]) => x + y;\n"
+                                    + "var errorThrown = false;\n"
+                                    + "try {\n"
+                                    + "  f([1, 2]);\n"
+                                    + "} catch (e) {\n"
+                                    + "  errorThrown = true;\n"
+                                    + "}\n"
+                                    + "if (!errorThrown) throw new Error('Expected error when Symbol is shadowed');"
+                                    + "\n"
+                                    + "// Verify that manually written code also fails with shadowed Symbol\n"
+                                    + "errorThrown = false;\n"
+                                    + "try {\n"
+                                    + "  var arr = [1, 2];\n"
+                                    + "  var iter = arr[Symbol.iterator]();\n"
+                                    + "} catch (e) {\n"
+                                    + "  errorThrown = true;\n"
+                                    + "}\n"
+                                    + "if (!errorThrown) throw new Error('Manual code should also fail with shadowed Symbol');"
+                                    + "";
+
+                    cx.evaluateString(scope, script, "test", 1, null);
+                    return null;
+                });
+    }
+
+    /**
      * Destructuring uses the intrinsic @@iterator (ECMA-262 GetIterator): shadowing the global
      * Symbol binding does not affect it.
      */
@@ -341,7 +380,8 @@ public class ArrayDestructuringTest {
     public void arrayDestructuringIgnoresShadowedSymbol() {
         Utils.runWithAllModes(
                 cx -> {
-                    cx.setLanguageVersion(org.monflabs.mozilla.javascript.Context.VERSION_ES6);
+                    cx.setLanguageVersion(
+                            org.monflabs.mozilla.javascript.Context.VERSION_ECMASCRIPT);
                     TopLevel scope = cx.initStandardObjects();
 
                     String script =

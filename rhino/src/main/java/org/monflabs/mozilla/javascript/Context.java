@@ -187,6 +187,15 @@ public class Context implements Closeable {
      *       functions and built-ins; {@code bind} names the bound function after the target's
      *       {@code name} property and keeps an undefined {@code this}; the {@code arguments} object
      *       is the spec's exotic object (unmapped with rest or destructured parameters).
+     *   <li>Parameter lists: a strict body applies to its parameters (duplicates, eval and
+     *       arguments are early errors, also in methods and non-simple lists), rest parameters may
+     *       be patterns; {@code Function.prototype.toString} gives the source text of methods from
+     *       their key and the CreateDynamicFunction text of the Function constructor; an indirect
+     *       eval is never strict, and a direct eval in parameters may not declare their names.
+     *   <li>Destructuring follows the iterator protocol (array patterns in every context, holes
+     *       step the iterator, defaults apply to undefined values only), object patterns throw for
+     *       null and undefined, and defaults that are anonymous functions are named after their
+     *       binding.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

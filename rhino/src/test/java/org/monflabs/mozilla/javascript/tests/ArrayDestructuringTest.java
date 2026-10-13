@@ -7,13 +7,11 @@ package org.monflabs.mozilla.javascript.tests;
 import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
-/** Array patterns follow the iterator protocol (plan 1.3a); the same in both versions. */
+/**
+ * Array patterns follow the iterator protocol (plan 1.3a) under VERSION_ECMASCRIPT; VERSION_ES6
+ * keeps the stock patterns (indexes, and a partial iterator path for parameters).
+ */
 class ArrayDestructuringTest {
-
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
 
     private static final String LOGGING_ITERABLE =
             "var log = [];"
@@ -23,23 +21,28 @@ class ArrayDestructuringTest {
 
     @Test
     void iterablesAreSteppedAndClosed() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "|",
                 "1|next,return",
                 LOGGING_ITERABLE + " var [a] = iterable; [a, log.join()].join('|')");
-        assertBoth(
+        Utils.assertGatedBehavior(
+                ",|",
                 "1,3|next,next,next,return",
                 LOGGING_ITERABLE
                         + " var [a, , b] = iterable; [[a, b].join(), log.join()].join('|')");
         // a done iterator is not closed, nor stepped again
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError",
                 "1,2,3|next,next,next,next",
                 LOGGING_ITERABLE
-                        + " var [...rest] = iterable; [rest.join(), log.join()].join('|')");
+                        + " try { var [...rest] = iterable; [rest.join(), log.join()].join('|') }"
+                        + " catch (e) { e.name }");
     }
 
     @Test
     void iteratorsAreClosedWhenADefaultOrATargetThrows() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "d:,t:,p:n,r:,ok:,g:",
                 "d:nr,t:nr,p:nr,r:nr,ok:nrnr,g:nr",
                 "var r = [];"
                         + " function mk(log, retThrows) { return { [Symbol.iterator]() { return {"
@@ -61,7 +64,9 @@ class ArrayDestructuringTest {
 
     @Test
     void holesInEveryContext() {
-        assertBoth(
+        // stock parameters skip holes without stepping the iterator
+        Utils.assertGatedBehavior(
+                "1/3,1/3,1/3,1/2",
                 "1/3,1/3,1/3,1/3",
                 "var r = [];"
                         + " var [a, , b] = [1, 2, 3]; r.push(a + '/' + b);"
@@ -73,7 +78,8 @@ class ArrayDestructuringTest {
 
     @Test
     void stringsSetsAndNestedPatterns() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "xy,NaN,3,1-2-3",
                 "xy,7,3,1-2-3",
                 "var [p, q] = 'xy'; var [s, t] = new Set([3, 4]);"
                         + " var [[m], {n}] = [[1], {n: 2}];"
@@ -83,12 +89,14 @@ class ArrayDestructuringTest {
 
     @Test
     void defaultsUseTheStepValueOnly() {
-        assertBoth("1,6", "var a = 5; var [a = 1, b = 6] = []; [a, b].join()");
+        Utils.assertGatedBehavior(
+                "5,6", "1,6", "var a = 5; var [a = 1, b = 6] = []; [a, b].join()");
     }
 
     @Test
     void notIterable() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError",
                 "TypeError,TypeError",
                 "var r = [];"
                         + " try { var [x] = undefined; } catch (e) { r.push(e.name); }"

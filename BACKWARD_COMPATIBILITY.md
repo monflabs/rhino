@@ -439,6 +439,8 @@ g(1);   // before: 2   now: 1 (a rest parameter makes arguments unmapped)
 
 ### 2.10 Early errors of parameter lists
 
+*Since plan G3 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f(a = 0, a) {}                 // before: accepted   now: SyntaxError (duplicate in a non-simple list)
 function g(a, a) { "use strict"; }      // before: accepted   now: SyntaxError (the body makes it strict)
@@ -455,6 +457,8 @@ new Function("'use strict'; eval = 1"); // before: InternalError   now: SyntaxEr
   §13.15.1 (strict assignment to `eval`/`arguments`).
 
 ### 2.11 `Function.prototype.toString`
+
+*Since plan G3 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 ({ get f() {} }).__lookupGetter__("f").toString();  // before: "f() {}"          now: "get f() {}"
@@ -477,6 +481,8 @@ Object.getOwnPropertySymbols(Map.prototype).length;               // before: 3 (
 
 ### 2.12 Eval code
 
+*Since plan G3 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f(a = eval("var a = 1")) {}
 f();                                 // before: fine   now: SyntaxError (also "var arguments")
@@ -493,6 +499,8 @@ f();                                 // before: fine   now: SyntaxError (also "v
   step 3 and §19.2.1.1 PerformEval steps 12–13.
 
 ### 2.13 Array destructuring follows the iterator protocol
+
+*Since plan G3 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var [a] = { 0: 1, length: 1 };    // before: a is 1         now: TypeError (not iterable)
@@ -515,6 +523,8 @@ function f([p, , q]) {} f([1, 2, 3]);  // before: q was 2    now: q is 3
   closed too; an error of its `return()` does not replace the error being thrown.
 
 ### 2.14 Object patterns and default names
+
+*Since plan G3 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var {} = null;                       // before: fine           now: TypeError

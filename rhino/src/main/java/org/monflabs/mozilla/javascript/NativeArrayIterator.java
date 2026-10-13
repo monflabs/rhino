@@ -75,7 +75,11 @@ public final class NativeArrayIterator extends ES6Iterator {
             return Integer.valueOf(index++);
         }
 
-        Object value = ScriptableObject.getProperty(arrayLike, index);
+        // a hole reads through the prototype chain (an own property only before VERSION_ECMASCRIPT)
+        Object value =
+                cx.isLatestEcmaScript()
+                        ? ScriptableObject.getProperty(arrayLike, index)
+                        : arrayLike.get(index, arrayLike);
         if (value == Scriptable.NOT_FOUND) {
             value = Undefined.instance;
         }

@@ -7,7 +7,10 @@ package org.monflabs.mozilla.javascript.tests;
 import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
-/** Object patterns and the names of pattern defaults (plan 1.3c); the same in both versions. */
+/**
+ * Object patterns and the names of pattern defaults (plan 1.3c), under VERSION_ECMASCRIPT;
+ * VERSION_ES6 keeps the stock patterns.
+ */
 class ObjectDestructuringTest {
 
     private static void assertBoth(Object expected, String script) {
@@ -17,7 +20,8 @@ class ObjectDestructuringTest {
 
     @Test
     void nullAndUndefinedCannotBeDestructured() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,TypeError,ok,ok",
                 "TypeError,TypeError,TypeError,TypeError",
                 "var r = []; function t(f) { try { f(); r.push('ok'); } catch (e) { r.push(e.name); } }"
                         + " t(function () { var {} = null; });"
@@ -29,7 +33,8 @@ class ObjectDestructuringTest {
 
     @Test
     void anonymousFunctionDefaultsAreNamedAfterTheirBinding() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                ",,,,named,|,||",
                 "fn,ar,gn,cv,named,|f,a|g|pq",
                 "var [fn = function () {}, ar = () => 1, gn = function* () {}, cv = (function () {}),"
                         + "  xn = function named() {}, cm = (0, function () {})] = [];"
@@ -49,7 +54,11 @@ class ObjectDestructuringTest {
 
     @Test
     void targetsAreEvaluatedBeforeTheirValue() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "ok",
+                "try { eval('var o = {}; [o.q = 5] = [];'); 'ok' } catch (e) { e.name }");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "key,next,return|key,get,9|k1,get a,k2,get b|5",
                 "var r = [];"
                         + " var log = []; var it = { [Symbol.iterator]() { return {"
@@ -68,7 +77,21 @@ class ObjectDestructuringTest {
 
     @Test
     void forHeads() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "1,3,undefined",
+                "1,3,undefined",
+                "'use strict'; var r = [];"
+                        + " for (let [{ x }] = [{ x: 1 }]; r.length < 1; ) r.push(x);"
+                        + " for (let { w: [c, d] } = { w: [1, 2] }; r.length < 2; ) r.push(c + d);"
+                        + " r.push(typeof x);"
+                        + " r.join()");
+        // an assignment pattern with initializers as the target of for-of
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "ok",
+                "try { eval('var a, b; for ({ a = 1, b } of [{ b: 3 }]) ;'); 'ok' }"
+                        + " catch (e) { e.name }");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1,4,3,undefined",
                 "'use strict'; var r = [];"
                         + " for (let [{ x }] = [{ x: 1 }]; r.length < 1; ) r.push(x);"
@@ -80,7 +103,8 @@ class ObjectDestructuringTest {
 
     @Test
     void forConstHeads() {
-        assertBoth(
+        // the interpreter of stock Rhino rejects a const loop head
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1,3",
                 "function f() { for (const x = 1; ; ) { return x; } }"
                         + " var r = []; for (const a = 1, b = 2; r.length < 1; ) { r.push(a + b); }"

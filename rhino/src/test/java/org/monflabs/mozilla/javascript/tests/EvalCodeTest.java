@@ -10,17 +10,13 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 /** Declarations of eval code (plan 1.2e, ECMA-262 19.2.1.3). */
 class EvalCodeTest {
 
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
-
     private static final String TRY =
             "var r = []; function t(f) { try { f(); r.push('ok'); } catch (e) { r.push(e.name); } }";
 
     @Test
     void varInAParameterListMayNotReuseAParameterOrArguments() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok,ok,ok,ok,ok",
                 "SyntaxError,SyntaxError,SyntaxError,ok,ok,ok",
                 TRY
                         + " t(function () { function f(p = eval('var arguments')) {} f(); });"
@@ -34,11 +30,14 @@ class EvalCodeTest {
 
     @Test
     void indirectEvalIsNeverStrict() {
-        assertBoth(
+        // before VERSION_ECMASCRIPT, an indirect eval took the strictness of the context
+        Utils.assertGatedBehavior(
+                "undefined,SyntaxError",
                 "number,ok",
                 "'use strict'; var r = [];"
                         + " (function () { (0, eval)('var ix = 1;'); })(); r.push(typeof ix);"
-                        + " (0, eval)('with ({}) {} r.push(\"ok\");');"
+                        + " try { (0, eval)('with ({}) {} r.push(\"ok\");'); }"
+                        + " catch (e) { r.push(e.name); }"
                         + " r.join()");
     }
 

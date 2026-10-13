@@ -4019,8 +4019,10 @@ public class ScriptRuntime {
         // mode.
         Consumer<CompilerEnvirons> compilerEnvironsProcessor =
                 compilerEnvs -> {
-                    // a direct eval propagates strict mode, an indirect one never does
-                    compilerEnvs.setStrictMode(isStrict);
+                    // a direct eval propagates strict mode, an indirect one never does (it took
+                    // the strict mode of the context before VERSION_ECMASCRIPT)
+                    compilerEnvs.setStrictMode(
+                            cx.isLatestEcmaScript() ? isStrict : cx.isStrictMode());
 
                     // If we are inside a method, we need to allow super. Methods have the home
                     // object set and propagated via the activation (i.e. the NativeCall),
@@ -4099,7 +4101,7 @@ public class ScriptRuntime {
     private static Predicate<String> evalForbiddenVarNames(
             Context cx, VarScope scope, boolean inParameters) {
         Predicate<String> forbidden = null;
-        if (inParameters && scope instanceof NativeCall) {
+        if (inParameters && scope instanceof NativeCall && cx.isLatestEcmaScript()) {
             JSDescriptor<?> fn = ((NativeCall) scope).function.getDescriptor();
             Set<String> names = new HashSet<>();
             if (!fn.hasLexicalThis()) {

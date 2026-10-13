@@ -8,15 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /**
- * Early errors of parameter lists, rest patterns and the Function constructor (plan 1.2c); the same
- * in both versions.
+ * Early errors of parameter lists, rest patterns and the Function constructor (plan 1.2c), under
+ * VERSION_ECMASCRIPT; VERSION_ES6 keeps the stock checks.
  */
 class FunctionEarlyErrorsTest {
-
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
 
     private static String errorNames(String... sources) {
         StringBuilder sb = new StringBuilder("var r = [];");
@@ -32,7 +27,8 @@ class FunctionEarlyErrorsTest {
 
     @Test
     void duplicateParameters() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok,ok,ok,ok,ok",
                 "ok,SyntaxError,SyntaxError,SyntaxError,SyntaxError,ok",
                 errorNames(
                         "function f(a, a) {}",
@@ -45,7 +41,8 @@ class FunctionEarlyErrorsTest {
 
     @Test
     void strictBodyChecksTheNameAndParameters() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok,ok,ok,ok",
                 "SyntaxError,SyntaxError,SyntaxError,SyntaxError,SyntaxError",
                 errorNames(
                         "function eval() { 'use strict'; }",
@@ -58,7 +55,7 @@ class FunctionEarlyErrorsTest {
     @Test
     void functionConstructor() {
         Utils.assertGatedBehavior(
-                "SyntaxError,SyntaxError",
+                "InternalError",
                 "SyntaxError,SyntaxError,TypeError,TypeError",
                 "var r = [];"
                         + " try { Function('a', 'a', '\"use strict\";'); } catch (e) { r.push(e.name); }"
@@ -72,7 +69,11 @@ class FunctionEarlyErrorsTest {
 
     @Test
     void restParameterWithABindingPattern() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "ok",
+                "try { eval('function f(a, ...[b, c]) {}'); 'ok' } catch (e) { e.name }");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1/2/3,4,5",
                 "function f(a, ...[b, c]) { return [a, b, c].join('/'); }"
                         + " function g(...{length}) { return length; }"
@@ -96,7 +97,10 @@ class FunctionEarlyErrorsTest {
 
     @Test
     void argumentsInADefaultParameter() {
-        assertBoth(
-                "third", "function f(x = arguments[2], z) { return x; } f(undefined, 0, 'third')");
+        Utils.assertGatedBehavior(
+                "ReferenceError",
+                "third",
+                "try { function f(x = arguments[2], z) { return x; } f(undefined, 0, 'third') }"
+                        + " catch (e) { e.name }");
     }
 }

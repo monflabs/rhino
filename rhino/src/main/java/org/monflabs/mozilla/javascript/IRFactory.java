@@ -2183,7 +2183,9 @@ public final class IRFactory {
             Scope let = Scope.splitScope(loop);
             // the scopes of the initializer (nested patterns) are in the let scope, where the names
             // they bind are declared
-            loop.setParentScope(let);
+            if (parser.compilerEnv.isLatestEcmaScript()) {
+                loop.setParentScope(let);
+            }
             let.setType(Token.LET);
             let.addChildrenToBack(init);
             // the loop must stay the let's direct child: NodeTransformer.visitLet re-parents it
@@ -2223,12 +2225,11 @@ public final class IRFactory {
                 && !((Scope) scope).getSymbolTable().isEmpty();
     }
 
-    private static Node createLoop(
-            Jump loop, int loopType, Node body, Node cond, Node init, Node incr) {
+    private Node createLoop(Jump loop, int loopType, Node body, Node cond, Node init, Node incr) {
         return createLoop(loop, loopType, body, cond, init, incr, false);
     }
 
-    private static Node createLoop(
+    private Node createLoop(
             Jump loop,
             int loopType,
             Node body,
@@ -2265,7 +2266,10 @@ public final class IRFactory {
             if (loopType == LOOP_FOR) {
                 int initType = init.getType();
                 if (initType != Token.EMPTY) {
-                    if (initType != Token.VAR && initType != Token.LET && initType != Token.CONST) {
+                    if (initType != Token.VAR
+                            && initType != Token.LET
+                            && (initType != Token.CONST
+                                    || !parser.compilerEnv.isLatestEcmaScript())) {
                         init = new Node(Token.EXPR_VOID, init);
                     }
                     loop.addChildToFront(init);

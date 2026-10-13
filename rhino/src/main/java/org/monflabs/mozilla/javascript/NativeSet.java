@@ -66,6 +66,9 @@ public class NativeSet extends ScriptableObject {
 
     private boolean instanceOfSet = false;
 
+    /** The size accessor of stock Rhino's prototypes (before VERSION_ECMASCRIPT). */
+    static final SymbolKey GETSIZE = new SymbolKey("[Symbol.getSize]", Symbol.Kind.REGULAR);
+
     static Object init(Context cx, VarScope scope, boolean sealed) {
         ES6Iterator.initialize(
                 ITER_DESCRIPTOR,
@@ -74,7 +77,24 @@ public class NativeSet extends ScriptableObject {
                 new NativeCollectionIterator(ITERATOR_TAG),
                 sealed,
                 ITERATOR_TAG);
-        return DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), sealed);
+        NativeObject proto = new NativeObject();
+        return DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    if (!c.isLatestEcmaScript()) {
+                        // the internal accessor of stock Rhino, before VERSION_ECMASCRIPT
+                        proto.defineProperty(
+                                c,
+                                scope,
+                                NativeSet.GETSIZE,
+                                (thisObj) -> realThis(thisObj, "size").js_getSize(),
+                                null,
+                                DONTENUM | PERMANENT);
+                    }
+                });
     }
 
     @Override

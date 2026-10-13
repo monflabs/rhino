@@ -35,13 +35,16 @@ class FunctionEnvironmentTest {
 
     @Test
     void evalInParametersAndNewTarget() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "undefined|ok|true,false|SyntaxError",
                 "SyntaxError|ok|true,false|SyntaxError",
-                "t(function () { var f = (p = eval('var x = 1'), x) => {}; f(); });"
+                PRELUDE
+                        + "t(function () { var f = (p = eval('var x = 1'), x) => {}; f(); });"
                         + " t(function () { var f = (p = eval('var arguments = 1')) => {}; f(); return 'ok'; });"
                         + " t(function () { var nt; function F() { nt = eval('new.target'); }"
                         + " new F(); var a = nt === F; F(); return [a, nt === F].join(); });"
-                        + " t(function () { return (0, eval)('new.target'); });");
+                        + " t(function () { return (0, eval)('new.target'); });"
+                        + " r.join('|')");
     }
 
     @Test

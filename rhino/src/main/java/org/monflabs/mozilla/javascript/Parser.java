@@ -527,6 +527,14 @@ public class Parser {
         return moduleInfo == null && !inAsyncFunction() && !inStaticBlock;
     }
 
+    /**
+     * The destructuring parameters of a function, desugared in source order under
+     * VERSION_ECMASCRIPT (in hash order before).
+     */
+    private Map<String, Node> newDestructuringMap() {
+        return compilerEnv.isLatestEcmaScript() ? new LinkedHashMap<>() : new HashMap<>();
+    }
+
     /** Whether the code being parsed is the top level of a module, where await is allowed. */
     private boolean isModuleTopLevel() {
         return moduleInfo != null && !(currentScriptOrFn instanceof FunctionNode);
@@ -1072,7 +1080,8 @@ public class Parser {
                                     if (fnNode.hasRestParameter()) {
                                         reportError("msg.rest.param.use.strict");
                                     }
-                                    if (fnNode.getProp(Node.DESTRUCTURING_PARAMS) != null) {
+                                    if (fnNode.getProp(Node.DESTRUCTURING_PARAMS) != null
+                                            && compilerEnv.isLatestEcmaScript()) {
                                         reportError("msg.destruct.param.use.strict");
                                     }
                                     checkLegacyEscapeInPrologue();
@@ -1560,7 +1569,7 @@ public class Parser {
 
                     AstNode expr = destructuringAssignExpr();
                     if (destructuring == null) {
-                        destructuring = new LinkedHashMap<>();
+                        destructuring = newDestructuringMap();
                     }
 
                     if (expr instanceof Assignment) {
@@ -1613,7 +1622,8 @@ public class Parser {
                         restStartLineno = lineNumber();
                         restStartColumn = columnNumber();
                         int next = peekToken();
-                        if (next == Token.LB || next == Token.LC) {
+                        if ((next == Token.LB || next == Token.LC)
+                                && compilerEnv.isLatestEcmaScript()) {
                             // a binding pattern as rest element: function f(...[a, b])
                             AstNode pattern = destructuringPrimaryExpr();
                             markDestructuring(pattern);
@@ -1912,7 +1922,7 @@ public class Parser {
 
         // Would prefer not to call createDestructuringAssignment until codegen,
         // but the symbol definitions have to happen now, before body is parsed.
-        Map<String, Node> destructuring = new LinkedHashMap<>();
+        Map<String, Node> destructuring = newDestructuringMap();
         Map<String, AstNode> destructuringDefault = new HashMap<>();
         Set<String> paramNames = new HashSet<>();
 
@@ -2076,7 +2086,8 @@ public class Parser {
                         reportError("msg.bad.id.strict", paramName);
                     }
                 }
-            } else if (restParam instanceof ArrayLiteral || restParam instanceof ObjectLiteral) {
+            } else if ((restParam instanceof ArrayLiteral || restParam instanceof ObjectLiteral)
+                    && compilerEnv.isLatestEcmaScript()) {
                 markDestructuring(restParam);
                 fnNode.addParam(restParam);
                 String pname = currentScriptOrFn.getNextTempName();
@@ -2100,6 +2111,19 @@ public class Parser {
      * parsing their parameters.
      */
     private void checkParamsAfterBody(FunctionNode fnNode, boolean isMethod) {
+        if (!compilerEnv.isLatestEcmaScript()) {
+            // before VERSION_ECMASCRIPT, only code that is already strict rejects duplicate
+            // simple parameters
+            if (inUseStrictDirective && fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+                Set<String> seen = new HashSet<>();
+                for (AstNode param : fnNode.getParams()) {
+                    if (param instanceof Name && !seen.add(((Name) param).getIdentifier())) {
+                        addError("msg.dup.param.strict", ((Name) param).getIdentifier());
+                    }
+                }
+            }
+            return;
+        }
         boolean strict = inUseStrictDirective || fnNode.isInStrictMode();
         boolean simple =
                 fnNode.getDefaultParams() == null
@@ -2822,7 +2846,8 @@ public class Parser {
                     }
                 }
 
-                if (init.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1) {
+                if (init.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
+                        && compilerEnv.isLatestEcmaScript()) {
                     // {x = 1} is only valid as a pattern
                     reportError("msg.syntax");
                 }
@@ -2956,7 +2981,7 @@ public class Parser {
             } else if (tt == Token.VAR || tt == Token.LET || tt == Token.CONST) {
                 consumeToken();
                 init = variables(tt, ts.tokenBeg, false);
-            } else if (tt == Token.LC || tt == Token.LB) {
+            } else if ((tt == Token.LC || tt == Token.LB) && compilerEnv.isLatestEcmaScript()) {
                 // may be an assignment pattern of a for-in/of: for ({x = 1} of ...)
                 boolean saved = inDestructuringAssignment;
                 inDestructuringAssignment = true;
@@ -4096,7 +4121,7 @@ public class Parser {
                     ? !isValidAssignmentTarget(pn, tt == Token.ASSIGN, isLogicalAssignment(tt))
                     : isNotValidSimpleAssignmentTarget(pn))
                 reportError("msg.syntax.invalid.assignment.lhs");
-            if (inUseStrictDirective && pn instanceof Name) {
+            if (inUseStrictDirective && pn instanceof Name && compilerEnv.isLatestEcmaScript()) {
                 String id = ((Name) pn).getIdentifier();
                 if ("eval".equals(id) || "arguments".equals(id)) {
                     reportError("msg.bad.id.strict", id);
@@ -6089,8 +6114,10 @@ public class Parser {
             throws IOException {
         methodIsGenerator = isGenerator && entryKind == METHOD_ENTRY;
         FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
-        // the source text of a method starts with its get/set/* prefix and name
-        fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
+        if (compilerEnv.isLatestEcmaScript()) {
+            // the source text of a method starts with its get/set/* prefix and name
+            fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
+        }
         if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
             // a getter has no parameter, a setter exactly one (not a rest parameter)
             if (entryKind == GET_ENTRY && !fn.getParams().isEmpty()) {
@@ -6269,7 +6296,9 @@ public class Parser {
             // default arguments. So, we do this check first, before the "insideFunctionBody"
             FunctionNode fn = (FunctionNode) currentScriptOrFn;
             fn.setRequiresArgumentObject();
-            if (insideFunctionParams() && fn.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+            if (insideFunctionParams()
+                    && fn.getFunctionType() != FunctionNode.ARROW_FUNCTION
+                    && compilerEnv.isLatestEcmaScript()) {
                 fn.setRequiresActivation();
             }
         }
@@ -6694,7 +6723,18 @@ public class Parser {
             AstNode defaultValue,
             Transformer transformer,
             boolean isFunctionParameter) {
-        boolean useIterator = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
+        if (!compilerEnv.isLatestEcmaScript()) {
+            return destructuringArrayLegacy(
+                    array,
+                    variableType,
+                    tempName,
+                    parent,
+                    destructuringNames,
+                    defaultValue,
+                    transformer,
+                    isFunctionParameter);
+        }
+        boolean useIterator = true;
         int setOp = variableType == Token.CONST ? Token.SETCONST : Token.SETNAME;
         if (defaultValue != null) {
             setupDefaultValues(tempName, parent, defaultValue, setOp, transformer);
@@ -6830,6 +6870,185 @@ public class Parser {
         }
         if (useIterator) {
             parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
+        }
+        return empty;
+    }
+
+    /**
+     * The array patterns of stock Rhino, before VERSION_ECMASCRIPT: elements are read by index and
+     * a rest element is a slice, except for the parameters of code from VERSION_ES6 on, which call
+     * the iterator of the global Symbol for each non-hole element and close it if it is not done.
+     * The default value of a parameter is applied before the first element.
+     */
+    private boolean destructuringArrayLegacy(
+            ArrayLiteral array,
+            int variableType,
+            String tempName,
+            Node parent,
+            List<String> destructuringNames,
+            AstNode defaultValue,
+            Transformer transformer,
+            boolean isFunctionParameter) {
+        boolean empty = true;
+        int setOp = variableType == Token.CONST ? Token.SETCONST : Token.SETNAME;
+        int index = 0;
+        boolean defaultValuesSetup = false;
+        String iteratorName = null;
+        String lastResultName = null;
+        for (AstNode n : array.getElements()) {
+            if (n.getType() == Token.EMPTY) {
+                index++;
+                continue;
+            }
+            if (defaultValue != null && !defaultValuesSetup) {
+                setupDefaultValues(tempName, parent, defaultValue, setOp, transformer);
+                defaultValuesSetup = true;
+            }
+            if (isFunctionParameter
+                    && iteratorName == null
+                    && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                // iterator = temp[Symbol.iterator]()
+                iteratorName = defineTemp();
+                lastResultName = defineTemp();
+                Node getIteratorMethod =
+                        new Node(
+                                Token.GETELEM,
+                                createName(tempName),
+                                new Node(
+                                        Token.GETPROP,
+                                        createName("Symbol"),
+                                        Node.newString("iterator")));
+                parent.addChildToBack(
+                        new Node(
+                                Token.SETNAME,
+                                createName(Token.BINDNAME, iteratorName, null),
+                                new Node(Token.CALL, getIteratorMethod)));
+                empty = false;
+            }
+            Node rightElem;
+            if (iteratorName != null) {
+                // lastResult = iterator.next(); elem = lastResult.value
+                Node callNext =
+                        new Node(
+                                Token.CALL,
+                                new Node(
+                                        Token.GETPROP,
+                                        createName(iteratorName),
+                                        Node.newString("next")));
+                parent.addChildToBack(
+                        new Node(
+                                Token.SETNAME,
+                                createName(Token.BINDNAME, lastResultName, null),
+                                callNext));
+                String elemTempName = defineTemp();
+                parent.addChildToBack(
+                        new Node(
+                                Token.SETNAME,
+                                createName(Token.BINDNAME, elemTempName, null),
+                                new Node(
+                                        Token.GETPROP,
+                                        createName(lastResultName),
+                                        Node.newString("value"))));
+                rightElem = createName(elemTempName);
+            } else {
+                rightElem = new Node(Token.GETELEM, createName(tempName), createNumber(index));
+            }
+            if (n.getType() == Token.NAME) {
+                String name = n.getString();
+                parent.addChildToBack(destructuringSet(setOp, name, rightElem, variableType));
+                if (variableType != -1) {
+                    defineSymbol(variableType, name, true);
+                    destructuringNames.add(name);
+                }
+            } else if (n.getType() == Token.ASSIGN) {
+                processDestructuringDefaults(
+                        variableType,
+                        parent,
+                        destructuringNames,
+                        (Assignment) n,
+                        rightElem,
+                        setOp,
+                        transformer,
+                        isFunctionParameter);
+            } else if (n instanceof Spread) {
+                if (index < array.getElements().size() - 1) {
+                    reportError("msg.parm.after.rest");
+                }
+                AstNode restTarget = ((Spread) n).getExpression();
+                Node sliceCall =
+                        new Node(
+                                Token.CALL,
+                                new Node(
+                                        Token.GETPROP,
+                                        createName(tempName),
+                                        Node.newString("slice")));
+                sliceCall.addChildToBack(createNumber(index));
+                if (restTarget.getType() == Token.NAME) {
+                    String name = restTarget.getString();
+                    parent.addChildToBack(destructuringSet(setOp, name, sliceCall, variableType));
+                    if (variableType != -1) {
+                        defineSymbol(variableType, name, true);
+                        destructuringNames.add(name);
+                    }
+                } else {
+                    parent.addChildToBack(
+                            nestedDestructuring(
+                                    destructuringNames,
+                                    variableType,
+                                    restTarget,
+                                    sliceCall,
+                                    currentScriptOrFn.getNextTempName(),
+                                    null,
+                                    transformer,
+                                    isFunctionParameter));
+                }
+            } else {
+                parent.addChildToBack(
+                        nestedDestructuring(
+                                destructuringNames,
+                                variableType,
+                                n,
+                                rightElem,
+                                currentScriptOrFn.getNextTempName(),
+                                null,
+                                transformer,
+                                isFunctionParameter));
+            }
+            index++;
+            empty = false;
+        }
+        if (iteratorName != null) {
+            // !lastResult.done ? ((f = iterator.return) !== undefined ? f.call(iterator)
+            //     : undefined) : undefined
+            String returnMethodName = defineTemp();
+            Node notDone =
+                    new Node(
+                            Token.NOT,
+                            new Node(
+                                    Token.GETPROP,
+                                    createName(lastResultName),
+                                    Node.newString("done")));
+            Node assignReturn =
+                    new Node(
+                            Token.SETNAME,
+                            createName(Token.BINDNAME, returnMethodName, null),
+                            new Node(
+                                    Token.GETPROP,
+                                    createName(iteratorName),
+                                    Node.newString("return")));
+            Node notUndefined = new Node(Token.NE, assignReturn, new Node(Token.UNDEFINED));
+            Node callReturn =
+                    new Node(
+                            Token.CALL,
+                            new Node(
+                                    Token.GETPROP,
+                                    createName(returnMethodName),
+                                    Node.newString("call")));
+            callReturn.addChildToBack(createName(iteratorName));
+            Node innerTernary =
+                    new Node(Token.HOOK, notUndefined, callReturn, new Node(Token.UNDEFINED));
+            parent.addChildToBack(
+                    new Node(Token.HOOK, notDone, innerTernary, new Node(Token.UNDEFINED)));
         }
         return empty;
     }
@@ -7497,7 +7716,19 @@ public class Parser {
                             right,
                             rightElem);
 
-            Node cond = cond_inner;
+            // the default applies when the element is undefined; before VERSION_ECMASCRIPT, only
+            // when the target is undefined too
+            Node cond =
+                    compilerEnv.isLatestEcmaScript()
+                            ? cond_inner
+                            : new Node(
+                                    Token.HOOK,
+                                    new Node(
+                                            Token.SHEQ,
+                                            new KeywordLiteral().setType(Token.UNDEFINED),
+                                            createName(name)),
+                                    cond_inner,
+                                    left);
 
             // store it to be transformed later
             if (transformer == null) {
@@ -7538,7 +7769,9 @@ public class Parser {
                                 null,
                                 transformer,
                                 isFunctionParameter));
-            } else if (isMemberTarget(left) && transformer != null) {
+            } else if (isMemberTarget(left)
+                    && transformer != null
+                    && compilerEnv.isLatestEcmaScript()) {
                 // {a: o.p = 1}: the reference is evaluated before the property is read
                 parent.addChildToBack(
                         simpleAssignment(
@@ -7563,7 +7796,7 @@ public class Parser {
         }
         if (value == null
                 || value.getType() != Token.FUNCTION
-                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+                || !compilerEnv.isLatestEcmaScript()) {
             return;
         }
         FunctionNode fn =
@@ -7659,7 +7892,7 @@ public class Parser {
         boolean defaultValuesSetup = false;
         List<Object> extractedKeys = new ArrayList<>(); // store strings or nodes for computed keys
 
-        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (compilerEnv.isLatestEcmaScript()) {
             // RequireObjectCoercible, after the default value of a parameter
             if (defaultValue != null) {
                 setupDefaultValues(tempName, parent, defaultValue, setOp, transformer);
@@ -7766,19 +7999,45 @@ public class Parser {
                 // Create a temp variable for the computed key within the LETEXPR scope
                 // to ensure the expression is only evaluated once
                 AstNode computedExpr = ((ComputedPropertyKey) id).getExpression();
-                // evaluated in order, right before the property is read
-                String keyTempName = defineTemp();
-                Node keyExpr =
-                        transformer != null ? transformer.transform(computedExpr) : computedExpr;
-                Node setKey =
-                        new Node(
-                                Token.SETNAME,
-                                createName(Token.BINDNAME, keyTempName, null),
-                                keyExpr);
-                if (transformer == null) {
-                    currentScriptOrFn.putDestructuringRvalues(setKey, computedExpr);
+                String keyTempName;
+                if (compilerEnv.isLatestEcmaScript()) {
+                    // evaluated in order, right before the property is read
+                    keyTempName = defineTemp();
+                    Node keyExpr =
+                            transformer != null
+                                    ? transformer.transform(computedExpr)
+                                    : computedExpr;
+                    Node setKey =
+                            new Node(
+                                    Token.SETNAME,
+                                    createName(Token.BINDNAME, keyTempName, null),
+                                    keyExpr);
+                    if (transformer == null) {
+                        currentScriptOrFn.putDestructuringRvalues(setKey, computedExpr);
+                    }
+                    parent.addChildToBack(setKey);
+                } else {
+                    // before VERSION_ECMASCRIPT, every key is evaluated first, in the let
+                    keyTempName = currentScriptOrFn.getNextTempName();
+                    Node tempVar;
+                    if (transformer != null) {
+                        tempVar =
+                                createName(
+                                        Token.NAME,
+                                        keyTempName,
+                                        transformer.transform(computedExpr));
+                    } else {
+                        tempVar = createName(Token.NAME, keyTempName, computedExpr);
+                        currentScriptOrFn.putDestructuringRvalues(tempVar, computedExpr);
+                    }
+                    letNode.addChildToBack(tempVar);
+                    pushScope(letExprScope);
+                    try {
+                        defineSymbol(Token.LET, keyTempName, true);
+                    } finally {
+                        popScope();
+                    }
                 }
-                parent.addChildToBack(setKey);
 
                 Node keyRef = createName(keyTempName);
                 extractedKeys.add(keyRef);

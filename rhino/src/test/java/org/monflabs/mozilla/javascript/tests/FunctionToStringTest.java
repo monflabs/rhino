@@ -7,17 +7,16 @@ package org.monflabs.mozilla.javascript.tests;
 import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
-/** Function.prototype.toString source text (plan 1.2d); the same in both versions. */
+/**
+ * Function.prototype.toString source text (plan 1.2d), under VERSION_ECMASCRIPT; VERSION_ES6 keeps
+ * the stock text.
+ */
 class FunctionToStringTest {
-
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
 
     @Test
     void methodsStartWithTheirKey() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "f() {}|f(a) {}|() {}|() {}|() {}",
                 "get /* a */ f() {}|set f(a) {}|* g() {}|[ 'h' ]() {}|m() {}",
                 "var o = { get /* a */ f() {}, set f(a) {}, * g() {}, [ 'h' ]() {}, m() {} };"
                         + " var d = Object.getOwnPropertyDescriptor(o, 'f');"
@@ -26,22 +25,27 @@ class FunctionToStringTest {
 
     @Test
     void functionConstructorSource() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError",
                 "function anonymous(a,b //\n) {\nreturn a; //\n}",
-                "String(Function('a', 'b //', 'return a; //'))");
-        assertBoth(
+                "try { String(Function('a', 'b //', 'return a; //')) } catch (e) { e.name }");
+        Utils.assertGatedBehavior(
+                "function * anonymous() {\n}",
                 "function* anonymous(\n) {\n\n}",
                 "String(Object.getPrototypeOf(function* () {}).constructor())");
     }
 
     @Test
     void callableProxiesAndBuiltins() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError",
                 "function () {\n\t[native code]\n}\n",
-                "Function.prototype.toString.call(new Proxy(function f() {}, {}))");
-        assertBoth(
+                "try { Function.prototype.toString.call(new Proxy(function f() {}, {})) }"
+                        + " catch (e) { e.name }");
+        Utils.assertGatedBehavior(
+                "function get $*() {\n\t[native code]\n}\n",
                 "function get() {\n\t[native code]\n}\n",
                 "String(Object.getOwnPropertyDescriptor(RegExp, '$*').get)");
-        assertBoth(0, "Object.getOwnPropertySymbols(Map.prototype).length - 2");
+        Utils.assertGatedBehavior(1, 0, "Object.getOwnPropertySymbols(Map.prototype).length - 2");
     }
 }

@@ -614,7 +614,8 @@ batches by area, each verified (test262 must not move), perf-gated and committed
   globals); `LatestFeaturesGateTest`.
 - *G2 (done)* 2.1-2.9 (const/let, strict `this`, `caller`, bind, `arguments`); the stock arguments object is kept
   next to the spec one in `Arguments`.
-- *G3* 2.10-2.14 (parameter early errors, `toString`, eval code, destructuring).
+- *G3 (done)* 2.10-2.14 (parameter early errors, `toString`, eval code, destructuring); stock array patterns in
+  `Parser.destructuringArrayLegacy`.
 - *G4* 2.15-2.22 (iteration protocol, literal early errors, `yield`, function environments).
 - *G5* 2.23-2.28 (typed arrays, Reflect and Proxy, String symbols, Array writes, Date, JSON).
 - *G6* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp).
