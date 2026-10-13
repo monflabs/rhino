@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Top-level await (2026-10-13, plan 8.5)
+
+- New: `await` and `for await` at the top level of a module. A module that uses them is compiled as an async
+  generator (its body is driven by AsyncFunctionDriver), and module evaluation follows the async-evaluation
+  algorithm of ES2022 (InnerModuleEvaluation with async parents and evaluation order, as in Nashorn); a graph
+  without top-level await evaluates synchronously, as before.
+- API: `ModuleRecord.evaluate` (and `Context.evaluateModule`) runs the promise jobs while an asynchronous module
+  graph is pending, then throws its evaluation error, so embedders keep a synchronous contract. `import()` settles
+  through the evaluation promise of the module (ContinueDynamicImport), one job after a failed load.
+- Fix: an export of a name bound by a destructuring declaration (`export var { x } = o`) is no longer reported as
+  undeclared; an escaped `await` (`\u0061wait`) is not the keyword.
+- test262: `top-level-await` is no longer an unsupported feature: 41,077/42,616 (96.4%), 260 more tests pass.
+  Perf gate: no regression against 8.4.
+
 ### RegExp match indices (2026-10-13, plan 8.4)
 
 - New (ES6 and later): the RegExp `d` flag, in literals and for the constructor; `RegExp.prototype.hasIndices`; a

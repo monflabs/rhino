@@ -52,6 +52,9 @@ final class ModuleInfo {
     /** The function declared by {@code export default function () {}}, named "default". */
     boolean anonymousDefaultFunction;
 
+    /** Whether the module awaits at its top level: its body is an async generator. */
+    boolean hasTopLevelAwait;
+
     private final String source;
     private final List<Edit> edits = new ArrayList<>();
 
@@ -131,7 +134,9 @@ final class ModuleInfo {
             locals.add(ee.localName());
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("(function* (").append(RECORD_PARAM).append(") {'use strict'; ");
+        sb.append(hasTopLevelAwait ? "(async function* (" : "(function* (")
+                .append(RECORD_PARAM)
+                .append(") {'use strict'; ");
         sb.append(RECORD_PARAM).append(".init(");
         boolean first = true;
         for (String local : locals) {

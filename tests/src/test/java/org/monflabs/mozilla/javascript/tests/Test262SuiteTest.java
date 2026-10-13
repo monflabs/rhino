@@ -169,7 +169,6 @@ public class Test262SuiteTest {
                             "IsHTMLDDA",
                             "CanBlockIsFalse",
                             "tail-call-optimization",
-                            "top-level-await",
                             "import-attributes",
                             "json-modules",
                             "Temporal",

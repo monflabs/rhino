@@ -524,6 +524,11 @@ public class Parser {
         return moduleInfo == null && !inAsyncFunction() && !inStaticBlock;
     }
 
+    /** Whether the code being parsed is the top level of a module, where await is allowed. */
+    private boolean isModuleTopLevel() {
+        return moduleInfo != null && !(currentScriptOrFn instanceof FunctionNode);
+    }
+
     private boolean inAsyncGenerator() {
         return currentScriptOrFn instanceof FunctionNode
                 && ((FunctionNode) currentScriptOrFn).isAsyncGenerator();
@@ -1476,12 +1481,30 @@ public class Parser {
         for (ModuleInfo.ImportEntry ie : moduleInfo.importEntries) {
             imported.add(ie.localName());
         }
+        // the names of destructuring declarations are not symbols until the IR is built
+        List<String> destructured = new ArrayList<>();
+        root.visit(
+                node -> {
+                    if (node instanceof FunctionNode) {
+                        return false;
+                    }
+                    if (node instanceof VariableDeclaration
+                            && (node.getType() == Token.VAR || node.getParent() == root)) {
+                        for (VariableInitializer vi : ((VariableDeclaration) node).getVariables()) {
+                            if (vi.isDestructuring()) {
+                                collectBoundNames(vi.getTarget(), destructured);
+                            }
+                        }
+                    }
+                    return true;
+                });
         for (ModuleInfo.ExportEntry ee : moduleInfo.exportEntries) {
             String local = ee.localName();
             if (ee.moduleRequest() == null
                     && !ModuleInfo.DEFAULT_BINDING.equals(local)
                     && !imported.contains(local)
-                    && root.getSymbol(local) == null) {
+                    && root.getSymbol(local) == null
+                    && !destructured.contains(local)) {
                 reportError("msg.module.undeclared.export", local);
             }
         }
@@ -2743,8 +2766,10 @@ public class Parser {
         pushScope(tempScope); // decide below what AST class to use
         try {
             if (matchToken(Token.AWAIT, true)) {
-                // for await (... of ...), in an async function (14.7.5)
-                if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
+                // for await (... of ...), in an async function (14.7.5) or a module
+                if (isModuleTopLevel()) {
+                    moduleInfo.hasTopLevelAwait = true;
+                } else if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
                     reportError("msg.bad.await");
                 }
                 isForAwait = true;
@@ -4445,10 +4470,12 @@ public class Parser {
     /** AwaitExpression (ECMA-262 15.8): a suspension of the generator an async body runs as. */
     private AstNode awaitExpr() throws IOException {
         consumeToken();
+        checkEscapedKeyword();
         int lineno = lineNumber(), column = columnNumber(), pos = ts.tokenBeg;
-        if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
-            // in a module outside an async function (top-level await is ES2022), or in the
-            // parameters of an async function
+        if (isModuleTopLevel()) {
+            moduleInfo.hasTopLevelAwait = true;
+        } else if (!inAsyncFunction() || functionOfParams == currentScriptOrFn) {
+            // in a module outside an async function, or in the parameters of an async function
             reportError("msg.bad.await");
         }
         AstNode operand = unaryExpr();

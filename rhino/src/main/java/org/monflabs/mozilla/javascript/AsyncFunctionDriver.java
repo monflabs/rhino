@@ -45,6 +45,17 @@ final class AsyncFunctionDriver {
         return capability.promise;
     }
 
+    /**
+     * Evaluates the body of a module with a top-level await (16.2.1.6.5 ExecuteModule with a
+     * capability): an async generator, already instantiated, whose awaits are AwaitRequests.
+     */
+    static Object runModule(Context cx, VarScope scope, ES6Generator generator) {
+        NativePromise.Capability capability = NativePromise.newCapability(cx, scope);
+        new AsyncFunctionDriver(generator, capability, scope)
+                .step(cx, NativeGenerator.GENERATOR_SEND, Undefined.instance);
+        return capability.promise;
+    }
+
     private final AsyncIteration.Driver iterationDriver =
             new AsyncIteration.Driver() {
                 @Override
@@ -136,6 +147,10 @@ final class AsyncFunctionDriver {
             return;
         }
         Object awaited = ScriptableObject.getProperty(result, ES6Iterator.VALUE_PROPERTY);
+        if (awaited instanceof NativeAsyncGenerator.AwaitRequest) {
+            // the await of a module body
+            awaited = ((NativeAsyncGenerator.AwaitRequest) awaited).value;
+        }
         if (ScriptRuntime.toBoolean(
                 ScriptableObject.getProperty(result, ES6Iterator.DONE_PROPERTY))) {
             capability.resolve.call(

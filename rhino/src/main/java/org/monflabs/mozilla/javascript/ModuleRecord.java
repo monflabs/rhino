@@ -36,6 +36,8 @@ public final class ModuleRecord {
         LINKING,
         LINKED,
         EVALUATING,
+        /** its synchronous part has run; it waits on an await, its own or a dependency's */
+        EVALUATING_ASYNC,
         EVALUATED
     }
 
@@ -56,6 +58,18 @@ public final class ModuleRecord {
     private Scriptable generator;
     private ModuleNamespace namespace;
 
+    // the state of an evaluation (16.2.1.6 Cyclic Module Records)
+    private int dfsIndex;
+    private int dfsAncestorIndex;
+    private ModuleRecord cycleRoot;
+    private boolean asyncEvaluation;
+    private long asyncEvaluationOrder;
+    private int pendingAsyncDependencies;
+    private final List<ModuleRecord> asyncParentModules = new ArrayList<>();
+    private NativePromise.Capability topLevelCapability;
+    private static final java.util.concurrent.atomic.AtomicLong ASYNC_EVALUATION_ORDER =
+            new java.util.concurrent.atomic.AtomicLong(1);
+
     private ModuleRecord(Module module, TopLevel realm, ModuleInfo info) {
         this.module = module;
         this.realm = realm;
@@ -63,10 +77,10 @@ public final class ModuleRecord {
     }
 
     /**
-     * The namespace of the module that import(specifier) names in the script or module of the given
-     * name, loaded, linked and evaluated.
+     * The module that import(specifier) names in the script or module of the given name, loaded and
+     * linked; its evaluation follows (see {@link #evaluateToPromise}).
      */
-    static Scriptable importDynamic(
+    static ModuleRecord importDynamic(
             Context cx, TopLevel realm, String referrerName, String specifier) {
         ModuleRecord referrerRecord = registry(realm).get(referrerName);
         int generated = referrerName.indexOf('#');
@@ -92,8 +106,7 @@ public final class ModuleRecord {
         }
         ModuleRecord record = load(cx, realm, resolve(cx, specifier, referrer));
         record.link(cx);
-        record.evaluate(cx);
-        return record.getNamespace();
+        return record;
     }
 
     /** The name of the module (its identity in the realm). */
@@ -235,7 +248,13 @@ public final class ModuleRecord {
                                 realm,
                                 Undefined.SCRIPTABLE_UNDEFINED,
                                 new Object[] {recordObject});
-        ScriptableObject.callMethod(cx, generator, "next", ScriptRuntime.emptyArgs);
+        if (generator instanceof NativeAsyncGenerator) {
+            // a module with a top-level await: its body is driven by evaluation
+            ES6Generator body = ((NativeAsyncGenerator) generator).body();
+            inTopCall(cx, lcx -> body.resumeLocal(lcx, realm, Undefined.instance));
+        } else {
+            ScriptableObject.callMethod(cx, generator, "next", ScriptRuntime.emptyArgs);
+        }
         if (info.anonymousDefaultFunction) {
             // export default function () {}: the function is named "default"
             Object fn = readBinding(cx, ModuleInfo.DEFAULT_BINDING);
@@ -364,32 +383,253 @@ public final class ModuleRecord {
 
     /**
      * Evaluates the module (16.2.1.5.3 Evaluate): its imported modules first, depth first, then its
-     * body, once. An error is remembered and thrown again by a later evaluation.
+     * body, once. With a top-level await in the graph, the evaluation completes in promise jobs,
+     * which this method runs (unless microtask processing is suspended); an evaluation error is
+     * thrown, also by a later evaluation.
      */
     public void evaluate(Context cx) {
-        if (status == Status.EVALUATED || status == Status.EVALUATING) {
+        evaluateToPromise(cx);
+        ModuleRecord root = evaluationRoot();
+        if (root.status == Status.EVALUATING_ASYNC) {
+            cx.processMicrotasks();
+        }
+        if (evaluationError != null) {
+            throw evaluationError;
+        }
+        if (root.evaluationError != null) {
+            throw root.evaluationError;
+        }
+    }
+
+    private ModuleRecord evaluationRoot() {
+        if ((status == Status.EVALUATING_ASYNC || status == Status.EVALUATED)
+                && cycleRoot != null) {
+            return cycleRoot;
+        }
+        return this;
+    }
+
+    /**
+     * Evaluate (16.2.1.5.3) without running the promise jobs: the promise that settles once the
+     * module graph is evaluated.
+     */
+    Object evaluateToPromise(Context cx) {
+        if (status == Status.NEW || status == Status.LINKING) {
+            link(cx);
+        }
+        ModuleRecord module = evaluationRoot();
+        if (module.topLevelCapability != null) {
+            return module.topLevelCapability.promise;
+        }
+        NativePromise.Capability capability = NativePromise.newCapability(cx, realm);
+        module.topLevelCapability = capability;
+        // evaluate() throws a rejection: it is handled
+        NativePromise.await(
+                cx,
+                realm,
+                capability.promise,
+                (lcx, ls, t, args) -> Undefined.instance,
+                (lcx, ls, t, args) -> Undefined.instance);
+        java.util.ArrayDeque<ModuleRecord> stack = new java.util.ArrayDeque<>();
+        try {
+            module.innerModuleEvaluation(cx, stack, 0);
+        } catch (RhinoException e) {
+            for (ModuleRecord m : stack) {
+                m.status = Status.EVALUATED;
+                m.evaluationError = e;
+            }
+            module.status = Status.EVALUATED;
+            module.evaluationError = e;
+            Object error = ScriptRuntime.moduleErrorValue(cx, realm, e);
+            capability.reject.call(cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
+            return capability.promise;
+        }
+        if (!module.asyncEvaluation) {
+            capability.resolve.call(
+                    cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {Undefined.instance});
+        }
+        return capability.promise;
+    }
+
+    private boolean hasTopLevelAwait() {
+        return info != null && info.hasTopLevelAwait;
+    }
+
+    /** InnerModuleEvaluation (16.2.1.5.3.1). */
+    private int innerModuleEvaluation(Context cx, java.util.Deque<ModuleRecord> stack, int index) {
+        if (info == null) {
+            // a module of Java values: nothing to run
+            if (status != Status.EVALUATED) {
+                status = Status.EVALUATED;
+                cycleRoot = this;
+            }
+            return index;
+        }
+        if (status == Status.EVALUATING_ASYNC || status == Status.EVALUATED) {
             if (evaluationError != null) {
                 throw evaluationError;
             }
-            return;
+            return index;
         }
-        if (status != Status.LINKED) {
-            link(cx);
+        if (status == Status.EVALUATING) {
+            return index;
         }
         status = Status.EVALUATING;
-        try {
-            for (ModuleRecord r : requested.values()) {
-                r.evaluate(cx);
+        dfsIndex = index;
+        dfsAncestorIndex = index;
+        pendingAsyncDependencies = 0;
+        index++;
+        stack.addLast(this);
+        for (ModuleRecord required : requested.values()) {
+            index = required.innerModuleEvaluation(cx, stack, index);
+            if (required.status == Status.EVALUATING) {
+                dfsAncestorIndex = Math.min(dfsAncestorIndex, required.dfsAncestorIndex);
+            } else {
+                required = required.cycleRoot != null ? required.cycleRoot : required;
+                if (required.evaluationError != null) {
+                    throw required.evaluationError;
+                }
             }
-            if (generator != null) {
-                ScriptableObject.callMethod(cx, generator, "next", ScriptRuntime.emptyArgs);
+            if (required.asyncEvaluation) {
+                pendingAsyncDependencies++;
+                required.asyncParentModules.add(this);
             }
-        } catch (RuntimeException e) {
-            evaluationError = e;
-            throw e;
-        } finally {
-            status = Status.EVALUATED;
         }
+        if (pendingAsyncDependencies > 0 || hasTopLevelAwait()) {
+            asyncEvaluation = true;
+            asyncEvaluationOrder = ASYNC_EVALUATION_ORDER.getAndIncrement();
+            if (pendingAsyncDependencies == 0) {
+                executeAsyncModule(cx);
+            }
+        } else {
+            executeModule(cx);
+        }
+        if (dfsAncestorIndex == dfsIndex) {
+            ModuleRecord m;
+            do {
+                m = stack.removeLast();
+                m.status = m.asyncEvaluation ? Status.EVALUATING_ASYNC : Status.EVALUATED;
+                m.cycleRoot = this;
+            } while (m != this);
+        }
+        return index;
+    }
+
+    /** ExecuteModule (16.2.1.6.5) of a module without a top-level await. */
+    private void executeModule(Context cx) {
+        if (generator != null) {
+            ScriptableObject.callMethod(cx, generator, "next", ScriptRuntime.emptyArgs);
+        }
+    }
+
+    /** ExecuteAsyncModule (16.2.1.5.3.2): runs the body of a module with a top-level await. */
+    private void executeAsyncModule(Context cx) {
+        ES6Generator body = ((NativeAsyncGenerator) generator).body();
+        Object promise = inTopCall(cx, lcx -> AsyncFunctionDriver.runModule(lcx, realm, body));
+        NativePromise.await(
+                cx,
+                realm,
+                promise,
+                (lcx, ls, t, args) -> {
+                    asyncModuleExecutionFulfilled(lcx);
+                    return Undefined.instance;
+                },
+                (lcx, ls, t, args) -> {
+                    asyncModuleExecutionRejected(lcx, args.length > 0 ? args[0] : null);
+                    return Undefined.instance;
+                });
+    }
+
+    /** AsyncModuleExecutionFulfilled (16.2.1.5.3.4). */
+    private void asyncModuleExecutionFulfilled(Context cx) {
+        if (status == Status.EVALUATED) {
+            return;
+        }
+        asyncEvaluation = false;
+        status = Status.EVALUATED;
+        if (topLevelCapability != null) {
+            topLevelCapability.resolve.call(
+                    cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {Undefined.instance});
+        }
+        List<ModuleRecord> execList = new ArrayList<>();
+        gatherAvailableAncestors(execList);
+        execList.sort((a, b) -> Long.compare(a.asyncEvaluationOrder, b.asyncEvaluationOrder));
+        for (ModuleRecord m : execList) {
+            if (m.status == Status.EVALUATED) {
+                continue;
+            }
+            if (m.hasTopLevelAwait()) {
+                m.executeAsyncModule(cx);
+                continue;
+            }
+            try {
+                inTopCall(
+                        cx,
+                        lcx -> {
+                            m.executeModule(lcx);
+                            return null;
+                        });
+            } catch (RhinoException e) {
+                m.asyncModuleExecutionRejected(cx, ScriptRuntime.moduleErrorValue(cx, realm, e));
+                continue;
+            }
+            m.asyncEvaluation = false;
+            m.status = Status.EVALUATED;
+            if (m.topLevelCapability != null) {
+                m.topLevelCapability.resolve.call(
+                        cx,
+                        realm,
+                        Undefined.SCRIPTABLE_UNDEFINED,
+                        new Object[] {Undefined.instance});
+            }
+        }
+    }
+
+    /** GatherAvailableAncestors (16.2.1.5.3.3). */
+    private void gatherAvailableAncestors(List<ModuleRecord> execList) {
+        for (ModuleRecord parent : asyncParentModules) {
+            if (execList.contains(parent)
+                    || (parent.cycleRoot != null && parent.cycleRoot.evaluationError != null)) {
+                continue;
+            }
+            parent.pendingAsyncDependencies--;
+            if (parent.pendingAsyncDependencies == 0) {
+                execList.add(parent);
+                if (!parent.hasTopLevelAwait()) {
+                    parent.gatherAvailableAncestors(execList);
+                }
+            }
+        }
+    }
+
+    /** AsyncModuleExecutionRejected (16.2.1.5.3.5). */
+    private void asyncModuleExecutionRejected(Context cx, Object reason) {
+        if (status == Status.EVALUATED) {
+            return;
+        }
+        evaluationError = new JavaScriptException(reason, getName(), 0);
+        status = Status.EVALUATED;
+        asyncEvaluation = false;
+        if (topLevelCapability != null) {
+            topLevelCapability.reject.call(
+                    cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {reason});
+        }
+        for (ModuleRecord parent : asyncParentModules) {
+            parent.asyncModuleExecutionRejected(cx, reason);
+        }
+    }
+
+    private Object inTopCall(Context cx, java.util.function.Function<Context, Object> action) {
+        if (ScriptRuntime.hasTopCall(cx)) {
+            return action.apply(cx);
+        }
+        return ScriptRuntime.doTopCall(
+                (lcx, ls, t, args) -> action.apply(lcx),
+                cx,
+                realm,
+                Undefined.SCRIPTABLE_UNDEFINED,
+                ScriptRuntime.emptyArgs,
+                true);
     }
 
     @Override

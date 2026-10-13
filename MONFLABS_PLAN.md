@@ -591,6 +591,8 @@ Steps:
   destructuring target `this.#x` is evaluated after the value is read (as for public members).
 - *8.3 (done)* class static blocks (a static element whose initializer is a synthetic method holding the block).
 - *8.4 (done)* RegExp `d` flag (`hasIndices`, `indices`); the one remaining test needs the `v` flag (10.2).
+- *8.5 (done)* top-level await (a module with it is an async generator; ES2022 async module evaluation in
+  ModuleRecord; `evaluate` runs the jobs of a pending graph).
 
 ### M9 — ES2023
 
@@ -683,7 +685,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
-| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 95.8% (8.1–8.4)      | ef4abf8e3 |
+| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 96.4% (8.1–8.5)      | ef4abf8e3 |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |

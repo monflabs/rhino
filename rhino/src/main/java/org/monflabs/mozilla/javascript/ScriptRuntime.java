@@ -6077,13 +6077,26 @@ public class ScriptRuntime {
                     // the jobs that loading enqueues run once this import is settled
                     cx.suspendMicrotaskProcessing();
                     try {
-                        Scriptable namespace =
+                        ModuleRecord record =
                                 ModuleRecord.importDynamic(cx, realm, referrerName, spec);
-                        capability.resolve.call(
+                        // ContinueDynamicImport: settles once the module graph is evaluated
+                        NativePromise.await(
                                 cx,
                                 realm,
-                                Undefined.SCRIPTABLE_UNDEFINED,
-                                new Object[] {namespace});
+                                record.evaluateToPromise(cx),
+                                (lcx, ls, t, args) -> {
+                                    capability.resolve.call(
+                                            lcx,
+                                            realm,
+                                            Undefined.SCRIPTABLE_UNDEFINED,
+                                            new Object[] {record.getNamespace()});
+                                    return Undefined.instance;
+                                },
+                                (lcx, ls, t, args) -> {
+                                    capability.reject.call(
+                                            lcx, realm, Undefined.SCRIPTABLE_UNDEFINED, args);
+                                    return Undefined.instance;
+                                });
                     } catch (RhinoException re) {
                         rejectWith(cx, realm, capability, re);
                     } finally {
@@ -6095,21 +6108,20 @@ public class ScriptRuntime {
 
     private static void rejectWith(
             Context cx, TopLevel realm, NativePromise.Capability capability, RhinoException re) {
-        Object error;
+        Object error = moduleErrorValue(cx, realm, re);
+        capability.reject.call(cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
+    }
+
+    /** The JavaScript value of an error thrown while a module is loaded or evaluated. */
+    static Object moduleErrorValue(Context cx, TopLevel realm, RhinoException re) {
         if (re instanceof JavaScriptException) {
-            error = ((JavaScriptException) re).getValue();
+            return ((JavaScriptException) re).getValue();
         } else if (re instanceof EvaluatorException) {
             // the imported module does not parse
-            error =
-                    newNativeError(
-                            cx,
-                            realm,
-                            TopLevel.NativeErrors.SyntaxError,
-                            new Object[] {re.details()});
-        } else {
-            error = wrapException(re, realm, cx);
+            return newNativeError(
+                    cx, realm, TopLevel.NativeErrors.SyntaxError, new Object[] {re.details()});
         }
-        capability.reject.call(cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
+        return wrapException(re, realm, cx);
     }
 
     /**

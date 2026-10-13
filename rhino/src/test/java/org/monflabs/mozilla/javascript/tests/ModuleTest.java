@@ -248,8 +248,9 @@ class ModuleTest {
                                     "script",
                                     1,
                                     null);
+                    // the failed load rejects first: the other settles through the evaluation
                     assertEquals(
-                            "42,TypeError",
+                            "TypeError,42",
                             cx.evaluateString(scope, "out.join()", "check", 1, null));
                     assertThrows(
                             EvaluatorException.class,
@@ -278,6 +279,57 @@ class ModuleTest {
                             1,
                             ((Number) ScriptableObject.getProperty(scope.getGlobalThis(), "runs"))
                                     .intValue());
+                });
+    }
+
+    @Test
+    void topLevelAwait() throws IOException {
+        write("slow.js", "export let v = 'early'; await null; v = await Promise.resolve('late');");
+        write("sync.js", "globalThis.order.push('sync'); export {};");
+        write(
+                "main.js",
+                "import { v } from './slow.js';\n"
+                        + "import './sync.js';\n"
+                        + "order.push('main:' + v);\n"
+                        + "export var { x = await 7 } = {};\n"
+                        + "for await (const n of [1, 2]) order.push(n);\n");
+        write("bad.js", "await null; throw new RangeError('tla');");
+        inAllModes(
+                new PathModuleLoader(dir),
+                (cx, scope) -> {
+                    Path main = dir.resolve("main.js");
+                    cx.evaluateString(scope, "globalThis.order = []", "setup", 1, null);
+                    // evaluate() runs the promise jobs of an asynchronous module graph
+                    Scriptable ns =
+                            cx.evaluateModule(
+                                    scope,
+                                    Module.source(main.toString(), Files.readString(main), main));
+                    assertEquals(7, ((Number) get(ns, "x")).intValue());
+                    assertEquals(
+                            "sync,main:late,1,2",
+                            cx.evaluateString(scope, "order.join()", "check", 1, null));
+                    // a rejected evaluation is thrown, and rejects import()
+                    Path bad = dir.resolve("bad.js");
+                    assertThrows(
+                            org.monflabs.mozilla.javascript.JavaScriptException.class,
+                            () ->
+                                    cx.evaluateModule(
+                                            scope,
+                                            Module.source(
+                                                    bad.toString(), Files.readString(bad), bad)));
+                    cx.evaluateString(
+                            scope,
+                            "var r; import('./slow.js').then(ns => r = ns.v);"
+                                    + " import('./bad.js').catch(e => r += ',' + e.message);",
+                            main.toString(),
+                            1,
+                            null);
+                    cx.processMicrotasks();
+                    assertEquals("late,tla", cx.evaluateString(scope, "r", "check", 1, null));
+                    // await is still an error in a script and in a function of a module
+                    assertThrows(
+                            EvaluatorException.class,
+                            () -> cx.evaluateModule(scope, "function f() { await 1; }", "m1"));
                 });
     }
 }

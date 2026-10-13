@@ -129,6 +129,11 @@ final class NativeAsyncGenerator extends ScriptableObject {
     }
 
     /** The object a call of an async generator function returns: its body has not started. */
+    /** The generator of the body (a module with a top-level await is driven directly). */
+    ES6Generator body() {
+        return body;
+    }
+
     static NativeAsyncGenerator create(VarScope scope, ES6Generator body, JSFunction function) {
         return new NativeAsyncGenerator(scope, body, function);
     }
