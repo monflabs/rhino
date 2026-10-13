@@ -307,6 +307,8 @@ unless stated otherwise.
 
 ### 2.1 `const` in a loop body takes each iteration's value
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f() {
   var r = [];
@@ -321,6 +323,8 @@ f();   // before: "0,0,0" (in functions without closures)   now: "0,1,2"
 
 ### 2.2 `for (const x of/in …)` initializes `x`
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f() { var s = 0; for (const v of [1, 2, 3]) { s += v; } return s; }
 f();   // before: NaN (v stayed undefined in functions without closures)   now: 6
@@ -329,6 +333,8 @@ f();   // before: NaN (v stayed undefined in functions without closures)   now: 
 - **Why:** the loop binding is initialized with each value (§14.7.5.7 ForIn/OfBodyEvaluation).
 
 ### 2.3 `let`/`const` loop heads create a binding per iteration
+
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var fs = [];
@@ -343,6 +349,8 @@ fs.map(function (f) { return f(); });   // before: [3, 3, 3]   now: [0, 1, 2]
 
 ### 2.4 Assignment to a block-level `const` has no effect (`VERSION_ES6`)
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f() { { const k = 1; (function () {}); k = 2; return k; } }
 f();   // before: 2 (the assignment succeeded)   now: 1 (no effect; TypeError in strict mode)
@@ -353,6 +361,8 @@ f();   // before: 2 (the assignment succeeded)   now: 1 (no effect; TypeError in
   `VERSION_ECMASCRIPT`, the assignment throws (see 1.1).
 
 ### 2.5 `let x;` in a loop body is `undefined` on each iteration
+
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 function f() {
@@ -368,6 +378,8 @@ f();   // before: "1,1" (in functions without closures)   now: "1,"
 
 ### 2.6 `this` of strict functions
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 "use strict";
 function f() { return typeof this; }
@@ -380,6 +392,8 @@ f.call(1);      // before: "object"   now: "number" (call/apply no longer box a 
   `"s".m()`) still receives the wrapper object; so does a strict function bound to a primitive with `bind`.
 
 ### 2.7 `caller` of strict functions throws
+
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 (function () { "use strict"; function s() {} s.caller; })();   // before: undefined   now: TypeError
@@ -394,6 +408,8 @@ Math.max.caller;                                                // before: undef
 
 ### 2.8 Bound functions
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 var t = Object.defineProperty(function () {}, "name", { value: "target" });
 t.bind().name;                                   // before: "bound "   now: "bound target"
@@ -405,9 +421,11 @@ t.bind().name;                                   // before: "bound "   now: "bou
 
 ### 2.9 The `arguments` object
 
+*Since plan G2 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f(x) { Object.defineProperty(arguments, "0", { configurable: false }); x = 7; return arguments[0]; }
-f(1);   // before: the property became non-writable and non-enumerable, and 1   now: 7 (still mapped)
+f(1);   // before: the property became non-writable and non-enumerable (still 7)   now: 7, and writable and enumerable
 function g(x, ...rest) { x = 2; return arguments[0]; }
 g(1);   // before: 2   now: 1 (a rest parameter makes arguments unmapped)
 ```

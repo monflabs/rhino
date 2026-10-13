@@ -26,7 +26,8 @@ class ArgumentsObjectTest {
 
     @Test
     void nonWritableIndexIsNoLongerMapped() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                5,
                 1,
                 "(function (x) { Object.defineProperty(arguments, '0', {writable: false});"
                         + " x = 5; return arguments[0]; })(1)");
@@ -34,7 +35,8 @@ class ArgumentsObjectTest {
 
     @Test
     void nonConfigurableIndexKeepsItsOtherAttributesAndMapping() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "1/false/false/false,7",
                 "1/true/true/false,7",
                 "(function (x) { Object.defineProperty(arguments, '0', {configurable: false});"
                         + " var d = Object.getOwnPropertyDescriptor(arguments, '0');"
@@ -51,7 +53,8 @@ class ArgumentsObjectTest {
     void unmappedArguments() {
         // strict functions and non-simple parameter lists
         assertBoth(1, "(function (x) { 'use strict'; x = 2; return arguments[0]; })(1)");
-        assertBoth(1, "(function (x, ...rest) { x = 2; return arguments[0]; })(1)");
+        Utils.assertGatedBehavior(
+                2, 1, "(function (x, ...rest) { x = 2; return arguments[0]; })(1)");
         assertBoth(1, "(function (x = 0) { x = 2; return arguments[0]; })(1)");
     }
 

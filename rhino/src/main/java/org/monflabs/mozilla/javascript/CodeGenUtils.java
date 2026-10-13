@@ -137,7 +137,8 @@ public class CodeGenUtils {
         // a parameter list that is not simple (rest parameters aside): no mapped arguments object
         builder.hasDefaultParameters =
                 scriptOrFn.getDefaultParams() != null
-                        || (scriptOrFn instanceof FunctionNode
+                        || (builder.languageVersion >= Context.VERSION_ECMASCRIPT
+                                && scriptOrFn instanceof FunctionNode
                                 && ((FunctionNode) scriptOrFn).hasDestructuredParams());
 
         // Calculate arity (function.length) - count params before first default

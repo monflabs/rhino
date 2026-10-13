@@ -18,6 +18,12 @@ public class LocalScope extends DeclarationScope {
      */
     @Override
     public void putConst(String name, VarScope start, Object value) {
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            // an ordinary binding before VERSION_ECMASCRIPT
+            super.put(name, start, value);
+            return;
+        }
         Slot<VarScope> slot = getMap().modify(this, name, 0, 0);
         slot.value = value;
         slot.setAttributes(

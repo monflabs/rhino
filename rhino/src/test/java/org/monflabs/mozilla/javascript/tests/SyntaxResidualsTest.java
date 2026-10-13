@@ -74,7 +74,7 @@ class SyntaxResidualsTest {
 
     @Test
     void arrowCoverAndCommentsAndEval() {
-        assertBoth(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1|SyntaxError|2|1|local",
                 "var r = [];"
                         + " var af = ({ x = 1 }) => x; r.push(af({}));"

@@ -46,10 +46,12 @@ class FunctionEnvironmentTest {
 
     @Test
     void destructuredParametersGiveUnmappedArguments() {
-        assertBoth(
-                "1|2",
-                "t(function () { function f(a, [b]) { arguments[0] = 2; return a; } return f(1, []); });"
-                        + " t(function () { function f(a, b) { arguments[0] = 2; return a; } return f(1, []); });");
+        String script =
+                PRELUDE
+                        + "t(function () { function f(a, [b]) { arguments[0] = 2; return a; } return f(1, []); });"
+                        + " t(function () { function f(a, b) { arguments[0] = 2; return a; } return f(1, []); });"
+                        + " r.join('|')";
+        Utils.assertGatedBehavior("2|2", "1|2", script);
     }
 
     @Test

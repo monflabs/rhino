@@ -73,7 +73,7 @@ class BuiltinsResidualsTest {
 
     @Test
     void dateSettersAndIndexOf() {
-        assertBoth(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "NaN,0|-1|get a() {}",
                 "var d = new Date(NaN); var v = d.setDate({ valueOf() { d.setTime(0); return 1; } });"
                         + " var r = [[v, d.getTime()].join()];"
@@ -140,7 +140,7 @@ class BuiltinsResidualsTest {
 
     @Test
     void stringAndConversionResiduals() {
-        assertBoth(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "2|x|TypeError|TypeError|TypeError",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => '__null__'.indexOf({ valueOf() { return null; }, toString: null }));"
@@ -165,7 +165,7 @@ class BuiltinsResidualsTest {
                         + " Promise.race.call(B, { [Symbol.iterator]() { return this; },"
                         + " next() { return { done: false }; }, return: 1 });"
                         + " Promise.resolve({ get then() { throw 'then'; } }).catch(e => r.push(e));";
-        for (int version : new int[] {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT}) {
+        for (int version : new int[] {Context.VERSION_ECMASCRIPT}) {
             Utils.runWithAllModes(
                     cx -> {
                         cx.setLanguageVersion(version);
@@ -182,7 +182,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void functionResiduals() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "0,1,2|7,0,1|0|0|0|TypeError",
                 "0,1,2|7,0,1|Infinity|0|2147483648|TypeError",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " function rest(...a) { return a; }"

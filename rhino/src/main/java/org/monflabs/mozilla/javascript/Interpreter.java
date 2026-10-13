@@ -3134,11 +3134,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     }
 
     /**
-     * Whether a const declaration creates a new binding each time it runs (ES6 block-scoped const,
-     * e.g. in a loop body), rather than being ignored after the first time (JavaScript 1.x const).
+     * Whether a const declaration creates a new binding each time it runs (block-scoped const, e.g.
+     * in a loop body, under VERSION_ECMASCRIPT), rather than being ignored after the first time
+     * (JavaScript 1.x const).
      */
     private static boolean isBlockScopedConst(CallFrame frame) {
-        return frame.fnOrScript.getDescriptor().getLanguageVersion() >= Context.VERSION_ES6;
+        return frame.fnOrScript.getDescriptor().isLatestEcmaScript();
     }
 
     private static void constAssignment(Context cx, CallFrame frame, int varIndex) {

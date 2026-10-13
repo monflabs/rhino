@@ -40,6 +40,7 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static final ClassDescriptor DESCRIPTOR;
     private static final ClassDescriptor ES6_DESCRIPTOR;
+    private static final ClassDescriptor LATEST_DESCRIPTOR;
     private static final ClassDescriptor GENERATOR_DESCRIPTOR;
     private static final ClassDescriptor ASYNC_DESCRIPTOR;
     private static final ClassDescriptor ASYNC_GENERATOR_DESCRIPTOR;
@@ -110,7 +111,10 @@ public class BaseFunction extends ScriptableObject implements Function {
                                 BaseFunction::js_protoArgumentsGetter,
                                 BaseFunction::js_protoArgumentsSetter,
                                 DONTENUM | READONLY)
-                        .withProp(
+                        .build();
+        // the builder is cumulative: the methods keep their descriptors (see APPLY_DESCRIPTOR)
+        LATEST_DESCRIPTOR =
+                builder.withProp(
                                 PROTO,
                                 "caller",
                                 BaseFunction::js_protoCallerGetter,
@@ -169,8 +173,10 @@ public class BaseFunction extends ScriptableObject implements Function {
 
         if (cx.getLanguageVersion() < Context.VERSION_ES6) {
             return DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
-        } else {
+        } else if (!cx.isLatestEcmaScript()) {
             return ES6_DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+        } else {
+            return LATEST_DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
         }
     }
 
@@ -590,15 +596,17 @@ public class BaseFunction extends ScriptableObject implements Function {
         int argc = args.length;
         final Scriptable boundThis;
         final Object[] boundArgs;
+        // an undefined this stays undefined for a strict target (null before VERSION_ECMASCRIPT)
+        Scriptable noThis = cx.isLatestEcmaScript() ? Undefined.SCRIPTABLE_UNDEFINED : null;
         if (argc > 0) {
             boundThis =
-                    Undefined.isUndefined(args[0])
-                            ? Undefined.SCRIPTABLE_UNDEFINED
+                    Undefined.isUndefined(args[0]) && noThis != null
+                            ? noThis
                             : ScriptRuntime.toObjectOrNull(cx, args[0], s);
             boundArgs = new Object[argc - 1];
             System.arraycopy(args, 1, boundArgs, 0, argc - 1);
         } else {
-            boundThis = Undefined.SCRIPTABLE_UNDEFINED;
+            boundThis = noThis;
             boundArgs = ScriptRuntime.emptyArgs;
         }
         return new BoundFunction(cx, s, targetFunction, boundThis, boundArgs);
@@ -846,13 +854,17 @@ public class BaseFunction extends ScriptableObject implements Function {
     }
 
     private static Object js_protoArgumentsGetter(Scriptable thisObj) {
-        checkSloppyFunction(thisObj);
-        return ((BaseFunction) thisObj).getArguments();
+        if (Context.getCurrentContext().isLatestEcmaScript()) {
+            checkSloppyFunction(thisObj);
+        }
+        return LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).getArguments();
     }
 
     private static void js_protoArgumentsSetter(Scriptable thisObj, Object value) {
-        checkSloppyFunction(thisObj);
-        ((BaseFunction) thisObj).setArguments(value);
+        if (Context.getCurrentContext().isLatestEcmaScript()) {
+            checkSloppyFunction(thisObj);
+        }
+        LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).setArguments(value);
     }
 
     /** The caller of a sloppy function is not tracked: undefined. */

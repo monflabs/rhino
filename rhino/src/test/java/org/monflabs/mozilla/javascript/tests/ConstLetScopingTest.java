@@ -49,17 +49,15 @@ class ConstLetScopingTest {
 
     @Test
     void constInLoopBodyTakesEachIterationsValue() {
-        // function without activation: the const lives in a register
-        Utils.assertWithAllModes_ES6(
-                "0,1,2",
-                "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); }"
-                        + " return r.join(); })()");
-        Utils.assertWithAllModes_ECMASCRIPT(
+        // function without activation: the const lives in a register (initialized once before)
+        Utils.assertGatedBehavior(
+                "0,0,0",
                 "0,1,2",
                 "(function () { var r = []; for (var i = 0; i < 3; i++) { const c = i; r.push(c); }"
                         + " return r.join(); })()");
         // numeric const in a register
-        Utils.assertWithAllModes_ES6(
+        Utils.assertGatedBehavior(
+                0.0,
                 3.0,
                 "(function () { var s = 0; for (var i = 0; i < 3; i++) { const c = i * 1; s += c; }"
                         + " return s; })()");
@@ -88,12 +86,11 @@ class ConstLetScopingTest {
 
     // --- per-iteration bindings of let/const loop heads ---
 
-    private static void assertPerIteration(String expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
+    private static void assertPerIteration(String expectedES6, String expected, String script) {
+        Utils.assertGatedBehavior(expectedES6, expected, script);
         // the same code inside a function with an activation (it creates closures)
-        Utils.assertWithAllModes_ES6(
-                expected, "(function () { return eval(" + quote(script) + "); })()");
+        Utils.assertGatedBehavior(
+                expectedES6, expected, "(function () { return eval(" + quote(script) + "); })()");
     }
 
     private static String quote(String s) {
@@ -105,6 +102,7 @@ class ConstLetScopingTest {
     @Test
     void forLetClosuresCaptureEachIteration() {
         assertPerIteration(
+                "3,3,3",
                 "0,1,2",
                 "var fs = []; for (let i = 0; i < 3; i++) { fs.push(function () { return i; }); } "
                         + CALL_ALL);
@@ -113,6 +111,7 @@ class ConstLetScopingTest {
     @Test
     void forLetWithContinueStillCopiesBeforeTheIncrement() {
         assertPerIteration(
+                "3,3,3",
                 "0,1,2",
                 "var fs = []; for (let i = 0; i < 3; i++) {"
                         + " fs.push(function () { return i; }); if (i < 3) { let z = i; continue; } } "
@@ -122,6 +121,7 @@ class ConstLetScopingTest {
     @Test
     void closureInForLetInitSeesTheFirstIterationsValue() {
         assertPerIteration(
+                "3",
                 "0",
                 "var g; for (let i = 0, f = function () { return i; }; i < 3; i++) { g = f; } '' + g()");
     }
@@ -129,10 +129,12 @@ class ConstLetScopingTest {
     @Test
     void forInAndForOfLetCreateABindingPerIteration() {
         assertPerIteration(
+                "c,c,c",
                 "a,b,c",
                 "var fs = []; for (let k in {a: 1, b: 2, c: 3}) { fs.push(function () { return k; }); } "
                         + CALL_ALL);
         assertPerIteration(
+                "3,3,3",
                 "1,2,3",
                 "var fs = []; for (const v of [1, 2, 3]) { fs.push(function () { return v; }); } "
                         + CALL_ALL);
@@ -145,7 +147,9 @@ class ConstLetScopingTest {
                 4.0,
                 "(function () { var s = 0; for (let i = 0; i < 2; i++) {"
                         + " for (let j = 0; j < 2; j++) { let r = i + j; s += r; } } return s; })()");
-        Utils.assertWithAllModes_ES6(
+        // a for-of const head was not initialized in a register before
+        Utils.assertGatedBehavior(
+                Double.NaN,
                 6.0,
                 "(function () { var s = 0; for (const v of [1, 2, 3]) { let w = v; s += w; }"
                         + " return s; })()");
@@ -154,6 +158,7 @@ class ConstLetScopingTest {
     @Test
     void varLoopsStillShareOneBinding() {
         assertPerIteration(
+                "3,3,3",
                 "3,3,3",
                 "var fs = []; for (var i = 0; i < 3; i++) { fs.push(function () { return i; }); } "
                         + CALL_ALL);
@@ -167,14 +172,18 @@ class ConstLetScopingTest {
     };
 
     private static void assertConstAssignment(String wrap) {
-        for (String assignment : CONST_ASSIGNMENTS) {
+        assertConstAssignment(wrap, new String[] {"k=1", "k=1", "k=1", "k=1", "k=1", "k=1", "k=1"});
+    }
+
+    private static void assertConstAssignment(String wrap, String[] expectedES6) {
+        for (int i = 0; i < CONST_ASSIGNMENTS.length; i++) {
             String script =
                     wrap.replace(
                             "ASSIGN",
                             "try { "
-                                    + assignment
+                                    + CONST_ASSIGNMENTS[i]
                                     + "; } catch (e) { return e.name; } return 'k=' + k;");
-            Utils.assertGatedBehavior("k=1", "TypeError", script);
+            Utils.assertGatedBehavior(expectedES6[i], "TypeError", script);
         }
     }
 
@@ -185,7 +194,10 @@ class ConstLetScopingTest {
 
     @Test
     void constAssignmentInABlockScope() {
-        assertConstAssignment("(function () { { const k = 1; (function () {}); ASSIGN } })()");
+        // before VERSION_ECMASCRIPT, a const in a block scope object is an ordinary binding
+        assertConstAssignment(
+                "(function () { { const k = 1; (function () {}); ASSIGN } })()",
+                new String[] {"k=2", "k=2", "k=2", "k=0", "k=2", "k=2", "k=2"});
     }
 
     @Test
@@ -203,7 +215,7 @@ class ConstLetScopingTest {
     @Test
     void constAssignmentInAScriptBlock() {
         Utils.assertGatedBehavior(
-                "k=1",
+                "k=2",
                 "TypeError",
                 "var r; { const k = 1; try { k = 2; r = 'k=' + k; } catch (e) { r = e.name; } } r");
     }
@@ -266,7 +278,7 @@ class ConstLetScopingTest {
     @Test
     void letWithoutInitializerIsUndefinedOnEachIteration() {
         Utils.assertGatedBehavior(
-                "1,",
+                "1,1",
                 "1,",
                 "(function () { var r = []; for (var i = 0; i < 2; i++) { let x; if (i == 0) x = 1;"
                         + " r.push(x); } return r.join(); })()");

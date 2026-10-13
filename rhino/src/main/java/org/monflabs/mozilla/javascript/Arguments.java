@@ -36,6 +36,9 @@ class Arguments extends ScriptableObject {
      */
     private final boolean[] mapped;
 
+    /** Before VERSION_ECMASCRIPT: the stock Rhino arguments object (see the legacy methods). */
+    private final boolean legacy;
+
     // The values of the indexed properties that are not slots yet: an index i with args[i] !=
     // NOT_FOUND is an ordinary writable, enumerable and configurable data property. It becomes a
     // slot (and NOT_FOUND here) when it is redefined or deleted, so that a call with many arguments
@@ -51,8 +54,9 @@ class Arguments extends ScriptableObject {
 
         args = activation.originalArgs;
         lengthObj = Integer.valueOf(args.length);
+        legacy = !cx.isLatestEcmaScript();
         boolean[] map = null;
-        int mappable = Math.min(args.length, activation.function.getParamCount());
+        int mappable = legacy ? 0 : Math.min(args.length, activation.function.getParamCount());
         for (int i = 0; i < mappable; i++) {
             if (isMappedParameter(activation.function, i)) {
                 if (map == null) {
@@ -183,6 +187,9 @@ class Arguments extends ScriptableObject {
 
     @Override
     public Object get(int index, Scriptable start) {
+        if (legacy) {
+            return legacyGet(index, start);
+        }
         if (isMapped(index)) {
             return getFromActivation(index);
         }
@@ -192,6 +199,10 @@ class Arguments extends ScriptableObject {
 
     @Override
     public void put(int index, Scriptable start, Object value) {
+        if (legacy) {
+            legacyPut(index, start, value);
+            return;
+        }
         if (start == this && isMapped(index)) {
             putIntoActivation(index, value);
         }
@@ -214,6 +225,10 @@ class Arguments extends ScriptableObject {
 
     @Override
     public void delete(int index) {
+        if (legacy) {
+            legacyDelete(index);
+            return;
+        }
         if (arg(index) != NOT_FOUND) {
             setArg(index, NOT_FOUND);
             unmap(index);
@@ -228,6 +243,9 @@ class Arguments extends ScriptableObject {
     @Override
     protected Object[] getIds(
             CompoundOperationMap<Scriptable> map, boolean getNonEnumerable, boolean getSymbols) {
+        if (legacy) {
+            return legacyGetIds(map, getNonEnumerable, getSymbols);
+        }
         Object[] ids = super.getIds(map, getNonEnumerable, getSymbols);
         int lazy = 0;
         for (Object arg : args) {
@@ -255,6 +273,9 @@ class Arguments extends ScriptableObject {
 
     @Override
     protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
+        if (legacy) {
+            return legacyGetOwnPropertyDescriptor(cx, id);
+        }
         int index = arrayIndex(id);
         Object value = arg(index);
         if (value != NOT_FOUND) {
@@ -270,6 +291,9 @@ class Arguments extends ScriptableObject {
     @Override
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        if (legacy) {
+            return legacyDefineOwnProperty(cx, id, desc, checkValid);
+        }
         int index = arrayIndex(id);
         materialize(index);
         if (!isMapped(index)) {
@@ -315,6 +339,143 @@ class Arguments extends ScriptableObject {
         double d = ScriptRuntime.toNumber(id);
         int index = (int) d;
         return d == index ? index : -1;
+    }
+
+    // The arguments object of stock Rhino, before VERSION_ECMASCRIPT: an index is shared with its
+    // parameter while it holds its initial value slot (not after a delete or a redefinition as an
+    // accessor or non-writable), and redefinitions apply the descriptor as given.
+
+    private boolean sharedWithActivation(int index) {
+        JSFunction f = activation.function;
+        if (f.isStrict() || f.hasDefaultParameters()) {
+            return false;
+        }
+        int definedCount = f.getParamCount();
+        if (index < definedCount) {
+            // an argument hidden by a later one of the same name is not shared
+            String argName = f.getParamOrVarName(index);
+            for (int i = index + 1; i < definedCount; i++) {
+                if (argName.equals(f.getParamOrVarName(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private void replaceArg(int index, Object value) {
+        if (sharedWithActivation(index)) {
+            putIntoActivation(index, value);
+        }
+        setArg(index, value);
+    }
+
+    private void removeArg(int index) {
+        if (args[index] != NOT_FOUND) {
+            setArg(index, NOT_FOUND);
+        }
+    }
+
+    private Object legacyGet(int index, Scriptable start) {
+        Object value = arg(index);
+        if (value == NOT_FOUND) {
+            return super.get(index, start);
+        }
+        return sharedWithActivation(index) ? getFromActivation(index) : value;
+    }
+
+    private void legacyPut(int index, Scriptable start, Object value) {
+        if (arg(index) == NOT_FOUND) {
+            super.put(index, start, value);
+        } else {
+            replaceArg(index, value);
+        }
+    }
+
+    private void legacyDelete(int index) {
+        if (0 <= index && index < args.length) {
+            removeArg(index);
+        }
+        super.delete(index);
+    }
+
+    private Object[] legacyGetIds(
+            CompoundOperationMap<Scriptable> map, boolean getNonEnumerable, boolean getSymbols) {
+        Object[] ids = super.getIds(map, getNonEnumerable, getSymbols);
+        if (args.length != 0) {
+            boolean[] present = new boolean[args.length];
+            int extraCount = args.length;
+            for (Object id : ids) {
+                if (id instanceof Integer) {
+                    int index = (Integer) id;
+                    if (0 <= index && index < args.length && !present[index]) {
+                        present[index] = true;
+                        extraCount--;
+                    }
+                }
+            }
+            if (!getNonEnumerable) { // avoid adding args which were redefined to non-enumerable
+                for (int i = 0; i < present.length; i++) {
+                    if (!present[i] && super.has(i, this)) {
+                        present[i] = true;
+                        extraCount--;
+                    }
+                }
+            }
+            if (extraCount != 0) {
+                Object[] tmp = new Object[extraCount + ids.length];
+                System.arraycopy(ids, 0, tmp, extraCount, ids.length);
+                ids = tmp;
+                int offset = 0;
+                for (int i = 0; i != args.length; ++i) {
+                    if (!present[i]) {
+                        ids[offset++] = Integer.valueOf(i);
+                    }
+                }
+            }
+        }
+        return ids;
+    }
+
+    private DescriptorInfo legacyGetOwnPropertyDescriptor(Context cx, Object id) {
+        int index = arrayIndex(id);
+        Object value = arg(index);
+        if (value == NOT_FOUND) {
+            return super.getOwnPropertyDescriptor(cx, id);
+        }
+        if (sharedWithActivation(index)) {
+            value = getFromActivation(index);
+        }
+        if (super.has(index, this)) { // the descriptor has been redefined
+            DescriptorInfo desc = super.getOwnPropertyDescriptor(cx, id);
+            desc.value = value;
+            return desc;
+        }
+        return buildDataDescriptor(value, EMPTY);
+    }
+
+    private boolean legacyDefineOwnProperty(
+            Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        super.defineOwnProperty(cx, id, desc, checkValid);
+        int index = arrayIndex(id);
+        Object value = arg(index);
+        if (value == NOT_FOUND) {
+            return true;
+        }
+        if (desc.isAccessorDescriptor()) {
+            removeArg(index);
+            return true;
+        }
+        Object newValue = desc.value;
+        if (newValue == NOT_FOUND) {
+            return true;
+        }
+        replaceArg(index, newValue);
+        if (isFalse(desc.writable)) {
+            removeArg(index);
+        }
+        return true;
     }
 
     static final class ReadonlyArguments extends Arguments {

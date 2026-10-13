@@ -801,9 +801,8 @@ public class NodeTransformer {
     }
 
     /**
-     * Whether "let x;" must store undefined: always for code compiled for VERSION_ECMASCRIPT (the
-     * binding is uninitialized until then), and for bindings in registers, which keep the value of
-     * a previous loop iteration. A script's own let bindings (global code) are left alone.
+     * Whether "let x;" must store undefined: for code compiled for VERSION_ECMASCRIPT (the binding
+     * is uninitialized until then; the let bindings of eval code at its top level excepted).
      */
     private boolean initializesLet(
             ScriptNode tree, Scope scope, Node name, boolean createScopeObjects) {
@@ -812,7 +811,8 @@ public class NodeTransformer {
         if (tdz) {
             return !(scriptLevel && inEval);
         }
-        return !createScopeObjects && !scriptLevel;
+        // before VERSION_ECMASCRIPT, let x; is not evaluated
+        return false;
     }
 
     /**

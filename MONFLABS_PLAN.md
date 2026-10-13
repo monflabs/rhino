@@ -34,6 +34,7 @@ existing code and without slowing the engine down.
 | 2026-10-08 | **Ultimate goal: remove the language versions and always behave as `VERSION_ECMASCRIPT`** (M15). Until then, each change is gated or applied to all versions, whichever is easier, without asking; every change incompatible with `VERSION_ES6` behavior is still logged in `BACKWARD_COMPATIBILITY.md`. |
 | 2026-10-08 | 1.2: `typeof this` in a strict function called without a receiver is `"undefined"` — all versions. |
 | 2026-10-13 | **Every behavior change is gated by `VERSION_ECMASCRIPT`**, bug fixes included (supersedes "gated or applied to all versions, whichever is easier"): the changes applied to every version so far (BACKWARD_COMPATIBILITY.md section 2) are gated in step G before M9, and `VERSION_ES6` keeps the behavior of stock Rhino. |
+| 2026-10-13 | Step G scope: **features stock Rhino 1.9 did not have are `VERSION_ECMASCRIPT`-only** (classes, async functions and generators, `for await`, private names, static blocks, modules and their Java API, `import()`/`import.meta`, the RegExp `d` flag, and the globals and methods the fork added), as stock Rhino ties ES6 features to `VERSION_ES6`. **Public Java API changes are undone**: the old signatures come back (`@Deprecated`, old semantics). |
 | 2026-10-10 | 1.8: typed arrays are little endian by default under `VERSION_ECMASCRIPT` (`FEATURE_LITTLE_ENDIAN`), as Nashorn and test262 assume; gated because embedders may read buffer bytes. |
 | 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
 | 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
@@ -607,7 +608,17 @@ Decided 2026-10-13: `VERSION_ES6` and the older versions keep the exact behavior
 The changes applied to every version so far (BACKWARD_COMPATIBILITY.md section 2, 2.1-2.46, from 40 commits) are
 gated with `isLatestEcmaScript()`, their tests check both sides with `Utils.assertGatedBehavior`, and the test
 expectations those commits changed are restored under `VERSION_ES6`. Section 2 then moves into section 1. Done in
-batches by area, each verified (test262 must not move), perf-gated and committed.
+batches by area, each verified (test262 must not move), perf-gated and committed. The analysis of the 40 commits
+(about 210 distinct changes, some 70 of them undocumented) is split as follows:
+- *G1 (done)* features stock Rhino did not have become `VERSION_ECMASCRIPT`-only (syntax, module API, new
+  globals); `LatestFeaturesGateTest`.
+- *G2 (done)* 2.1-2.9 (const/let, strict `this`, `caller`, bind, `arguments`); the stock arguments object is kept
+  next to the spec one in `Arguments`.
+- *G3* 2.10-2.14 (parameter early errors, `toString`, eval code, destructuring).
+- *G4* 2.15-2.22 (iteration protocol, literal early errors, `yield`, function environments).
+- *G5* 2.23-2.28 (typed arrays, Reflect and Proxy, String symbols, Array writes, Date, JSON).
+- *G6* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp).
+- *G7* 2.35-2.46 (language residuals, Annex B, `await`, generators, realms, array-likes).
 
 ### M9 — ES2023
 

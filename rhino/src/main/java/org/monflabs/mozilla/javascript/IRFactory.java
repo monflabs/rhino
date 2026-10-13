@@ -2175,7 +2175,7 @@ public final class IRFactory {
         return result;
     }
 
-    private static Node createFor(Scope loop, Node init, Node test, Node incr, Node body) {
+    private Node createFor(Scope loop, Node init, Node test, Node incr, Node body) {
         if (init.getType() == Token.LET) {
             // rewrite "for (let i=s; i < N; i++)..." as
             // "let (i=s) { for (; i < N; i++)..." so that "s" is evaluated
@@ -2195,7 +2195,7 @@ public final class IRFactory {
                             test,
                             new Node(Token.EMPTY),
                             incr,
-                            hasBindings(let)));
+                            parser.compilerEnv.isLatestEcmaScript() && hasBindings(let)));
             return let;
         }
         return createLoop(loop, LOOP_FOR, body, test, init, incr, false);
@@ -2390,7 +2390,9 @@ public final class IRFactory {
                     // with an array type of length 2 (to hold key and value)
                     parser.reportError("msg.bad.for.in.destruct");
                 }
-            } else if (declType == Token.CONST && lvalue.getType() == Token.NAME) {
+            } else if (declType == Token.CONST
+                    && lvalue.getType() == Token.NAME
+                    && parser.compilerEnv.isLatestEcmaScript()) {
                 // initializes the binding; a plain assignment to a const is ignored
                 assign =
                         new Node(
@@ -2400,7 +2402,9 @@ public final class IRFactory {
             } else {
                 assign = parser.simpleAssignment(lvalue, id);
             }
-            if ((declType == Token.LET || declType == Token.CONST) && hasBindings(loop)) {
+            if ((declType == Token.LET || declType == Token.CONST)
+                    && parser.compilerEnv.isLatestEcmaScript()
+                    && hasBindings(loop)) {
                 // a new binding for each iteration
                 newBody.addChildToBack(new Node(Token.COPY_SCOPE));
             }

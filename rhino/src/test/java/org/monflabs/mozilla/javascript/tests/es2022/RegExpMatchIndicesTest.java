@@ -12,15 +12,15 @@ class RegExpMatchIndicesTest {
 
     @Test
     void indices() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "[[[1,3],null,[2,3]],[1,3],true,false]",
                 "var m = /a(?<x>b)?(c)/d.exec('zac');\n"
                         + "JSON.stringify([m.indices, m.indices.groups.x === undefined ? m.indices[0]"
                         + " : null, 'x' in m.indices.groups, 'indices' in /a/.exec('a')])");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "dgy,true,false,dg",
                 "[/x/ygd.flags, /x/d.hasIndices, /x/.hasIndices, new RegExp('x', 'gd').flags].join()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "[[0,2],[2,4]]",
                 "var r = /(?<a>.)./dg; var res = [];\n"
                         + "for (var m of 'abcd'.matchAll(r)) res.push(m.indices[0]);\n"

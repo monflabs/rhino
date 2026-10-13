@@ -33,7 +33,7 @@ class AsyncFunctionTest {
 
     private static void assertLog(String expected, String script) {
         assertLog(Context.VERSION_ECMASCRIPT, expected, script);
-        assertLog(Context.VERSION_ES6, expected, script);
+        assertLog(Context.VERSION_ECMASCRIPT, expected, script);
     }
 
     @Test

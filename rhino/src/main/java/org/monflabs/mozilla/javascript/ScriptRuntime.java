@@ -317,7 +317,7 @@ public class ScriptRuntime {
             new LazilyLoadedCtor<>(scope, "DataView", sealed, true, NativeDataView::init);
         }
 
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             new LazilyLoadedCtor<>(
                     scope, "SharedArrayBuffer", sealed, true, NativeSharedArrayBuffer::init);
             new LazilyLoadedCtor<>(scope, "Atomics", sealed, true, NativeAtomics::init);
@@ -3877,6 +3877,7 @@ public class ScriptRuntime {
             Context cx, VarScope scope, Object arg0, int l, Function target) {
         if (l != 0
                 && arg0 != Undefined.instance
+                && cx.isLatestEcmaScript()
                 && target instanceof JSFunction
                 && ((JSFunction) target).isStrict()
                 && !((JSFunction) target).isBuiltIn()
@@ -4283,8 +4284,12 @@ public class ScriptRuntime {
     /** The typeof operator */
     public static String typeof(Object value) {
         if (value == null) return "object";
-        if (value == Undefined.instance || value == Undefined.SCRIPTABLE_UNDEFINED)
-            return "undefined";
+        if (value == Undefined.instance) return "undefined";
+        if (value == Undefined.SCRIPTABLE_UNDEFINED) {
+            // the this of a strict function called without a receiver: "object" before
+            Context cx = Context.getCurrentContext();
+            return cx != null && cx.isLatestEcmaScript() ? "undefined" : "object";
+        }
         if (value instanceof Delegator) return typeof(((Delegator) value).getDelegee());
         if (value instanceof ScriptableObject) return ((ScriptableObject) value).getTypeOf();
         if (value instanceof Scriptable) return (value instanceof Callable) ? "function" : "object";

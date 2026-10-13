@@ -1201,7 +1201,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 return Token.COMMENT;
             }
 
-            if (c == '#' && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+            if (c == '#' && parser.compilerEnv.isLatestEcmaScript()) {
                 int hashBeg = tokenBeg;
                 int next = peekChar();
                 if (next == '\\'
@@ -1645,8 +1645,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
             else if (matchChar('s')) addToString('s');
             else if (matchChar('y')) addToString('y');
             else if (matchChar('u')) addToString('u');
-            else if (parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
-                    && matchChar('d')) addToString('d');
+            else if (parser.compilerEnv.isLatestEcmaScript() && matchChar('d')) addToString('d');
             else break;
         }
         tokenEnd = start + stringBufferTop + 2; // include slashes

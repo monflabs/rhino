@@ -4887,8 +4887,8 @@ class BodyCodegen {
         generateExpression(child.getNext(), node);
         boolean isNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);
         int reg = varRegisters[varIndex];
-        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
-            // ES6 block-scoped const: each evaluation of the declaration (e.g. in a loop body)
+        if (compilerEnv.isLatestEcmaScript()) {
+            // block-scoped const: each evaluation of the declaration (e.g. in a loop body)
             // initializes a new binding, where a JavaScript 1.x const ignored all but the first.
             if (isNumber) {
                 cfw.addPush(1);

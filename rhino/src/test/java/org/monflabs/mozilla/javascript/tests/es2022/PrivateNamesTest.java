@@ -17,7 +17,7 @@ class PrivateNamesTest {
 
     @Test
     void instanceElements() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "7,70,107,#m,[]",
                 "class A {\n"
                         + "  #x = 1;\n"
@@ -31,13 +31,13 @@ class PrivateNamesTest {
                         + "  }\n"
                         + "}\n"
                         + "new A().test()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "9,8,true",
                 "class G { #x; #y; #f = () => this;\n"
                         + "  m() { [this.#x] = [9]; ({ y: this.#y } = { y: 8 });\n"
                         + "    return [this.#x, this.#y, this.#f() === this].join(); } }\n"
                         + "new G().m()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 ",5,6",
                 "class E { #x = 5; #m() { return 6; }\n"
                         + "  static f(o) { return [o?.#x, o?.#x, o?.#m()]; } }\n"
@@ -46,7 +46,7 @@ class PrivateNamesTest {
 
     @Test
     void staticElements() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "s,S,true,false",
                 "class A { static #s = 's'; static #m() { return A.#s.toUpperCase(); }\n"
                         + "  static t() { return [A.#s, A.#m(), #s in A, #s in new A()]; } }\n"
@@ -55,7 +55,7 @@ class PrivateNamesTest {
 
     @Test
     void brandChecks() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "true,false,TypeError,TypeError,TypeError,TypeError,TypeError",
                 "function err(f) { try { f(); return 'none'; } catch (e) { return e.name; } }\n"
                         + "class A { #x = 1; #m() {} get #g() { return 1; } set #s(v) {}\n"
@@ -66,7 +66,7 @@ class PrivateNamesTest {
                         + "var a = new A();\n"
                         + "[A.has(a), A.has({})].concat(A.t(a)).join()");
         // each evaluation of a class creates new private names
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "true,false",
                 "function make() { return class { #x; static has(o) { return #x in o; } }; }\n"
                         + "var C1 = make(), C2 = make();\n"
@@ -76,7 +76,7 @@ class PrivateNamesTest {
     @Test
     void returnOverride() {
         // the fields of a derived class are added to the object the base constructor returns
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1,true,TypeError",
                 "class Base { constructor(o) { return o; } }\n"
                         + "class Stamp extends Base { #x = 1; static get(o) { return o.#x; } }\n"
@@ -88,7 +88,7 @@ class PrivateNamesTest {
 
     @Test
     void nestedClassesAndEval() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1,2,3",
                 "class Outer { #x = 1;\n"
                         + "  m() { var self = this;\n"
@@ -123,12 +123,12 @@ class PrivateNamesTest {
                         return null;
                     });
         }
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 true,
                 "class A { get #x() { return 1; } set #x(v) {} t() { return this.#x === 1; } }\n"
                         + "new A().t()");
         // in eval code
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "SyntaxError,SyntaxError",
                 "function err(f) { try { f(); return 'none'; } catch (e) { return e.name; } }\n"
                         + "class A { #x; m() { eval('this.#y'); } }\n"

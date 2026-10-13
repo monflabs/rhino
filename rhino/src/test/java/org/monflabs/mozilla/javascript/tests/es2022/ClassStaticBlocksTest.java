@@ -18,7 +18,7 @@ class ClassStaticBlocksTest {
     @Test
     void staticBlocks() {
         // run in order with the static fields, with the class as this, and their own var scope
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1,true,2,2,3,true,",
                 "var log = [];\n"
                         + "class A { static x = 1;\n"
@@ -28,7 +28,7 @@ class ClassStaticBlocksTest {
                         + "      super.toString === Function.prototype.toString); } }\n"
                         + "log.push(typeof v === 'undefined' ? undefined : v);\n"
                         + "log.join()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "f", "var r; class C { static { r = (function await() { return 'f'; })(); } }; r");
     }
 

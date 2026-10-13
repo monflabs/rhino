@@ -57,7 +57,8 @@ class FunctionEarlyErrorsTest {
 
     @Test
     void functionConstructor() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError,SyntaxError",
                 "SyntaxError,SyntaxError,TypeError,TypeError",
                 "var r = [];"
                         + " try { Function('a', 'a', '\"use strict\";'); } catch (e) { r.push(e.name); }"

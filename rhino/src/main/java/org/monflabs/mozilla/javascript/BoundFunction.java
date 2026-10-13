@@ -33,8 +33,7 @@ public class BoundFunction extends BaseFunction {
         this.targetFunction = targetFunction;
         this.boundThis = boundThis;
         this.boundArgs = boundArgs;
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6
-                && targetFunction instanceof Scriptable target) {
+        if (cx.isLatestEcmaScript() && targetFunction instanceof Scriptable target) {
             // 20.2.3.2 steps 4-6: the target's own length, which may not be an int32
             double len = 0;
             if (AbstractEcmaObjectOperations.hasOwnProperty(cx, target, "length")) {
@@ -55,21 +54,27 @@ public class BoundFunction extends BaseFunction {
         } else {
             length = 0;
         }
-        // "bound " + the target's name property, read when the function is bound
-        Object targetName =
-                targetFunction instanceof Scriptable
-                        ? ScriptableObject.getProperty((Scriptable) targetFunction, "name")
-                        : NOT_FOUND;
-        boundName = "bound " + (targetName instanceof CharSequence ? targetName : "");
+        if (cx.isLatestEcmaScript()) {
+            // "bound " + the target's name property, read when the function is bound
+            Object targetName =
+                    targetFunction instanceof Scriptable
+                            ? ScriptableObject.getProperty((Scriptable) targetFunction, "name")
+                            : NOT_FOUND;
+            boundName = "bound " + (targetName instanceof CharSequence ? targetName : "");
+        } else {
+            boundName = null;
+        }
 
         ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, false);
 
         Function thrower = ScriptRuntime.typeErrorThrower(cx);
         var throwing = new DescriptorInfo(false, NOT_FOUND, false, thrower, thrower, NOT_FOUND);
 
-        if (cx.getLanguageVersion() < Context.VERSION_ES6) {
-            // from ES6 on, Function.prototype.caller/arguments throw for bound functions
+        if (!cx.isLatestEcmaScript()) {
+            // under VERSION_ECMASCRIPT, Function.prototype.caller throws for bound functions
             defineOwnProperty(cx, "caller", throwing, false);
+        }
+        if (cx.getLanguageVersion() < Context.VERSION_ES6) {
             defineOwnProperty(cx, "arguments", throwing, false);
         }
     }
@@ -123,7 +128,13 @@ public class BoundFunction extends BaseFunction {
 
     @Override
     public String getFunctionName() {
-        return boundName;
+        if (boundName != null) {
+            return boundName;
+        }
+        if (targetFunction instanceof BaseFunction) {
+            return "bound " + ((BaseFunction) targetFunction).getFunctionName();
+        }
+        return "";
     }
 
     private static Object[] concat(Object[] first, Object[] second) {

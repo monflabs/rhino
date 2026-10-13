@@ -30,7 +30,7 @@ class AnnexBTest {
 
     @Test
     void regExpLegacyFeatures() {
-        assertBoth(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "false,TypeError,TypeError",
                 "var r = [];"
                         + " r.push(Object.getOwnPropertyDescriptor(RegExp, 'lastMatch').enumerable);"

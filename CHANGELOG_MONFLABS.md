@@ -6,6 +6,30 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Lexical declarations and functions only under VERSION_ECMASCRIPT (2026-10-13, plan G2)
+
+- `BACKWARD_COMPATIBILITY.md` 2.1-2.9 are gated: `VERSION_ES6` keeps the stock behavior of `const` in loops
+  (registers initialized once, `for (const x of ...)` heads), loop heads without per-iteration bindings, `let x;`,
+  assignable block-level consts, `typeof this` ("object") and boxed `call`/`apply` receivers of strict functions, no
+  `Function.prototype.caller` (bound functions get their own throwing `caller`), the old
+  `Function.prototype.arguments` accessor, `bind` (null `this`, dynamic name, the target's arity as length), and the
+  stock arguments object (restored next to the spec one in `Arguments`; destructured parameters keep it mapped).
+- The interpreter's per-function check uses the new `JSDescriptor.isLatestEcmaScript()`.
+- Fix of the 2.9 example: the old value of a non-configurable index was 7 (still mapped), not 1.
+- test262: unchanged (41,080/42,616, 96.4%; it runs under `VERSION_ECMASCRIPT`). Perf gate: no regression.
+
+### New features only under VERSION_ECMASCRIPT (2026-10-13, plan G1)
+
+- Decision: `VERSION_ES6` and the older versions keep the behavior of stock Rhino; the features stock Rhino did not
+  have are `VERSION_ECMASCRIPT`-only, as stock Rhino ties its ES6 features to `VERSION_ES6`.
+- Before `VERSION_ECMASCRIPT`, these are syntax errors again: classes (with fields, private names and static
+  blocks), async functions, arrows, methods and generators, `for await`, spread arguments, `import()`, the RegExp
+  `d` flag; `await` is a reserved word again. The globals and properties the fork added do not exist:
+  `SharedArrayBuffer`, `Atomics`, `Symbol.asyncIterator`, `RegExp.prototype.hasIndices`, the async iteration
+  prototypes. `Context.loadModule` and `evaluateModule` throw unless the version is `VERSION_ECMASCRIPT`.
+- Tests: the tests of these features run under `VERSION_ECMASCRIPT`; `LatestFeaturesGateTest` checks both sides.
+- test262: unchanged (41,080/42,616, 96.4%). Perf gate: no regression.
+
 ### ES2022 residuals; M8 done (2026-10-13, plan 8.6)
 
 - Fix: the computed keys of the static and instance elements of a class are evaluated in source order (a 8.1

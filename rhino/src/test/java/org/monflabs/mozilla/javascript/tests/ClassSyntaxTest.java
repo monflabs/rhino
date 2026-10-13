@@ -11,7 +11,7 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 class ClassSyntaxTest {
 
     private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
+        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
         Utils.assertWithAllModes_ECMASCRIPT(expected, script);
     }
 

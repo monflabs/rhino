@@ -278,6 +278,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return languageVersion;
     }
 
+    /** Whether the code was compiled for {@link Context#VERSION_ECMASCRIPT}. */
+    public boolean isLatestEcmaScript() {
+        return languageVersion >= Context.VERSION_ECMASCRIPT;
+    }
+
     @Override
     public int getParamAndVarCount() {
         return paramAndVarCount;

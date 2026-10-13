@@ -497,6 +497,9 @@ public class Parser {
 
         if (tt == Token.YIELD && isYieldAnIdentifier()) {
             tt = Token.NAME;
+        } else if (tt == Token.AWAIT && !compilerEnv.isLatestEcmaScript()) {
+            // await is a reserved word before VERSION_ECMASCRIPT
+            tt = Token.RESERVED;
         } else if (tt == Token.AWAIT && isAwaitAnIdentifier()) {
             tt = Token.NAME;
         }
@@ -547,7 +550,7 @@ public class Parser {
         if (currentToken != Token.NAME
                 || ts.nameHadEscape
                 || !"async".equals(ts.getString())
-                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+                || !compilerEnv.isLatestEcmaScript()) {
             return false;
         }
         TokenStream.LookAhead next = ts.lookAhead();
@@ -579,7 +582,7 @@ public class Parser {
         if (currentToken != Token.NAME
                 || ts.nameHadEscape
                 || !"async".equals(ts.getString())
-                || compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+                || !compilerEnv.isLatestEcmaScript()) {
             return false;
         }
         TokenStream.LookAhead next = ts.lookAhead();
@@ -4648,6 +4651,10 @@ public class Parser {
                     reportError("msg.yield.parenthesized");
                 }
                 AstNode en = assignExpr();
+                if (en instanceof Spread && !compilerEnv.isLatestEcmaScript()) {
+                    // spread arguments are a feature of VERSION_ECMASCRIPT
+                    reportError("msg.syntax");
+                }
                 if (peekToken() == Token.FOR) {
                     try {
                         result.add(generatorExpression(en, 0, true));
@@ -5222,7 +5229,7 @@ public class Parser {
                 boolean asyncName =
                         "async".equals(ts.getString())
                                 && !ts.nameHadEscape
-                                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
+                                && compilerEnv.isLatestEcmaScript();
                 consumeToken();
                 AstNode nameNode = name(ttFlagged, tt);
                 if (inFieldInitializer
@@ -5334,8 +5341,7 @@ public class Parser {
                 if (isClassKeyword()) {
                     return classDefinition(false);
                 }
-                if ("import".equals(ts.getString())
-                        && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                if ("import".equals(ts.getString()) && compilerEnv.isLatestEcmaScript()) {
                     return importExpression();
                 }
                 consumeToken();
@@ -6868,8 +6874,8 @@ public class Parser {
 
     /** Whether the peeked RESERVED token is the class keyword (ES6 and later). */
     private boolean isClassKeyword() {
-        return compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
-                && "class".equals(ts.getString());
+        // classes are a feature of VERSION_ECMASCRIPT: class stays a reserved word before
+        return compilerEnv.isLatestEcmaScript() && "class".equals(ts.getString());
     }
 
     /** A class declaration: a let binding of the class name, initialized by the class. */
@@ -7429,7 +7435,7 @@ public class Parser {
     private boolean isAsyncMethodStart(String propertyName, boolean escaped) throws IOException {
         return "async".equals(propertyName)
                 && !escaped
-                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                && compilerEnv.isLatestEcmaScript()
                 && (peekFlaggedToken() & TI_AFTER_EOL) == 0;
     }
 

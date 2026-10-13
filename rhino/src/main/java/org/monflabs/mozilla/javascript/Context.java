@@ -172,6 +172,21 @@ public class Context implements Closeable {
      *   <li>{@code for (async of ...)} is a SyntaxError.
      *   <li>ZWNJ (U+200C) and ZWJ (U+200D) in an identifier are part of it, instead of being
      *       stripped as format characters.
+     *   <li>The features stock Rhino did not have are only available under this version: classes
+     *       (fields, private names, static blocks), async functions and generators, {@code for
+     *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} flag, {@code
+     *       SharedArrayBuffer}, {@code Atomics} and {@code Symbol.asyncIterator}; {@code await} is
+     *       a reserved word in the other versions.
+     *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
+     *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
+     *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each
+     *       iteration, and a block-level {@code const} cannot be assigned.
+     *   <li>Functions: a strict function called without a receiver has an undefined {@code this}
+     *       ({@code typeof this}), {@code call}/{@code apply} pass a primitive {@code this} to a
+     *       strict function; {@code Function.prototype.caller}/{@code arguments} throw for strict
+     *       functions and built-ins; {@code bind} names the bound function after the target's
+     *       {@code name} property and keeps an undefined {@code this}; the {@code arguments} object
+     *       is the spec's exotic object (unmapped with rest or destructured parameters).
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
@@ -693,9 +708,14 @@ public class Context implements Closeable {
     /**
      * Loads a module and, transitively, the modules it imports, in the realm of {@code scope}. A
      * module already loaded in that realm under the same name is returned as is. Parse errors are
-     * thrown here; {@link ModuleRecord#link} and {@link ModuleRecord#evaluate} follow.
+     * thrown here; {@link ModuleRecord#link} and {@link ModuleRecord#evaluate} follow. Modules
+     * require the language version {@link #VERSION_ECMASCRIPT}.
      */
     public ModuleRecord loadModule(TopLevel scope, Module module) {
+        if (!isLatestEcmaScript()) {
+            // modules are a feature of VERSION_ECMASCRIPT
+            throw reportRuntimeErrorById("msg.module.version");
+        }
         // no promise job runs while the graph is half loaded
         suspendMicrotaskProcessing();
         try {

@@ -17,7 +17,8 @@ public class BuiltinCtorTest {
             cx.initSafeStandardObjects(tl);
             for (var bi : TopLevel.Builtins.values()) {
                 var ctor = tl.getBuiltinCtor(bi);
-                if (ctor.isConstructor()) {
+                // a builtin of a later language version is not defined
+                if (ctor != null && ctor.isConstructor()) {
 
                     Object res = null;
                     try {

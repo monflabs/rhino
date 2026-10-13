@@ -17,14 +17,16 @@ class StrictFunctionSemanticsTest {
 
     @Test
     void thisOfAStrictFunctionCalledWithoutReceiverIsUndefined() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "object,true",
                 "undefined,true",
                 "'use strict'; function f() { return [typeof this, this === undefined].join(); } f()");
     }
 
     @Test
     void callAndApplyPassAPrimitiveThisToAStrictFunction() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "object,object,object,object,object",
                 "number,string,boolean,object,undefined",
                 "'use strict'; function f() { return typeof this; }"
                         + " [f.call(1), f.apply('s'), f.call(true), f.call(null), f.call(undefined)].join()");
@@ -34,7 +36,8 @@ class StrictFunctionSemanticsTest {
 
     @Test
     void callerOfStrictFunctionsAndBuiltinsThrows() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "undefined",
                 "TypeError,TypeError,undefined",
                 "var r = [];"
                         + " (function () { 'use strict'; function s() {}"
@@ -46,7 +49,8 @@ class StrictFunctionSemanticsTest {
 
     @Test
     void boundFunctions() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "bound ,bound bound ,false,false,3",
                 "bound target,bound bound target,true,true,-1",
                 "var t = Object.defineProperty(function () {}, 'name', {value: 'target'});"
                         + " function s() { 'use strict'; return this === undefined; }"

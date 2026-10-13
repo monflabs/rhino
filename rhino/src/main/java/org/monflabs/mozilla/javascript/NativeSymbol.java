@@ -46,7 +46,10 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
         ScriptableObject.defineProperty(scope, CLASS_NAME, ctor, DONTENUM);
 
         // Create all the predefined symbols and bind them to the scope.
-        createStandardSymbol(scope, ctor, "asyncIterator", SymbolKey.ASYNC_ITERATOR);
+        if (cx.isLatestEcmaScript()) {
+            // async iteration is a feature of VERSION_ECMASCRIPT
+            createStandardSymbol(scope, ctor, "asyncIterator", SymbolKey.ASYNC_ITERATOR);
+        }
         createStandardSymbol(scope, ctor, "iterator", SymbolKey.ITERATOR);
         createStandardSymbol(scope, ctor, "species", SymbolKey.SPECIES);
         createStandardSymbol(scope, ctor, "toStringTag", SymbolKey.TO_STRING_TAG);

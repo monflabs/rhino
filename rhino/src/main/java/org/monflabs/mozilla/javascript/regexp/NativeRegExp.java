@@ -257,6 +257,7 @@ public class NativeRegExp extends ScriptableObject {
                     (c, ctor) -> {
                         defineLegacyAccessors(c, scope, ctor);
                         defineRealmGetters(c, scope, prototype);
+                        removeLatestFlags(c, prototype);
                     });
         }
 
@@ -264,7 +265,21 @@ public class NativeRegExp extends ScriptableObject {
         proto.re = compileRE(cx, "", null, false);
 
         return DESCRIPTOR.buildConstructor(
-                cx, scope, proto, sealed, (c, ctor) -> defineLegacyAccessors(c, scope, ctor));
+                cx,
+                scope,
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    defineLegacyAccessors(c, scope, ctor);
+                    removeLatestFlags(c, proto);
+                });
+    }
+
+    /** The d flag (hasIndices) is a feature of VERSION_ECMASCRIPT. */
+    private static void removeLatestFlags(Context cx, ScriptableObject prototype) {
+        if (!cx.isLatestEcmaScript()) {
+            prototype.delete("hasIndices");
+        }
     }
 
     private static final Object[][] FLAG_GETTERS = {
@@ -1106,7 +1121,7 @@ public class NativeRegExp extends ScriptableObject {
                     f = JSREG_STICKY;
                 } else if (c == 'u') {
                     f = JSREG_UNICODE;
-                } else if (c == 'd' && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                } else if (c == 'd' && cx.isLatestEcmaScript()) {
                     f = JSREG_HASINDICES;
                 } else {
                     reportError("msg.invalid.re.flag", String.valueOf(c));

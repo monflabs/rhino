@@ -16,7 +16,7 @@ class ClassSuperTest {
                     + " static s() { return 'As'; } get g() { return 'Ag'; } }";
 
     private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, PRELUDE + script + " r.join('|')");
+        Utils.assertWithAllModes_ECMASCRIPT(expected, PRELUDE + script + " r.join('|')");
         Utils.assertWithAllModes_ECMASCRIPT(expected, PRELUDE + script + " r.join('|')");
     }
 

@@ -17,7 +17,7 @@ class IterationProtocolTest {
 
     @Test
     void spreadArguments() {
-        assertBoth(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "1-2-3-4|2|5|7-8",
                 "function f() { return Array.prototype.join.call(arguments, '-'); }"
                         + " var o = { m() { return f(...arguments); } };"

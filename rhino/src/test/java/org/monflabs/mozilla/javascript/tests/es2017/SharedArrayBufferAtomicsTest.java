@@ -19,7 +19,7 @@ class SharedArrayBufferAtomicsTest {
 
     @Test
     void sharedArrayBuffer() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "8,true,16,12,12,TypeError,RangeError,SharedArrayBuffer",
                 "var sab = new SharedArrayBuffer(8, { maxByteLength: 16 });\n"
                         + "var r = [sab.byteLength, sab.growable, sab.maxByteLength];\n"
@@ -29,7 +29,7 @@ class SharedArrayBufferAtomicsTest {
                         + "try { sab.grow(4); } catch (e) { r.push(e.name); }\n"
                         + "r.push(Object.prototype.toString.call(sab).slice(8, -1));\n"
                         + "r.join()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "2,3",
                 "var sab = new SharedArrayBuffer(4); new Uint8Array(sab).set([1, 2, 3, 4]);\n"
                         + "Array.from(new Uint8Array(sab.slice(1, 3))).join()");
@@ -37,7 +37,7 @@ class SharedArrayBufferAtomicsTest {
 
     @Test
     void readModifyWrite() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "5,7,2,6,6,4,5,4294967295,-1,3",
                 "var ta = new Int32Array(new SharedArrayBuffer(16));\n"
                         + "var r = [Atomics.store(ta, 0, 5.9), Atomics.add(ta, 0, 2) + 2];\n"
@@ -49,7 +49,7 @@ class SharedArrayBufferAtomicsTest {
                         + "Atomics.compareExchange(ta, 3, 0, 3); Atomics.compareExchange(ta, 3, 1, 9);\n"
                         + "r.push(Atomics.load(ta, 3));\n"
                         + "r.join()");
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "-128,127,10n,18446744073709551615n",
                 "var i8 = new Int8Array(4); Atomics.store(i8, 0, 127);\n"
                         + "var r = [Atomics.add(i8, 0, 1) - 255, Atomics.load(i8, 0) + 255];\n"
@@ -62,7 +62,7 @@ class SharedArrayBufferAtomicsTest {
 
     @Test
     void validation() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "TypeError,TypeError,RangeError,0,TypeError,true",
                 "var r = [];\n"
                         + "function t(f) { try { f(); r.push('none'); } catch (e) { r.push(e.name); } }\n"
@@ -77,7 +77,7 @@ class SharedArrayBufferAtomicsTest {
 
     @Test
     void waitWithoutNotify() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "not-equal,timed-out,TypeError,TypeError",
                 "var ta = new Int32Array(new SharedArrayBuffer(8));\n"
                         + "var r = [Atomics.wait(ta, 0, 1), Atomics.wait(ta, 0, 0, 10)];\n"
@@ -137,7 +137,7 @@ class SharedArrayBufferAtomicsTest {
 
     @Test
     void strictGeneratorResumedBySloppyCode() {
-        Utils.assertWithAllModes_ES6(
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "TypeError",
                 "var g = (function() { 'use strict'; return function* G() { eval('G = 1'); }; })();\n"
                         + "function sloppy() { try { g().next(); return 'none'; }"
