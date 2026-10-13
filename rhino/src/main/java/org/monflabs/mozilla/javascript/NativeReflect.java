@@ -150,6 +150,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object defineProperty(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyDefineProperty(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. Let key be ? ToPropertyKey(propertyKey).
@@ -193,6 +196,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object deleteProperty(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyDeleteProperty(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. Let key be ? ToPropertyKey(propertyKey).
@@ -208,6 +214,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object get(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyGet(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. Let key be ? ToPropertyKey(propertyKey).
@@ -286,6 +295,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object has(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyHas(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. Let key be ? ToPropertyKey(propertyKey).
@@ -373,6 +385,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object set(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacySet(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. Let key be ? ToPropertyKey(propertyKey).
@@ -402,6 +417,9 @@ final class NativeReflect extends ScriptableObject {
      */
     private static Object setPrototypeOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacySetPrototypeOf(cx, f, nt, s, thisObj, args);
+        }
         /*
          * 1. If Type(target) is not Object, throw a TypeError exception.
          * 2. If Type(proto) is not Object and proto is not null, throw a TypeError exception.
@@ -434,5 +452,252 @@ final class NativeReflect extends ScriptableObject {
             throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(args[0]));
         }
         return ScriptableObject.ensureScriptableObject(args[0]);
+    }
+
+    // Reflect before VERSION_ECMASCRIPT (stock Rhino)
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.defineproperty">28.1.3
+     * Reflect.defineProperty ( target, propertyKey, attributes )</a>
+     */
+    private static Object legacyDefineProperty(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. Let key be ? ToPropertyKey(propertyKey).
+         * 3. Let desc be ? ToPropertyDescriptor(attributes).
+         * 4. Return ? target.[[DefineOwnProperty]](key, desc).
+         */
+        if (args.length < 3) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.method.missing.parameter",
+                    "Reflect.defineProperty",
+                    "3",
+                    Integer.toString(args.length));
+        }
+
+        ScriptableObject target = checkTarget(args);
+        DescriptorInfo desc = new DescriptorInfo(ScriptableObject.ensureScriptableObject(args[2]));
+
+        Object key = args[1];
+
+        try {
+            if (key instanceof Symbol) {
+                return target.defineOwnProperty(cx, key, desc);
+            } else {
+                String propertyKey =
+                        ScriptRuntime.toString(
+                                ScriptRuntime.toPrimitive(key, ScriptRuntime.StringClass));
+                return target.defineOwnProperty(cx, propertyKey, desc);
+            }
+
+        } catch (EcmaError e) {
+            return false;
+        }
+    }
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.deleteproperty">28.1.4
+     * Reflect.deleteProperty ( target, propertyKey )</a>
+     */
+    private static Object legacyDeleteProperty(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. Let key be ? ToPropertyKey(propertyKey).
+         * 3. Return ? target.[[Delete]](key).
+         */
+        ScriptableObject target = checkTarget(args);
+
+        if (args.length > 1) {
+            if (ScriptRuntime.isSymbol(args[1])) {
+                return ScriptableObject.deleteProperty(target, (Symbol) args[1]);
+            }
+            return ScriptableObject.deleteProperty(target, ScriptRuntime.toString(args[1]));
+        }
+
+        return false;
+    }
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.get">28.1.5 Reflect.get (
+     * target, propertyKey [ , receiver ] )</a>
+     */
+    private static Object legacyGet(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. Let key be ? ToPropertyKey(propertyKey).
+         * 3. If receiver is not present, then
+         *    a. Set receiver to target.
+         * 4. Return ? target.[[Get]](key, receiver).
+         */
+        ScriptableObject target = checkTarget(args);
+
+        if (args.length < 2) {
+            return Undefined.SCRIPTABLE_UNDEFINED;
+        }
+
+        Scriptable receiver =
+                (args.length > 2 && args[2] instanceof Scriptable) ? (Scriptable) args[2] : target;
+
+        Object prop;
+        if (ScriptRuntime.isSymbol(args[1])) {
+            prop = ScriptableObject.getSuperProperty(target, receiver, (Symbol) args[1]);
+        } else if (args[1] instanceof Number) {
+            prop =
+                    ScriptableObject.getSuperProperty(
+                            target, receiver, ScriptRuntime.toIndex(args[1]));
+        } else {
+            prop =
+                    ScriptableObject.getSuperProperty(
+                            target, receiver, ScriptRuntime.toString(args[1]));
+        }
+        return prop == Scriptable.NOT_FOUND ? Undefined.SCRIPTABLE_UNDEFINED : prop;
+    }
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.has">28.1.8 Reflect.has (
+     * target, propertyKey )</a>
+     */
+    private static Object legacyHas(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. Let key be ? ToPropertyKey(propertyKey).
+         * 3. Return ? target.[[HasProperty]](key).
+         */
+        ScriptableObject target = checkTarget(args);
+
+        if (args.length > 1) {
+            if (ScriptRuntime.isSymbol(args[1])) {
+                return ScriptableObject.hasProperty(target, (Symbol) args[1]);
+            }
+
+            return ScriptableObject.hasProperty(target, ScriptRuntime.toString(args[1]));
+        }
+        return false;
+    }
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.set">28.1.12 Reflect.set (
+     * target, propertyKey, V [ , receiver ] )</a>
+     */
+    private static Object legacySet(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. Let key be ? ToPropertyKey(propertyKey).
+         * 3. If receiver is not present, then
+         *    a. Set receiver to target.
+         * 4. Return ? target.[[Set]](key, V, receiver).
+         */
+        ScriptableObject target = checkTarget(args);
+        if (args.length < 2) {
+            return true;
+        }
+
+        // A missing value must be treated as undefined
+        final Object value = args.length > 2 ? args[2] : Undefined.instance;
+
+        Scriptable receiver = args.length > 3 ? ScriptableObject.ensureScriptable(args[3]) : target;
+
+        // OrdinarySet is only needed when receiver != target.
+        // When receiver == target we must call target.[[Set]] directly via put(),
+        // which correctly invokes any proxy set trap on target.
+        // Inlining OrdinarySet when receiver == target would
+        // bypass the proxy trap and apply the plain-object non-writable check
+        // incorrectly (e.g. a configurable+non-writable property where the trap
+        // returns true would wrongly return false).
+        if (receiver != target) {
+            if (target instanceof NativeProxy) {
+                if (ScriptRuntime.isSymbol(args[1])) {
+                    target.put((Symbol) args[1], receiver, value);
+                } else {
+                    ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(args[1]);
+                    if (soi.stringId == null) {
+                        target.put(soi.index, receiver, value);
+                    } else {
+                        target.put(soi.stringId, receiver, value);
+                    }
+                }
+                return true;
+            }
+
+            AbstractEcmaObjectOperations.ordinarySet(cx, s, target, args[1], args[2], receiver);
+            return true;
+        }
+
+        // receiver == target (or target has no own property P):
+        // delegate to [[Set]] on the receiver, which correctly fires any proxy
+        // set trap when receiver/target is a Proxy.
+        if (ScriptRuntime.isSymbol(args[1])) {
+            target.put((Symbol) args[1], receiver, value);
+        } else {
+            ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(args[1]);
+            if (soi.stringId == null) {
+                target.put(soi.index, receiver, value);
+            } else {
+                target.put(soi.stringId, receiver, value);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * see <a href="https://262.ecma-international.org/12.0/#sec-reflect.setprototypeof">28.1.13
+     * Reflect.setPrototypeOf ( target, proto )</a>
+     */
+    private static Object legacySetPrototypeOf(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        /*
+         * 1. If Type(target) is not Object, throw a TypeError exception.
+         * 2. If Type(proto) is not Object and proto is not null, throw a TypeError exception.
+         * 3. Return ? target.[[SetPrototypeOf]](proto).
+         */
+        if (args.length < 2) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.method.missing.parameter",
+                    "Reflect.js_setPrototypeOf",
+                    "2",
+                    Integer.toString(args.length));
+        }
+
+        ScriptableObject target = checkTarget(args);
+
+        if (target.getPrototype() == args[1]) {
+            return true;
+        }
+
+        if (!target.isExtensible()) {
+            return false;
+        }
+
+        if (args[1] == null) {
+            target.setPrototype(null);
+            return true;
+        }
+
+        if (ScriptRuntime.isSymbol(args[1])) {
+            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(args[0]));
+        }
+
+        Scriptable proto = ScriptableObject.ensureScriptable(args[1]);
+        if (target.getPrototype() == proto) {
+            return true;
+        }
+
+        // avoid cycles
+        Scriptable p = proto;
+        while (p != null) {
+            if (target == p) {
+                return false;
+            }
+            p = p.getPrototype();
+        }
+
+        target.setPrototype(proto);
+        return true;
     }
 }

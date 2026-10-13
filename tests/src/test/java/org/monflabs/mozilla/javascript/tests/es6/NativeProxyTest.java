@@ -336,7 +336,7 @@ public class NativeProxyTest {
                         + "  '' + e;"
                         + "}\n";
         Utils.assertWithAllModes_ES6(
-                "TypeError: The proxy refused to define the property \"p\"", js);
+                "TypeError: Cannot add properties to this object because extensible is false.", js);
     }
 
     @Test

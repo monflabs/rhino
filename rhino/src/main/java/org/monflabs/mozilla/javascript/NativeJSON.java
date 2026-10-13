@@ -99,7 +99,7 @@ public final class NativeJSON extends ScriptableObject {
         Object unfiltered = parse(cx, scope, jtext);
         Scriptable root = cx.newObject(scope);
         root.put("", root, unfiltered);
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             return internalize(cx, scope, reviver, root, "");
         }
         return walk(cx, scope, reviver, root, "");
@@ -251,12 +251,24 @@ public final class NativeJSON extends ScriptableObject {
 
         if (replacer instanceof Callable) {
             replacerFunction = (Callable) replacer;
-        } else if (NativeArray.isArray(replacer)) {
+        } else if (cx.isLatestEcmaScript()
+                ? NativeArray.isArray(replacer)
+                : replacer instanceof NativeArray) {
             LinkedHashSet<Object> propertySet = new LinkedHashSet<>();
             Scriptable replacerArray = (Scriptable) replacer;
-            long len = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, replacerArray);
-            for (long i = 0; i < len; i++) {
-                Object v = getKey(replacerArray, Long.toString(i));
+            java.util.List<Object> values = new ArrayList<>();
+            if (cx.isLatestEcmaScript()) {
+                long len = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, replacerArray);
+                for (long i = 0; i < len; i++) {
+                    values.add(getKey(replacerArray, Long.toString(i)));
+                }
+            } else {
+                // the present indexes of the array (stock Rhino)
+                for (int i : ((NativeArray) replacerArray).getIndexIds()) {
+                    values.add(replacerArray.get(i, replacerArray));
+                }
+            }
+            for (Object v : values) {
                 if (v instanceof String) {
                     propertySet.add(v);
                 } else if (v instanceof Number
@@ -319,7 +331,7 @@ public final class NativeJSON extends ScriptableObject {
             keyInt = ((Number) key).intValue();
             value = getProperty(holder, keyInt);
         }
-        boolean es6 = state.cx.getLanguageVersion() >= Context.VERSION_ES6;
+        boolean es6 = state.cx.isLatestEcmaScript();
         if (es6 && value == Scriptable.NOT_FOUND) {
             value = Undefined.instance;
         }
@@ -477,7 +489,7 @@ public final class NativeJSON extends ScriptableObject {
         Object[] k = null;
         if (state.propertyList != null) {
             k = state.propertyList;
-        } else if (value instanceof NativeProxy) {
+        } else if (value instanceof NativeProxy && state.cx.isLatestEcmaScript()) {
             k = AbstractEcmaObjectOperations.enumerableOwnKeys(state.cx, value).toArray();
         } else {
             k = value.getIds();
@@ -659,7 +671,10 @@ public final class NativeJSON extends ScriptableObject {
     }
 
     private static boolean isObjectArrayLike(Object o) {
-        if (NativeArray.isArray(o)) {
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.isLatestEcmaScript()
+                ? NativeArray.isArray(o)
+                : o instanceof NativeArray) {
             return true;
         }
         if (o instanceof NativeJavaObject) {

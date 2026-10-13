@@ -101,6 +101,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public boolean has(String name, Scriptable start) {
+        if (!latest()) {
+            return legacyHas(name, start);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -154,6 +157,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public boolean has(int index, Scriptable start) {
+        if (!latest()) {
+            return legacyHas(index, start);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -206,6 +212,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public boolean has(Symbol key, Scriptable start) {
+        if (!latest()) {
+            return legacyHas(key, start);
+        }
         ScriptableObject target = getTargetThrowIfRevoked();
 
         Function trap = getTrap(TRAP_HAS);
@@ -366,6 +375,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public Object get(String name, Scriptable start) {
+        if (!latest()) {
+            return legacyGet(name, start);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -419,6 +431,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public Object get(int index, Scriptable start) {
+        if (!latest()) {
+            return legacyGet(index, start);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -475,6 +490,9 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public Object get(Symbol key, Scriptable start) {
+        if (!latest()) {
+            return legacyGet(key, start);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -562,26 +580,45 @@ class NativeProxy extends ScriptableObject {
 
     @Override
     protected boolean endsPropertyLookup(String name) {
-        return true;
+        // a proxy in a prototype chain answers [[HasProperty]] itself (VERSION_ECMASCRIPT)
+        return latest();
     }
 
     @Override
     protected boolean endsPropertyLookup(int index) {
-        return true;
+        return latest();
+    }
+
+    /** Whether the current context runs VERSION_ECMASCRIPT. */
+    private static boolean latest() {
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.isLatestEcmaScript();
     }
 
     @Override
     public void put(String name, Scriptable start, Object value) {
+        if (!latest()) {
+            legacyPut(name, start, value);
+            return;
+        }
         putValue(name, start, value);
     }
 
     @Override
     public void put(int index, Scriptable start, Object value) {
+        if (!latest()) {
+            legacyPut(index, start, value);
+            return;
+        }
         putValue(index, start, value);
     }
 
     @Override
     public void put(Symbol key, Scriptable start, Object value) {
+        if (!latest()) {
+            legacyPut(key, start, value);
+            return;
+        }
         putValue(key, start, value);
     }
 
@@ -626,16 +663,28 @@ class NativeProxy extends ScriptableObject {
 
     @Override
     public void delete(String name) {
+        if (!latest()) {
+            legacyDelete(name);
+            return;
+        }
         deleteOrThrow(name);
     }
 
     @Override
     public void delete(int index) {
+        if (!latest()) {
+            legacyDelete(index);
+            return;
+        }
         deleteOrThrow(index);
     }
 
     @Override
     public void delete(Symbol key) {
+        if (!latest()) {
+            legacyDelete(key);
+            return;
+        }
         deleteOrThrow(key);
     }
 
@@ -654,7 +703,8 @@ class NativeProxy extends ScriptableObject {
      */
     /** A property key as passed to a trap: a symbol, or a string (not an index). */
     private static Object trapKey(Object id) {
-        return ScriptRuntime.isSymbol(id) ? id : ScriptRuntime.toString(id);
+        // before VERSION_ECMASCRIPT, an index key is passed as a number
+        return ScriptRuntime.isSymbol(id) || !latest() ? id : ScriptRuntime.toString(id);
     }
 
     /** CompletePropertyDescriptor (6.2.6.6): the missing fields get their default values. */
@@ -684,6 +734,9 @@ class NativeProxy extends ScriptableObject {
 
     @Override
     protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
+        if (!latest()) {
+            return legacyGetOwnPropertyDescriptor(cx, id);
+        }
         /*
          * 1. Assert: IsPropertyKey(P) is true.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -879,8 +932,21 @@ class NativeProxy extends ScriptableObject {
     }
 
     @Override
+    public boolean defineOwnProperty(Context cx, Object id, DescriptorInfo desc) {
+        if (!cx.isLatestEcmaScript()) {
+            // stock Rhino: the trap's result is returned, without a TypeError
+            return legacyDefineOwnProperty(cx, id, desc);
+        }
+        return super.defineOwnProperty(cx, id, desc);
+    }
+
+    @Override
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        if (!cx.isLatestEcmaScript()) {
+            // stock Rhino: the internal definition bypasses the trap
+            return super.defineOwnProperty(cx, id, desc, checkValid);
+        }
         boolean defined = defineOwnPropertyResult(cx, id, desc);
         if (!defined && checkValid) {
             throw ScriptRuntime.typeErrorById("msg.proxy.define.refused", id);
@@ -1026,6 +1092,10 @@ class NativeProxy extends ScriptableObject {
      */
     @Override
     public void setPrototype(Scriptable prototype) {
+        if (!latest()) {
+            legacySetPrototype(prototype);
+            return;
+        }
         /*
          * 1. Assert: Either Type(V) is Object or Type(V) is Null.
          * 2. Let handler be O.[[ProxyHandler]].
@@ -1229,5 +1299,787 @@ class NativeProxy extends ScriptableObject {
             }
             return false;
         }
+    }
+
+    // The proxy of stock Rhino, before VERSION_ECMASCRIPT
+
+    private void legacyDelete(String name) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Delete]](P).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is undefined, return true.
+         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         * 13. Let extensibleTarget be ? IsExtensible(target).
+         * 14. If extensibleTarget is false, throw a TypeError exception.
+         * 15. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_DELETE_PROPERTY);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, name}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), name);
+            if (targetDesc == null) {
+                return; // true
+            }
+            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                throw ScriptRuntime.typeError(
+                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
+            }
+
+            return; // true
+        }
+
+        target.delete(name);
+    }
+
+    private void legacyDelete(Symbol key) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Delete]](P).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is undefined, return true.
+         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         * 13. Let extensibleTarget be ? IsExtensible(target).
+         * 14. If extensibleTarget is false, throw a TypeError exception.
+         * 15. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_DELETE_PROPERTY);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, key}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), key);
+            if (targetDesc == null) {
+                return; // true
+            }
+            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                throw ScriptRuntime.typeError(
+                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
+            }
+
+            return; // true
+        }
+
+        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
+        symbolScriptableTarget.delete(key);
+    }
+
+    private void legacyDelete(int index) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "deleteProperty").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Delete]](P).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is undefined, return true.
+         * 12. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         * 13. Let extensibleTarget be ? IsExtensible(target).
+         * 14. If extensibleTarget is false, throw a TypeError exception.
+         * 15. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_DELETE_PROPERTY);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(trap, new Object[] {target, ScriptRuntime.toString(index)}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc =
+                    target.getOwnPropertyDescriptor(Context.getContext(), index);
+            if (targetDesc == null) {
+                return; // true
+            }
+            if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                throw ScriptRuntime.typeError(
+                        "proxy can't delete an existing own property ' + name + ' on an not configurable or not extensible object");
+            }
+
+            return; // true
+        }
+
+        target.delete(index);
+    }
+
+    private Object legacyGet(String name, Scriptable start) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "get").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Get]](P, Receiver).
+         * 8. Let trapResult be ? Call(trap, handler, « target, P, Receiver »).
+         * 9. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 10. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(trapResult, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true and targetDesc.[[Get]] is undefined, then
+         *         i. If trapResult is not undefined, throw a TypeError exception.
+         * 11. Return trapResult.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_GET);
+        if (trap != null) {
+            Object trapResult = callTrap(trap, new Object[] {target, name, start});
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), name);
+            if (targetDesc != null && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(trapResult, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.getter)) {
+                    if (!Undefined.isUndefined(trapResult)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+            }
+            return trapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        return target.get(name, start);
+    }
+
+    private Object legacyGet(Symbol key, Scriptable start) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "get").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Get]](P, Receiver).
+         * 8. Let trapResult be ? Call(trap, handler, « target, P, Receiver »).
+         * 9. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 10. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(trapResult, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true and targetDesc.[[Get]] is undefined, then
+         *         i. If trapResult is not undefined, throw a TypeError exception.
+         * 11. Return trapResult.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_GET);
+        if (trap != null) {
+            Object trapResult = callTrap(trap, new Object[] {target, key, start});
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), key);
+            if (targetDesc != null
+                    && !Undefined.isUndefined(targetDesc)
+                    && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(trapResult, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.getter)) {
+                    if (!Undefined.isUndefined(trapResult)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+            }
+            return trapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
+        return symbolScriptableTarget.get(key, start);
+    }
+
+    private Object legacyGet(int index, Scriptable start) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "get").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Get]](P, Receiver).
+         * 8. Let trapResult be ? Call(trap, handler, « target, P, Receiver »).
+         * 9. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 10. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(trapResult, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true and targetDesc.[[Get]] is undefined, then
+         *         i. If trapResult is not undefined, throw a TypeError exception.
+         * 11. Return trapResult.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_GET);
+        if (trap != null) {
+            Object trapResult =
+                    callTrap(trap, new Object[] {target, ScriptRuntime.toString(index), start});
+
+            DescriptorInfo targetDesc =
+                    target.getOwnPropertyDescriptor(Context.getContext(), index);
+            if (targetDesc != null
+                    && !Undefined.isUndefined(targetDesc)
+                    && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(trapResult, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.getter)) {
+                    if (!Undefined.isUndefined(trapResult)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy get has to return the same value as the plain call");
+                    }
+                }
+            }
+            return trapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        return target.get(index, start);
+    }
+
+    private DescriptorInfo legacyGetOwnPropertyDescriptor(Context cx, Object id) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "getOwnPropertyDescriptor").
+         * 7. If trap is undefined, then
+         *    a. Return ? target.[[GetOwnProperty]](P).
+         * 8. Let trapResultObj be ? Call(trap, handler, « target, P »).
+         * 9. If Type(trapResultObj) is neither Object nor Undefined, throw a TypeError exception.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If trapResultObj is undefined, then
+         *     a. If targetDesc is undefined, return undefined.
+         *     b. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         *     c. Let extensibleTarget be ? IsExtensible(target).
+         *     d. If extensibleTarget is false, throw a TypeError exception.
+         *     e. Return undefined.
+         * 12. Let extensibleTarget be ? IsExtensible(target).
+         * 13. Let resultDesc be ? ToPropertyDescriptor(trapResultObj).
+         * 14. Call CompletePropertyDescriptor(resultDesc).
+         * 15. Let valid be IsCompatiblePropertyDescriptor(extensibleTarget, resultDesc, targetDesc).
+         * 16. If valid is false, throw a TypeError exception.
+         * 17. If resultDesc.[[Configurable]] is false, then
+         *     a. If targetDesc is undefined or targetDesc.[[Configurable]] is true, then
+         *         i. Throw a TypeError exception.
+         *     b. If resultDesc has a [[Writable]] field and resultDesc.[[Writable]] is false, then
+         *         i. If targetDesc.[[Writable]] is true, throw a TypeError exception.
+         * 18. Return resultDesc.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_GET_OWN_PROPERTY_DESCRIPTOR);
+        if (trap != null) {
+            Object trapResultObj = callTrap(trap, new Object[] {target, id});
+            if (!Undefined.isUndefined(trapResultObj)
+                    && !(trapResultObj instanceof Scriptable
+                            && !ScriptRuntime.isSymbol(trapResultObj))) {
+                throw ScriptRuntime.typeError(
+                        "getOwnPropertyDescriptor trap has to return undefined or an object");
+            }
+
+            var targetDesc =
+                    ScriptRuntime.isSymbol(id)
+                            ? target.getOwnPropertyDescriptor(cx, id)
+                            : target.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(id));
+
+            if (Undefined.isUndefined(trapResultObj)) {
+                if (Undefined.isUndefined(targetDesc)) {
+                    return null;
+                }
+
+                if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                    throw ScriptRuntime.typeError(
+                            "proxy can't report an existing own property '"
+                                    + id
+                                    + "' as non-existent on a non-extensible object");
+                }
+                return null;
+            }
+
+            Scriptable trapResult = (Scriptable) trapResultObj;
+            if (trapResultObj != null) {
+                Object value = ScriptableObject.getProperty(trapResult, "value");
+                int attributes =
+                        applyDescriptorToAttributeBitset(
+                                DONTENUM | READONLY | PERMANENT,
+                                getProperty(trapResult, "enumerable"),
+                                getProperty(trapResult, "writable"),
+                                getProperty(trapResult, "configurable"));
+
+                var desc = ScriptableObject.buildDataDescriptor(value, attributes);
+                return desc;
+            }
+            return null;
+        }
+
+        if (ScriptRuntime.isSymbol(id)) {
+            return target.getOwnPropertyDescriptor(cx, id);
+        }
+
+        return target.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(id));
+    }
+
+    private boolean legacyHas(String name, Scriptable start) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "has").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[HasProperty]](P).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
+         * 9. If booleanTrapResult is false, then
+         *      a. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         *     b. If targetDesc is not undefined, then
+         *         i. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         *         ii. Let extensibleTarget be ? IsExtensible(target).
+         *         iii. If extensibleTarget is false, throw a TypeError exception.
+         * 10. Return booleanTrapResult.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_HAS);
+        if (trap != null) {
+
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, name}));
+            if (!booleanTrapResult) {
+                DescriptorInfo targetDesc =
+                        target.getOwnPropertyDescriptor(Context.getContext(), name);
+                if (targetDesc != null) {
+                    if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                        throw ScriptRuntime.typeError(
+                                "proxy can't report an existing own property '"
+                                        + name
+                                        + "' as non-existent on a non-extensible object");
+                    }
+                }
+            }
+            return booleanTrapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        return target.has(name, start);
+    }
+
+    private boolean legacyHas(Symbol key, Scriptable start) {
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_HAS);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, key}));
+            if (!booleanTrapResult) {
+                DescriptorInfo targetDesc =
+                        target.getOwnPropertyDescriptor(Context.getContext(), key);
+                if (targetDesc != null) {
+                    if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                        throw ScriptRuntime.typeError(
+                                "proxy can't check an existing property ' + name + ' existance on an not configurable or not extensible object");
+                    }
+                }
+            }
+
+            return booleanTrapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
+        return symbolScriptableTarget.has(key, start);
+    }
+
+    private boolean legacyHas(int index, Scriptable start) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "has").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[HasProperty]](P).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P »)).
+         * 9. If booleanTrapResult is false, then
+         *     a. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         *     b. If targetDesc is not undefined, then
+         *         i. If targetDesc.[[Configurable]] is false, throw a TypeError exception.
+         *         ii. Let extensibleTarget be ? IsExtensible(target).
+         *         iii. If extensibleTarget is false, throw a TypeError exception.
+         * 10. Return booleanTrapResult.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_HAS);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(trap, new Object[] {target, ScriptRuntime.toString(index)}));
+            if (!booleanTrapResult) {
+                DescriptorInfo targetDesc =
+                        target.getOwnPropertyDescriptor(Context.getContext(), index);
+                if (targetDesc != null) {
+                    if (targetDesc.isConfigurable(false) || !target.isExtensible()) {
+                        throw ScriptRuntime.typeError(
+                                "proxy can't check an existing property ' + name + ' existance on an not configurable or not extensible object");
+                    }
+                }
+            }
+
+            return booleanTrapResult;
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        return target.has(index, start);
+    }
+
+    private void legacyPut(String name, Scriptable start, Object value) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "set").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Set]](P, V, Receiver).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P, V, Receiver »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(V, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true, then
+         *         i. If targetDesc.[[Set]] is undefined, throw a TypeError exception.
+         * 12. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_SET);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(trap, new Object[] {target, name, value, start}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), name);
+            if (targetDesc != null
+                    && !Undefined.isUndefined(targetDesc)
+                    && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(value, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy set has to use the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.setter)) {
+                    throw ScriptRuntime.typeError("proxy set has to be available");
+                }
+            }
+            return; // true
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        target.put(name, start, value);
+    }
+
+    private void legacyPut(Symbol key, Scriptable start, Object value) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "set").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Set]](P, V, Receiver).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P, V, Receiver »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(V, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true, then
+         *         i. If targetDesc.[[Set]] is undefined, throw a TypeError exception.
+         * 12. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_SET);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(trap, new Object[] {target, key, value, start}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), key);
+            if (targetDesc != null
+                    && !Undefined.isUndefined(targetDesc)
+                    && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(value, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy set has to use the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.setter)) {
+                    throw ScriptRuntime.typeError("proxy set has to be available");
+                }
+            }
+            return; // true
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        SymbolScriptable symbolScriptableTarget = ensureSymbolScriptable(target);
+        symbolScriptableTarget.put(key, start, value);
+    }
+
+    private void legacyPut(int index, Scriptable start, Object value) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "set").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[Set]](P, V, Receiver).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P, V, Receiver »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 11. If targetDesc is not undefined and targetDesc.[[Configurable]] is false, then
+         *     a. If IsDataDescriptor(targetDesc) is true and targetDesc.[[Writable]] is false, then
+         *         i. If SameValue(V, targetDesc.[[Value]]) is false, throw a TypeError exception.
+         *     b. If IsAccessorDescriptor(targetDesc) is true, then
+         *         i. If targetDesc.[[Set]] is undefined, throw a TypeError exception.
+         * 12. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_SET);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(
+                                    trap,
+                                    new Object[] {
+                                        target, ScriptRuntime.toString(index), value, start
+                                    }));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+
+            DescriptorInfo targetDesc =
+                    target.getOwnPropertyDescriptor(Context.getContext(), index);
+            if (targetDesc != null
+                    && !Undefined.isUndefined(targetDesc)
+                    && targetDesc.isConfigurable(false)) {
+                if (targetDesc.isDataDescriptor() && targetDesc.isWritable(false)) {
+                    if (!Objects.equals(value, targetDesc.value)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy set has to use the same value as the plain call");
+                    }
+                }
+                if (targetDesc.isAccessorDescriptor() && Undefined.isUndefined(targetDesc.setter)) {
+                    throw ScriptRuntime.typeError("proxy set has to be available");
+                }
+            }
+            return; // true
+        }
+
+        if (start == this) {
+            start = target;
+        }
+        target.put(index, start, value);
+    }
+
+    private void legacySetPrototype(Scriptable prototype) {
+        /*
+         * 1. Assert: Either Type(V) is Object or Type(V) is Null.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "setPrototypeOf").
+         * 7. If trap is undefined, then
+         *     a. Return ? target.[[SetPrototypeOf]](V).
+         * 8. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, V »)).
+         * 9. If booleanTrapResult is false, return false.
+         * 10. Let extensibleTarget be ? IsExtensible(target).
+         * 11. If extensibleTarget is true, return true.
+         * 12. Let targetProto be ? target.[[SetPrototypeOf]]().
+         * 13. If SameValue(V, targetProto) is false, throw a TypeError exception.
+         * 14. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_SET_PROTOTYPE_OF);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(callTrap(trap, new Object[] {target, prototype}));
+            if (!booleanTrapResult) {
+                return; // false
+            }
+            if (target.isExtensible()) {
+                return; // true
+            }
+
+            return;
+        }
+
+        target.setPrototype(prototype);
+    }
+
+    private boolean legacyDefineOwnProperty(Context cx, Object id, DescriptorInfo desc) {
+        /*
+         * 1. Assert: IsPropertyKey(P) is true.
+         * 2. Let handler be O.[[ProxyHandler]].
+         * 3. If handler is null, throw a TypeError exception.
+         * 4. Assert: Type(handler) is Object.
+         * 5. Let target be O.[[ProxyTarget]].
+         * 6. Let trap be ? GetMethod(handler, "defineProperty").
+         * 7. If trap is undefined, then
+         *    a. Return ? target.[[DefineOwnProperty]](P, Desc).
+         * 8. Let descObj be FromPropertyDescriptor(Desc).
+         * 9. Let booleanTrapResult be ! ToBoolean(? Call(trap, handler, « target, P, descObj »)).
+         * 10. If booleanTrapResult is false, return false.
+         * 11. Let targetDesc be ? target.[[GetOwnProperty]](P).
+         * 12. Let extensibleTarget be ? IsExtensible(target).
+         * 13. If Desc has a [[Configurable]] field and if Desc.[[Configurable]] is false, then
+         *     a. Let settingConfigFalse be true.
+         * 14. Else, let settingConfigFalse be false.
+         * 15. If targetDesc is undefined, then
+         *     a. If extensibleTarget is false, throw a TypeError exception.
+         *     b. If settingConfigFalse is true, throw a TypeError exception.
+         * 16. Else,
+         *     a. If IsCompatiblePropertyDescriptor(extensibleTarget, Desc, targetDesc) is false, throw a TypeError exception.
+         *     b. If settingConfigFalse is true and targetDesc.[[Configurable]] is true, throw a TypeError exception.
+         *     c. If IsDataDescriptor(targetDesc) is true, targetDesc.[[Configurable]] is false, and targetDesc.[[Writable]] is true, then
+         *         i. If Desc has a [[Writable]] field and Desc.[[Writable]] is false, throw a TypeError exception.
+         * 17. Return true.
+         */
+        ScriptableObject target = getTargetThrowIfRevoked();
+
+        Function trap = getTrap(TRAP_DEFINE_PROPERTY);
+        if (trap != null) {
+            boolean booleanTrapResult =
+                    ScriptRuntime.toBoolean(
+                            callTrap(
+                                    trap,
+                                    new Object[] {
+                                        target, id, desc.toObject(trap.getDeclarationScope())
+                                    }));
+            if (!booleanTrapResult) {
+                return false;
+            }
+
+            DescriptorInfo targetDesc = target.getOwnPropertyDescriptor(Context.getContext(), id);
+            boolean extensibleTarget = target.isExtensible();
+
+            boolean settingConfigFalse = desc.isConfigurable(false);
+
+            if (targetDesc == null) {
+                if (!extensibleTarget || settingConfigFalse) {
+                    throw ScriptRuntime.typeError(
+                            "proxy can't define an incompatible property descriptor");
+                }
+            } else {
+                if (!AbstractEcmaObjectOperations.isCompatiblePropertyDescriptor(
+                        cx, extensibleTarget, desc, targetDesc)) {
+                    throw ScriptRuntime.typeError(
+                            "proxy can't define an incompatible property descriptor");
+                }
+
+                if (settingConfigFalse && targetDesc.isConfigurable()) {
+                    throw ScriptRuntime.typeError(
+                            "proxy can't define an incompatible property descriptor");
+                }
+
+                if (targetDesc.isDataDescriptor()
+                        && targetDesc.isConfigurable(false)
+                        && targetDesc.isWritable()) {
+                    if (desc.isWritable(false)) {
+                        throw ScriptRuntime.typeError(
+                                "proxy can't define an incompatible property descriptor");
+                    }
+                }
+            }
+            return true;
+        }
+
+        return target.defineOwnProperty(cx, id, desc);
     }
 }

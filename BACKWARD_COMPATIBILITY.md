@@ -680,6 +680,8 @@ Object.defineProperty(o, "x", { value: 2 });   // before: TypeError   now: o.x i
 
 ### 2.23 Typed arrays as exotic objects
 
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 var ta = new Int8Array(2);
 Reflect.ownKeys(ta);                          // before: []   now: ["0", "1"]
@@ -697,6 +699,8 @@ Object.create(ta)[0] = 1;                     // before: set ta[0]   now: an own
 - **Why:** ECMA-262 2026, §10.4.5 TypedArray Exotic Objects.
 
 ### 2.24 Reflect.set and proxies
+
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 Reflect.set(Object.freeze({x: 1}), "x", 2);       // before: true   now: false
@@ -720,6 +724,8 @@ Object.getOwnPropertyDescriptor(q, "x");          // before: a descriptor   now:
 
 ### 2.25 String methods and the symbols of primitives
 
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 Number.prototype[Symbol.match] = function () { return "custom"; };
 "a1b".match(1);          // before: "custom"   now: ["1"] (1 is converted to the string "1")
@@ -731,6 +737,8 @@ Number.prototype[Symbol.match] = function () { return "custom"; };
 
 ### 2.26 Array methods on frozen objects
 
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 Object.freeze([1]).push(2);                    // before: 2 (nothing changed)   now: TypeError
 Array.prototype.pop.call("abc");               // before: "c"   now: TypeError (length is read-only)
@@ -741,6 +749,8 @@ Array.prototype.pop.call("abc");               // before: "c"   now: TypeError (
 - **Why:** ECMA-262 2026, §23.1.3 (the methods use Set(O, P, V, true) and DeletePropertyOrThrow).
 
 ### 2.27 Object.prototype residuals and Date setters
+
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var d = new Date(NaN); d.setDate({ valueOf() { d.setTime(0); return 1; } });
@@ -759,6 +769,8 @@ Object.prototype.toString.call(new Proxy([], {}));                  // before: "
 - **Why:** ECMA-262 2026, §21.4.4 (Date setters), §20.1.3 (Object.prototype), Annex B.2.2.
 
 ### 2.28 JSON revivers and replacers, Object.hasOwn, Object.assign
+
+*Since plan G5 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 JSON.parse("[1]", function (k, v) { return typeof k; });     // before: "string" for "", "number" for 0   now: "string"

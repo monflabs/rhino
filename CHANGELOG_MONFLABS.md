@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Typed arrays, Reflect, Proxy and built-in residuals only under VERSION_ECMASCRIPT (2026-10-13, plan G5)
+
+- `BACKWARD_COMPATIBILITY.md` 2.23-2.28 are gated, with the undocumented changes of the same commits. Under
+  `VERSION_ES6`, stock Rhino again for: typed array keys, descriptors, definitions, deletions and stores (only the
+  rare branches check the version: in-bounds element writes stay free of it); `Reflect.defineProperty`,
+  `deleteProperty`, `get`, `has`, `set` and `setPrototypeOf` (the stock bodies kept as `legacy*` methods); the proxy
+  `get`/`has`/`put`/`delete`/`getOwnPropertyDescriptor`/`setPrototype` and the public 3-argument
+  `defineOwnProperty` override (restored), index keys passed to traps as numbers, no lookup ending at a proxy;
+  `Object.setPrototypeOf` and `copyWithin` with proxies and undefined; own keys with the integer keys first (the
+  public `ScriptableObject.KeyComparator` is stock again; the spec order is a private comparator);
+  `String.prototype` methods using the Symbol methods of primitives; Array methods ignoring failed writes; Date
+  setters; `__defineGetter__` and friends; `hasOwnProperty`, `propertyIsEnumerable`, `isPrototypeOf` and
+  `Object.prototype.toString`; `indexOf`/`lastIndexOf`; JSON revivers and replacers; `Object.hasOwn` (length 1),
+  `Object.assign` and `Date.prototype.toJSON`.
+- Java API: `AbstractEcmaObjectOperations.ordinarySet(..., Scriptable receiver)` is back (`@Deprecated`, with its
+  stock semantics), next to the new `Object` receiver overload.
+- Tests: the stock `date.tojson.doctest` and the `NativeProxyTest` message are restored.
+- test262: unchanged (41,080/42,616, 96.4%). Perf gate: no regression.
+
 ### Iteration, literals, yield and function environments only under VERSION_ECMASCRIPT (2026-10-13, plan G4)
 
 - `BACKWARD_COMPATIBILITY.md` 2.15-2.22 are gated, with the undocumented changes of the same commits. Under

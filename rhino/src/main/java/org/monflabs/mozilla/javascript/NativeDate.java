@@ -194,8 +194,14 @@ final class NativeDate extends ScriptableObject {
                     ScriptRuntime.toString(o),
                     ScriptRuntime.toString(toISO));
         }
-        // the result of toISOString, whatever it is (21.4.4.37)
-        return ((Callable) toISO).call(cx, s, o, ScriptRuntime.emptyArgs);
+        // the result of toISOString, whatever it is (21.4.4.37; a primitive before
+        // VERSION_ECMASCRIPT)
+        Object result = ((Callable) toISO).call(cx, s, o, ScriptRuntime.emptyArgs);
+        if (!cx.isLatestEcmaScript() && !ScriptRuntime.isPrimitive(result)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.toisostring.must.return.primitive", ScriptRuntime.toString(result));
+        }
+        return result;
     }
 
     private static Object js_toPrimitive(
@@ -547,7 +553,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setMilliseconds);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -562,7 +568,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCMilliseconds);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -577,7 +583,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setSeconds);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -592,7 +598,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCSeconds);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -607,7 +613,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setMinutes);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -622,7 +628,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCMinutes);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -637,7 +643,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setHours);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -652,7 +658,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeTime(cx, t, args, Id_setUTCHours);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -667,7 +673,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setDate);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -682,7 +688,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setUTCDate);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -697,7 +703,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setMonth);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }
@@ -712,7 +718,7 @@ final class NativeDate extends ScriptableObject {
 
         boolean invalid = Double.isNaN(t);
         t = makeDate(cx, t, args, Id_setUTCMonth);
-        if (invalid) {
+        if (invalid && cx.isLatestEcmaScript()) {
             // the date value was read before the arguments were converted
             return ScriptRuntime.NaNobj;
         }

@@ -18,6 +18,10 @@ class TypedArrayInternalsTest {
                     + " Object.defineProperty(Int8Array.prototype, '1.5', { set(v) { throw new Error('proto'); },"
                     + " configurable: true });";
 
+    private static void assertGated(Object expectedES6, Object expected, String script) {
+        Utils.assertGatedBehavior(expectedES6, expected, PRELUDE + script + " r.join('|')");
+    }
+
     private static void assertBoth(Object expected, String script) {
         Utils.assertWithAllModes_ES6(expected, PRELUDE + script + " r.join('|')");
         Utils.assertWithAllModes_ECMASCRIPT(expected, PRELUDE + script + " r.join('|')");
@@ -25,7 +29,8 @@ class TypedArrayInternalsTest {
 
     @Test
     void ownKeysAndDescriptors() {
-        assertBoth(
+        assertGated(
+                "foo|0,1,2|TypeError|undefined",
                 "0,1,2,foo|0,1,2,foo|0,true,true,true|undefined",
                 "t(() => Reflect.ownKeys(ta).join());"
                         + " t(() => Object.keys(ta).join());"
@@ -36,7 +41,8 @@ class TypedArrayInternalsTest {
 
     @Test
     void numericKeysDoNotReachThePrototype() {
-        assertBoth(
+        assertGated(
+                "Error|true|true|Error|false",
                 "undefined|false|false|undefined|true",
                 "t(() => ta['-0']);"
                         + " t(() => '-0' in ta);"
@@ -47,7 +53,8 @@ class TypedArrayInternalsTest {
 
     @Test
     void defineAndDelete() {
-        assertBoth(
+        assertGated(
+                "0,0,0|0,0,0|9|false|true|true",
                 "TypeError|TypeError|9|TypeError|true|true",
                 "t(() => Object.defineProperty(ta, '0', { configurable: false }));"
                         + " t(() => Object.defineProperty(ta, '0', { get() {} }));"

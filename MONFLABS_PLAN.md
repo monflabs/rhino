@@ -618,7 +618,8 @@ batches by area, each verified (test262 must not move), perf-gated and committed
   `Parser.destructuringArrayLegacy`.
 - *G4 (done)* 2.15-2.22 (iteration protocol, literal early errors, `yield`, function environments); the stock
   for-of iteration is restored in `ScriptRuntime`.
-- *G5* 2.23-2.28 (typed arrays, Reflect and Proxy, String symbols, Array writes, Date, JSON).
+- *G5 (done)* 2.23-2.28 (typed arrays, Reflect and Proxy, String symbols, Array writes, Date, JSON); the stock
+  Reflect and Proxy methods are kept as `legacy*` methods.
 - *G6* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp).
 - *G7* 2.35-2.46 (language residuals, Annex B, `await`, generators, realms, array-likes).
 

@@ -20,18 +20,22 @@ class BuiltinsResidualsTest {
 
     @Test
     void stringMethodsIgnoreSymbolMethodsOfPrimitives() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "match|replace|search",
                 "1|a-b-c|2",
                 "Object.defineProperty(Number.prototype, Symbol.match, { get() { throw new Error('match'); } });"
                         + " Object.defineProperty(Number.prototype, Symbol.replace, { get() { throw new Error('replace'); } });"
                         + " Object.defineProperty(Number.prototype, Symbol.search, { get() { throw new Error('search'); } });"
-                        + " ['a1b1c'.match(1).index, 'a1b1c'.replace(1, '-').replace(1, '-'),"
-                        + " 'ab1'.search(1)].join('|')");
+                        + " function t(f) { try { return f(); } catch (e) { return e.message; } }"
+                        + " [t(() => 'a1b1c'.match(1).index),"
+                        + " t(() => 'a1b1c'.replace(1, '-').replace(1, '-')),"
+                        + " t(() => 'ab1'.search(1))].join('|')");
     }
 
     @Test
     void ownKeysOrder() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "1,12345678900,b,a,4294967294,4294967295,Symbol(z)|0,Symbol(),foo",
                 "1,4294967294,12345678900,b,a,4294967295,Symbol(z)|0,foo,Symbol()",
                 "var o = { 12345678900: 1, b: 1, 1: 1, a: 1, [Symbol('z')]: 1, 4294967294: 1, 4294967295: 1 };"
                         + " var keys = Reflect.ownKeys(o).map(String).join();"
@@ -43,7 +47,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void arrayMethodsThrowWhenAWriteFails() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok|ok|ok|ok|ok",
                 "TypeError|TypeError|TypeError|TypeError|TypeError",
                 "var r = []; function t(f) { try { f(); r.push('ok'); } catch (e) { r.push(e.name); } }"
                         + " t(() => Object.freeze([1]).push(2));"
@@ -57,7 +62,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void objectPrototypeMethods() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "undefined|function|TypeError|TypeError|[object Promise]|[object Array]",
                 "TypeError|function|true|false|[object Object]|[object Array]",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => Object.prototype.__defineGetter__.call(Object.freeze({}), 'x', function () {}));"
@@ -84,7 +90,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void objectHasOwnAssignAndToJSON() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError|false|1|TypeError|x",
                 "TypeError|true|2|TypeError|x",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => Object.hasOwn(null, { toString() { throw new Error('key'); } }));"
@@ -98,7 +105,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void jsonWithProxiesAndRevivers() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "{\"0\":1,\"1\":2}|{\"a\":1,\"b\":2}|{\"b\":2}|string,number|0,1,|0",
                 "[1,2]|{\"a\":1}|{\"b\":2}|string,string|0,1,|7",
                 "var r = [];"
                         + " r.push(JSON.stringify(new Proxy([1, 2], {})));"
@@ -199,7 +207,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void objectResiduals() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError,2|TypeError|get,set|TypeError|TypeError|TypeError|ownKeys,gopd:a,get:a|undefined",
                 "TypeError,2|TypeError|get,set|TypeError|TypeError|TypeError|ownKeys,gopd:a,get:a|9",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var a = [0, 1, 2]; a.length = 10; a[5] = 5;"

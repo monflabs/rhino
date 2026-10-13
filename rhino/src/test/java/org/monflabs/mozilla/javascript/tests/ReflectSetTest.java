@@ -13,6 +13,10 @@ class ReflectSetTest {
     private static final String PRELUDE =
             "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }";
 
+    private static void assertGated(Object expectedES6, Object expected, String script) {
+        Utils.assertGatedBehavior(expectedES6, expected, PRELUDE + script + " r.join('|')");
+    }
+
     private static void assertBoth(Object expected, String script) {
         Utils.assertWithAllModes_ES6(expected, PRELUDE + script + " r.join('|')");
         Utils.assertWithAllModes_ECMASCRIPT(expected, PRELUDE + script + " r.join('|')");
@@ -20,7 +24,8 @@ class ReflectSetTest {
 
     @Test
     void reflectSetReportsFailures() {
-        assertBoth(
+        assertGated(
+                "true|true|true|true,1|TypeError|true",
                 "false|false|false|true,1|false|false",
                 "t(() => Reflect.set(Object.defineProperty({}, 'x', { value: 1 }), 'x', 2));"
                         + " t(() => Reflect.set(Object.preventExtensions({}), 'x', 2));"
@@ -32,7 +37,8 @@ class ReflectSetTest {
 
     @Test
     void proxies() {
-        assertBoth(
+        assertGated(
+                "true|undefined||Error|[object Object]",
                 "false|TypeError|x,x|1|TypeError",
                 "var p = new Proxy({}, { set() { return false; } });"
                         + " t(() => Reflect.set(p, 'x', 1));"
@@ -49,7 +55,8 @@ class ReflectSetTest {
 
     @Test
     void deleteDefineAndSetPrototype() {
-        assertBoth(
+        assertGated(
+                "true|undefined|false|[object Object]|false|[object Object]|false",
                 "false|TypeError|false|TypeError|false|TypeError|true",
                 "var nd = new Proxy({}, { deleteProperty() { return false; } });"
                         + " t(() => Reflect.deleteProperty(nd, 'x'));"

@@ -3024,6 +3024,11 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
      * then the symbols, each in their (creation) order. Keys already in that order are left alone.
      */
     static void sortKeys(Object[] ids) {
+        if (!isLatestEcmaScript()) {
+            // the integer keys first, before VERSION_ECMASCRIPT
+            Arrays.sort(ids, KEY_COMPARATOR);
+            return;
+        }
         int previousRank = 0;
         long previousIndex = -1;
         boolean sorted = true;
@@ -3038,7 +3043,7 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
             previousIndex = index;
         }
         if (!sorted) {
-            Arrays.sort(ids, KEY_COMPARATOR);
+            Arrays.sort(ids, SPEC_KEY_COMPARATOR);
         }
     }
 
@@ -3245,6 +3250,17 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
 
     static final Comparator<Object> KEY_COMPARATOR = new KeyComparator();
 
+    /** The order of OrdinaryOwnPropertyKeys, see #sortKeys. */
+    private static final Comparator<Object> SPEC_KEY_COMPARATOR =
+            (o1, o2) -> {
+                int r1 = keyRank(o1);
+                int r2 = keyRank(o2);
+                if (r1 != r2) {
+                    return r1 - r2;
+                }
+                return r1 == 0 ? Long.compare(arrayIndex(o1), arrayIndex(o2)) : 0;
+            };
+
     /**
      * This comparator sorts property fields in spec-compliant order. Numeric ids first, in numeric
      * order, followed by string ids, in insertion order. Since this class already keeps string keys
@@ -3257,12 +3273,17 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
 
         @Override
         public int compare(Object o1, Object o2) {
-            int r1 = keyRank(o1);
-            int r2 = keyRank(o2);
-            if (r1 != r2) {
-                return r1 - r2;
+            // the integer keys first, in ascending order (stock Rhino)
+            if (o1 instanceof Integer) {
+                if (o2 instanceof Integer) {
+                    return ((Integer) o1).compareTo((Integer) o2);
+                }
+                return -1;
             }
-            return r1 == 0 ? Long.compare(arrayIndex(o1), arrayIndex(o2)) : 0;
+            if (o2 instanceof Integer) {
+                return 1;
+            }
+            return 0;
         }
     }
 

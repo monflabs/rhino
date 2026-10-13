@@ -51,6 +51,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static ClassDescriptor LEGACY_DESCRIPTOR;
     private static ClassDescriptor ES6_DESCRIPTOR;
+    private static ClassDescriptor LATEST_DESCRIPTOR;
 
     static {
         var builder =
@@ -97,7 +98,7 @@ public class NativeObject extends ScriptableObject implements Map {
                         .withMethod(CTOR, "entries", 1, NativeObject::js_entries)
                         .withMethod(CTOR, "fromEntries", 1, NativeObject::js_fromEntries)
                         .withMethod(CTOR, "values", 1, NativeObject::js_values)
-                        .withMethod(CTOR, "hasOwn", 2, NativeObject::js_hasOwn)
+                        .withMethod(CTOR, "hasOwn", 1, NativeObject::js_hasOwn)
                         .withProp(
                                 PROTO,
                                 PROTO_PROPERTY,
@@ -105,10 +106,15 @@ public class NativeObject extends ScriptableObject implements Map {
                                 NativeObject::js_protoSetter,
                                 DONTENUM | READONLY)
                         .build();
+        // Object.hasOwn.length is 2 under VERSION_ECMASCRIPT (the builder is cumulative)
+        LATEST_DESCRIPTOR = builder.withMethod(CTOR, "hasOwn", 2, NativeObject::js_hasOwn).build();
     }
 
     static JSFunction init(Context cx, VarScope s, boolean sealed) {
-        var desc = cx.version >= Context.VERSION_ES6 ? ES6_DESCRIPTOR : LEGACY_DESCRIPTOR;
+        var desc =
+                cx.isLatestEcmaScript()
+                        ? LATEST_DESCRIPTOR
+                        : cx.version >= Context.VERSION_ES6 ? ES6_DESCRIPTOR : LEGACY_DESCRIPTOR;
         NativeObject proto = new NativeObject();
         // Object.prototype is an immutable prototype exotic object (10.4.7)
         proto.immutableProto = cx.version >= Context.VERSION_ES6;
@@ -177,7 +183,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_hasOwnProperty(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // ToPropertyKey, then ToObject (20.1.3.2)
             Object key =
                     ScriptRuntime.toPropertyKey(args.length < 1 ? Undefined.instance : args[0]);
@@ -197,7 +203,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_propertyIsEnumerable(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // ToPropertyKey, ToObject, then [[GetOwnProperty]] (20.1.3.4)
             Object key =
                     ScriptRuntime.toPropertyKey(args.length < 1 ? Undefined.instance : args[0]);
@@ -252,8 +258,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_isPrototypeOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6
-                && (args.length == 0 || !ScriptRuntime.isObject(args[0]))) {
+        if (cx.isLatestEcmaScript() && (args.length == 0 || !ScriptRuntime.isObject(args[0]))) {
             // a primitive argument gives false before this is converted (20.1.3.3)
             return Boolean.FALSE;
         }
@@ -328,7 +333,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_defineGetterOrSetter(
             Context cx, VarScope scope, boolean isSetter, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // B.2.2.2 and B.2.2.3
             Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
             Object fn = args.length > 1 ? args[1] : Undefined.instance;
@@ -382,7 +387,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_lookupGetterOrSetter(
             Context cx, VarScope scope, boolean isSetter, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // B.2.2.4 and B.2.2.5
             Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
             Object key =
@@ -463,7 +468,8 @@ public class NativeObject extends ScriptableObject implements Map {
         if (!(thisObj instanceof ScriptableObject)) {
             return thisObj;
         }
-        if (thisObj instanceof NativeProxy) {
+        boolean latest = Context.getCurrentContext().isLatestEcmaScript();
+        if (thisObj instanceof NativeProxy && latest) {
             // [[SetPrototypeOf]] of the proxy, then OrdinarySetPrototypeOf failures throw
             if (!((NativeProxy) thisObj).setPrototypeOf(Context.getCurrentContext(), proto)) {
                 throw ScriptRuntime.typeErrorById("msg.proxy.setprototype.refused");
@@ -484,7 +490,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
         // cycle detection, which stops at a proxy (OrdinarySetPrototypeOf step 8.c.i)
         Scriptable prototypeProto = proto;
-        while (prototypeProto != null && !(prototypeProto instanceof NativeProxy)) {
+        while (prototypeProto != null && !(latest && prototypeProto instanceof NativeProxy)) {
             if (prototypeProto == thisScriptable) {
                 throw ScriptRuntime.typeErrorById(
                         "msg.object.cyclic.prototype", thisScriptable.getClass().getSimpleName());
@@ -622,7 +628,7 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Object propertyName = args.length < 2 ? Undefined.instance : args[1];
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // ToObject, then ToPropertyKey (20.1.2.13)
             Scriptable o = ScriptRuntime.toObject(cx, s, arg);
             return AbstractEcmaObjectOperations.hasOwnProperty(
@@ -824,7 +830,7 @@ public class NativeObject extends ScriptableObject implements Map {
 
     private static Object js_assign(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() < Context.VERSION_ES6) {
+        if (!cx.isLatestEcmaScript()) {
             return assign(cx, s, args);
         }
         // Set(to, key, value, true): a write that fails throws (20.1.2.1)
@@ -856,7 +862,7 @@ public class NativeObject extends ScriptableObject implements Map {
                 continue;
             }
             Scriptable sourceObj = ScriptRuntime.toObject(cx, s, args[i]);
-            if (sourceObj instanceof NativeProxy) {
+            if (sourceObj instanceof NativeProxy && cx.isLatestEcmaScript()) {
                 // [[OwnPropertyKeys]], then [[GetOwnProperty]] and [[Get]] of each key (traps)
                 NativeProxy proxy = (NativeProxy) sourceObj;
                 Object[] keys;

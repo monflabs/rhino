@@ -51,7 +51,8 @@ public class AbstractEcmaObjectOperations {
      */
     static boolean hasOwnProperty(Context cx, Object o, Object property) {
         Scriptable obj = ScriptableObject.ensureScriptable(o);
-        if (obj instanceof NativeProxy || obj instanceof ModuleNamespace) {
+        if ((obj instanceof NativeProxy && cx.isLatestEcmaScript())
+                || obj instanceof ModuleNamespace) {
             // HasOwnProperty uses [[GetOwnProperty]] (a trap, or the read of a binding), not
             // [[HasProperty]]
             Object key =
@@ -585,6 +586,122 @@ public class AbstractEcmaObjectOperations {
             Context cx, VarScope s, ScriptableObject o, Object p, Object v, Object receiver) {
         DescriptorInfo ownDesc = o.getOwnPropertyDescriptor(cx, ownKey(p));
         return ordinarySetWithOwnDescriptor(cx, s, o, p, v, receiver, ownDesc);
+    }
+
+    /**
+     * OrdinarySet as in stock Rhino (the receiver an object, a parent's [[Set]] assumed to
+     * succeed), kept for embedders and the behavior before VERSION_ECMASCRIPT.
+     *
+     * @deprecated use {@link #ordinarySet(Context, VarScope, ScriptableObject, Object, Object,
+     *     Object)}, which returns the result of [[Set]]
+     *     <p>see <a href="https://262.ecma-international.org/14.0/#sec-ordinaryset">OrdinarySet (
+     *     O, P, V, Receiver )</a>
+     */
+    @Deprecated
+    public static boolean ordinarySet(
+            Context cx, VarScope s, ScriptableObject o, Object p, Object v, Scriptable receiver) {
+        /*
+         * 1. Let ownDesc be ? O.[[GetOwnProperty]](P).
+         * 2. Return ? OrdinarySetWithOwnDescriptor(O, P, V, Receiver, ownDesc).
+         */
+        DescriptorInfo ownDesc =
+                ScriptRuntime.isSymbol(p)
+                        ? o.getOwnPropertyDescriptor(cx, p)
+                        : o.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(p));
+
+        return legacyOrdinarySetWithOwnDescriptor(cx, s, o, p, v, receiver, ownDesc);
+    }
+
+    /**
+     * Implements the OrdinarySetWithOwnDescriptor abstract operation.
+     *
+     * <p>see <a href="https://262.ecma-international.org/14.0/#sec-ordinarysetwithowndescriptor">
+     * OrdinarySetWithOwnDescriptor ( O, P, V, Receiver, ownDesc )</a>
+     */
+    private static boolean legacyOrdinarySetWithOwnDescriptor(
+            Context cx,
+            VarScope s,
+            Scriptable o,
+            Object p,
+            Object v,
+            Scriptable receiver,
+            DescriptorInfo ownDesc) {
+        /*
+         * 1. If ownDesc is undefined, then
+         *    a. Let parent be ? O.[[GetPrototypeOf]]().
+         *    b. If parent is not null, then
+         *       i. Return ? parent.[[Set]](P, V, Receiver).
+         *    c. Else,
+         *       i. Set ownDesc to the PropertyDescriptor { [[Value]]: undefined, [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true }.
+         * 2. If IsDataDescriptor(ownDesc) is true, then
+         *    a. If ownDesc.[[Writable]] is false, return false.
+         *    b. If Type(Receiver) is not Object, return false.
+         *    c. Let existingDescriptor be ? Receiver.[[GetOwnProperty]](P).
+         *    d. If existingDescriptor is not undefined, then
+         *       i.  If IsAccessorDescriptor(existingDescriptor) is true, return false.
+         *       ii. If existingDescriptor.[[Writable]] is false, return false.
+         *       iii.Let valueDesc be the PropertyDescriptor { [[Value]]: V }.
+         *           Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
+         *    e. Else,
+         *       Return ? CreateDataProperty(Receiver, P, V).
+         * 3. Assert: IsAccessorDescriptor(ownDesc) is true.
+         * 4. Let setter be ownDesc.[[Set]].
+         * 5. If setter is undefined, return false.
+         * 6. Perform ? Call(setter, Receiver, « V »).
+         * 7. Return true.
+         */
+
+        if (ownDesc == null || Undefined.isUndefined(ownDesc)) {
+            Scriptable parent = o.getPrototype();
+            if (parent != null) {
+                if (ScriptRuntime.isSymbol(p)) {
+                    parent.put((Symbol) p, receiver, v);
+                } else {
+                    ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(p);
+                    if (soi.stringId == null) {
+                        parent.put(soi.index, receiver, v);
+                    } else {
+                        parent.put(soi.stringId, receiver, v);
+                    }
+                }
+                return true;
+            }
+
+            ownDesc = new DescriptorInfo(true, true, true, Undefined.instance);
+        }
+
+        if (ownDesc.isDataDescriptor()) {
+            if (ownDesc.isWritable(false) || !(receiver instanceof ScriptableObject)) {
+                return false;
+            }
+            ScriptableObject receiverObj = (ScriptableObject) receiver;
+
+            DescriptorInfo existingDesc =
+                    ScriptRuntime.isSymbol(p)
+                            ? receiverObj.getOwnPropertyDescriptor(cx, p)
+                            : receiverObj.getOwnPropertyDescriptor(cx, ScriptRuntime.toString(p));
+
+            if (existingDesc != null) {
+                if (existingDesc.isAccessorDescriptor() || existingDesc.isWritable(false)) {
+                    return false;
+                }
+                DescriptorInfo valueDesc =
+                        new DescriptorInfo(
+                                NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, v);
+                return receiverObj.defineOwnProperty(cx, p, valueDesc);
+            }
+
+            DescriptorInfo newDesc = new DescriptorInfo(true, true, true, v);
+            receiverObj.defineOwnProperty(cx, p, newDesc);
+            return true;
+        }
+
+        Object setter = ownDesc.setter;
+        if (setter == null || setter == NOT_FOUND || Undefined.isUndefined(setter)) {
+            return false;
+        }
+        ((Function) setter).call(cx, s, receiver, new Object[] {v});
+        return true;
     }
 
     /**

@@ -967,7 +967,7 @@ public class NativeArray extends ScriptableObject implements List {
     private static Object setLengthProperty(Context cx, Scriptable target, long length) {
         Object len = ScriptRuntime.wrapNumber((double) length);
         boolean wasStrict = cx.isStrictMode();
-        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        cx.setIsStrictMode(wasStrict || cx.isLatestEcmaScript());
         try {
             ScriptableObject.putProperty(target, "length", len);
         } finally {
@@ -985,7 +985,7 @@ public class NativeArray extends ScriptableObject implements List {
     private static void deleteElem(Scriptable target, long index) {
         Context cx = Context.getCurrentContext();
         boolean wasStrict = cx.isStrictMode();
-        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        cx.setIsStrictMode(wasStrict || cx.isLatestEcmaScript());
         try {
             int i = (int) index;
             if (i == index) {
@@ -1026,12 +1026,12 @@ public class NativeArray extends ScriptableObject implements List {
     }
 
     /**
-     * Set(O, P, V, true): an assignment that fails throws a TypeError (from VERSION_ES6; JavaScript
-     * 1.x ignores it).
+     * Set(O, P, V, true): an assignment that fails throws a TypeError (under VERSION_ECMASCRIPT; it
+     * is ignored before).
      */
     private static void setElem(Context cx, Scriptable target, long index, Object value) {
         boolean wasStrict = cx.isStrictMode();
-        cx.setIsStrictMode(wasStrict || cx.getLanguageVersion() >= Context.VERSION_ES6);
+        cx.setIsStrictMode(wasStrict || cx.isLatestEcmaScript());
         try {
             if (index > Integer.MAX_VALUE) {
                 String id = Long.toString(index);
@@ -1245,7 +1245,7 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
-            if (na.denseOnly && na.isWritableDense()) {
+            if (na.denseOnly && (!cx.isLatestEcmaScript() || na.isWritableDense())) {
                 for (int i = 0, j = ((int) na.length) - 1; i < j; i++, j--) {
                     Object temp = na.dense[i];
                     na.dense[i] = na.dense[j];
@@ -1325,7 +1325,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && na.isWritableDense()
+                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
                     && na.ensureCapacity((int) na.length + args.length)) {
                 for (Object arg : args) {
                     na.dense[(int) na.length++] = arg;
@@ -1355,7 +1355,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && na.isWritableDense()
+                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
                     && na.length > 0
                     && na.dense[(int) na.length - 1] != NOT_FOUND) {
                 na.length--;
@@ -1392,7 +1392,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && na.isWritableDense()
+                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
                     && na.length > 0
                     && na.dense[(int) na.length - 1] != NOT_FOUND) {
                 na.length--;
@@ -1439,7 +1439,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && na.isWritableDense()
+                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
                     && na.ensureCapacity((int) na.length + args.length)) {
                 System.arraycopy(na.dense, 0, na.dense, args.length, (int) na.length);
                 System.arraycopy(args, 0, na.dense, 0, args.length);
@@ -1523,7 +1523,7 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             na = (NativeArray) o;
-            denseFrom = na.denseOnly && na.isWritableDense();
+            denseFrom = na.denseOnly && (!cx.isLatestEcmaScript() || na.isWritableDense());
         }
         if (result instanceof NativeArray) {
             nar = (NativeArray) result;
@@ -1734,6 +1734,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_indexOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyIndexOf(cx, f, nt, s, thisObj, args);
+        }
         // 23.1.3.17
         Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
@@ -1794,6 +1797,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_lastIndexOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyLastIndexOf(cx, f, nt, s, thisObj, args);
+        }
         // 23.1.3.20
         Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
@@ -1829,6 +1835,113 @@ public class NativeArray extends ScriptableObject implements List {
         }
         for (long i = start; i >= 0; i--) {
             if (hasElem(o, i) && ScriptRuntime.shallowEq(getElem(cx, o, i), compareTo)) {
+                return Long.valueOf(i);
+            }
+        }
+        return NEGATIVE_ONE;
+    }
+
+    /** Stock Rhino, before VERSION_ECMASCRIPT. */
+    private static Object legacyIndexOf(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
+
+        Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+        long length = getLengthProperty(cx, o);
+        /*
+         * From http://developer.mozilla.org/en/docs/Core_JavaScript_1.5_Reference:Objects:Array:indexOf
+         * The index at which to begin the search. Defaults to 0, i.e. the
+         * whole array will be searched. If the index is greater than or
+         * equal to the length of the array, -1 is returned, i.e. the array
+         * will not be searched. If negative, it is taken as the offset from
+         * the end of the array. Note that even when the index is negative,
+         * the array is still searched from front to back. If the calculated
+         * index is less than 0, the whole array will be searched.
+         */
+        long start;
+        if (args.length < 2) {
+            // default
+            start = 0;
+        } else {
+            start = (long) ScriptRuntime.toInteger(args[1]);
+            if (start < 0) {
+                start += length;
+                if (start < 0) start = 0;
+            }
+            if (start > length - 1) return NEGATIVE_ONE;
+        }
+        if (o instanceof NativeArray) {
+            NativeArray na = (NativeArray) o;
+            if (na.denseOnly) {
+                Scriptable proto = na.getPrototype();
+                for (int i = (int) start; i < length; i++) {
+                    Object val = na.dense[i];
+                    if (val == NOT_FOUND && proto != null) {
+                        val = ScriptableObject.getProperty(proto, i);
+                    }
+                    if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
+                        return Long.valueOf(i);
+                    }
+                }
+                return NEGATIVE_ONE;
+            }
+        }
+        for (long i = start; i < length; i++) {
+            Object val = getRawElem(o, i);
+            if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
+                return Long.valueOf(i);
+            }
+        }
+        return NEGATIVE_ONE;
+    }
+
+    /** Stock Rhino, before VERSION_ECMASCRIPT. */
+    private static Object legacyLastIndexOf(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Object compareTo = args.length > 0 ? args[0] : Undefined.instance;
+
+        Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+        long length = getLengthProperty(cx, o);
+        /*
+         * From http://developer.mozilla.org/en/docs/Core_JavaScript_1.5_Reference:Objects:Array:lastIndexOf
+         * The index at which to start searching backwards. Defaults to the
+         * array's length, i.e. the whole array will be searched. If the
+         * index is greater than or equal to the length of the array, the
+         * whole array will be searched. If negative, it is taken as the
+         * offset from the end of the array. Note that even when the index
+         * is negative, the array is still searched from back to front. If
+         * the calculated index is less than 0, -1 is returned, i.e. the
+         * array will not be searched.
+         */
+        long start;
+        if (args.length < 2) {
+            // default
+            start = length - 1;
+        } else {
+            start = (long) ScriptRuntime.toInteger(args[1]);
+            if (start >= length) start = length - 1;
+            else if (start < 0) start += length;
+            if (start < 0) return NEGATIVE_ONE;
+        }
+        if (o instanceof NativeArray) {
+            NativeArray na = (NativeArray) o;
+            if (na.denseOnly) {
+                Scriptable proto = na.getPrototype();
+                for (int i = (int) start; i >= 0; i--) {
+                    Object val = na.dense[i];
+                    if (val == NOT_FOUND && proto != null) {
+                        val = ScriptableObject.getProperty(proto, i);
+                    }
+                    if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
+                        return Long.valueOf(i);
+                    }
+                }
+                return NEGATIVE_ONE;
+            }
+        }
+        for (long i = start; i >= 0; i--) {
+            Object val = getRawElem(o, i);
+            if (val != NOT_FOUND && ScriptRuntime.shallowEq(val, compareTo)) {
                 return Long.valueOf(i);
             }
         }
@@ -1971,7 +2084,9 @@ public class NativeArray extends ScriptableObject implements List {
         if ((o instanceof NativeArray) && (count <= Integer.MAX_VALUE)) {
             NativeArray na = (NativeArray) o;
             // the conversion of the arguments may have changed the array
-            if (na.denseOnly && na.isWritableDense() && na.length == len) {
+            if (na.denseOnly
+                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
+                    && na.length == len) {
                 for (; count > 0; count--) {
                     na.dense[(int) to] = na.dense[(int) from];
                     from += direction;
@@ -1982,7 +2097,20 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
 
+        boolean latest = cx.isLatestEcmaScript();
         for (; count > 0; count--) {
+            if (!latest) {
+                // stock Rhino: an absent or undefined element is deleted at the destination
+                Object temp = getRawElem(o, from);
+                if (temp == Scriptable.NOT_FOUND || Undefined.isUndefined(temp)) {
+                    deleteElem(o, to);
+                } else {
+                    setElem(cx, o, to, temp);
+                }
+                from += direction;
+                to += direction;
+                continue;
+            }
             // HasProperty, then Get and Set, or DeletePropertyOrThrow (23.1.3.4 step 13)
             boolean fromPresent =
                     from > Integer.MAX_VALUE

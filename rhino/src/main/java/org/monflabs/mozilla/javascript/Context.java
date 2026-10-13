@@ -202,6 +202,13 @@ public class Context implements Closeable {
      *       function expression is immutable; built-ins accept a NewTarget (Object, WeakRef,
      *       FinalizationRegistry, DataView), {@code ArrayBuffer[Symbol.species]}, and the RegExp
      *       legacy statics only read through RegExp itself.
+     *   <li>Built-ins follow the spec's internal methods: typed arrays are exotic objects (own
+     *       keys, descriptors, numeric keys); Reflect and Proxy return the results of [[Set]],
+     *       [[Delete]], [[DefineOwnProperty]] and [[SetPrototypeOf]] and check the proxy
+     *       invariants; own keys are ordered as OrdinaryOwnPropertyKeys; String methods use the
+     *       Symbol methods of objects only; Array methods throw when a write fails; Date setters,
+     *       the Object.prototype methods, JSON, Object.hasOwn, Object.assign and
+     *       Date.prototype.toJSON follow the spec steps.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

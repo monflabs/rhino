@@ -200,9 +200,29 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     public Object get(String name, Scriptable start) {
         Double num = numericIndex(name);
         if (num != null) {
+            if (!latest()) {
+                // before VERSION_ECMASCRIPT, a key that is not an index reaches the prototype
+                int ix = toIndex(num);
+                return ix >= 0 ? js_get(ix) : super.get(name, start);
+            }
             return isValidIntegerIndex(num) ? js_get(num.intValue()) : Undefined.instance;
         }
         return super.get(name, start);
+    }
+
+    /** Whether the current context runs VERSION_ECMASCRIPT (typed arrays as exotic objects). */
+    private static boolean latest() {
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.isLatestEcmaScript();
+    }
+
+    /** A non-negative integer index, or -1 (the index of a key before VERSION_ECMASCRIPT). */
+    private static int toIndex(double num) {
+        int ix = (int) num;
+        if (ix == num && ix >= 0) {
+            return ix;
+        }
+        return -1;
     }
 
     @Override
@@ -214,6 +234,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     public boolean has(String name, Scriptable start) {
         Double num = numericIndex(name);
         if (num != null) {
+            if (!latest()) {
+                int ix = toIndex(num);
+                return ix >= 0 ? !checkIndex(ix) : super.has(name, start);
+            }
             return isValidIntegerIndex(num);
         }
         return super.has(name, start);
@@ -250,23 +274,34 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     @Override
     protected boolean endsPropertyLookup(String name) {
-        return numericIndex(name) != null;
+        return latest() && numericIndex(name) != null;
     }
 
     @Override
     protected boolean endsPropertyLookup(int index) {
-        return true;
+        // an element (in bounds) is found anyway: no context lookup on that path
+        return !checkIndex(index) || latest();
     }
 
     @Override
     public void put(int index, Scriptable start, Object val) {
+        if (start != this && start != null && !latest()) {
+            // before VERSION_ECMASCRIPT, the element is written whatever the receiver
+            js_set(index, val);
+            return;
+        }
         setElement(index, index, start, val);
     }
 
     @Override
     public void put(String name, Scriptable start, Object val) {
         Double num = numericIndex(name);
-        if (num != null) {
+        if (num != null && !latest()) {
+            int ix = toIndex(num);
+            if (ix >= 0) {
+                js_set(ix, val);
+            }
+        } else if (num != null) {
             setElement(name, num, start, val);
         } else {
             super.put(name, start, val);
@@ -318,7 +353,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     @Override
     public void delete(int index) {
-        if (!checkIndex(index)) {
+        if (!checkIndex(index) && latest()) {
             undeletable(index);
         }
     }
@@ -328,7 +363,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         Double num = numericIndex(name);
         if (num == null) {
             super.delete(name);
-        } else if (isValidIntegerIndex(num)) {
+        } else if (isValidIntegerIndex(num) && latest()) {
             undeletable(name);
         }
     }
@@ -346,7 +381,23 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             org.monflabs.mozilla.javascript.CompoundOperationMap<Scriptable> map,
             boolean getNonEnumerable,
             boolean getSymbols) {
-        return withIndexes(super.getIds(map, getNonEnumerable, getSymbols));
+        Object[] ids = super.getIds(map, getNonEnumerable, getSymbols);
+        // before VERSION_ECMASCRIPT, the elements are not own keys (see getIds())
+        return latest() ? withIndexes(ids) : ids;
+    }
+
+    @Override
+    public Object[] getIds() {
+        if (latest()) {
+            return super.getIds();
+        }
+        // the enumerable ids before VERSION_ECMASCRIPT: the indexes only
+        int len = getLength();
+        Object[] ret = new Object[len];
+        for (int i = 0; i < len; i++) {
+            ret[i] = Integer.valueOf(i);
+        }
+        return ret;
     }
 
     /** [[OwnPropertyKeys]]: the indexes of the elements first. */
@@ -362,6 +413,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     @Override
     protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
+        if (!cx.isLatestEcmaScript()) {
+            // the elements have no descriptor before VERSION_ECMASCRIPT
+            return super.getOwnPropertyDescriptor(cx, id);
+        }
         id = propertyKey(id);
         Double num = numericKey(id);
         if (num != null) {
@@ -413,6 +468,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     @Override
     protected boolean defineOwnProperty(
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyDefineOwnProperty(cx, id, desc, checkValid);
+        }
         id = propertyKey(id);
         Double num = numericKey(id);
         if (num == null) {
@@ -436,6 +494,61 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             js_set(num.intValue(), toNumeric(desc.value));
         }
         return true;
+    }
+
+    /**
+     * [[DefineOwnProperty]] before VERSION_ECMASCRIPT: a descriptor that is not a writable,
+     * enumerable and configurable data property is ignored.
+     */
+    private boolean legacyDefineOwnProperty(
+            Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        if (id instanceof CharSequence) {
+            Double num = numericIndex(id.toString());
+            if (num != null) {
+                int idx = num.intValue();
+                if (checkIndex(idx)) {
+                    if (checkValid) {
+                        throw ScriptRuntime.typeErrorById(
+                                "msg.typed.array.index.out.of.bounds", idx, 0, getLength());
+                    }
+                    if (desc.hasValue()) {
+                        toNumeric(desc.value);
+                    }
+                    return false;
+                }
+                if (desc.isConfigurable(false)
+                        || desc.isEnumerable(false)
+                        || desc.isAccessorDescriptor()
+                        || desc.isWritable(false)) {
+                    return false;
+                }
+                if (desc.hasValue()) {
+                    js_set(idx, desc.value);
+                }
+                return true;
+            }
+        }
+        if (!ScriptRuntime.isSymbol(id)) {
+            var s = ScriptRuntime.toStringIdOrIndex(id);
+            if (s.getStringId() == null) {
+                int idx = s.getIndex();
+                if (checkIndex(idx)) {
+                    if (checkValid) {
+                        throw ScriptRuntime.typeErrorById(
+                                "msg.typed.array.index.out.of.bounds", idx, 0, getLength());
+                    }
+                    if (desc.hasValue()) {
+                        toNumeric(desc.value);
+                    }
+                    return false;
+                }
+                if (desc.hasValue()) {
+                    js_set(idx, desc.value);
+                    return true;
+                }
+            }
+        }
+        return super.defineOwnProperty(cx, id, desc, checkValid);
     }
 
     // Actual functions

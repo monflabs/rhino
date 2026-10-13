@@ -1261,7 +1261,7 @@ public class ScriptRuntime {
 
         String className = ((Scriptable) obj).getClassName();
         Context cx = Context.getCurrentContext();
-        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx != null && cx.isLatestEcmaScript()) {
             // builtinTag (20.1.3.6): the standard objects that have a @@toStringTag otherwise
             if (NativeArray.isArray(obj)) {
                 return "[object Array]";
@@ -2444,7 +2444,7 @@ public class ScriptRuntime {
             so.delete(s);
             return !so.has(s, (Scriptable) target);
         }
-        if (target instanceof NativeProxy) {
+        if (target instanceof NativeProxy && cx.isLatestEcmaScript()) {
             // [[Delete]] of a proxy has a result: has would call its has trap
             NativeProxy proxy = (NativeProxy) target;
             boolean deleted = proxy.delete(cx, elem);

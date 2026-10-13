@@ -360,6 +360,17 @@ final class NativeString extends ScriptableObject {
         }
     }
 
+    /**
+     * Whether a String method calls the Symbol.match/replace/search/split method of its argument:
+     * of an object (of any value but null and undefined, through its wrapper, before
+     * VERSION_ECMASCRIPT).
+     */
+    private static boolean usesSymbolMethod(Context cx, Object value) {
+        return cx.isLatestEcmaScript()
+                ? ScriptRuntime.isObject(value)
+                : value != null && !Undefined.isUndefined(value);
+    }
+
     private static Object js_split(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         // See ECMAScript spec 22.1.3.23
@@ -373,7 +384,7 @@ final class NativeString extends ScriptableObject {
 
         Object separator = args.length > 0 ? args[0] : Undefined.instance;
         Object limit = args.length > 1 ? args[1] : Undefined.instance;
-        if (ScriptRuntime.isObject(separator)) {
+        if (usesSymbolMethod(cx, separator)) {
             Object splitter = ScriptRuntime.getObjectElem(separator, SymbolKey.SPLIT, cx, s);
             // If method is not undefined, it should be a Callable
             if (splitter != null && !Undefined.isUndefined(splitter)) {
@@ -592,7 +603,7 @@ final class NativeString extends ScriptableObject {
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "match");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
         RegExpProxy regExpProxy = ScriptRuntime.checkRegExpProxy(cx);
-        if (ScriptRuntime.isObject(regexp)) {
+        if (usesSymbolMethod(cx, regexp)) {
             Object matcher = ScriptRuntime.getObjectElem(regexp, SymbolKey.MATCH, cx, s);
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
@@ -837,7 +848,7 @@ final class NativeString extends ScriptableObject {
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "search");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
         RegExpProxy regExpProxy = ScriptRuntime.checkRegExpProxy(cx);
-        if (ScriptRuntime.isObject(regexp)) {
+        if (usesSymbolMethod(cx, regexp)) {
             Object matcher = ScriptRuntime.getObjectElem(regexp, SymbolKey.SEARCH, cx, s);
             // If method is not undefined, it should be a Callable
             if (matcher != null && !Undefined.isUndefined(matcher)) {
@@ -884,7 +895,7 @@ final class NativeString extends ScriptableObject {
         Object searchValue = args.length > 0 ? args[0] : Undefined.instance;
         Object replaceValue = args.length > 1 ? args[1] : Undefined.instance;
 
-        if (ScriptRuntime.isObject(searchValue)) {
+        if (usesSymbolMethod(cx, searchValue)) {
             Object replacer = ScriptRuntime.getObjectElem(searchValue, SymbolKey.REPLACE, cx, s);
             // If method is not undefined, it should be a Callable
             if (replacer != null && !Undefined.isUndefined(replacer)) {
@@ -962,7 +973,7 @@ final class NativeString extends ScriptableObject {
         Object searchValue = args.length > 0 ? args[0] : Undefined.instance;
         Object replaceValue = args.length > 1 ? args[1] : Undefined.instance;
 
-        if (ScriptRuntime.isObject(searchValue)) {
+        if (usesSymbolMethod(cx, searchValue)) {
             boolean isRegExp =
                     searchValue instanceof Scriptable
                             && AbstractEcmaObjectOperations.isRegExp(cx, s, searchValue);
@@ -1061,7 +1072,7 @@ final class NativeString extends ScriptableObject {
         // See ECMAScript spec 22.1.3.14
         Object o = requireObjectCoercible(cx, thisObj, CLASS_NAME, "matchAll");
         Object regexp = args.length > 0 ? args[0] : Undefined.instance;
-        if (ScriptRuntime.isObject(regexp)) {
+        if (usesSymbolMethod(cx, regexp)) {
             boolean isRegExp = AbstractEcmaObjectOperations.isRegExp(cx, s, regexp);
             if (isRegExp) {
                 Object flags = ScriptRuntime.getObjectProp(regexp, "flags", cx, s);
