@@ -59,7 +59,7 @@ final class IteratorRecord {
         return new IteratorRecord(it, ScriptableObject.getProperty(it, "next"), null);
     }
 
-    private static boolean hasOriginalArrayIteratorNext(VarScope scope) {
+    static boolean hasOriginalArrayIteratorNext(VarScope scope) {
         Scriptable prototype = NativeArrayIterator.prototype(scope);
         if (prototype == null) {
             return false;

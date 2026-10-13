@@ -109,8 +109,11 @@ public class BoundFunction extends BaseFunction {
 
     @Override
     public boolean isConstructor() {
-        return AbstractEcmaObjectOperations.isConstructor(
-                Context.getCurrentContext(), targetFunction);
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            return super.isConstructor();
+        }
+        return AbstractEcmaObjectOperations.isConstructor(cx, targetFunction);
     }
 
     @Override

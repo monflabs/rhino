@@ -20,9 +20,11 @@ class FunctionEnvironmentTest {
 
     @Test
     void functionExpressionNameIsImmutable() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "number|undefined|number|number|undefined|function|number",
                 "function|TypeError|function|function|TypeError|function|number",
-                "t(function () { var f = function g() { g = 1; return typeof g; }; return f(); });"
+                PRELUDE
+                        + "t(function () { var f = function g() { g = 1; return typeof g; }; return f(); });"
                         + " t(function () { var f = function g() { 'use strict'; g = 1; }; return f(); });"
                         + " t(function () { var f = function g() { (() => { g = 1; })(); return typeof g; };"
                         + " return f(); });"
@@ -30,13 +32,14 @@ class FunctionEnvironmentTest {
                         + " t(function () { var f = function g() { 'use strict'; eval('g = 1'); }; return f(); });"
                         + " t(function () { var f = function g() { return function () { g = null; }; };"
                         + " var h = f(); h(); return typeof f; });"
-                        + " t(function () { var f = function g() { var g = 1; return typeof g; }; return f(); });");
+                        + " t(function () { var f = function g() { var g = 1; return typeof g; }; return f(); });"
+                        + " r.join('|')");
     }
 
     @Test
     void evalInParametersAndNewTarget() {
         Utils.assertGatedBehavior(
-                "undefined|ok|true,false|SyntaxError",
+                "undefined|ok|SyntaxError|SyntaxError",
                 "SyntaxError|ok|true,false|SyntaxError",
                 PRELUDE
                         + "t(function () { var f = (p = eval('var x = 1'), x) => {}; f(); });"
@@ -59,10 +62,12 @@ class FunctionEnvironmentTest {
 
     @Test
     void redefiningANonConfigurablePropertyKeepsItsEnumerability() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError",
                 "2,x",
                 "var o = Object.defineProperty({}, 'x', { value: 1, writable: true, enumerable: true });"
-                        + " Object.defineProperty(o, 'x', { value: 2 }); r.push([o.x, Object.keys(o)].join());");
+                        + " try { Object.defineProperty(o, 'x', { value: 2 }); [o.x, Object.keys(o)].join() }"
+                        + " catch (e) { e.name }");
     }
 
     @Test

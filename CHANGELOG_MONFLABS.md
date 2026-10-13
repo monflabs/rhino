@@ -6,6 +6,29 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Iteration, literals, yield and function environments only under VERSION_ECMASCRIPT (2026-10-13, plan G4)
+
+- `BACKWARD_COMPATIBILITY.md` 2.15-2.22 are gated, with the undocumented changes of the same commits. Under
+  `VERSION_ES6`: for-of uses the stock iteration (`ScriptRuntime.enumInitInOrder`/`enumNextInOrder` restored: `next`
+  read at each step, the result converted to an object) and never closes its iterator; getters and setters accept
+  any parameters and are constructors; a rest parameter may have an initializer; duplicate `__proto__`, escaped
+  `get`/`set` and the token after a `"use strict"` are accepted as before; any anonymous function stored in a literal
+  is named after its key; `yield` keeps its JavaScript 1.7 rules (`yield*` may span lines, a function expression in a
+  generator cannot be named `yield`), generator parameters are destructured at the first `next()`, a generator's
+  prototype has a `constructor` and `%GeneratorPrototype%` none, `yield*` calls `next()` without an argument for
+  undefined, and a generator whose body throws stays resumable; generators the class compiler cannot handle are not
+  interpreted instead; function-expression names are ordinary variables and `name = null` stores `this.name`;
+  `Object.defineProperty` without `enumerable` on a non-configurable property throws as before (internal [[Set]]
+  keeps the existing enumerability); `length` of functions cannot be redefined; `Function.prototype.bind` results
+  are constructors as before; `Object`, `WeakRef`, `FinalizationRegistry` and `DataView` ignore NewTarget as before,
+  `ArrayBuffer[Symbol.species]` does not exist, the RegExp legacy statics read through any object;
+  `new.target` in eval code is a SyntaxError.
+- Tests: `LegacyBuiltinsGateTest`; the stock `LambdaPropertyTest` and `es6/NewTargetTest` are restored.
+- Performance: the stock for-of reads an array whose iteration is not observable (the original
+  `Array.prototype.values` and array iterator `next`) by index, as the array iterator does (own elements, the length
+  at each step); without it, the gate measured for-of under `VERSION_ES6` 35-58% slower.
+- test262: unchanged (41,080/42,616, 96.4%). Perf gate: no regression (for-of re-measured).
+
 ### Parameters, toString, eval and destructuring only under VERSION_ECMASCRIPT (2026-10-13, plan G3)
 
 - `BACKWARD_COMPATIBILITY.md` 2.10-2.14 are gated, with the undocumented changes of the same commits: under

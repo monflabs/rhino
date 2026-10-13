@@ -574,7 +574,7 @@ public class NativeRegExp extends ScriptableObject {
      */
     private static String legacyStr(JSFunction ctor, Scriptable receiver, Object value) {
         Context cx = Context.getCurrentContext();
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6 && receiver != ctor) {
+        if (cx != null && cx.isLatestEcmaScript() && receiver != ctor) {
             throw ScriptRuntime.typeErrorById("msg.regexp.legacy.receiver");
         }
         return value instanceof SubString ? toStr((SubString) value) : toStr((String) value);

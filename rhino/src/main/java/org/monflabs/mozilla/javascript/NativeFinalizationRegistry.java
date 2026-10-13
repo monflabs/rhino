@@ -76,7 +76,10 @@ public class NativeFinalizationRegistry extends ScriptableObject {
 
         NativeFinalizationRegistry r = new NativeFinalizationRegistry((Function) args[0], s);
         r.setParentScope(f.getDeclarationScope());
-        r.setPrototype(ScriptRuntime.findPrototype(f, nt));
+        r.setPrototype(
+                cx.isLatestEcmaScript()
+                        ? ScriptRuntime.findPrototype(f, nt)
+                        : (Scriptable) f.getPrototypeProperty());
         return r;
     }
 

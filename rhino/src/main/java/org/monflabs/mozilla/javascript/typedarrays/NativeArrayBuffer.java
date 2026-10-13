@@ -88,7 +88,17 @@ public class NativeArrayBuffer extends ScriptableObject {
     }
 
     public static Object init(Context cx, VarScope scope, boolean sealed) {
-        return DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), sealed);
+        return DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                new NativeObject(),
+                sealed,
+                (c, ctor) -> {
+                    if (!c.isLatestEcmaScript()) {
+                        // ArrayBuffer[Symbol.species] is defined under VERSION_ECMASCRIPT
+                        ctor.delete(SymbolKey.SPECIES);
+                    }
+                });
     }
 
     /** Create an empty buffer. */

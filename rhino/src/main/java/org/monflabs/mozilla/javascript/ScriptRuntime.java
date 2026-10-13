@@ -2973,6 +2973,10 @@ public class ScriptRuntime {
         IteratorRecord record;
         VarScope scope;
 
+        // the stock for-of over an array whose iteration is not observable: its next index
+        NativeArray legacyArray;
+        int legacyIndex;
+
         // for await
         AsyncIteration.Loop asyncLoop;
     }
@@ -3034,6 +3038,9 @@ public class ScriptRuntime {
         if (enumType == ENUMERATE_VALUES_IN_ORDER) {
             x.enumType = enumType;
             x.iterator = null;
+            if (!cx.isLatestEcmaScript()) {
+                return enumInitInOrder(cx, x);
+            }
             x.record = IteratorRecord.open(value, cx, scope);
             x.scope = scope;
             return x;
@@ -3087,8 +3094,69 @@ public class ScriptRuntime {
         return enumNext(enumObj, Context.getContext());
     }
 
+    /** The for-of iteration of stock Rhino, before VERSION_ECMASCRIPT. */
+    private static Object enumInitInOrder(Context cx, IdEnumeration x) {
+        if (!(x.obj instanceof SymbolScriptable)
+                || !ScriptableObject.hasProperty(x.obj, SymbolKey.ITERATOR)) {
+            throw typeErrorById("msg.not.iterable", toString(x.obj));
+        }
+        Object iterator = ScriptableObject.getProperty(x.obj, SymbolKey.ITERATOR);
+        if (!(iterator instanceof Callable)) {
+            throw typeErrorById("msg.not.iterable", toString(x.obj));
+        }
+        Callable f = (Callable) iterator;
+        VarScope scope =
+                f instanceof Function ? ((Function) f).getDeclarationScope() : cx.topCallScope;
+        if (x.obj instanceof NativeArray
+                && f instanceof JSFunction
+                && ((JSFunction) f).getDescriptor() == NativeArray.VALUES_DESCRIPTOR
+                && IteratorRecord.hasOriginalArrayIteratorNext(scope)) {
+            // the original array iterator: read by index, as it does
+            x.legacyArray = (NativeArray) x.obj;
+            return x;
+        }
+        Object v = f.call(cx, scope, x.obj, emptyArgs);
+        if (!(v instanceof Scriptable)) {
+            throw typeErrorById("msg.not.iterable", toString(x.obj));
+        }
+        x.iterator = (Scriptable) v;
+        return x;
+    }
+
+    /** A step of the for-of iteration of stock Rhino: next is read at each step. */
+    private static Boolean enumNextInOrder(IdEnumeration enumObj, Context cx) {
+        Object v = ScriptableObject.getProperty(enumObj.iterator, ES6Iterator.NEXT_METHOD);
+        if (!(v instanceof Callable)) {
+            throw notFunctionError(enumObj.iterator, ES6Iterator.NEXT_METHOD);
+        }
+        Callable f = (Callable) v;
+        VarScope scope =
+                f instanceof Function ? ((Function) f).getDeclarationScope() : cx.topCallScope;
+        Object r = f.call(cx, scope, enumObj.iterator, emptyArgs);
+        Scriptable iteratorResult = toObject(cx, scope, r);
+        Object done = ScriptableObject.getProperty(iteratorResult, ES6Iterator.DONE_PROPERTY);
+        if (done != Scriptable.NOT_FOUND && toBoolean(done)) {
+            return Boolean.FALSE;
+        }
+        enumObj.currentId =
+                ScriptableObject.getProperty(iteratorResult, ES6Iterator.VALUE_PROPERTY);
+        return Boolean.TRUE;
+    }
+
     public static Boolean enumNext(Object enumObj, Context cx) {
         IdEnumeration x = (IdEnumeration) enumObj;
+        if (x.legacyArray != null) {
+            if (x.legacyIndex >= NativeArray.getLengthProperty(cx, x.legacyArray)) {
+                return Boolean.FALSE;
+            }
+            // the array iterator of stock Rhino reads own elements only
+            Object value = x.legacyArray.get(x.legacyIndex++, x.legacyArray);
+            x.currentId = value == Scriptable.NOT_FOUND ? Undefined.instance : value;
+            return Boolean.TRUE;
+        }
+        if (x.iterator != null && x.enumType == ENUMERATE_VALUES_IN_ORDER) {
+            return enumNextInOrder(x, cx);
+        }
         if (x.record != null) {
             Object value = x.record.step(cx, x.scope);
             if (x.record.isDone()) {
@@ -3153,7 +3221,7 @@ public class ScriptRuntime {
         if (x.asyncLoop != null) {
             return x.asyncLoop.value;
         }
-        if (x.iterator != null || x.record != null) {
+        if (x.iterator != null || x.record != null || x.legacyArray != null) {
             return x.currentId;
         }
         switch (x.enumType) {
@@ -4033,7 +4101,9 @@ public class ScriptRuntime {
                     compilerEnvs.setAllowSuper(isInsideMethod);
                     compilerEnvs.setInDerivedConstructor(
                             thisArg instanceof ClassDefinition.DerivedThis);
-                    compilerEnvs.setAllowNewTarget(newTarget != null);
+                    // new.target in eval code is that of the function (SyntaxError before
+                    // VERSION_ECMASCRIPT)
+                    compilerEnvs.setAllowNewTarget(newTarget != null && cx.isLatestEcmaScript());
                     compilerEnvs.setInEval(true);
                     compilerEnvs.setHomeObject(homeObject);
                     compilerEnvs.setEvalForbiddenVarNames(

@@ -27,7 +27,8 @@ class ObjectLiteralSyntaxTest {
 
     @Test
     void accessorParameters() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok,ok,ok,ok,ok",
                 "SyntaxError,SyntaxError,SyntaxError,SyntaxError,ok,ok",
                 errorNames(
                         "({ get a(x) {} })",
@@ -40,19 +41,24 @@ class ObjectLiteralSyntaxTest {
 
     @Test
     void restParameterWithoutInitializer() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok",
                 "SyntaxError,SyntaxError",
                 errorNames("(function (...x = []) {})", "({ m(...x = []) {} })"));
     }
 
     @Test
     void escapedGetAndSetAreNotAccessorKeywords() {
-        assertBoth("SyntaxError,ok", errorNames("({ g\\u0065t m() {} })", "({ g\\u0065t: 1 })"));
+        Utils.assertGatedBehavior(
+                "ok,ok",
+                "SyntaxError,ok",
+                errorNames("({ g\\u0065t m() {} })", "({ g\\u0065t: 1 })"));
     }
 
     @Test
     void duplicateProtoDefinitions() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ok,ok,ok",
                 "SyntaxError,ok,ok",
                 errorNames(
                         "({ __proto__: null, other: null, '__proto__': null })",
@@ -62,7 +68,8 @@ class ObjectLiteralSyntaxTest {
 
     @Test
     void strictDirectiveAppliesToTheNextToken() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "ReferenceError,ok",
                 "SyntaxError,SyntaxError",
                 errorNames(
                         "'use strict'; public = 1", "(function () { 'use strict'; public = 1; })"));
@@ -70,7 +77,8 @@ class ObjectLiteralSyntaxTest {
 
     @Test
     void onlyFunctionsDefinedAsAPropertyValueAreNamedAfterIt() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "a|b|c|c|[d]|comp|comp2|m|get g",
                 "|b|||[d]|comp||m|get g",
                 "var s = Symbol('d'), k = 'comp'; var f = (0, function () {});"
                         + " var o = { a: (0, function () {}), b: (function () {}), c: f,"
@@ -83,7 +91,8 @@ class ObjectLiteralSyntaxTest {
 
     @Test
     void inIsAllowedInAComputedKeyOfAForHead() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "g",
                 "g",
                 "var empty = Object.create(null); var obj;"
                         + " for (obj = { get ['x' in empty]() { return 'g'; } }; ; ) { break; } obj.false");

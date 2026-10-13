@@ -205,7 +205,7 @@ public abstract class NewLiteralStorage {
 
     public static NewLiteralStorage create(Context cx, Object[] ids) {
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
-            return new NameInference(ids, -1, false);
+            return new NameInference(ids, -1, false, cx.isLatestEcmaScript());
         } else {
             return new NoInference(ids, -1, false);
         }
@@ -213,7 +213,7 @@ public abstract class NewLiteralStorage {
 
     public static NewLiteralStorage create(Context cx, int length, boolean createKeys) {
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
-            return new NameInference(null, length, createKeys);
+            return new NameInference(null, length, createKeys, cx.isLatestEcmaScript());
         } else {
             return new NoInference(null, length, createKeys);
         }
@@ -236,8 +236,15 @@ public abstract class NewLiteralStorage {
     }
 
     private static final class NameInference extends NewLiteralStorage {
-        NameInference(Object[] ids, int length, boolean createKeys) {
+        /**
+         * Under VERSION_ECMASCRIPT, only functions written as the value of a property are named;
+         * before, any anonymous function stored in the literal.
+         */
+        private final boolean literalOnly;
+
+        NameInference(Object[] ids, int length, boolean createKeys, boolean literalOnly) {
             super(ids, length, createKeys);
+            this.literalOnly = literalOnly;
         }
 
         @Override
@@ -245,7 +252,7 @@ public abstract class NewLiteralStorage {
             // Try to infer the name if the value is a normal JS function
             if (this.keys == null
                     || !(value instanceof JSFunction)
-                    || !((JSFunction) value).getDescriptor().isNamedByLiteral()) {
+                    || (literalOnly && !((JSFunction) value).getDescriptor().isNamedByLiteral())) {
                 return;
             }
 

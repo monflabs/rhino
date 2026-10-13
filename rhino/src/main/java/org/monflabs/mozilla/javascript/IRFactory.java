@@ -618,7 +618,7 @@ public final class IRFactory {
                 && left instanceof Name
                 && right instanceof KeywordLiteral) {
 
-            boolean legacy = parser.compilerEnv.getLanguageVersion() < Context.VERSION_ES6;
+            boolean legacy = !parser.compilerEnv.isLatestEcmaScript();
             String identifier = ((Name) left).getIdentifier();
             for (AstNode p = node.getParent(); p != null; p = p.getParent()) {
                 if (p instanceof FunctionNode) {
@@ -870,7 +870,7 @@ public final class IRFactory {
 
             if (destructuring != null) {
                 Node destructure = new Node(Token.EXPR_VOID, destructuring, lineno, column);
-                if (fn.isGeneratorFunction()) {
+                if (fn.isGeneratorFunction() && parser.compilerEnv.isLatestEcmaScript()) {
                     // FunctionDeclarationInstantiation binds the parameters when the generator is
                     // called, before the generator object is created. The prologue of a compiled
                     // generator cannot hold a try: no guard closes the iterators on a throw.
@@ -2115,7 +2115,8 @@ public final class IRFactory {
                 // function doesn't already define a formal parameter, var,
                 // or nested function with the same name.
                 fnNode.putSymbol(new Symbol(Symbol.Type.FUNCTION_VAR, name.getIdentifier()));
-                if (!fnNode.isCompiledByContext()) {
+                if (!fnNode.isCompiledByContext() && parser.compilerEnv.isLatestEcmaScript()) {
+                    // an immutable binding of the name (an ordinary variable before)
                     fnNode.setSelfNameBinding();
                 }
                 Node init =
@@ -2419,7 +2420,7 @@ public final class IRFactory {
             // for-of statements only: a comprehension is an expression, which cannot hold a try
             if (isForOf
                     && ast.getClass() == ForInLoop.class
-                    && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    && parser.compilerEnv.isLatestEcmaScript()) {
                 // IteratorClose: jumps out of the loop close the iterator (NodeTransformer finds
                 // the loop by its LOCAL_BLOCK_PROP), and a throw closes it in the finally
                 loop.putProp(Node.LOCAL_BLOCK_PROP, localBlock);

@@ -662,9 +662,15 @@ public class AbstractEcmaObjectOperations {
                 if (existingDesc.isAccessorDescriptor() || existingDesc.isWritable(false)) {
                     return false;
                 }
+                // the enumerability is the existing one (an internal descriptor, not a script's)
                 DescriptorInfo valueDesc =
                         new DescriptorInfo(
-                                NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND, v);
+                                existingDesc.enumerable,
+                                NOT_FOUND,
+                                NOT_FOUND,
+                                NOT_FOUND,
+                                NOT_FOUND,
+                                v);
                 return defineOwn(cx, receiverObj, key, valueDesc);
             }
             // CreateDataProperty

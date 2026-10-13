@@ -17,7 +17,14 @@ class GeneratorSyntaxTest {
 
     @Test
     void yieldOperandIsAnAssignmentExpression() {
-        assertBoth(
+        // before VERSION_ECMASCRIPT, the operand of yield is an Expression
+        Utils.assertGatedBehavior(
+                "ok,SyntaxError",
+                "ok,ok",
+                "var r = []; function t(s) { try { eval(s); r.push('ok'); } catch (e) { r.push(e.name); } }"
+                        + " t('function* a() { var x = [yield 1, 7]; }');"
+                        + " t('function* b() { yield 1, yield 2; }'); r.join()");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "9,7|1,2|2|1,2",
                 "function* a() { var x = [yield 1, 7]; return x.join(); }"
                         + " var it = a(); it.next(); var r = [it.next(9).value];"
@@ -31,7 +38,9 @@ class GeneratorSyntaxTest {
 
     @Test
     void yieldIsAnIdentifierOutsideGenerators() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError", "ok", "try { eval('var yield = 3'); 'ok' } catch (e) { e.name }");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "4|2|43|function",
                 "var yield = 3; var r = [yield + 1];"
                         + " function f() { var yield = 2; return yield; } r.push(f());"
@@ -43,7 +52,8 @@ class GeneratorSyntaxTest {
 
     @Test
     void yieldIsReservedInGeneratorsAndStrictCode() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "SyntaxError,SyntaxError,SyntaxError,ok",
                 "SyntaxError,SyntaxError,SyntaxError,SyntaxError",
                 "var r = []; function t(s) { try { eval(s); r.push('ok'); } catch (e) { r.push(e.name); } }"
                         + " t('function* g(yield) {}'); t('function* g() { var yield; }');"
@@ -53,7 +63,8 @@ class GeneratorSyntaxTest {
 
     @Test
     void parametersAreBoundWhenTheGeneratorIsCalled() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "created|5|1,2,NaN|7",
                 "TypeError|5|1,2,3|7",
                 "var r = []; function* g([a]) {}"
                         + " try { g(null); r.push('created'); } catch (e) { r.push(e.name); }"
@@ -66,7 +77,25 @@ class GeneratorSyntaxTest {
 
     @Test
     void generatorDetails() {
-        assertBoth(
+        // yield* passes undefined to next, %GeneratorPrototype% has a constructor
+        Utils.assertGatedBehavior(
+                "0|false",
+                "1|true",
+                "var r = []; function* h() { return 1; } var n;"
+                        + " var it = { [Symbol.iterator]() { return { next() { n = arguments.length;"
+                        + "   return { done: true }; } }; } }; function* d() { yield* it; } d().next();"
+                        + " r.push(n);"
+                        + " r.push(Object.getPrototypeOf(h).prototype.constructor"
+                        + "   === Object.getPrototypeOf(h));"
+                        + " r.join('|')");
+        // a function expression in a generator may be named yield; yield* and its operand
+        Utils.assertGatedBehavior(
+                "SyntaxError,ok",
+                "ok,ok",
+                "var r = []; function t(s) { try { eval(s); r.push('ok'); } catch (e) { r.push(e.name); } }"
+                        + " t('function* h() { return (function yield() {}); }');"
+                        + " t('function* g() { yield *\\n 1; }'); r.join()");
+        Utils.assertWithAllModes_ECMASCRIPT(
                 "5|1|1|true|TypeError|true",
                 "var r = [];"
                         + " var g = function* () { yield *\n g2(); }; var g2 = function* () { yield 5; };"
@@ -82,6 +111,7 @@ class GeneratorSyntaxTest {
 
     @Test
     void generatorPrototypeHasNoOwnProperties() {
-        assertBoth(0, "function* g() {} Object.getOwnPropertyNames(g.prototype).length");
+        Utils.assertGatedBehavior(
+                1, 0, "function* g() {} Object.getOwnPropertyNames(g.prototype).length");
     }
 }

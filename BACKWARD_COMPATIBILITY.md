@@ -544,6 +544,8 @@ var [f = function () {}] = [];       // before: f.name is ""   now: "f"
 
 ### 2.15 `for-of` closes its iterator
 
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 for (var x of iterable) break;   // before: iterable's iterator was left open   now: its return() is called
 ```
@@ -555,6 +557,8 @@ for (var x of iterable) break;   // before: iterable's iterator was left open   
 - **Why:** ECMA-262 2026, §14.7.5.7 ForIn/OfBodyEvaluation and §7.4.11 IteratorClose.
 
 ### 2.16 Early errors of object literals and functions
+
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 ({ get a(x) {} });                 // before: accepted   now: SyntaxError (a getter has no parameters)
@@ -576,6 +580,8 @@ function f(...rest = []) {}        // before: accepted   now: SyntaxError
   `__proto__`), §12.7.2 (escaped keywords), §11.2.2 (directive prologues).
 
 ### 2.17 `yield`
+
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var yield = 1;                               // before: SyntaxError   now: fine (non-strict code)
@@ -599,6 +605,8 @@ function* h() { yield\n* 1 }                // before: yield* 1   now: SyntaxErr
 
 ### 2.18 Names of functions and classes in default values
 
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 function f(g = function () {}) { return g.name; }   // before: ""   now: "g"
 var [h = () => 1] = []; h.name;                      // before: ""   now: "h"
@@ -610,6 +618,8 @@ var [h = () => 1] = []; h.name;                      // before: ""   now: "h"
   AssignmentElement initializers).
 
 ### 2.19 Getters and setters are not constructors
+
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var d = Object.getOwnPropertyDescriptor({ get a() { return 1; } }, "a");
@@ -623,6 +633,8 @@ new d.get();            // before: an object   now: TypeError
 
 ### 2.20 Legacy static properties of RegExp read through another object
 
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 var F = Object.setPrototypeOf(function () {}, RegExp);
 F.lastMatch;   // before: the last match   now: TypeError
@@ -634,6 +646,8 @@ F.lastMatch;   // before: the last match   now: TypeError
 - **Why:** ECMA-262 Annex B proposal "Legacy RegExp features" (GetLegacyRegExpStaticProperty), tested by test262.
 
 ### 2.21 The name of a function expression is immutable
+
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var f = function g() { g = 1; return typeof g; };
@@ -651,6 +665,8 @@ var h = function k() { return function () { k = null; }; };   // JavaScript 1.x:
 - **Why:** ECMA-262 2026, §15.2.5 InstantiateOrdinaryFunctionExpression (CreateImmutableBinding of the name).
 
 ### 2.22 `Object.defineProperty` on a non-configurable property
+
+*Since plan G4 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 var o = Object.defineProperty({}, "x", { value: 1, writable: true, enumerable: true });

@@ -196,6 +196,12 @@ public class Context implements Closeable {
      *       step the iterator, defaults apply to undefined values only), object patterns throw for
      *       null and undefined, and defaults that are anonymous functions are named after their
      *       binding.
+     *   <li>for-of follows the iteration protocol and closes its iterator; the early errors of
+     *       object literals and accessors; accessors are not constructors; {@code yield} is an
+     *       identifier outside generators and its operand an AssignmentExpression; the name of a
+     *       function expression is immutable; built-ins accept a NewTarget (Object, WeakRef,
+     *       FinalizationRegistry, DataView), {@code ArrayBuffer[Symbol.species]}, and the RegExp
+     *       legacy statics only read through RegExp itself.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
@@ -2902,7 +2908,8 @@ public class Context implements Closeable {
                         returnFunction);
 
         Evaluator compiler = forceInterpreter ? createInterpreter() : spec.getCompiler();
-        boolean hasGenerators = containsGenerators(tree);
+        // under VERSION_ECMASCRIPT, generators the class compiler cannot handle are interpreted
+        boolean hasGenerators = compilerEnv.isLatestEcmaScript() && containsGenerators(tree);
         CompilationResult<T> result;
         try {
             if (compiler == null) {

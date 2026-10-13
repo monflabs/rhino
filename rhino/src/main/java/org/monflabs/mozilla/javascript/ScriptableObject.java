@@ -1970,7 +1970,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
             if ((current.getAttributes() & PERMANENT) != 0) {
                 if (isTrue(info.configurable))
                     throw ScriptRuntime.typeErrorById("msg.change.configurable.false.to.true", id);
-                if (info.enumerable != NOT_FOUND
+                // an absent enumerable keeps the attribute (counted as false before
+                // VERSION_ECMASCRIPT)
+                if ((info.enumerable != NOT_FOUND || !isLatestEcmaScript())
                         && ((current.getAttributes() & DONTENUM) == 0) != isTrue(info.enumerable))
                     throw ScriptRuntime.typeErrorById(
                             "msg.change.enumerable.with.configurable.false", id);
@@ -2012,6 +2014,12 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
 
     protected static boolean isTrue(Object value) {
         return (value != NOT_FOUND) && ScriptRuntime.toBoolean(value);
+    }
+
+    /** Whether the current context runs under VERSION_ECMASCRIPT (false without a context). */
+    static boolean isLatestEcmaScript() {
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.isLatestEcmaScript();
     }
 
     protected static boolean isFalse(Object value) {

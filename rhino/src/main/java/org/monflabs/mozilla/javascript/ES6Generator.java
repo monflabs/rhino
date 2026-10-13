@@ -147,8 +147,12 @@ public final class ES6Generator extends ScriptableObject {
 
     private Scriptable resumeDelegee(Context cx, VarScope scope, Object value) {
         try {
-            // yield* calls next with the received value, also undefined (ECMA-262 15.5.5)
-            Object[] nextArgs = new Object[] {value};
+            // yield* calls next with the received value, also undefined (ECMA-262 15.5.5);
+            // without an argument for undefined before VERSION_ECMASCRIPT
+            Object[] nextArgs =
+                    cx.isLatestEcmaScript() || !Undefined.isUndefined(value)
+                            ? new Object[] {value}
+                            : ScriptRuntime.emptyArgs;
 
             var nextFn = ScriptRuntime.getPropAndThis(delegee, ES6Iterator.NEXT_METHOD, cx, scope);
             Object nr = nextFn.call(cx, scope, nextArgs);
@@ -314,8 +318,11 @@ public final class ES6Generator extends ScriptableObject {
                 throw jse;
             }
         } catch (RhinoException re) {
-            // an exception thrown out of the generator's body completes it
-            state = State.COMPLETED;
+            // an exception thrown out of the generator's body completes it (it stayed resumable
+            // before VERSION_ECMASCRIPT)
+            if (cx.isLatestEcmaScript()) {
+                state = State.COMPLETED;
+            }
             lineNumber = re.lineNumber();
             lineSource = re.lineSource();
             throw re;

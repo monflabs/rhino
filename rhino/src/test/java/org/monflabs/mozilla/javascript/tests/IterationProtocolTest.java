@@ -35,7 +35,8 @@ class IterationProtocolTest {
 
     @Test
     void forOfClosesItsIteratorWhenLeftEarly() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "6:|b:|t:|ret:|co:|bo:|g:",
                 "6:|b:r|t:r|ret:r|co:rr|bo:rr|g:r",
                 ITERABLE
                         + " t(function (log) { var s = 0; for (var x of mk(log)) s += x; return s; });"
@@ -55,7 +56,8 @@ class IterationProtocolTest {
 
     @Test
     void returnMustGiveAnObjectAfterABreak() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "body",
                 "TypeError,body",
                 "var r = [];"
                         + " var a = { [Symbol.iterator]() { return { next() { return {done: false}; },"

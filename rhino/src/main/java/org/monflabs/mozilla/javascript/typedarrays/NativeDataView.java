@@ -171,6 +171,11 @@ public class NativeDataView extends NativeArrayBufferView {
             }
         }
 
+        if (!cx.isLatestEcmaScript()) {
+            var res = new NativeDataView(ab, pos, len, autoLength);
+            ScriptRuntime.setBuiltinProtoAndParent(res, f, nt, s, TopLevel.Builtins.DataView);
+            return res;
+        }
         // the prototype of newTarget may detach or resize the buffer: checked again after it
         Scriptable proto = ScriptRuntime.findPrototype(f, nt, TopLevel.Builtins.DataView);
         if (ab.isDetached()) {

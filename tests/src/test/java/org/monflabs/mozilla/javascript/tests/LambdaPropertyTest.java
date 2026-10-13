@@ -122,12 +122,10 @@ public class LambdaPropertyTest {
         cx.evaluateString(global, "assertEquals(0, o.val)", "test.js", 1, null);
         cx.evaluateString(global, "o.val = 2; assertEquals(2, o.val)", "test.js", 1, null);
 
-        // Define again: a writable non-configurable data property may change its value
+        // Define again -- should fail
         cx.evaluateString(
                 global,
-                "Object.defineProperty(o, 'val', { value: 3 }); assertEquals(3, o.val);"
-                        + "assertThrows(() => { Object.defineProperty(o, 'val', { get: () => 1 }); });"
-                        + "assertThrows(() => { Object.defineProperty(o, 'val', { enumerable: false }); });",
+                "assertThrows(() => { Object.defineProperty(o, 'val', { value: 2 }); });",
                 "test.js",
                 1,
                 null);

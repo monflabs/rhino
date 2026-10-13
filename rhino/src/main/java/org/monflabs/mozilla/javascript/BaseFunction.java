@@ -210,7 +210,7 @@ public class BaseFunction extends ScriptableObject implements Function {
 
                     proto.setAttributes("constructor", DONTENUM | READONLY);
                     proto.defineProperty("prototype", generatorProto, READONLY | DONTENUM);
-                    if (generatorProto instanceof ScriptableObject) {
+                    if (generatorProto instanceof ScriptableObject && c.isLatestEcmaScript()) {
                         // %GeneratorPrototype%.constructor is %GeneratorFunction.prototype%;
                         // %GeneratorPrototype% is created, and possibly sealed, before
                         ScriptableObject generatorPrototype = (ScriptableObject) generatorProto;
@@ -325,7 +325,11 @@ public class BaseFunction extends ScriptableObject implements Function {
             Scriptable owner,
             Scriptable start,
             boolean isThrow) {
-        function.lengthValue = value;
+        // a redefined length (Object.defineProperty) is ignored before VERSION_ECMASCRIPT
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.isLatestEcmaScript()) {
+            function.lengthValue = value;
+        }
         return true;
     }
 
@@ -965,7 +969,8 @@ public class BaseFunction extends ScriptableObject implements Function {
             obj.setPrototype(proto);
         }
 
-        if (generatorTag == null) {
+        Context cx = Context.getCurrentContext();
+        if (generatorTag == null || cx == null || !cx.isLatestEcmaScript()) {
             // the prototype of a generator function has no constructor (ECMA-262 15.5.4)
             obj.defineProperty("constructor", this, DONTENUM);
         }

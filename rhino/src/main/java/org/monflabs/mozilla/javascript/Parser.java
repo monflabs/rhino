@@ -513,7 +513,7 @@ public class Parser {
      * versions before ES6, a yield makes the function a (legacy) generator.
      */
     private boolean isYieldAnIdentifier() {
-        return compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+        return compilerEnv.isLatestEcmaScript()
                 && !inUseStrictDirective
                 && !(currentScriptOrFn instanceof FunctionNode
                         && ((FunctionNode) currentScriptOrFn).isGeneratorFunction());
@@ -681,6 +681,9 @@ public class Parser {
      * in strict code (public, static, ...) becomes that keyword.
      */
     private void applyStrictToPeekedToken() {
+        if (!compilerEnv.isLatestEcmaScript()) {
+            return;
+        }
         if (currentFlaggedToken != Token.EOF && currentToken == Token.NAME && !ts.nameHadEscape) {
             int strictToken =
                     TokenStream.keywordToken(
@@ -1665,7 +1668,7 @@ public class Parser {
                         }
 
                         if (matchToken(Token.ASSIGN, true)) {
-                            if (wasRest) {
+                            if (wasRest && compilerEnv.isLatestEcmaScript()) {
                                 // a rest parameter has no initializer
                                 reportError("msg.parm.after.rest");
                             }
@@ -1746,7 +1749,7 @@ public class Parser {
             } else if (type == FunctionNode.FUNCTION_EXPRESSION
                     && !isGenerator
                     && !inUseStrictDirective
-                    && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                    && compilerEnv.isLatestEcmaScript()
                     && matchToken(Token.YIELD, true)) {
                 // the name of a function expression is bound in that function: not a generator
                 name = createNameNode(true, Token.NAME);
@@ -1792,6 +1795,7 @@ public class Parser {
         if (isGenerator
                 && type == FunctionNode.FUNCTION_EXPRESSION
                 && name != null
+                && compilerEnv.isLatestEcmaScript()
                 && "yield".equals(name.getIdentifier())) {
             // the name of a generator expression is bound in the generator, where yield is a
             // keyword
@@ -2415,7 +2419,7 @@ public class Parser {
                 return pn;
 
             case Token.YIELD:
-                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                if (compilerEnv.isLatestEcmaScript()) {
                     // an expression statement: yield is an AssignmentExpression (yield a, b)
                     lineno = ts.getLineno();
                     column = ts.getTokenColumn();
@@ -3399,19 +3403,20 @@ public class Parser {
         int lineno = lineNumber(), column = columnNumber(), pos = ts.tokenBeg, end = ts.tokenEnd;
 
         boolean yieldStar = false;
+        // under VERSION_ECMASCRIPT, yield and * are on the same line
         if ((tt == Token.YIELD)
                 && (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6)
-                && (peekTokenOrEOL() == Token.MUL)) {
+                && ((compilerEnv.isLatestEcmaScript() ? peekTokenOrEOL() : peekToken())
+                        == Token.MUL)) {
             yieldStar = true;
             consumeToken();
         }
 
         AstNode e = null;
         // This is ugly, but we don't want to require a semicolon.
-        boolean es6Yield =
-                tt == Token.YIELD && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
-        // yield* requires an operand, which may be on the next line
-        switch (yieldStar ? peekToken() : peekTokenOrEOL()) {
+        boolean es6Yield = tt == Token.YIELD && compilerEnv.isLatestEcmaScript();
+        // yield* requires an operand, which may be on the next line (under VERSION_ECMASCRIPT)
+        switch (yieldStar && es6Yield ? peekToken() : peekTokenOrEOL()) {
             case Token.SEMI:
             case Token.RC:
             case Token.RB:
@@ -4078,9 +4083,8 @@ public class Parser {
             int opPos = ts.tokenBeg;
             if (compilerEnv.isStrictMode() && !pn.hasSideEffects())
                 addStrictWarning("msg.no.side.effects", "", pos, nodeEnd(pn) - pos);
-            if (peekToken() == Token.YIELD
-                    && compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
-                // JavaScript 1.7 rule; in ES6, yield is an AssignmentExpression
+            if (peekToken() == Token.YIELD && !compilerEnv.isLatestEcmaScript()) {
+                // JavaScript 1.7 rule; under VERSION_ECMASCRIPT, yield is an AssignmentExpression
                 reportError("msg.yield.parenthesized");
             }
             if (allowTrailingComma && peekToken() == Token.RP) {
@@ -4671,8 +4675,7 @@ public class Parser {
                     argumentListTrailingComma = true;
                     break;
                 }
-                if (peekToken() == Token.YIELD
-                        && compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
+                if (peekToken() == Token.YIELD && !compilerEnv.isLatestEcmaScript()) {
                     reportError("msg.yield.parenthesized");
                 }
                 AstNode en = assignExpr();
@@ -5859,6 +5862,7 @@ public class Parser {
                         entryKind = METHOD_ENTRY;
                     } else if (pname.getType() == Token.NAME) {
                         if (pnameEscaped
+                                && compilerEnv.isLatestEcmaScript()
                                 && ("get".equals(propertyName) || "set".equals(propertyName))) {
                             // get and set written with escapes are not accessor keywords
                             reportError("msg.bad.prop");
@@ -5960,8 +5964,7 @@ public class Parser {
         // two __proto__: value definitions are a SyntaxError, unless the literal is a pattern
         // (ECMA-262 B.3.1)
         if (objectLiteralDestructuringDefault
-                || (protoDefinitions > 1
-                        && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6)) {
+                || (protoDefinitions > 1 && compilerEnv.isLatestEcmaScript())) {
             pn.putIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 1);
         }
         if (objJsdocNode != null) {
@@ -6012,9 +6015,10 @@ public class Parser {
                     nextToken();
                     int lineno = lineNumber();
                     int column = columnNumber();
-                    // the in operator is allowed in a computed key, also in a for head
+                    // the in operator is allowed in a computed key, also in a for head (under
+                    // VERSION_ECMASCRIPT)
                     boolean savedInForInit = inForInit;
-                    inForInit = false;
+                    inForInit = savedInForInit && !compilerEnv.isLatestEcmaScript();
                     AstNode expr;
                     try {
                         expr = assignExpr();
@@ -6118,7 +6122,7 @@ public class Parser {
             // the source text of a method starts with its get/set/* prefix and name
             fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
         }
-        if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (compilerEnv.isLatestEcmaScript()) {
             // a getter has no parameter, a setter exactly one (not a rest parameter)
             if (entryKind == GET_ENTRY && !fn.getParams().isEmpty()) {
                 reportError("msg.getter.params");
@@ -6137,7 +6141,7 @@ public class Parser {
             case GET_ENTRY:
                 pn.setIsGetterMethod();
                 fn.setFunctionIsGetterMethod();
-                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                if (compilerEnv.isLatestEcmaScript()) {
                     // like a method: no prototype, not a constructor
                     fn.setIsShorthand();
                 }
@@ -6145,7 +6149,7 @@ public class Parser {
             case SET_ENTRY:
                 pn.setIsSetterMethod();
                 fn.setFunctionIsSetterMethod();
-                if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                if (compilerEnv.isLatestEcmaScript()) {
                     fn.setIsShorthand();
                 }
                 break;
