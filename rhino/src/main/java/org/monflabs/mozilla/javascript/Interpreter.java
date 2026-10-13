@@ -801,6 +801,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.METHOD_KEY] = new DoIterator(Icode.METHOD_KEY);
         instructionObjs[base + Icode.NEW_PRIVATE_NAME] = new DoIterator(Icode.NEW_PRIVATE_NAME);
         instructionObjs[base + Icode.STATIC_BLOCK_KEY] = new DoIterator(Icode.STATIC_BLOCK_KEY);
+        instructionObjs[base + Icode.ELEMENT_KEY] = new DoIterator(Icode.ELEMENT_KEY);
         for (int icode : Icode.AWAIT_ICODES) {
             instructionObjs[base + icode] = new DoIterator(icode);
         }
@@ -3529,6 +3530,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                                 ScriptRuntime.newPrivateName(value, cx, frame.scope);
                         case Icode.STATIC_BLOCK_KEY ->
                                 ScriptRuntime.classStaticBlockKey(value, cx, frame.scope);
+                        case Icode.ELEMENT_KEY ->
+                                ScriptRuntime.classElementKey(value, cx, frame.scope);
                         case Icode.ASYNC_ITER_OPEN ->
                                 ScriptRuntime.asyncIterOpen(value, cx, frame.scope);
                         case Icode.ASYNC_ITER_NEXT ->

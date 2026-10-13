@@ -1290,6 +1290,24 @@ public final class IRFactory {
         parser.currentScope = scope;
         try {
             Node def = Node.newString(Token.CLASS, (cls.getHeritage() != null ? "E" : "N") + name);
+            // the computed keys, evaluated in source order once the heritage is
+            List<String> temps = new ArrayList<>();
+            Node keys = hoistComputedKeys(cls, temps);
+            if (keys != null) {
+                if (cls.getHeritage() == null) {
+                    heritage = new Node(Token.COMMA, keys, heritage);
+                } else {
+                    String temp = parser.currentScriptOrFn.getNextTempName();
+                    parser.defineSymbol(Token.LET, temp, false);
+                    temps.add(temp);
+                    Node saved = createAssignment(Token.ASSIGN, parser.createName(temp), heritage);
+                    heritage =
+                            new Node(
+                                    Token.COMMA,
+                                    new Node(Token.COMMA, saved, keys),
+                                    parser.createName(temp));
+                }
+            }
             def.addChildToBack(heritage);
             def.addChildToFront(
                     cls.getConstructor() != null
@@ -1312,6 +1330,9 @@ public final class IRFactory {
                 newName.putIntProp(Node.AWAIT_KIND_PROP, 3);
                 privateBinding.addChildToBack(newName);
                 let.addChildToBack(privateBinding);
+            }
+            for (String temp : temps) {
+                let.addChildToBack(Node.newString(Token.NAME, temp));
             }
             if (className == null) {
                 // the static fields of an anonymous class are defined at once
@@ -1341,6 +1362,64 @@ public final class IRFactory {
         } finally {
             parser.currentScope = outer;
         }
+    }
+
+    /**
+     * The computed keys of the elements of a class, static and not, are evaluated in source order
+     * (15.7.14 ClassDefinitionEvaluation step 27), whereas each literal of members evaluates its
+     * own: when both have computed keys, each is evaluated into a temporary of the class scope, in
+     * order, and the literals read them. Returns the assignments of the temporaries, or null.
+     */
+    private Node hoistComputedKeys(ClassNode cls, List<String> temps) {
+        List<ComputedPropertyKey> protoKeys = computedKeys(cls.getPrototypeMembers());
+        List<ComputedPropertyKey> staticKeys = computedKeys(cls.getStaticMembers());
+        if (protoKeys.isEmpty() || staticKeys.isEmpty()) {
+            return null;
+        }
+        List<ComputedPropertyKey> all = new ArrayList<>(protoKeys);
+        all.addAll(staticKeys);
+        all.sort((a, b) -> Integer.compare(a.getAbsolutePosition(), b.getAbsolutePosition()));
+        Node result = null;
+        for (ComputedPropertyKey key : all) {
+            AstNode expr = key.getExpression();
+            Node value;
+            if (expr instanceof ClassFieldKey) {
+                value = transform(expr);
+            } else {
+                value = new Node(Token.FIELD_KEY, transform(expr));
+                value.putIntProp(Node.AWAIT_KIND_PROP, 5);
+            }
+            String temp = parser.currentScriptOrFn.getNextTempName();
+            parser.defineSymbol(Token.LET, temp, false);
+            temps.add(temp);
+            Node assign = createAssignment(Token.ASSIGN, parser.createName(temp), value);
+            result = result == null ? assign : new Node(Token.COMMA, result, assign);
+            key.setExpression(new Name(key.getPosition(), temp));
+        }
+        return result;
+    }
+
+    /** The computed keys of the members whose evaluation is observable. */
+    private static List<ComputedPropertyKey> computedKeys(ObjectLiteral members) {
+        List<ComputedPropertyKey> keys = new ArrayList<>();
+        for (AbstractObjectProperty prop : members.getElements()) {
+            if (!(prop instanceof ObjectProperty)
+                    || !(((ObjectProperty) prop).getKey() instanceof ComputedPropertyKey)) {
+                continue;
+            }
+            ComputedPropertyKey key = (ComputedPropertyKey) ((ObjectProperty) prop).getKey();
+            AstNode expr = key.getExpression();
+            if (expr instanceof ClassFieldKey
+                    && (((ClassFieldKey) expr).isMethod()
+                            || ((ClassFieldKey) expr).isStaticBlock()
+                            || ((ClassFieldKey) expr).getKey() instanceof StringLiteral
+                            || ((ClassFieldKey) expr).getKey() instanceof Name)) {
+                // a private name, a static block or a written name
+                continue;
+            }
+            keys.add(key);
+        }
+        return keys;
     }
 
     private Node transformNumber(NumberLiteral node) {

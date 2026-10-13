@@ -46,6 +46,24 @@ class ClassFieldsTest {
     }
 
     @Test
+    void computedKeysInSourceOrder() {
+        // static and instance computed keys are evaluated in source order, after the heritage
+        Utils.assertWithAllModes_ES6(
+                "h,a,b,c,d|1|2|3|true",
+                "var log = [];\n"
+                        + "function k(n) { log.push(n); return n; }\n"
+                        + "class B {}\n"
+                        + "var C = class extends (log.push('h'), B) {\n"
+                        + "  [k('a')] = 1; static [k('b')] = 2; [k('c')]() { return 3; }"
+                        + " static [k('d')]; };\n"
+                        + "[log.join(), new C().a, C.b, new C().c(), 'd' in C].join('|')");
+        Utils.assertWithAllModes_ES6(
+                "4,5,3,6",
+                "let i = 0; class D { [i++] = i++; static [i++] = i++; [i++] = i++; }\n"
+                        + "var d = new D(); [d[0], d[2], D[1], i].join()");
+    }
+
+    @Test
     void earlyErrors() {
         for (String source :
                 new String[] {

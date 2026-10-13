@@ -1009,6 +1009,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                                     case 2 -> Icode.METHOD_KEY;
                                     case 3 -> Icode.NEW_PRIVATE_NAME;
                                     case 4 -> Icode.STATIC_BLOCK_KEY;
+                                    case 5 -> Icode.ELEMENT_KEY;
                                     default -> Icode.FIELD_KEY;
                                 });
                 break;

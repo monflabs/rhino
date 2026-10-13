@@ -33,6 +33,7 @@ existing code and without slowing the engine down.
 | 2026-10-07 | Every change that makes code or an embedding behave differently from stock Rhino (gated or not) is documented in **`BACKWARD_COMPATIBILITY.md`**. |
 | 2026-10-08 | **Ultimate goal: remove the language versions and always behave as `VERSION_ECMASCRIPT`** (M15). Until then, each change is gated or applied to all versions, whichever is easier, without asking; every change incompatible with `VERSION_ES6` behavior is still logged in `BACKWARD_COMPATIBILITY.md`. |
 | 2026-10-08 | 1.2: `typeof this` in a strict function called without a receiver is `"undefined"` — all versions. |
+| 2026-10-13 | **Every behavior change is gated by `VERSION_ECMASCRIPT`**, bug fixes included (supersedes "gated or applied to all versions, whichever is easier"): the changes applied to every version so far (BACKWARD_COMPATIBILITY.md section 2) are gated in step G before M9, and `VERSION_ES6` keeps the behavior of stock Rhino. |
 | 2026-10-10 | 1.8: typed arrays are little endian by default under `VERSION_ECMASCRIPT` (`FEATURE_LITTLE_ENDIAN`), as Nashorn and test262 assume; gated because embedders may read buffer bytes. |
 | 2026-10-10 | **1.9 / M4.3: RegExp — extend Rhino's own engine** (`regexp/NativeRegExp`) for the ES2015+ features (`u`/`y`/`v`/`d` flags, code points, named groups, property escapes, lookbehind), rather than routing to `java.util.regex`: one engine, exact spec semantics. |
 | 2026-10-11 | **1.12: module-loader API = a port of Nashorn's `api.modules`**: package `org.monflabs.mozilla.javascript.modules` with a functional `ModuleLoader.load(specifier, referrer)` returning a `Module` (`Module.source` for script modules, `Module.values` for Java-backed ones); loaders form a chain where the first answer wins; path, classpath-resource and Java-values loaders provided. The chain is set on the **`ContextFactory`**, and a `Context` can override it. |
@@ -66,12 +67,12 @@ and documented, as Nashorn does for Unicode 17.
 
 These restate and extend the constraints in `AGENTS.md`.
 
-1. **`VERSION_ECMASCRIPT` is the target; the gate is a convenience.** The ultimate goal (decided 2026-10-08) is to
-   remove the language versions and always behave as `VERSION_ECMASCRIPT` (milestone M15). So what happens under the
-   other versions does not matter in the end: for each change, pick the **easiest** implementation, either gated
-   (`cx.isLatestEcmaScript()` at runtime, `compilerEnv.isLatestEcmaScript()` for syntax and early errors, tested
-   with `Utils.assertGatedBehavior`) or applied to every version. No decision needs to be asked for that choice.
-   Every change whose result differs from `VERSION_ES6` behavior, gated or not, is documented in
+1. **`VERSION_ECMASCRIPT` is the target, and every change is gated.** The ultimate goal (decided 2026-10-08) is to
+   remove the language versions and always behave as `VERSION_ECMASCRIPT` (milestone M15). Until then (decided
+   2026-10-13), every behavior change is only active under `VERSION_ECMASCRIPT` (`cx.isLatestEcmaScript()` at
+   runtime, `compilerEnv.isLatestEcmaScript()` for syntax and early errors, tested with
+   `Utils.assertGatedBehavior`): the other versions keep their exact behavior, bug fixes included.
+   Every change whose result differs from `VERSION_ES6` behavior is documented in
    `BACKWARD_COMPATIBILITY.md` (before/after example, spec section) and `CHANGELOG_MONFLABS.md`; gated ones are also
    named in the Javadoc of `Context.VERSION_ECMASCRIPT`.
 2. **Both backends.** Every language feature works in the interpreter (`CodeGenerator`/`Interpreter`) and in compiled
@@ -593,6 +594,20 @@ Steps:
 - *8.4 (done)* RegExp `d` flag (`hasIndices`, `indices`); the one remaining test needs the `v` flag (10.2).
 - *8.5 (done)* top-level await (a module with it is an async generator; ES2022 async module evaluation in
   ModuleRecord; `evaluate` runs the jobs of a pending graph).
+- *8.6 (done)* computed keys of static and instance elements in source order; `.at()`, `Object.hasOwn`, `cause`
+  pass. Left for M13: a destructuring target `this.x` is evaluated after the value is read; class methods with
+  default parameters do not get a separate var scope; the `arity` own property of functions.
+
+Status (2026-10-13, done): every ES2022 feature passes but for the limits above, the `v` flag test of
+`regexp-match-indices` (10.2) and the Unicode 17 identifiers (JDK data).
+
+### G — Gate every change by `VERSION_ECMASCRIPT`
+
+Decided 2026-10-13: `VERSION_ES6` and the older versions keep the exact behavior of stock Rhino, bug fixes included.
+The changes applied to every version so far (BACKWARD_COMPATIBILITY.md section 2, 2.1-2.46, from 40 commits) are
+gated with `isLatestEcmaScript()`, their tests check both sides with `Utils.assertGatedBehavior`, and the test
+expectations those commits changed are restored under `VERSION_ES6`. Section 2 then moves into section 1. Done in
+batches by area, each verified (test262 must not move), perf-gated and committed.
 
 ### M9 — ES2023
 
@@ -685,7 +700,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
-| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 96.4% (8.1–8.5)      | 87be5041b |
+| 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | (this) |
+| G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | in progress |                              |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |

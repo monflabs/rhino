@@ -6142,6 +6142,11 @@ public class ScriptRuntime {
         return new ClassDefinition.FieldKey(key, false, true);
     }
 
+    /** ToPropertyKey of the computed key of a class method, in the order of the elements. */
+    public static Object classElementKey(Object key, Context cx, VarScope scope) {
+        return toPropertyKey(key);
+    }
+
     /** The key of a class static block: it defines no field. */
     public static Object classStaticBlockKey(Object key, Context cx, VarScope scope) {
         return new ClassDefinition.FieldKey(null, false, false);

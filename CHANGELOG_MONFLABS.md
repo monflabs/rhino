@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### ES2022 residuals; M8 done (2026-10-13, plan 8.6)
+
+- Fix: the computed keys of the static and instance elements of a class are evaluated in source order (a 8.1
+  limit): when both kinds have computed keys, each is evaluated into a temporary of the class scope once the heritage
+  is, and the literals of members read them (Token#FIELD_KEY kind 5 converts a method key).
+- The other ES2022 items need no work: `.at()`, `Object.hasOwn` and the error `cause` pass.
+- test262: 41,080/42,616 (96.4%), 3 more tests pass. Perf gate: no regression against 8.5.
+
 ### Top-level await (2026-10-13, plan 8.5)
 
 - New: `await` and `for await` at the top level of a module. A module that uses them is compiled as an async

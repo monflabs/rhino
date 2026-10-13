@@ -67,15 +67,15 @@ The goal is to update Rhino to support the latest ECMAScript standard **without 
 constraints apply to every change made toward that goal:
 
 - **`VERSION_ECMASCRIPT` is the target.** The ultimate goal is to remove the language versions and always behave as
-  `Context.VERSION_ECMASCRIPT` (plan milestone M15). Until then, a behavior change that can break existing code is
-  either gated (only active under `VERSION_ECMASCRIPT`) or applied to every version, whichever is easier to implement.
+  `Context.VERSION_ECMASCRIPT` (plan milestone M15). Until then, **every behavior change is gated: only active under
+  `VERSION_ECMASCRIPT`**, so that `VERSION_ES6` and the older versions keep their exact behavior, bug fixes included.
   Gate with `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors
   (so that `grep isLatestEcmaScript` lists every gated behavior), rather than ad-hoc flags, and test both sides with
   `Utils.assertGatedBehavior`.
 - **Document every breaking change** in [BACKWARD_COMPATIBILITY.md](BACKWARD_COMPATIBILITY.md): every change whose
-  result differs from `VERSION_ES6` behavior, whether gated by `VERSION_ECMASCRIPT` (section 1) or applied to every
-  version (section 2), with a before/after example and the spec section. Gated changes are also listed under "Behavior changes" in the Javadoc of
-  `Context.VERSION_ECMASCRIPT`, and every change gets a [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) entry.
+  result under `VERSION_ECMASCRIPT` differs from `VERSION_ES6` behavior, with a before/after example and the spec
+  section. Gated changes are also listed under "Behavior changes" in the Javadoc of `Context.VERSION_ECMASCRIPT`, and
+  every change gets a [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) entry.
 - **test262 is the conformance target.** With `VERSION_ECMASCRIPT`, the engine must pass the full test262 suite. The
   suite already runs with this version (see `Test262SuiteTest`). When a change makes more tests pass, update
   [tests/testsrc/test262.properties](tests/testsrc/test262.properties) as described in
