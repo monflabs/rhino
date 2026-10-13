@@ -1475,6 +1475,7 @@ class BodyCodegen {
                                     case 1 -> "classFieldKeyNamed";
                                     case 2 -> "classMethodKey";
                                     case 3 -> "newPrivateName";
+                                    case 4 -> "classStaticBlockKey";
                                     default -> "classFieldKey";
                                 },
                         "(Ljava/lang/Object;"

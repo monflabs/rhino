@@ -15,6 +15,7 @@ public class ClassFieldKey extends AstNode {
     private AstNode key;
     private boolean named;
     private boolean method;
+    private boolean staticBlock;
 
     {
         type = Token.FIELD_KEY;
@@ -44,6 +45,15 @@ public class ClassFieldKey extends AstNode {
 
     public void setMethod() {
         method = true;
+    }
+
+    /** Whether the entry is a class static block, whose value is its code as a method. */
+    public boolean isStaticBlock() {
+        return staticBlock;
+    }
+
+    public void setStaticBlock() {
+        staticBlock = true;
     }
 
     /** Whether the initializer is an anonymous function definition that the key names. */

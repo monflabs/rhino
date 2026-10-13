@@ -589,6 +589,7 @@ Steps:
 - *8.2 (done)* private names (a const binding `#x` of the class scope holding a PrivateName; an element access with
   it as the key; per-object identity map), direct eval early errors, ZWNJ/ZWJ identifier parts (gated). Limit: a
   destructuring target `this.#x` is evaluated after the value is read (as for public members).
+- *8.3 (done)* class static blocks (a static element whose initializer is a synthetic method holding the block).
 
 ### M9 — ES2023
 

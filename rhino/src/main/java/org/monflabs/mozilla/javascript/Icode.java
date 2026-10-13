@@ -227,9 +227,11 @@ abstract class Icode {
             // private names (Token#FIELD_KEY kinds 2 and 3)
             METHOD_KEY = CLASS_STATIC - 1,
             NEW_PRIVATE_NAME = METHOD_KEY - 1,
+            // class static blocks (Token#FIELD_KEY kind 4)
+            STATIC_BLOCK_KEY = NEW_PRIVATE_NAME - 1,
 
             // Last icode
-            MIN_ICODE = NEW_PRIVATE_NAME;
+            MIN_ICODE = STATIC_BLOCK_KEY;
 
     /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
     static final int[] AWAIT_ICODES = {
@@ -503,6 +505,8 @@ abstract class Icode {
                 return "METHOD_KEY";
             case NEW_PRIVATE_NAME:
                 return "NEW_PRIVATE_NAME";
+            case STATIC_BLOCK_KEY:
+                return "STATIC_BLOCK_KEY";
         }
 
         // icode without name

@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Class static blocks (2026-10-13, plan 8.3)
+
+- New: `static { ... }` in a class body, run in order with the static fields, with the class as `this`, `super.x`
+  and the private names of the class; its `var`s are local to it.
+- Implementation: like a static field, an entry of the statics literal (Token#FIELD_KEY kind 4) whose value is a
+  synthetic method with the statements of the block as body, called once the class name is bound.
+- Early errors: `return`, `arguments`, `await` (as an identifier or an expression; a function expression named
+  `await` stays valid), `super()`.
+- test262: 40,791/42,616 (95.7%), 36 more tests pass (every in-scope `class-static-block` test). Perf gate: no regression against 8.2.
+
 ### Private names (2026-10-12, plan 8.2)
 
 - New: private fields, methods and accessors, instance and static (`#x`, `#m() {}`, `get #a() {}`), `obj.#x` (also

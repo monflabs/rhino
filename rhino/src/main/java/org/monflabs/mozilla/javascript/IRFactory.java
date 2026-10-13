@@ -352,6 +352,8 @@ public final class IRFactory {
                         fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 1);
                     } else if (key.isMethod()) {
                         fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 2);
+                    } else if (key.isStaticBlock()) {
+                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 4);
                     }
                     return fieldKey;
                 }

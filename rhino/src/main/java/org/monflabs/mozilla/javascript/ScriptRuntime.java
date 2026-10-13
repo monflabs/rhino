@@ -6130,6 +6130,11 @@ public class ScriptRuntime {
         return new ClassDefinition.FieldKey(key, false, true);
     }
 
+    /** The key of a class static block: it defines no field. */
+    public static Object classStaticBlockKey(Object key, Context cx, VarScope scope) {
+        return new ClassDefinition.FieldKey(null, false, false);
+    }
+
     /** A new Private Name, for a private identifier declared by a class being evaluated. */
     public static Object newPrivateName(Object description, Context cx, VarScope scope) {
         return new PrivateName((String) description);

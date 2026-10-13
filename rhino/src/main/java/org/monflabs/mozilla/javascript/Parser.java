@@ -521,7 +521,7 @@ public class Parser {
      * in the body and the parameters of an async function, and anywhere in a module.
      */
     private boolean isAwaitAnIdentifier() {
-        return moduleInfo == null && !inAsyncFunction();
+        return moduleInfo == null && !inAsyncFunction() && !inStaticBlock;
     }
 
     private boolean inAsyncGenerator() {
@@ -1713,6 +1713,14 @@ public class Parser {
                     && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
                     && matchToken(Token.YIELD, true)) {
                 // the name of a function expression is bound in that function: not a generator
+                name = createNameNode(true, Token.NAME);
+                mustMatchToken(Token.LP, "msg.no.paren.parms", true);
+            } else if (type == FunctionNode.FUNCTION_EXPRESSION
+                    && !isAsync
+                    && inStaticBlock
+                    && moduleInfo == null
+                    && matchToken(Token.AWAIT, true)) {
+                // likewise, await names a function expression in a class static block
                 name = createNameNode(true, Token.NAME);
                 mustMatchToken(Token.LP, "msg.no.paren.parms", true);
             } else if (matchToken(Token.LP, true)) {
@@ -3323,7 +3331,7 @@ public class Parser {
     }
 
     private AstNode returnOrYield(int tt, boolean exprContext) throws IOException {
-        if (!insideFunctionBody()) {
+        if (!insideFunctionBody() || (tt == Token.RETURN && inStaticBlock)) {
             reportError(tt == Token.RETURN ? "msg.bad.return" : "msg.bad.yield");
         } else if (tt == Token.YIELD
                 && compilerEnv.isLatestEcmaScript()
@@ -6416,6 +6424,7 @@ public class Parser {
         private boolean savedHasUndefinedBeenRedefined;
         private int savedNonArrowFunctionDepth;
         private boolean savedInFieldInitializer;
+        private boolean savedInStaticBlock;
         private boolean savedInParenthesizedCover;
         private int savedPendingCoverInitializedNames;
 
@@ -6425,6 +6434,8 @@ public class Parser {
             Parser.this.inParenthesizedCover = false;
             savedNonArrowFunctionDepth = Parser.this.nonArrowFunctionDepth;
             savedInFieldInitializer = Parser.this.inFieldInitializer;
+            savedInStaticBlock = Parser.this.inStaticBlock;
+            Parser.this.inStaticBlock = false;
             if (fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
                 Parser.this.nonArrowFunctionDepth++;
                 // an arrow function in an initializer is still in it: arguments is an error there
@@ -6457,6 +6468,7 @@ public class Parser {
 
         void restore() {
             Parser.this.inFieldInitializer = savedInFieldInitializer;
+            Parser.this.inStaticBlock = savedInStaticBlock;
             Parser.this.currentScriptOrFn = savedCurrentScriptOrFn;
             Parser.this.currentScope = savedCurrentScope;
             Parser.this.labelSet = savedLabelSet;
@@ -6954,6 +6966,10 @@ public class Parser {
                 consumeToken();
                 int staticPos = ts.tokenBeg;
                 int next = peekToken();
+                if (next == Token.LC) {
+                    staticBlock(cls, staticElems);
+                    continue;
+                }
                 if (next == Token.LP || isFieldEnd("static")) {
                     // a method or a field named static
                     Name name = new Name(staticPos, "static");
@@ -7281,6 +7297,49 @@ public class Parser {
         if (isStatic) {
             cls.setHasStaticElements();
         }
+    }
+
+    /** True while the statements of a class static block are parsed (not in nested functions). */
+    private boolean inStaticBlock;
+
+    /**
+     * A class static block (ClassStaticBlock, 15.7): a static element whose initializer is a method
+     * with the statements of the block as body, called with the constructor as this.
+     */
+    private void staticBlock(ClassNode cls, List<AbstractObjectProperty> elems) throws IOException {
+        int pos = ts.tokenBeg;
+        int lineno = lineNumber(), column = columnNumber();
+        FunctionNode fn = new FunctionNode(pos);
+        fn.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
+        fn.setMethodDefinition(true);
+        fn.setFieldInitializer();
+        fn.setInStrictMode(true);
+        PerFunctionVariables savedVars = new PerFunctionVariables(fn);
+        boolean wasInsideMethod = insideMethod;
+        insideMethod = true;
+        inStaticBlock = true;
+        try {
+            AstNode body = parseFunctionBody(FunctionNode.FUNCTION_EXPRESSION, fn);
+            fn.setBody(body);
+            fn.setRawSourceBounds(pos, ts.tokenEnd);
+            fn.setLength(ts.tokenEnd - pos);
+        } finally {
+            savedVars.restore();
+            insideMethod = wasInsideMethod;
+        }
+        fn.setSourceName(sourceURI);
+        fn.setLineColumnNumber(lineno, column);
+        fn.setEndLineno(lineNumber());
+        KeywordLiteral none = new KeywordLiteral(pos, 0, Token.NULL);
+        ClassFieldKey blockKey = new ClassFieldKey(pos, none, false);
+        blockKey.setStaticBlock();
+        ComputedPropertyKey key = new ComputedPropertyKey(pos, 0);
+        key.setExpression(blockKey);
+        ObjectProperty prop = new ObjectProperty(pos);
+        prop.setKeyAndValue(key, fn);
+        prop.setIsNormalMethod();
+        elems.add(prop);
+        cls.setHasStaticElements();
     }
 
     /** An initializer: a method whose body returns the AssignmentExpression after the =. */

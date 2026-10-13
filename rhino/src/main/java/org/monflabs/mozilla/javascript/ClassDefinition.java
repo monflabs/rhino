@@ -170,6 +170,10 @@ final class ClassDefinition {
                 nameAfterKey((BaseFunction) value, field.key);
             }
         }
+        if (field.key == null) {
+            // a static block
+            return;
+        }
         if (field.key instanceof PrivateName) {
             PrivateName.addField(receiver, (PrivateName) field.key, value);
             return;
