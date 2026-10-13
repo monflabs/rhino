@@ -220,9 +220,13 @@ abstract class Icode {
             ASYNC_ITER_CLOSE_ABRUPT = ASYNC_ITER_CLOSE - 1,
             // import(): the referrer name, the specifier and the options (Token#IMPORT_CALL)
             IMPORT_CALL = ASYNC_ITER_CLOSE_ABRUPT - 1,
+            // class fields (Token#FIELD_KEY, Token#CLASS_STATIC)
+            FIELD_KEY = IMPORT_CALL - 1,
+            FIELD_KEY_NAMED = FIELD_KEY - 1,
+            CLASS_STATIC = FIELD_KEY_NAMED - 1,
 
             // Last icode
-            MIN_ICODE = IMPORT_CALL;
+            MIN_ICODE = CLASS_STATIC;
 
     /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
     static final int[] AWAIT_ICODES = {
@@ -486,6 +490,12 @@ abstract class Icode {
                 return "ASYNC_ITER_CLOSE_ABRUPT";
             case IMPORT_CALL:
                 return "IMPORT_CALL";
+            case FIELD_KEY:
+                return "FIELD_KEY";
+            case FIELD_KEY_NAMED:
+                return "FIELD_KEY_NAMED";
+            case CLASS_STATIC:
+                return "CLASS_STATIC";
         }
 
         // icode without name

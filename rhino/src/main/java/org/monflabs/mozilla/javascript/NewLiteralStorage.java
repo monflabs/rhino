@@ -59,7 +59,7 @@ public abstract class NewLiteralStorage {
     }
 
     public void pushKey(Object key) {
-        if (key instanceof Symbol) {
+        if (key instanceof Symbol || key instanceof ClassDefinition.FieldKey) {
             keys[index] = key;
         } else {
             keys[index] = ScriptRuntime.toString(key);

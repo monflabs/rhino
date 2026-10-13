@@ -1463,6 +1463,23 @@ class BodyCodegen {
                                 + ")Ljava/lang/Object;");
                 break;
 
+            case Token.FIELD_KEY:
+            case Token.CLASS_STATIC:
+                generateExpression(child, node);
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                addScriptRuntimeInvoke(
+                        type == Token.CLASS_STATIC
+                                ? "classStaticInit"
+                                : node.getIntProp(Node.AWAIT_KIND_PROP, 0) == 1
+                                        ? "classFieldKeyNamed"
+                                        : "classFieldKey",
+                        "(Ljava/lang/Object;"
+                                + "Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + ")Ljava/lang/Object;");
+                break;
+
             case Token.ITER_OPEN:
             case Token.ITER_STEP:
             case Token.ITER_REST:

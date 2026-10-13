@@ -13,6 +13,133 @@ final class ClassDefinition {
 
     private ClassDefinition() {}
 
+    /**
+     * The key of a field, in the literal of the members of a class (Token#FIELD_KEY): the entry is
+     * not a property of the literal but a field of the class, defined on each instance (or once on
+     * the constructor, for a static field). {@code named}: the initializer is an anonymous function
+     * definition, which the key names (NamedEvaluation).
+     */
+    static final class FieldKey implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        final Object key;
+        final boolean named;
+
+        FieldKey(Object key, boolean named) {
+            this.key = key;
+            this.named = named;
+        }
+    }
+
+    /** A field of a class (ClassFieldDefinition): its key and its initializer, or null. */
+    static final class Element implements java.io.Serializable {
+        private static final long serialVersionUID = 1L;
+        final Object key;
+        final Object initializer;
+        final boolean named;
+
+        Element(FieldKey key, Object initializer) {
+            this.key = key.key;
+            this.initializer = initializer;
+            this.named = key.named;
+        }
+    }
+
+    private static final String ELEMENTS = "ClassDefinition.elements";
+
+    /** Records a field entry of the literal of the members of a class (fillObjectLiteral). */
+    @SuppressWarnings("unchecked")
+    static void addElement(Scriptable literal, FieldKey key, Object initializer) {
+        ScriptableObject obj = (ScriptableObject) literal;
+        java.util.List<Element> elements =
+                (java.util.List<Element>) obj.getAssociatedValue(ELEMENTS);
+        if (elements == null) {
+            elements = new java.util.ArrayList<>();
+            obj.associateValue(ELEMENTS, elements);
+        }
+        elements.add(new Element(key, initializer));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Element[] takeElements(ScriptableObject literal) {
+        java.util.List<Element> elements =
+                (java.util.List<Element>) literal.getAssociatedValue(ELEMENTS);
+        if (elements == null || elements.isEmpty()) {
+            return null;
+        }
+        Element[] result = elements.toArray(new Element[0]);
+        elements.clear();
+        return result;
+    }
+
+    /** InitializeInstanceElements (7.3.34) of the fields of a class, on a new instance. */
+    static void initializeInstanceElements(
+            BaseFunction constructor, Scriptable instance, Context cx, VarScope scope) {
+        Element[] fields = constructor.classFields;
+        if (fields == null) {
+            return;
+        }
+        for (Element field : fields) {
+            defineField(field, instance, cx, scope);
+        }
+    }
+
+    /**
+     * The static fields of a class, defined on its constructor once its name is bound (15.7.14 step
+     * 31, Token#CLASS_STATIC); returns the constructor.
+     */
+    static Object runStaticElements(Object constructor, Context cx, VarScope scope) {
+        if (constructor instanceof BaseFunction) {
+            BaseFunction f = (BaseFunction) constructor;
+            Element[] elements = f.classStaticElements;
+            f.classStaticElements = null;
+            if (elements != null) {
+                for (Element element : elements) {
+                    defineField(element, f, cx, scope);
+                }
+            }
+        }
+        return constructor;
+    }
+
+    /** DefineField (7.3.33): the initializer is called with the receiver as this. */
+    private static void defineField(
+            Element field, Scriptable receiver, Context cx, VarScope scope) {
+        Object value = Undefined.instance;
+        if (field.initializer instanceof Callable) {
+            value =
+                    ((Callable) field.initializer)
+                            .call(cx, scope, receiver, ScriptRuntime.emptyArgs);
+            if (field.named && value instanceof BaseFunction) {
+                nameAfterKey((BaseFunction) value, field.key);
+            }
+        }
+        // CreateDataPropertyOrThrow
+        var desc = new ScriptableObject.DescriptorInfo(true, true, true, value);
+        if (receiver instanceof ScriptableObject) {
+            if (!((ScriptableObject) receiver).defineOwnProperty(cx, field.key, desc)) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.class.field.define", ScriptRuntime.toString(field.key));
+            }
+        } else if (field.key instanceof Symbol) {
+            ((SymbolScriptable) receiver).put((Symbol) field.key, receiver, value);
+        } else {
+            receiver.put(ScriptRuntime.toString(field.key), receiver, value);
+        }
+    }
+
+    /** SetFunctionName(F, key) of an anonymous function that a computed field key names. */
+    private static void nameAfterKey(BaseFunction f, Object key) {
+        if (!"".equals(f.get("name", f))) {
+            return;
+        }
+        if (key instanceof Symbol) {
+            String description = ((Symbol) key).getName();
+            f.setFunctionName(description.isEmpty() ? "" : "[" + description + "]");
+        } else {
+            f.setFunctionName(ScriptRuntime.toString(key));
+        }
+    }
+
     static Scriptable define(
             Object constructor,
             Object heritage,
@@ -75,6 +202,18 @@ final class ClassDefinition {
                 ScriptableObject.DONTENUM | ScriptableObject.READONLY | ScriptableObject.PERMANENT);
 
         ScriptableObject statics = (ScriptableObject) staticMembers;
+        f.classFields = takeElements(proto);
+        Element[] staticElements = takeElements(statics);
+        if (staticElements != null) {
+            // the home object of a static initializer is the constructor
+            for (Element element : staticElements) {
+                if (element.initializer instanceof JSFunction
+                        && ((JSFunction) element.initializer).getHomeObject() == statics) {
+                    ((JSFunction) element.initializer).initClassHomeObject(f);
+                }
+            }
+            f.classStaticElements = staticElements;
+        }
         for (Object id : ownKeys(statics)) {
             ScriptableObject.DescriptorInfo own = statics.getOwnPropertyDescriptor(cx, id);
             var desc =
@@ -168,6 +307,8 @@ final class ClassDefinition {
                             ScriptRuntime.getMessageById("msg.class.super.twice"));
                 }
                 value = result;
+                // the fields of a derived class are defined once super() returns
+                initializeInstanceElements(constructor, result, cx, scope);
                 return result;
             };
         }
@@ -186,14 +327,15 @@ final class ClassDefinition {
 
     /** OrdinaryCreateFromConstructor(newTarget, "%Object.prototype%") for a base class. */
     static Scriptable createInstance(BaseFunction f, Context cx, VarScope scope, Object nt) {
-        if (nt instanceof JSFunction || !(nt instanceof Scriptable)) {
-            return f.createObject(cx, scope, nt);
-        }
         Scriptable instance = f.createObject(cx, scope, nt);
-        Object proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");
-        if (proto instanceof Scriptable) {
-            instance.setPrototype((Scriptable) proto);
+        if (!(nt instanceof JSFunction) && nt instanceof Scriptable) {
+            Object proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");
+            if (proto instanceof Scriptable) {
+                instance.setPrototype((Scriptable) proto);
+            }
         }
+        // the fields of a base class are defined before its constructor runs
+        initializeInstanceElements(f, instance, cx, scope);
         return instance;
     }
 

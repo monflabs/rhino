@@ -273,7 +273,12 @@ public class Token {
             AWAIT = FN_NAME_ASSIGN + 1,
             // import(specifier [, options]): the referrer name, the specifier and the options
             IMPORT_CALL = AWAIT + 1,
-            LAST_TOKEN = IMPORT_CALL + 1;
+            // the key of a class field (ClassDefinition.FieldKey); its NAMED_FIELD_PROP: named by
+            // it
+            FIELD_KEY = IMPORT_CALL + 1,
+            // the static fields of a class, defined once its name is bound
+            CLASS_STATIC = FIELD_KEY + 1,
+            LAST_TOKEN = CLASS_STATIC + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -662,6 +667,10 @@ public class Token {
                 return "AWAIT";
             case IMPORT_CALL:
                 return "IMPORT_CALL";
+            case FIELD_KEY:
+                return "FIELD_KEY";
+            case CLASS_STATIC:
+                return "CLASS_STATIC";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

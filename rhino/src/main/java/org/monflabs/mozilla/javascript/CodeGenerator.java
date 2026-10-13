@@ -998,6 +998,17 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 stackChange(-2);
                 break;
 
+            case Token.FIELD_KEY:
+            case Token.CLASS_STATIC:
+                visitExpression(child, 0);
+                addIcode(
+                        type == Token.CLASS_STATIC
+                                ? Icode.CLASS_STATIC
+                                : node.getIntProp(Node.AWAIT_KIND_PROP, 0) == 1
+                                        ? Icode.FIELD_KEY_NAMED
+                                        : Icode.FIELD_KEY);
+                break;
+
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:

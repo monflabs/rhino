@@ -1072,6 +1072,15 @@ public class BaseFunction extends ScriptableObject implements Function {
     private Object nameValue = null;
     Object lengthValue = null;
     private boolean isGeneratorFunction = false;
+
+    /**
+     * The fields of the class this function is the constructor of, or null (see ClassDefinition).
+     */
+    ClassDefinition.Element[] classFields;
+
+    /** The static fields of the class, until they are defined (see ClassDefinition). */
+    ClassDefinition.Element[] classStaticElements;
+
     private Scriptable homeObject = null;
 
     // For function object instances, attributes are

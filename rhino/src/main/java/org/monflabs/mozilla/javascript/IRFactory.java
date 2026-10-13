@@ -24,6 +24,7 @@ import org.monflabs.mozilla.javascript.ast.BigIntLiteral;
 import org.monflabs.mozilla.javascript.ast.Block;
 import org.monflabs.mozilla.javascript.ast.BreakStatement;
 import org.monflabs.mozilla.javascript.ast.CatchClause;
+import org.monflabs.mozilla.javascript.ast.ClassFieldKey;
 import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.ComputedPropertyKey;
 import org.monflabs.mozilla.javascript.ast.ConditionalExpression;
@@ -343,6 +344,15 @@ public final class IRFactory {
                 return transformYield((Yield) node);
             case Token.IMPORT_CALL:
                 return transformImportCall((ImportCall) node);
+            case Token.FIELD_KEY:
+                {
+                    ClassFieldKey key = (ClassFieldKey) node;
+                    Node fieldKey = new Node(Token.FIELD_KEY, transform(key.getKey()));
+                    if (key.isNamed()) {
+                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 1);
+                    }
+                    return fieldKey;
+                }
             default:
                 if (node instanceof ExpressionStatement) {
                     return transformExprStmt((ExpressionStatement) node);
@@ -1289,8 +1299,10 @@ public final class IRFactory {
             def.addChildToBack(transformObjectLiteral(cls.getPrototypeMembers()));
             def.addChildToBack(transformObjectLiteral(cls.getStaticMembers()));
             def.setLineColumnNumber(cls.getLineno(), cls.getColumn());
+            boolean hasStaticElements = cls.hasStaticElements();
             if (className == null) {
-                return def;
+                // the static fields of an anonymous class are defined at once
+                return hasStaticElements ? new Node(Token.CLASS_STATIC, def) : def;
             }
             // let (C) { C = class ...; C }: the methods close over the binding of the name
             Node binding = Node.newString(Token.NAME, name);
@@ -1300,7 +1312,12 @@ public final class IRFactory {
             Node init = new Node(Token.SETCONST, Node.newString(Token.BINDNAME, name), def);
             init.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
             scope.addChildToBack(let);
-            scope.addChildToBack(new Node(Token.COMMA, init, Node.newString(Token.NAME, name)));
+            Node result = Node.newString(Token.NAME, name);
+            if (hasStaticElements) {
+                // once the name is bound, the static fields are defined
+                result = new Node(Token.CLASS_STATIC, result);
+            }
+            scope.addChildToBack(new Node(Token.COMMA, init, result));
             return scope;
         } finally {
             parser.currentScope = outer;
@@ -1354,7 +1371,8 @@ public final class IRFactory {
                     while (valueNode instanceof ParenthesizedExpression) {
                         valueNode = ((ParenthesizedExpression) valueNode).getExpression();
                     }
-                    if (valueNode instanceof FunctionNode) {
+                    if (valueNode instanceof FunctionNode
+                            && !((FunctionNode) valueNode).isFieldInitializer()) {
                         // an anonymous function definition named after its (computed) key at
                         // runtime
                         ((FunctionNode) valueNode).setNamedByLiteral();
@@ -3082,6 +3100,12 @@ public final class IRFactory {
             return;
         }
 
+        if (right != null
+                && right.type == Token.CLASS_STATIC
+                && right.getFirstChild().type == Token.CLASS) {
+            // the class is named before its static fields are defined
+            right = right.getFirstChild();
+        }
         if (left instanceof Name && right != null && right.type == Token.CLASS) {
             String name = ((Name) left).getIdentifier();
             if (!name.equals(NativeObject.PROTO_PROPERTY)) {

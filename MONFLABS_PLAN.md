@@ -39,6 +39,7 @@ existing code and without slowing the engine down.
 | 2026-10-12 | **3.1: async functions reuse the generator machinery**: an async body is compiled like a generator in both backends, `await` is an internal suspension, and a Java driver resumes it from promise reactions on the `Context` microtask queue (no threads; spec tick order). Nashorn's `AsyncSupport` drives the same kind of suspension, but on virtual threads. |
 | 2026-10-12 | 3.4: every agent can block in `Atomics.wait`, the main thread included (as in Nashorn, and as fits a server); the two `CanBlockIsFalse` tests are skipped as written for another host. `Atomics.waitAsync` is deferred to its edition (10.3). |
 | 2026-10-12 | **4.3: Unicode property escapes use the JDK's data only** (as Nashorn): no bundled UCD; `Script_Extensions`, the binary properties the JDK does not carry and the Unicode-version gap of the generated tests are documented limits. |
+| 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -581,6 +582,11 @@ representation; Nashorn uses a per-object slot). **8.3** Class static blocks (23
 (`hasIndices`, `.indices`; 3%). **8.5** Top-level `await` in modules (async module evaluation). **8.6** Residuals:
 `.at()`, `Object.hasOwn`, error `cause`.
 
+Steps:
+- *8.1 (done)* public instance and static fields (entries of the member literals keyed by a ClassFieldKey, recorded
+  on the constructor; Token#FIELD_KEY, Token#CLASS_STATIC). Limits: static and instance computed keys are not
+  interleaved in source order; `eval('arguments')` in an initializer.
+
 ### M9 — ES2023
 
 **9.1** Residuals: `findLast*`, change-array-by-copy (96%), hashbang (93%), symbols as `WeakMap`/`WeakRef` keys.
@@ -672,7 +678,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
-| 8.x  | ES2022 (class fields, private names, TLA)       | todo        |                              |        |
+| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 86.5% (8.1)          | (this) |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |

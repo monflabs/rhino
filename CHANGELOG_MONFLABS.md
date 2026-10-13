@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Public class fields (2026-10-12, plan 8.1)
+
+- New: public instance and static class fields, with computed keys, initializers (`this` is the instance or the
+  constructor, `super.x` works, an anonymous function is named after its key) and ASI between fields.
+- Implementation: a field is an entry of the object literal of the members of its class (the prototype's, or the
+  statics') whose key is a ClassFieldKey (Token#FIELD_KEY) and whose value is its initializer, a synthetic method; the
+  literal keeps such entries aside, and ClassDefinition records them on the constructor. A base class defines its
+  instance fields when the instance is created, a derived class when super() returns; static fields are defined once
+  the class name is bound (Token#CLASS_STATIC), and an anonymous class is named first.
+- Early errors: `arguments` in an initializer, a field named `constructor`, a static field named `prototype`.
+- Known limits: computed keys of static and instance elements are evaluated per literal (statics after) rather than
+  in source order; `arguments` inside a direct eval in an initializer is not a SyntaxError.
+- test262: `class-fields-public` is no longer an unsupported feature: 36,844/42,616 (86.5%), 771 more tests pass;
+  the newly failing class tests need private names (8.2) or are the limits above. Perf gate: no regression against M7.
+
 ### Prototypes from another realm's newTarget; M7 done (2026-10-12, plan 7.x)
 
 - All versions: GetPrototypeFromConstructor falls back to the intrinsic of newTarget's realm for the native errors

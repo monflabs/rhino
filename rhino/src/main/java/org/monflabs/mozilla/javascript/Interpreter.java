@@ -795,6 +795,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
         instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
+        instructionObjs[base + Icode.FIELD_KEY] = new DoIterator(Icode.FIELD_KEY);
+        instructionObjs[base + Icode.FIELD_KEY_NAMED] = new DoIterator(Icode.FIELD_KEY_NAMED);
+        instructionObjs[base + Icode.CLASS_STATIC] = new DoIterator(Icode.CLASS_STATIC);
         for (int icode : Icode.AWAIT_ICODES) {
             instructionObjs[base + icode] = new DoIterator(icode);
         }
@@ -3512,6 +3515,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                                 ScriptRuntime.awaitRequest(value, cx, frame.scope);
                         case Icode.ASYNC_DELEGATE ->
                                 ScriptRuntime.asyncDelegate(value, cx, frame.scope);
+                        case Icode.FIELD_KEY -> ScriptRuntime.classFieldKey(value, cx, frame.scope);
+                        case Icode.FIELD_KEY_NAMED ->
+                                ScriptRuntime.classFieldKeyNamed(value, cx, frame.scope);
+                        case Icode.CLASS_STATIC ->
+                                ScriptRuntime.classStaticInit(value, cx, frame.scope);
                         case Icode.ASYNC_ITER_OPEN ->
                                 ScriptRuntime.asyncIterOpen(value, cx, frame.scope);
                         case Icode.ASYNC_ITER_NEXT ->

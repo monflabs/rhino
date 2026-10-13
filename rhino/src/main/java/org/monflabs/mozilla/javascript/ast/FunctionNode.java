@@ -135,6 +135,7 @@ public class FunctionNode extends ScriptNode {
     private boolean isES6Generator;
     private boolean isAsync;
     private boolean isAsyncGenerator;
+    private boolean isFieldInitializer;
     // ES2024, B.3.2.1: block-scoped function that should also be var-hoisted
     private boolean annexBHoisted;
     private List<Node> generatorResumePoints;
@@ -367,6 +368,15 @@ public class FunctionNode extends ScriptNode {
     public void setIsAsync() {
         isAsync = true;
         setIsES6Generator();
+    }
+
+    /** Whether this is the synthetic method whose body is the initializer of a class field. */
+    public boolean isFieldInitializer() {
+        return isFieldInitializer;
+    }
+
+    public void setFieldInitializer() {
+        isFieldInitializer = true;
     }
 
     public void setIsAsyncGenerator() {

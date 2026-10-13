@@ -169,7 +169,6 @@ public class Test262SuiteTest {
                             "IsHTMLDDA",
                             "CanBlockIsFalse",
                             "class-fields-private",
-                            "class-fields-public",
                             "tail-call-optimization",
                             "top-level-await",
                             "import-attributes",

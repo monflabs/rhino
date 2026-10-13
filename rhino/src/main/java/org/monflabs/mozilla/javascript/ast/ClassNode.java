@@ -22,6 +22,7 @@ public class ClassNode extends AstNode {
     private Scope scope;
     private int sourceStart;
     private int sourceEnd;
+    private boolean hasStaticElements;
 
     {
         type = Token.CLASS;
@@ -29,6 +30,15 @@ public class ClassNode extends AstNode {
 
     public ClassNode(int pos) {
         super(pos);
+    }
+
+    /** Whether the class has static fields, which are defined once its name is bound. */
+    public boolean hasStaticElements() {
+        return hasStaticElements;
+    }
+
+    public void setHasStaticElements() {
+        hasStaticElements = true;
     }
 
     public Name getClassName() {

@@ -28,6 +28,7 @@ import org.monflabs.mozilla.javascript.ast.BigIntLiteral;
 import org.monflabs.mozilla.javascript.ast.Block;
 import org.monflabs.mozilla.javascript.ast.BreakStatement;
 import org.monflabs.mozilla.javascript.ast.CatchClause;
+import org.monflabs.mozilla.javascript.ast.ClassFieldKey;
 import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.Comment;
 import org.monflabs.mozilla.javascript.ast.ComputedPropertyKey;
@@ -5151,6 +5152,12 @@ public class Parser {
                                 && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
                 consumeToken();
                 AstNode nameNode = name(ttFlagged, tt);
+                if (inFieldInitializer
+                        && nameNode instanceof Name
+                        && "arguments".equals(((Name) nameNode).getIdentifier())) {
+                    // ContainsArguments of a field initializer (15.7.1)
+                    reportError("msg.class.field.arguments");
+                }
                 if (asyncName && peekFlaggedToken() == Token.LP) {
                     // async (...): a call, or the parameters of an async arrow function
                     asyncCallTarget = nameNode;
@@ -6366,6 +6373,7 @@ public class Parser {
         private List<Jump> savedLoopAndSwitchSet;
         private boolean savedHasUndefinedBeenRedefined;
         private int savedNonArrowFunctionDepth;
+        private boolean savedInFieldInitializer;
         private boolean savedInParenthesizedCover;
         private int savedPendingCoverInitializedNames;
 
@@ -6374,8 +6382,11 @@ public class Parser {
             savedPendingCoverInitializedNames = Parser.this.pendingCoverInitializedNames;
             Parser.this.inParenthesizedCover = false;
             savedNonArrowFunctionDepth = Parser.this.nonArrowFunctionDepth;
+            savedInFieldInitializer = Parser.this.inFieldInitializer;
             if (fnNode.getFunctionType() != FunctionNode.ARROW_FUNCTION) {
                 Parser.this.nonArrowFunctionDepth++;
+                // an arrow function in an initializer is still in it: arguments is an error there
+                Parser.this.inFieldInitializer = fnNode.isFieldInitializer();
             }
             savedCurrentScriptOrFn = Parser.this.currentScriptOrFn;
             Parser.this.currentScriptOrFn = fnNode;
@@ -6403,6 +6414,7 @@ public class Parser {
         }
 
         void restore() {
+            Parser.this.inFieldInitializer = savedInFieldInitializer;
             Parser.this.currentScriptOrFn = savedCurrentScriptOrFn;
             Parser.this.currentScope = savedCurrentScope;
             Parser.this.labelSet = savedLabelSet;
@@ -6891,11 +6903,12 @@ public class Parser {
             boolean isStatic = false;
             if ((tt == Token.NAME || tt == Token.RESERVED) && "static".equals(ts.getString())) {
                 consumeToken();
+                int staticPos = ts.tokenBeg;
                 int next = peekToken();
-                if (next == Token.LP) {
-                    // a method named static
-                    Name name = new Name(ts.tokenBeg, "static");
-                    classMember(cls, name, ts.tokenBeg, protoElems, false, true);
+                if (next == Token.LP || isFieldEnd("static")) {
+                    // a method or a field named static
+                    Name name = new Name(staticPos, "static");
+                    classMember(cls, name, staticPos, protoElems, false, true);
                     continue;
                 }
                 isStatic = true;
@@ -6940,6 +6953,11 @@ public class Parser {
         int entryKind = METHOD_ENTRY;
         boolean isAsync = false;
         boolean escaped = ts.nameHadEscape;
+        if (!(pname instanceof GeneratorMethodDefinition)
+                && isFieldEnd(escaped || !(pname instanceof Name) ? null : propertyName)) {
+            classField(cls, pname, propStart, elems, isStatic, propertyName);
+            return;
+        }
         if (peekToken() != Token.LP && pname instanceof Name) {
             if ("get".equals(propertyName)) {
                 entryKind = GET_ENTRY;
@@ -6990,6 +7008,145 @@ public class Parser {
                 methodDefinition(ppos, propStart, pname, entryKind, isGenerator, true);
         ((FunctionNode) prop.getValue()).setInStrictMode(true);
         elems.add(prop);
+    }
+
+    /**
+     * Whether the class element whose name was just consumed is a field: its name is followed by an
+     * initializer, a semicolon, the end of the class or a line terminator (ASI).
+     */
+    private boolean isFieldEnd(String name) throws IOException {
+        int tt = peekToken();
+        if (tt == Token.ASSIGN || tt == Token.SEMI || tt == Token.RC) {
+            return true;
+        }
+        if (tt == Token.LP) {
+            return false;
+        }
+        if (("get".equals(name) || "set".equals(name)) && tt == Token.MUL) {
+            // get * cannot start an accessor: a line terminator ends the field
+            return (peekFlaggedToken() & TI_AFTER_EOL) != 0;
+        }
+        if ("get".equals(name) || "set".equals(name) || "static".equals(name)) {
+            // get, set and static may be followed by a line terminator, async may not
+            return false;
+        }
+        return (peekFlaggedToken() & TI_AFTER_EOL) != 0;
+    }
+
+    /** True while the initializer of a class field is parsed, and the arrow functions in it. */
+    private boolean inFieldInitializer;
+
+    /**
+     * A field of a class (FieldDefinition, 15.7): an entry of the object literal of the members of
+     * the class whose key is a {@link ClassFieldKey}, and whose value is the initializer as a
+     * method, called with the instance (or the constructor) as this.
+     */
+    private void classField(
+            ClassNode cls,
+            AstNode pname,
+            int propStart,
+            List<AbstractObjectProperty> elems,
+            boolean isStatic,
+            String propertyName)
+            throws IOException {
+        if (pname instanceof ComputedPropertyKey) {
+            propertyName = null;
+        }
+        if ("constructor".equals(propertyName) || (isStatic && "prototype".equals(propertyName))) {
+            reportError("msg.class.field.name", propertyName);
+        }
+        AstNode keyExpr;
+        if (pname instanceof ComputedPropertyKey) {
+            keyExpr = ((ComputedPropertyKey) pname).getExpression();
+        } else if (pname instanceof Name) {
+            StringLiteral literal = new StringLiteral(pname.getPosition(), pname.getLength());
+            literal.setValue(((Name) pname).getIdentifier());
+            literal.setQuoteCharacter('"');
+            keyExpr = literal;
+        } else {
+            keyExpr = pname;
+        }
+        AstNode value;
+        boolean named = false;
+        if (matchToken(Token.ASSIGN, true)) {
+            FunctionNode initializer = fieldInitializer(ts.tokenEnd);
+            AstNode expr =
+                    ((ReturnStatement) initializer.getBody().getFirstChild()).getReturnValue();
+            named = isAnonymousFunctionDefinition(expr);
+            value = initializer;
+        } else {
+            value = new KeywordLiteral(ts.tokenBeg, 0, Token.NULL);
+        }
+        // the end of the field: a semicolon, or an inserted one
+        if (!matchToken(Token.SEMI, true)
+                && peekToken() != Token.RC
+                && (peekFlaggedToken() & TI_AFTER_EOL) == 0) {
+            reportError("msg.no.semi.stmt");
+        }
+        ComputedPropertyKey key = new ComputedPropertyKey(pname.getPosition(), pname.getLength());
+        key.setExpression(new ClassFieldKey(keyExpr.getPosition(), keyExpr, named));
+        ObjectProperty prop = new ObjectProperty(propStart);
+        prop.setKeyAndValue(key, value);
+        if (value instanceof FunctionNode) {
+            prop.setIsNormalMethod();
+        }
+        elems.add(prop);
+        if (isStatic) {
+            cls.setHasStaticElements();
+        }
+    }
+
+    /** An initializer: a method whose body returns the AssignmentExpression after the =. */
+    private FunctionNode fieldInitializer(int pos) throws IOException {
+        int lineno = lineNumber(), column = columnNumber();
+        FunctionNode fn = new FunctionNode(pos);
+        fn.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
+        fn.setMethodDefinition(true);
+        fn.setFieldInitializer();
+        fn.setInStrictMode(true);
+        PerFunctionVariables savedVars = new PerFunctionVariables(fn);
+        boolean wasInsideMethod = insideMethod;
+        insideMethod = true;
+        ++nestingOfFunction;
+        try {
+            AstNode value = assignExpr();
+            ReturnStatement ret =
+                    new ReturnStatement(value.getPosition(), value.getLength(), value);
+            ret.putProp(Node.EXPRESSION_CLOSURE_PROP, Boolean.TRUE);
+            ret.setLineColumnNumber(value.getLineno(), value.getColumn());
+            Block body = new Block(value.getPosition());
+            body.putProp(Node.EXPRESSION_CLOSURE_PROP, Boolean.TRUE);
+            body.setLineColumnNumber(value.getLineno(), value.getColumn());
+            body.addStatement(ret);
+            body.setLength(value.getLength());
+            fn.setBody(body);
+            int end = pos + body.getPosition() + body.getLength();
+            fn.setRawSourceBounds(pos, end);
+            fn.setLength(end - pos);
+        } finally {
+            --nestingOfFunction;
+            savedVars.restore();
+            insideMethod = wasInsideMethod;
+        }
+        fn.setSourceName(sourceURI);
+        fn.setLineColumnNumber(lineno, column);
+        fn.setEndLineno(lineNumber());
+        return fn;
+    }
+
+    /** IsAnonymousFunctionDefinition (8.4.3). */
+    private static boolean isAnonymousFunctionDefinition(AstNode expr) {
+        while (expr instanceof ParenthesizedExpression) {
+            expr = ((ParenthesizedExpression) expr).getExpression();
+        }
+        if (expr instanceof FunctionNode) {
+            FunctionNode fn = (FunctionNode) expr;
+            return fn.getFunctionName() == null || fn.getFunctionName().length() == 0;
+        }
+        if (expr instanceof ClassNode) {
+            return ((ClassNode) expr).getClassName() == null;
+        }
+        return false;
     }
 
     /**

@@ -6061,6 +6061,24 @@ public class ScriptRuntime {
         capability.reject.call(cx, realm, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
     }
 
+    /**
+     * The key of a class field (Token#FIELD_KEY): ToPropertyKey of the written or computed key, in
+     * the order of the elements of the class.
+     */
+    public static Object classFieldKey(Object key, Context cx, VarScope scope) {
+        return new ClassDefinition.FieldKey(toPropertyKey(key), false);
+    }
+
+    /** The key of a class field whose initializer is an anonymous function the key names. */
+    public static Object classFieldKeyNamed(Object key, Context cx, VarScope scope) {
+        return new ClassDefinition.FieldKey(toPropertyKey(key), true);
+    }
+
+    /** The static fields of a class, once its name is bound (Token#CLASS_STATIC). */
+    public static Object classStaticInit(Object constructor, Context cx, VarScope scope) {
+        return ClassDefinition.runStaticElements(constructor, cx, scope);
+    }
+
     /** GetIterator(value, async) for a for await loop (Node#AWAIT_ITER_OPEN). */
     public static Object asyncIterOpen(Object value, Context cx, VarScope scope) {
         return new AsyncIteration.Open(
@@ -6528,6 +6546,12 @@ public class ScriptRuntime {
             // -1 for property getter, 1 for property setter, 0 for a regular value property
             int getterSetter = getterSetters == null ? 0 : getterSetters[i];
             Object value = propertyValues[i];
+
+            if (id instanceof ClassDefinition.FieldKey) {
+                // a field of a class, not a property of the literal of its members
+                ClassDefinition.addElement(object, (ClassDefinition.FieldKey) id, value);
+                continue;
+            }
 
             if (getterSetter == 2) {
                 // __proto__: value (B.3.1): sets the prototype to an object or null
