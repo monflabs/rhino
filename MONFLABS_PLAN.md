@@ -700,7 +700,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
-| 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | (this) |
+| 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
 | G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | in progress |                              |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
