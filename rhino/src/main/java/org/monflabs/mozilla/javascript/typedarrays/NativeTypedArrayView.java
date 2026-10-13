@@ -346,7 +346,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     /** A [[Set]] that returned false: a TypeError in strict mode (PutValue). */
     private static void failedSet(Context cx, Object key) {
-        if (cx != null && cx.isStrictMode()) {
+        if (cx != null && cx.isStrictMode() && cx.isLatestEcmaScript()) {
             throw ScriptRuntime.typeErrorById("msg.modify.readonly", ScriptRuntime.toString(key));
         }
     }
@@ -557,15 +557,30 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         var res = scope.get(TYPED_ARRAY, scope);
         if (res == NOT_FOUND) {
             res = DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), false);
-            // %TypedArray%.prototype.toString is %Array.prototype.toString% (23.2.3.32)
-            Scriptable arrayProto = ScriptableObject.getArrayPrototype(scope);
-            Object toString =
-                    arrayProto == null
-                            ? NOT_FOUND
-                            : ScriptableObject.getProperty(arrayProto, "toString");
-            if (toString instanceof Callable) {
-                ((ScriptableObject) ((JSFunction) res).getPrototypeProperty())
-                        .defineProperty("toString", toString, DONTENUM);
+            ScriptableObject proto = (ScriptableObject) ((JSFunction) res).getPrototypeProperty();
+            if (cx.isLatestEcmaScript()) {
+                // %TypedArray%.prototype.toString is %Array.prototype.toString% (23.2.3.32)
+                Scriptable arrayProto = ScriptableObject.getArrayPrototype(scope);
+                Object toString =
+                        arrayProto == null
+                                ? NOT_FOUND
+                                : ScriptableObject.getProperty(arrayProto, "toString");
+                if (toString instanceof Callable) {
+                    proto.defineProperty("toString", toString, DONTENUM);
+                }
+            } else {
+                // stock Rhino: no @@species, and an @@iterator of its own (not values)
+                ((JSFunction) res).delete(SymbolKey.SPECIES);
+                proto.defineProperty(
+                        SymbolKey.ITERATOR,
+                        new org.monflabs.mozilla.javascript.LambdaFunction(
+                                scope,
+                                "[Symbol.iterator]",
+                                0,
+                                (lcx, ls, thisObj, args) ->
+                                        js_values(lcx, null, null, ls, thisObj, args),
+                                false),
+                        DONTENUM);
             }
         }
         return (JSFunction) res;
@@ -668,9 +683,13 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             return constructable.construct(new NativeArrayBuffer(), 0, 0);
         }
 
-        if (!ScriptRuntime.isObject(arg0)) {
-            // Create a zeroed-out array of a certain length: ToIndex (23.2.5.1 step 6)
-            int length = ScriptRuntime.toIndex(arg0);
+        boolean latest = cx.isLatestEcmaScript();
+        if (latest
+                ? !ScriptRuntime.isObject(arg0)
+                : arg0 instanceof Number || arg0 instanceof String) {
+            // Create a zeroed-out array of a certain length: ToIndex (23.2.5.1 step 6; ToInt32
+            // before VERSION_ECMASCRIPT)
+            int length = latest ? ScriptRuntime.toIndex(arg0) : ScriptRuntime.toInt32(arg0);
             NativeArrayBuffer buffer = makeArrayBuffer(cx, scope, length, bytesPerElement);
             return constructable.construct(buffer, 0, length);
         }
@@ -787,7 +806,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
             final Object[] arrayElements;
 
-            if ((iter != Scriptable.NOT_FOUND) && iter != null && !Undefined.isUndefined(iter)) {
+            if ((iter != Scriptable.NOT_FOUND)
+                    && (iter != null || !cx.isLatestEcmaScript())
+                    && !Undefined.isUndefined(iter)) {
                 final Object iterator = ScriptRuntime.callIterator(obj, cx, scope);
                 if (!Undefined.isUndefined(iterator)) {
                     final ArrayList<Object> elems = new ArrayList<>();
@@ -998,10 +1019,15 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     }
 
     private Object getElemForToString(Context cx, VarScope scope, int index, boolean useLocale) {
-        // Get: an index out of a buffer that shrank meanwhile is undefined (23.2.3.31)
-        Object elem = ScriptableObject.getProperty(this, index);
-        if (elem == NOT_FOUND || Undefined.isUndefined(elem)) {
-            return "";
+        Object elem;
+        if (cx.isLatestEcmaScript()) {
+            // Get: an index out of a buffer that shrank meanwhile is undefined (23.2.3.31)
+            elem = ScriptableObject.getProperty(this, index);
+            if (elem == NOT_FOUND || Undefined.isUndefined(elem)) {
+                return "";
+            }
+        } else {
+            elem = js_get(index);
         }
         if (useLocale) {
             var toLocaleString = ScriptRuntime.getPropAndThis(elem, "toLocaleString", cx, scope);
@@ -1476,7 +1502,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             self.setRange(
                     cx,
                     s,
-                    ScriptRuntime.toObject(cx, s, isArg(args, 0) ? args[0] : Undefined.instance),
+                    cx.isLatestEcmaScript()
+                            ? ScriptRuntime.toObject(
+                                    cx, s, isArg(args, 0) ? args[0] : Undefined.instance)
+                            : ScriptableObject.ensureScriptable(args[0]),
                     offset);
         }
 
@@ -1498,7 +1527,14 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
             srcLength = self.getLength();
         }
 
-        double relStart = isArg(args, 0) ? ScriptRuntime.toIntegerOrInfinity(args[0]) : 0;
+        // ToIntegerOrInfinity (ToInt32 before VERSION_ECMASCRIPT)
+        boolean latest = cx.isLatestEcmaScript();
+        double relStart =
+                isArg(args, 0)
+                        ? (latest
+                                ? ScriptRuntime.toIntegerOrInfinity(args[0])
+                                : ScriptRuntime.toInt32(args[0]))
+                        : 0;
         int start =
                 (int)
                         (relStart < 0
@@ -1511,7 +1547,12 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         if (!hasEnd && self.isAutoLength) {
             constructorArgs = new Object[] {self.arrayBuffer, beginOffset};
         } else {
-            double relEnd = hasEnd ? ScriptRuntime.toIntegerOrInfinity(args[1]) : srcLength;
+            double relEnd =
+                    hasEnd
+                            ? (latest
+                                    ? ScriptRuntime.toIntegerOrInfinity(args[1])
+                                    : ScriptRuntime.toInt32(args[1]))
+                            : srcLength;
             int end =
                     (int)
                             (relEnd < 0
@@ -1570,7 +1611,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     private static Object js_toReversed(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeTypedArrayView<?> self = realThis(thisObj);
-        int len = (int) self.validateAndGetLength();
+        int len = (int) (cx.isLatestEcmaScript() ? self.validateAndGetLength() : self.getLength());
 
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
@@ -1591,7 +1632,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     private static Object js_toSorted(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeTypedArrayView<?> self = realThis(thisObj);
-        int len = (int) self.validateAndGetLength();
+        int len = (int) (cx.isLatestEcmaScript() ? self.validateAndGetLength() : self.getLength());
 
         Object[] working = self.sortTemporaryArray(cx, s, args);
 
@@ -1609,11 +1650,154 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         return result;
     }
 
+    // stock Rhino, before VERSION_ECMASCRIPT
+
+    private static Object legacyWith(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeTypedArrayView<?> self = realThis(thisObj);
+
+        long relativeIndex = args.length > 0 ? (int) ScriptRuntime.toInteger(args[0]) : 0;
+        long actualIndex = relativeIndex >= 0 ? relativeIndex : self.length + relativeIndex;
+
+        Object argsValue = args.length > 1 ? ScriptRuntime.toNumeric(args[1]) : 0.0;
+        int len = self.getLength();
+
+        if (actualIndex < 0 || actualIndex >= len) {
+            String msg =
+                    ScriptRuntime.getMessageById(
+                            "msg.typed.array.index.out.of.bounds",
+                            relativeIndex,
+                            len * -1,
+                            len - 1);
+            throw ScriptRuntime.rangeError(msg);
+        }
+
+        NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
+        Scriptable result =
+                cx.newObject(
+                        s,
+                        self.getClassName(),
+                        new Object[] {newBuffer, 0, len, self.getBytesPerElement()});
+
+        for (int k = 0; k < len; ++k) {
+            Object fromValue = (k == actualIndex) ? argsValue : self.js_get(k);
+            result.put(k, result, fromValue);
+        }
+
+        return result;
+    }
+
+    private static Object legacyFrom(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (args.length < 1) {
+            throw ScriptRuntime.typeErrorById("msg.missing.argument");
+        }
+        final Scriptable items = ScriptRuntime.toObject(s, args[0]);
+        if (!AbstractEcmaObjectOperations.isConstructor(cx, thisObj)) {
+            throw ScriptRuntime.typeErrorById("msg.constructor.expected");
+        }
+        Constructable constructable = (Constructable) thisObj;
+
+        if (items instanceof NativeTypedArrayView) {
+            NativeTypedArrayView<?> ta = (NativeTypedArrayView<?>) items;
+            if (ta.isTypedArrayOutOfBounds()) {
+                // The specs do not explicitly call out this check but the tests test it
+                throw ScriptRuntime.typeErrorById("msg.typed.array.out.of.bounds");
+            }
+        }
+
+        Function mapFn = null;
+        Object mapArg = (args.length >= 2) ? args[1] : Undefined.instance;
+        Scriptable mapFnThisArg = Undefined.SCRIPTABLE_UNDEFINED;
+        if (!Undefined.isUndefined(mapArg)) {
+            if (!(mapArg instanceof Function)) {
+                throw ScriptRuntime.typeErrorById("msg.map.function.not");
+            }
+            mapFn = (Function) mapArg;
+            if (args.length >= 3) {
+                mapFnThisArg = ScriptableObject.ensureScriptable(args[2]);
+            }
+        }
+
+        List<Object> listFromIterator = null;
+        Object iteratorProp = ScriptableObject.getProperty(items, SymbolKey.ITERATOR);
+        // Optimization: When items is an instance of java.util.List and also have an iterator,
+        // we don't use the iterator to avoid copying the contents to determine the length.
+        // However, with this the test262 test
+        // built-ins/TypedArray/from/iterated-array-changed-by-tonumber.js
+        // doesn't pass.
+        if (!(iteratorProp == Scriptable.NOT_FOUND)
+                && !(items instanceof List) // NativeArray and NativeTypedArrayView
+                && !Undefined.isUndefined(iteratorProp)) {
+            final Object iterator = ScriptRuntime.callIterator(items, cx, s);
+            if (!Undefined.isUndefined(iterator)) {
+                try (IteratorLikeIterable it = new IteratorLikeIterable(cx, s, iterator)) {
+                    listFromIterator = new ArrayList<>();
+                    for (Object temp : it) {
+                        listFromIterator.add(temp);
+                    }
+                }
+            }
+        }
+
+        int size;
+        if (listFromIterator != null) {
+            size = listFromIterator.size();
+        } else {
+            long sizeLong = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, items);
+            if (sizeLong > Integer.MAX_VALUE) {
+                throw ScriptRuntime.rangeErrorById("msg.arraylength.bad");
+            }
+
+            size = (int) AbstractEcmaObjectOperations.lengthOfArrayLike(cx, items);
+        }
+
+        Scriptable result = constructable.construct(cx, s, new Object[] {size});
+        if (!(result instanceof NativeTypedArrayView)) {
+            throw ScriptRuntime.typeErrorById("msg.typed.array.receiver.incompatible", "from");
+        }
+
+        NativeTypedArrayView<?> typedArray = (NativeTypedArrayView<?>) result;
+        if (typedArray.getLength() < size) {
+            throw ScriptRuntime.typeErrorById("msg.typed.array.length.too.small");
+        }
+        if (items instanceof NativeTypedArrayView
+                && !isContentCompatible((NativeTypedArrayView<?>) items, typedArray)) {
+            throw ScriptRuntime.typeErrorById("msg.typed.array.content.mismatch");
+        }
+
+        for (int k = 0; k < size; k++) {
+            Object temp;
+            if (listFromIterator != null) {
+                temp = listFromIterator.get(k);
+            } else if (items instanceof List<?>) {
+                try {
+                    temp = ((List<?>) items).get(k);
+                } catch (IndexOutOfBoundsException e) {
+                    temp = Undefined.instance;
+                }
+            } else {
+                temp = ScriptRuntime.getObjectIndex(items, k, cx, s);
+            }
+
+            if (mapFn != null) {
+                temp = mapFn.call(cx, s, mapFnThisArg, new Object[] {temp, k});
+            }
+
+            typedArray.setArrayElement(k, temp);
+        }
+
+        return result;
+    }
+
     private static Object js_with(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyWith(cx, f, nt, s, thisObj, args);
+        }
         // 23.2.3.36
         NativeTypedArrayView<?> self = realThis(thisObj);
-        int len = (int) self.validateAndGetLength();
+        int len = (int) (cx.isLatestEcmaScript() ? self.validateAndGetLength() : self.getLength());
 
         double relativeIndex =
                 ScriptRuntime.toIntegerOrInfinity(args.length > 0 ? args[0] : Undefined.instance);
@@ -1648,6 +1832,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     private static Object js_from(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyFrom(cx, f, nt, s, thisObj, args);
+        }
         if (args.length < 1) {
             throw ScriptRuntime.typeErrorById("msg.missing.argument");
         }

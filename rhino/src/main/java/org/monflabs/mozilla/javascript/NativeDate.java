@@ -111,13 +111,21 @@ final class NativeDate extends ScriptableObject {
     }
 
     static void init(Context cx, VarScope scope, boolean sealed) {
+        ScriptableObject proto =
+                cx.getLanguageVersion() >= Context.VERSION_ES6
+                        ? new NativeObject()
+                        : new NativeDate(Double.NaN);
         DESCRIPTOR.buildConstructor(
                 cx,
                 scope,
-                cx.getLanguageVersion() >= Context.VERSION_ES6
-                        ? new NativeObject()
-                        : new NativeDate(Double.NaN),
-                sealed);
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    if (!c.isLatestEcmaScript()) {
+                        // writable before VERSION_ECMASCRIPT
+                        proto.setAttributes(SymbolKey.TO_PRIMITIVE, DONTENUM);
+                    }
+                });
     }
 
     private NativeDate() {}
@@ -206,7 +214,7 @@ final class NativeDate extends ScriptableObject {
 
     private static Object js_toPrimitive(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6 && !ScriptRuntime.isObject(thisObj)) {
+        if (cx.isLatestEcmaScript() && !ScriptRuntime.isObject(thisObj)) {
             // 21.4.4.45 step 2: no conversion of the receiver
             throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(thisObj));
         }
@@ -1127,6 +1135,10 @@ final class NativeDate extends ScriptableObject {
 
     private static double MakeTime(double hour, double min, double sec, double ms) {
         // 21.4.1.27: each product and sum in IEEE 754 arithmetic, in this order
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            return ((hour * MinutesPerHour + min) * SecondsPerMinute + sec) * msPerSecond + ms;
+        }
         return hour * (MinutesPerHour * SecondsPerMinute * msPerSecond)
                 + min * (SecondsPerMinute * msPerSecond)
                 + sec * msPerSecond
@@ -1158,7 +1170,8 @@ final class NativeDate extends ScriptableObject {
         }
         // ToIntegerOrInfinity: -0 is +0
         if (d > 0.0) return Math.floor(d + 0.);
-        return Math.ceil(d) + 0.;
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.isLatestEcmaScript() ? Math.ceil(d) + 0. : Math.ceil(d + 0.);
     }
 
     /* end of ECMA helper functions */
@@ -1383,7 +1396,7 @@ final class NativeDate extends ScriptableObject {
             int hour = values[HOUR], min = values[MIN], sec = values[SEC], msec = values[MSEC];
             int tzhour = values[TZHOUR], tzmin = values[TZMIN];
             if (year > 275943 // ceil(1e8/365) + 1970 = 275943
-                    || (yearmod == -1 && year == 0) // -000000 is not a year (21.4.1.32.1)
+                    || (yearmod == -1 && year == 0 && isLatestEcmaScript()) // -000000 (21.4.1.32.1)
                     || (month < 1 || month > 12)
                     || (day < 1 || day > DaysInMonth(year, month))
                     || hour > 24

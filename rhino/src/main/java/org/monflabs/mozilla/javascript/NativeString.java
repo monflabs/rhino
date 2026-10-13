@@ -319,14 +319,25 @@ final class NativeString extends ScriptableObject {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         String target =
                 ScriptRuntime.toString(requireObjectCoercible(cx, thisObj, CLASS_NAME, "includes"));
-        checkValidRegex(cx, s, args, 0, "includes");
-        String searchStr = ScriptRuntime.toString(args, 0);
+        String searchStr;
+        if (cx.isLatestEcmaScript()) {
+            checkValidRegex(cx, s, args, 0, "includes");
+            searchStr = ScriptRuntime.toString(args, 0);
+        } else {
+            // the argument is converted first before VERSION_ECMASCRIPT
+            searchStr = ScriptRuntime.toString(args, 0);
+            checkValidRegex(cx, s, args, 0, "includes");
+        }
         int position = (int) ScriptRuntime.toInteger(args, 1);
         return target.indexOf(searchStr, position) != -1;
     }
 
     /** The TypeError of GetMethod (7.3.10), without converting the receiver to a string. */
     private static RuntimeException notCallableMethod(Object obj, Object method, SymbolKey key) {
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            return ScriptRuntime.notFunctionError(obj, method, key.getName());
+        }
         String objName =
                 obj instanceof Scriptable
                         ? "[object " + ((Scriptable) obj).getClassName() + "]"
@@ -337,7 +348,7 @@ final class NativeString extends ScriptableObject {
 
     private static void checkValidRegex(
             Context cx, VarScope s, Object[] args, int pos, String functionName) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // IsRegExp (7.2.6), before the conversion of the argument
             if (args.length > pos && AbstractEcmaObjectOperations.isRegExp(cx, s, args[pos])) {
                 throw ScriptRuntime.typeErrorById(
@@ -529,7 +540,7 @@ final class NativeString extends ScriptableObject {
         if (0 <= index && index < string.length()) {
             // the index properties are read-only (10.4.3.5)
             Context cx = Context.getCurrentContext();
-            if (cx != null && cx.isStrictMode() && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            if (cx != null && cx.isStrictMode() && cx.isLatestEcmaScript()) {
                 throw ScriptRuntime.typeErrorById("msg.modify.readonly", Integer.toString(index));
             }
             return;

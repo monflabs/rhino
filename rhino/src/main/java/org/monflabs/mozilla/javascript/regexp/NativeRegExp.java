@@ -246,7 +246,7 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     static Object init(Context cx, VarScope scope, boolean sealed) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // RegExp.prototype is an ordinary object (22.2.6)
             RegExpPrototype prototype = new RegExpPrototype();
             return DESCRIPTOR.buildConstructor(
@@ -358,9 +358,7 @@ public class NativeRegExp extends ScriptableObject {
     private static String sourceText(NativeRegExp regExp) {
         String source = new String(regExp.re.source);
         Context cx = Context.getCurrentContext();
-        return cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6
-                ? escapePattern(source)
-                : source;
+        return cx != null && cx.isLatestEcmaScript() ? escapePattern(source) : source;
     }
 
     /**
@@ -474,7 +472,7 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Scriptable js_constructCall(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             return construct(cx, f, f, s, args, true);
         }
         if (args.length > 0
@@ -487,7 +485,7 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Scriptable js_construct(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             return construct(cx, f, nt, s, args, false);
         }
         NativeRegExp re = NativeRegExpInstantiator.withLanguageVersion(cx.getLanguageVersion());
@@ -665,7 +663,10 @@ public class NativeRegExp extends ScriptableObject {
                             : null;
 
             // compile(regexp, flags) is a TypeError (B.2.4.1; the constructor accepts it)
-            if (args.length > 0 && args[0] instanceof NativeRegExp && flags != null) {
+            if (args.length > 0
+                    && args[0] instanceof NativeRegExp
+                    && flags != null
+                    && (cx.isLatestEcmaScript() || cx.getLanguageVersion() < Context.VERSION_ES6)) {
                 throw ScriptRuntime.typeErrorById("msg.bad.regexp.compile");
             }
 
@@ -701,8 +702,26 @@ public class NativeRegExp extends ScriptableObject {
         {"sticky", "y"}
     };
 
+    private static final String[][] LEGACY_FLAG_PROPERTIES = {
+        {"global", "g"},
+        {"ignoreCase", "i"},
+        {"multiline", "m"},
+        {"dotAll", "s"},
+        {"sticky", "y"},
+        {"unicode", "u"}
+    };
+
     /** get RegExp.prototype.flags (22.2.6.4): each flag property in this order. */
     private static void appendFlags(Scriptable thisObj, StringBuilder buf) {
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            for (String[] flag : LEGACY_FLAG_PROPERTIES) {
+                if (ScriptRuntime.toBoolean(ScriptableObject.getProperty(thisObj, flag[0]))) {
+                    buf.append(flag[1]);
+                }
+            }
+            return;
+        }
         for (String[] flag : FLAG_PROPERTIES) {
             Object value = ScriptableObject.getProperty(thisObj, flag[0]);
             if (value != NOT_FOUND && ScriptRuntime.toBoolean(value)) {
@@ -753,7 +772,7 @@ public class NativeRegExp extends ScriptableObject {
 
         boolean globalOrSticky = (re.flags & JSREG_GLOB) != 0 || (re.flags & JSREG_STICKY) != 0;
         double d = ScriptRuntime.toInteger(lastIndex);
-        if (d < 0 && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (d < 0 && cx.isLatestEcmaScript()) {
             // RegExpBuiltinExec: ToLength(lastIndex)
             d = 0;
         }
@@ -2617,8 +2636,7 @@ public class NativeRegExp extends ScriptableObject {
                     // Annex B.1.2: an InvalidBracedQuantifier (nothing to repeat) is an error
                     if (c == '{'
                             && isBracedQuantifier(src, state.cp - 1, state.cpend)
-                            && Context.getCurrentContext().getLanguageVersion()
-                                    >= Context.VERSION_ES6) {
+                            && Context.getCurrentContext().isLatestEcmaScript()) {
                         reportError("msg.bad.quant", "{");
                         return false;
                     }
@@ -2682,8 +2700,7 @@ public class NativeRegExp extends ScriptableObject {
                      * atom next time instead.
                      */
 
-                    boolean anyBound =
-                            Context.getCurrentContext().getLanguageVersion() >= Context.VERSION_ES6;
+                    boolean anyBound = Context.getCurrentContext().isLatestEcmaScript();
                     if (++state.cp < src.length && isDigit(c = src[state.cp])) {
                         ++state.cp;
                         long minValue = getQuantifierBound(c, state);
@@ -4665,11 +4682,20 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private static void setLastIndexOrThrow(Scriptable thisObj, Object value) {
+        if (!Context.getCurrentContext().isLatestEcmaScript()
+                && thisObj instanceof ScriptableObject
+                && (((ScriptableObject) thisObj).getAttributes("lastIndex") & READONLY) != 0) {
+            throw ScriptRuntime.typeErrorById("msg.modify.readonly", "lastIndex");
+        }
         setLastIndex(thisObj, value);
     }
 
     /** Set(R, "lastIndex", value, true). */
     private static void setLastIndex(Scriptable thisObj, Object value) {
+        if (!Context.getCurrentContext().isLatestEcmaScript()) {
+            ScriptableObject.putProperty(thisObj, "lastIndex", value);
+            return;
+        }
         if (!AbstractEcmaObjectOperations.set(
                 Context.getCurrentContext(), thisObj, "lastIndex", value, thisObj)) {
             throw ScriptRuntime.typeErrorById("msg.modify.readonly", "lastIndex");
@@ -4697,7 +4723,7 @@ public class NativeRegExp extends ScriptableObject {
 
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // 22.2.6.17: generic, from the source and flags properties. A primitive receiver
             // arrives boxed (or as the global object for undefined) and is rejected as such.
             if (!ScriptRuntime.isObject(thisObj) || thisObj == s || isBoxedPrimitive(thisObj)) {
@@ -4784,6 +4810,13 @@ public class NativeRegExp extends ScriptableObject {
 
     public static Object regExpExec(Scriptable regexp, String string, Context cx, VarScope scope) {
         // See ECMAScript spec 22.2.7.1
+        if (!cx.isLatestEcmaScript()) {
+            Object execMethod = ScriptRuntime.getObjectProp(regexp, "exec", cx, scope);
+            if (execMethod instanceof Callable) {
+                return ((Callable) execMethod).call(cx, scope, regexp, new Object[] {string});
+            }
+            return NativeRegExp.js_exec(cx, scope, regexp, new Object[] {string});
+        }
         Object execMethod = ScriptableObject.getProperty(regexp, "exec");
         if (execMethod instanceof Callable) {
             Object result = ((Callable) execMethod).call(cx, scope, regexp, new Object[] {string});
@@ -4839,6 +4872,9 @@ public class NativeRegExp extends ScriptableObject {
         Scriptable realThis = (Scriptable) thisObj;
 
         String string = ScriptRuntime.toString(args.length > 0 ? args[0] : Undefined.instance);
+        if (!cx.isLatestEcmaScript()) {
+            return legacySymbolSearch(cx, scope, realThis, string);
+        }
         // 22.2.6.12: the raw values of lastIndex, compared with SameValue
         Object previousLastIndex = ScriptableObject.getProperty(realThis, "lastIndex");
         if (previousLastIndex == NOT_FOUND) {
@@ -4855,6 +4891,27 @@ public class NativeRegExp extends ScriptableObject {
             currentLastIndex = Undefined.instance;
         }
         if (!ScriptRuntime.same(currentLastIndex, previousLastIndex)) {
+            setLastIndex(realThis, previousLastIndex);
+        }
+
+        if (result == null) {
+            return -1;
+        } else {
+            return ScriptRuntime.getObjectProp(result, "index", cx, scope);
+        }
+    }
+
+    private static Object legacySymbolSearch(
+            Context cx, VarScope scope, Scriptable realThis, String string) {
+        long previousLastIndex = getLastIndex(cx, realThis);
+        if (previousLastIndex != 0) {
+            setLastIndex(realThis, ScriptRuntime.zeroObj);
+        }
+
+        Object result = regExpExec(realThis, string, cx, scope);
+
+        long currentLastIndex = getLastIndex(cx, realThis);
+        if (previousLastIndex != currentLastIndex) {
             setLastIndex(realThis, previousLastIndex);
         }
 
@@ -4936,7 +4993,8 @@ public class NativeRegExp extends ScriptableObject {
         RegExpImpl reImpl = getImpl(cx);
         boolean sticky = (re.flags & JSREG_STICKY) != 0;
         // 22.2.6.11 step 8: global comes from the flags property
-        boolean global = flags.indexOf('g') != -1;
+        boolean global =
+                cx.isLatestEcmaScript() ? flags.indexOf('g') != -1 : (re.flags & JSREG_GLOB) != 0;
 
         int[] indexp = {0};
         if (sticky) {

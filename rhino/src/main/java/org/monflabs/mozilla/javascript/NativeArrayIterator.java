@@ -55,7 +55,7 @@ public final class NativeArrayIterator extends ES6Iterator {
 
     @Override
     protected boolean isDone(Context cx, VarScope scope) {
-        if (exhausted) {
+        if (exhausted && cx.isLatestEcmaScript()) {
             // once done, the iterator no longer looks at its array (23.1.5.1)
             return true;
         }

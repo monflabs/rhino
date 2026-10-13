@@ -103,11 +103,9 @@ final class NativeError extends ScriptableObject {
     static ScriptableObject makeProto(Context cx, VarScope scope, Function ctorObj) {
         Scriptable proto = (Scriptable) ctorObj.get("prototype", ctorObj);
 
-        // from ES6, the prototypes of the NativeError constructors are ordinary objects (20.5.6.3)
-        ScriptableObject obj =
-                cx.getLanguageVersion() >= Context.VERSION_ES6
-                        ? new NativeObject()
-                        : new NativeError();
+        // the prototypes of the NativeError constructors are ordinary objects (20.5.6.3) under
+        // VERSION_ECMASCRIPT
+        ScriptableObject obj = cx.isLatestEcmaScript() ? new NativeObject() : new NativeError();
         obj.setPrototype(proto);
         obj.setParentScope(scope);
         return obj;
@@ -196,7 +194,7 @@ final class NativeError extends ScriptableObject {
     /** The options argument of the Error constructors: any object from ES6 (a proxy included). */
     private static boolean isErrorOptions(Object arg) {
         Context cx = Context.getCurrentContext();
-        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx != null && cx.isLatestEcmaScript()) {
             return ScriptRuntime.isObject(arg) && arg instanceof Scriptable;
         }
         return arg instanceof NativeObject;
@@ -204,6 +202,16 @@ final class NativeError extends ScriptableObject {
 
     /** InstallErrorCause (20.5.8.1): HasProperty, then Get. */
     static void installCause(Scriptable options, NativeError obj) {
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            // stock Rhino: Get only
+            Object cause = ScriptableObject.getProperty(options, "cause");
+            if (cause != NOT_FOUND) {
+                ScriptableObject.putProperty(obj, "cause", cause);
+                obj.setAttributes("cause", DONTENUM);
+            }
+            return;
+        }
         if (!ScriptableObject.hasProperty(options, "cause")) {
             return;
         }

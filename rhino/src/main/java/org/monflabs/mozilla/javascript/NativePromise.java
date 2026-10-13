@@ -147,7 +147,8 @@ public class NativePromise extends ScriptableObject {
         Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
-            promiseResolve = getPromiseResolve(thisObj);
+            // GetPromiseResolve before GetIterator (at the first step before VERSION_ECMASCRIPT)
+            promiseResolve = cx.isLatestEcmaScript() ? getPromiseResolve(thisObj) : null;
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, scope);
             iterable = new IteratorLikeIterable(cx, scope, maybeIterable);
         } catch (RhinoException re) {
@@ -167,7 +168,7 @@ public class NativePromise extends ScriptableObject {
             try {
                 return resolver.resolve(cx, scope);
             } catch (RhinoException re) {
-                closeIterator(iterable, iterator);
+                closeIterator(cx, iterable, iterator);
                 throw re;
             }
         } catch (RhinoException re) {
@@ -202,7 +203,8 @@ public class NativePromise extends ScriptableObject {
         Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
-            promiseResolve = getPromiseResolve(thisObj);
+            // GetPromiseResolve before GetIterator (at the first step before VERSION_ECMASCRIPT)
+            promiseResolve = cx.isLatestEcmaScript() ? getPromiseResolve(thisObj) : null;
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, f.getDeclarationScope());
             iterable = new IteratorLikeIterable(cx, fscope, maybeIterable);
         } catch (RhinoException re) {
@@ -219,7 +221,7 @@ public class NativePromise extends ScriptableObject {
             try {
                 return performRace(cx, fscope, iterator, thisObj, promiseResolve, cap);
             } catch (RhinoException re) {
-                closeIterator(iterable, iterator);
+                closeIterator(cx, iterable, iterator);
                 throw re;
             }
         } catch (RhinoException re) {
@@ -239,6 +241,9 @@ public class NativePromise extends ScriptableObject {
             Object thisObj,
             Callable resolve,
             Capability cap) {
+        if (resolve == null) {
+            resolve = getPromiseResolve(thisObj);
+        }
 
         // Manually iterate for exception handling purposes
         while (true) {
@@ -281,7 +286,8 @@ public class NativePromise extends ScriptableObject {
         Callable promiseResolve;
         IteratorLikeIterable iterable;
         try {
-            promiseResolve = getPromiseResolve(thisObj);
+            // GetPromiseResolve before GetIterator (at the first step before VERSION_ECMASCRIPT)
+            promiseResolve = cx.isLatestEcmaScript() ? getPromiseResolve(thisObj) : null;
             Object maybeIterable = ScriptRuntime.callIterator(arg, cx, fscope);
             iterable = new IteratorLikeIterable(cx, fscope, maybeIterable);
         } catch (RhinoException re) {
@@ -300,7 +306,7 @@ public class NativePromise extends ScriptableObject {
             try {
                 return rejector.reject(cx, fscope);
             } catch (RhinoException re) {
-                closeIterator(iterable, iterator);
+                closeIterator(cx, iterable, iterator);
                 throw re;
             }
         } catch (RhinoException re) {
@@ -324,12 +330,15 @@ public class NativePromise extends ScriptableObject {
 
     /** IteratorClose with a throw completion: the error of the iterator's return is ignored. */
     private static void closeIterator(
-            IteratorLikeIterable iterable, IteratorLikeIterable.Itr iterator) {
+            Context cx, IteratorLikeIterable iterable, IteratorLikeIterable.Itr iterator) {
         if (!iterator.isDone()) {
             try {
                 iterable.close();
-            } catch (RhinoException ignored) {
-                // the original error wins (7.4.11 step 5)
+            } catch (RhinoException e) {
+                // the original error wins (7.4.11 step 5); not before VERSION_ECMASCRIPT
+                if (!cx.isLatestEcmaScript()) {
+                    throw e;
+                }
             }
         }
     }
@@ -760,7 +769,11 @@ public class NativePromise extends ScriptableObject {
             try {
                 thenObj = ScriptableObject.getProperty(sresolution, "then");
             } catch (RhinoException re) {
-                // 27.2.1.3.2 step 10: an abrupt Get rejects the promise
+                // 27.2.1.3.2 step 10: an abrupt Get rejects the promise (it is thrown before
+                // VERSION_ECMASCRIPT)
+                if (!cx.isLatestEcmaScript()) {
+                    throw re;
+                }
                 promise.rejectPromise(cx, scope, getErrorObject(cx, scope, re));
                 return Undefined.instance;
             }
@@ -902,6 +915,9 @@ public class NativePromise extends ScriptableObject {
         }
 
         Object resolve(Context topCx, VarScope topScope) {
+            if (promiseResolve == null) {
+                promiseResolve = getPromiseResolve(thisObj);
+            }
             int index = 0;
 
             // Iterate manually because we need to catch exceptions in a special way.
@@ -963,7 +979,11 @@ public class NativePromise extends ScriptableObject {
                                     1,
                                     (cx, scope, thisObj, args) -> {
                                         Scriptable result = cx.newObject(scope);
-                                        result.put("status", result, "rejected");
+                                        // " rejected" in stock Rhino
+                                        result.put(
+                                                "status",
+                                                result,
+                                                cx.isLatestEcmaScript() ? "rejected" : " rejected");
                                         result.put(
                                                 "reason",
                                                 result,
@@ -1014,6 +1034,9 @@ public class NativePromise extends ScriptableObject {
         }
 
         Object reject(Context topCx, VarScope topScope) {
+            if (promiseResolve == null) {
+                promiseResolve = getPromiseResolve(thisObj);
+            }
             int index = 0;
 
             // Iterate manually because we need to catch exceptions in a special way.

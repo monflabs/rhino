@@ -390,6 +390,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_union(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "union").legacyUnion(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "union");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         KeysIterator keys = new KeysIterator(cx, s, rec);
@@ -402,6 +405,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_intersection(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "intersection").legacyIntersection(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "intersection");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         NativeSet result = o.newSet(cx, s);
@@ -425,6 +431,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_difference(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "difference").legacyDifference(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "difference");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         NativeSet result = o.copySet(cx, s);
@@ -446,6 +455,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_symmetricDifference(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "symmetricDifference").legacySymmetricDifference(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "symmetricDifference");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         KeysIterator keys = new KeysIterator(cx, s, rec);
@@ -466,6 +478,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_isSubsetOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "isSubsetOf").legacyIsSubsetOf(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "isSubsetOf");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         if (o.entries.size() > rec.size) {
@@ -481,6 +496,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_isSupersetOf(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "isSupersetOf").legacyIsSupersetOf(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "isSupersetOf");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         if (o.entries.size() < rec.size) {
@@ -498,6 +516,9 @@ public class NativeSet extends ScriptableObject {
 
     private static Object js_isDisjointFrom(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return realThis(thisObj, "isDisjointFrom").legacyIsDisjointFrom(cx, s, args);
+        }
         NativeSet o = realThis(thisObj, "isDisjointFrom");
         SetRecord rec = getSetRecord(args.length > 0 ? args[0] : Undefined.instance);
         if (o.entries.size() <= rec.size) {
@@ -516,5 +537,475 @@ public class NativeSet extends ScriptableObject {
             }
         }
         return Boolean.TRUE;
+    }
+
+    // The Set methods of stock Rhino, before VERSION_ECMASCRIPT
+
+    private Object legacyIntersection(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
+        result.instanceOfSet = true;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        return legacyIntersectionSetLike(cx, scope, otherObj, result, sizeVal, hasVal, keysVal);
+    }
+
+    private Object legacyIntersectionSetLike(
+            Context cx,
+            VarScope scope,
+            Object otherObj,
+            NativeSet result,
+            Object sizeVal,
+            Object hasVal,
+            Object keysVal) {
+        // Validate has and keys are callable
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        Callable hasMethod = (Callable) hasVal;
+        Callable keysMethod = (Callable) keysVal;
+
+        // ES2025: Compare sizes to determine iteration strategy
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+        int otherSize =
+                Double.isInfinite(otherSizeDouble)
+                        ? Integer.MAX_VALUE
+                        : (int) Math.floor(otherSizeDouble);
+        int thisSize = entries.size();
+
+        if (thisSize <= otherSize) {
+            // When this.size <= other.size: iterate through this, call other.has()
+            for (Hashtable.Entry entry : entries) {
+                Object key = entry.key;
+                Object inOther = legacyCallHas(cx, scope, otherObj, hasMethod, key);
+                if (ScriptRuntime.toBoolean(inOther)) {
+                    result.js_add(key);
+                }
+            }
+        } else {
+            // When this.size > other.size: iterate through other.keys(), call this.has()
+            Object iterator =
+                    ScriptRuntime.callIterator(
+                            keysMethod.call(
+                                    cx,
+                                    scope,
+                                    ScriptableObject.ensureScriptable(otherObj),
+                                    ScriptRuntime.emptyArgs),
+                            cx,
+                            scope);
+            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+                for (Object key : it) {
+                    if (js_has(key) == Boolean.TRUE) {
+                        result.js_add(key);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private Object legacyUnion(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
+        result.instanceOfSet = true;
+
+        // Add all elements from this set
+        for (Hashtable.Entry entry : entries) {
+            result.js_add(entry.key);
+        }
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        // Validate size is a number (required by GetSetRecord)
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+
+        // Validate has and keys are callable (GetSetRecord requires both even if union only uses
+        // keys)
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        // Set-like object - use keys method
+        Callable keysMethod = (Callable) keysVal;
+        Object iterator =
+                ScriptRuntime.callIterator(
+                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
+        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+            for (Object key : it) {
+                result.js_add(key);
+            }
+        }
+
+        return result;
+    }
+
+    private Object legacyDifference(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
+        result.instanceOfSet = true;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        return legacyDifferenceSetLike(cx, scope, otherObj, result, sizeVal, hasVal, keysVal);
+    }
+
+    private Object legacyDifferenceSetLike(
+            Context cx,
+            VarScope scope,
+            Object otherObj,
+            NativeSet result,
+            Object sizeVal,
+            Object hasVal,
+            Object keysVal) {
+        // Validate has and keys are callable
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        Callable hasMethod = (Callable) hasVal;
+        Callable keysMethod = (Callable) keysVal;
+
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+        int otherSize =
+                Double.isInfinite(otherSizeDouble)
+                        ? Integer.MAX_VALUE
+                        : (int) Math.floor(otherSizeDouble);
+        int thisSize = entries.size();
+
+        // According to the spec and test converts-negative-zero.js:
+        // When this.size > other.size, we should iterate through other.keys()
+        // and remove matching elements, NOT call other.has()
+        if (thisSize > otherSize) {
+
+            // First, add all elements from this set
+            for (Hashtable.Entry entry : entries) {
+                result.js_add(entry.key);
+            }
+
+            // Then iterate through other and remove matching elements
+            Object iterator =
+                    ScriptRuntime.callIterator(
+                            keysMethod.call(
+                                    cx,
+                                    scope,
+                                    ScriptableObject.ensureScriptable(otherObj),
+                                    ScriptRuntime.emptyArgs),
+                            cx,
+                            scope);
+            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+                for (Object key : it) {
+                    // Convert -0 to +0 as the spec requires
+                    if (key instanceof Number
+                            && ((Number) key).doubleValue() == ScriptRuntime.negativeZero) {
+                        result.js_delete(ScriptRuntime.zeroObj);
+                    } else {
+                        result.js_delete(key);
+                    }
+                }
+            }
+        } else {
+            // When this.size <= other.size, iterate through this and check with has()
+
+            for (Hashtable.Entry entry : entries) {
+                Object key = entry.key;
+                Object inOther = legacyCallHas(cx, scope, otherObj, hasMethod, key);
+                if (!ScriptRuntime.toBoolean(inOther)) {
+                    result.js_add(key);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private Object legacySymmetricDifference(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        NativeSet result = (NativeSet) cx.newObject(scope, CLASS_NAME);
+        result.instanceOfSet = true;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        // Validate size is a number (required by GetSetRecord)
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+
+        // Validate has and keys are callable
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        // Set-like object path
+        Callable hasMethod = (Callable) hasVal;
+        Callable keysMethod = (Callable) keysVal;
+
+        // Add elements from this that are not in other
+        for (Hashtable.Entry entry : entries) {
+            Object key = entry.key;
+            Object inOther = legacyCallHas(cx, scope, otherObj, hasMethod, key);
+            if (!ScriptRuntime.toBoolean(inOther)) {
+                result.js_add(key);
+            }
+        }
+
+        // Add elements from other that are not in this
+        Object iterator =
+                ScriptRuntime.callIterator(
+                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
+        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+            for (Object key : it) {
+                if (js_has(key) != Boolean.TRUE) {
+                    result.js_add(key);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private Object legacyIsSubsetOf(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        // Validate has and keys are callable (even though isSubsetOf only uses has)
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        // Set-like object - use has method for efficiency
+        Callable hasMethod = (Callable) hasVal;
+
+        // Check size optimization
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+        int otherSize =
+                Double.isInfinite(otherSizeDouble)
+                        ? Integer.MAX_VALUE
+                        : (int) Math.floor(otherSizeDouble);
+        int thisSize = entries.size();
+
+        // If this set is larger than other, it cannot be a subset
+        if (thisSize > otherSize) {
+            return Boolean.FALSE;
+        }
+
+        // Check if all elements of this are in other
+        for (Hashtable.Entry entry : entries) {
+            Object key = entry.key;
+            Object inOther = legacyCallHas(cx, scope, otherObj, hasMethod, key);
+            if (!ScriptRuntime.toBoolean(inOther)) {
+                return Boolean.FALSE;
+            }
+        }
+
+        return Boolean.TRUE;
+    }
+
+    private Object legacyIsSupersetOf(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        // Validate size is a number (required by GetSetRecord)
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+
+        // Validate has and keys are callable (GetSetRecord requires both even if isSupersetOf only
+        // uses keys)
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        // Iterate through other.keys() and check if all elements are in this
+        Callable keysMethod = (Callable) keysVal;
+        Object iterator =
+                ScriptRuntime.callIterator(
+                        keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs), cx, scope);
+        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+            for (Object value : it) {
+                if (js_has(value) != Boolean.TRUE) {
+                    return Boolean.FALSE;
+                }
+            }
+        }
+        return Boolean.TRUE;
+    }
+
+    private Object legacyIsDisjointFrom(Context cx, VarScope scope, Object[] args) {
+        Object otherObj = args.length > 0 ? args[0] : Undefined.instance;
+
+        // ES2025: GetSetRecord requires size, has, and keys properties
+        Scriptable scriptable = ScriptableObject.ensureScriptable(otherObj);
+        Object sizeVal = ScriptableObject.getProperty(scriptable, "size");
+        Object hasVal = ScriptableObject.getProperty(scriptable, "has");
+        Object keysVal = ScriptableObject.getProperty(scriptable, "keys");
+
+        // Validate all required properties exist
+        legacyValidateSetLike(sizeVal, hasVal, keysVal);
+
+        // Validate has and keys are callable
+        if (!(hasVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "has", ScriptRuntime.typeof(hasVal));
+        }
+        if (!(keysVal instanceof Callable)) {
+            throw ScriptRuntime.typeErrorById(
+                    "msg.isnt.function", "keys", ScriptRuntime.typeof(keysVal));
+        }
+
+        // Set-like object with size optimization
+        Callable hasMethod = (Callable) hasVal;
+        Callable keysMethod = (Callable) keysVal;
+
+        double otherSizeDouble = ScriptRuntime.toNumber(sizeVal);
+        if (Double.isNaN(otherSizeDouble)) {
+            throw ScriptRuntime.typeError("size is not a number");
+        }
+        int otherSize =
+                Double.isInfinite(otherSizeDouble)
+                        ? Integer.MAX_VALUE
+                        : (int) Math.floor(otherSizeDouble);
+        int thisSize = entries.size();
+
+        if (thisSize <= otherSize) {
+            // Iterate through this set
+            for (Hashtable.Entry entry : entries) {
+                Object key = entry.key;
+                Object inOther = legacyCallHas(cx, scope, otherObj, hasMethod, key);
+                if (ScriptRuntime.toBoolean(inOther)) {
+                    return Boolean.FALSE;
+                }
+            }
+        } else {
+            // Iterate through other
+            Object iterator =
+                    ScriptRuntime.callIterator(
+                            keysMethod.call(cx, scope, scriptable, ScriptRuntime.emptyArgs),
+                            cx,
+                            scope);
+            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+                for (Object key : it) {
+                    if (js_has(key) == Boolean.TRUE) {
+                        return Boolean.FALSE;
+                    }
+                }
+            }
+        }
+
+        return Boolean.TRUE;
+    }
+
+    // Helper methods for Set operations
+
+    private static Object legacyCallHas(
+            Context cx, VarScope scope, Object obj, Object hasMethod, Object key) {
+        return ((Callable) hasMethod)
+                .call(cx, scope, ScriptableObject.ensureScriptable(obj), new Object[] {key});
+    }
+
+    private static void legacyValidateSetLike(Object sizeVal, Object hasVal, Object keysVal) {
+        if (sizeVal == Scriptable.NOT_FOUND) {
+            throw ScriptRuntime.typeError("Set-like object must have a 'size' property");
+        }
+        if (hasVal == Scriptable.NOT_FOUND) {
+            throw ScriptRuntime.typeError("Set-like object must have a 'has' method");
+        }
+        if (keysVal == Scriptable.NOT_FOUND) {
+            throw ScriptRuntime.typeError("Set-like object must have a 'keys' method");
+        }
     }
 }

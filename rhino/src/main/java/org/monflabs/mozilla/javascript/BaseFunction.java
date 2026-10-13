@@ -680,7 +680,12 @@ public class BaseFunction extends ScriptableObject implements Function {
             throw ScriptRuntime.notFunctionError(null);
         }
         if (thisObj instanceof BaseFunction) {
-            return (BaseFunction) thisObj;
+            // a function is not converted (it was, with its default value, before
+            // VERSION_ECMASCRIPT)
+            Context cx = Context.getCurrentContext();
+            if (cx != null && cx.isLatestEcmaScript()) {
+                return (BaseFunction) thisObj;
+            }
         }
         if (thisObj instanceof Scriptable) {
             Object x = ((Scriptable) thisObj).getDefaultValue(ScriptRuntime.FunctionClass);
@@ -778,7 +783,7 @@ public class BaseFunction extends ScriptableObject implements Function {
         Object proto;
         if (nt instanceof JSFunction || nt instanceof ClassDefinition.DefaultConstructor) {
             proto = ((BaseFunction) nt).getPrototypeProperty();
-        } else if (nt instanceof NativeProxy) {
+        } else if (nt instanceof NativeProxy && cx.isLatestEcmaScript()) {
             // GetPrototypeFromConstructor: Get, then GetFunctionRealm, which throws for a revoked
             // proxy
             proto = ScriptableObject.getProperty((Scriptable) nt, "prototype");

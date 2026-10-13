@@ -13,11 +13,6 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 /** Residuals of the built-ins (plan 1.8c). */
 class BuiltinsResidualsTest {
 
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
-
     @Test
     void stringMethodsIgnoreSymbolMethodsOfPrimitives() {
         Utils.assertGatedBehavior(
@@ -124,7 +119,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void arrayMethodsFollowSpecSteps() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "0|false|2,3|1|||9007199254740992|undefined|1,2,3",
                 "3|true|2,3|1|[object Object]|x|TypeError|TypeError|1,2,3",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var n; var a = [1, 2, 3, 4, 5]; a.constructor = {};"
@@ -190,13 +186,15 @@ class BuiltinsResidualsTest {
 
     @Test
     void functionResiduals() {
+        // under VERSION_ES6, the interpreter keeps the rest-parameter bug of stock Rhino
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "0,1,2|7,0,1",
+                "function rest(...a) { return a; }"
+                        + " [rest.apply(null, [0, 1, 2]), rest.bind(null, 7)(0, 1)].join('|')");
         Utils.assertGatedBehavior(
-                "0,1,2|7,0,1|0|0|0|TypeError",
-                "0,1,2|7,0,1|Infinity|0|2147483648|TypeError",
+                "0|0|0|[object Object]",
+                "Infinity|0|2147483648|TypeError",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
-                        + " function rest(...a) { return a; }"
-                        + " t(() => rest.apply(null, [0, 1, 2]));"
-                        + " t(() => rest.bind(null, 7)(0, 1));"
                         + " function len(l) { var f = function () {};"
                         + " Object.defineProperty(f, 'length', { value: l }); return f.bind().length; }"
                         + " t(() => len(Infinity)); t(() => len(NaN)); t(() => len(2 ** 31));"
@@ -208,7 +206,7 @@ class BuiltinsResidualsTest {
     @Test
     void objectResiduals() {
         Utils.assertGatedBehavior(
-                "TypeError,2|TypeError|get,set|TypeError|TypeError|TypeError|ownKeys,gopd:a,get:a|undefined",
+                ",0|undefined|set,enumerable|TypeError|a|null|ownKeys,get:a|undefined",
                 "TypeError,2|TypeError|get,set|TypeError|TypeError|TypeError|ownKeys,gopd:a,get:a|9",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var a = [0, 1, 2]; a.length = 10; a[5] = 5;"
@@ -234,7 +232,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void setDateBigIntErrorResiduals() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "TypeError||-1|-62167219200000|true|1|undefined|[object Error]",
                 "size,ToNumber,has,keys|1,3|0|NaN|false|TypeError|c|[object Object]",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var log = []; new Set([1]).union({"
@@ -256,7 +255,8 @@ class BuiltinsResidualsTest {
 
     @Test
     void typedArrayResiduals() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "RangeError|Error|1|false|false|get Symbol(Symbol.toStringTag)||1,9|0",
                 "RangeError|TypeError|TypeError|true|true|get [Symbol.toStringTag]|3,4|1,9|NaN",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => new Int8Array(-1));"
@@ -269,6 +269,22 @@ class BuiltinsResidualsTest {
                         + " t(() => new Int8Array([1, 2, 3, 4]).subarray(-Infinity).subarray(2, Infinity));"
                         + " t(() => new Int8Array([1, 2]).with(-1, 9));"
                         + " t(() => Float64Array.from([, 1])[0]);"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void typedArrayJsTestsExpectations() {
+        Utils.assertGatedBehavior(
+                "RangeError: Index -4 out of range|RangeError: Index -2,147,483,656 out of range"
+                        + "|0,2,3|1,0,3|TypeError",
+                "RangeError: Index -2 out of range|RangeError: Index -268,435,457 out of range"
+                        + "|NaN,2,3|1,0,3|ok",
+                "var r = []; function t(f) { try { r.push(String(f())); }"
+                        + " catch (e) { r.push(e instanceof TypeError ? e.name : String(e)); } }"
+                        + " t(() => new Int16Array(-2)); t(() => new Float64Array(-268435457));"
+                        + " t(() => new Float32Array([1, 2, 3]).with(0));"
+                        + " t(() => new Int8Array([1, 2, 3]).with(1));"
+                        + " t(() => { var a = new Int8Array(2); a.set(0); a.set(0, 1); return 'ok'; });"
                         + " r.join('|')");
     }
 

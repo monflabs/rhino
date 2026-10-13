@@ -132,7 +132,8 @@ public class LambdaAccessorSlot extends StandardSlot<Scriptable> {
     /** The name of the accessor functions: a symbol key is named [description] (10.2.9). */
     private String functionName() {
         Object name = super.getName();
-        if (name instanceof SymbolKey) {
+        Context cx = Context.getCurrentContext();
+        if (name instanceof SymbolKey && cx != null && cx.isLatestEcmaScript()) {
             return "[" + ((SymbolKey) name).getName() + "]";
         }
         return String.valueOf(name);

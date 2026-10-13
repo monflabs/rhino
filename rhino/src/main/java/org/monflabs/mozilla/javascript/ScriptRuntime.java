@@ -792,6 +792,11 @@ public class ScriptRuntime {
     public static BigInteger toBigIntStrict(Object val) {
         Object prim = toPrimitive(val, NumberClass);
         if (prim instanceof Number && !(prim instanceof BigInteger)) {
+            // a Number converts to a BigInt before VERSION_ECMASCRIPT
+            Context cx = Context.getCurrentContext();
+            if (cx == null || !cx.isLatestEcmaScript()) {
+                return toBigInt(prim);
+            }
             throw typeErrorById("msg.cant.convert.to.bigint", toString(prim));
         }
         return toBigInt(prim);

@@ -506,10 +506,8 @@ function TestTypedArraySet() {
   assertThrows(function() { a.set.call({}) });
   assertThrows(function() { a.set.call([]) });
 
-  // a primitive source is converted with ToObject: a Number object has no length
-  a.set(0);
-  a.set(0, 1);
-  assertArrayPrefix(expected, a);
+  assertThrows(function() { a.set(0); });
+  assertThrows(function() { a.set(0, 1); });
 }
 
 TestTypedArraySet();

@@ -157,7 +157,7 @@ public class AbstractEcmaObjectOperations {
         try (var map = obj.startCompoundOp(false)) {
             ids = obj.getIds(map, true, true);
         }
-        if (obj instanceof NativeProxy) {
+        if (obj instanceof NativeProxy && cx.isLatestEcmaScript()) {
             // the trap sees the partial descriptors of the spec, and a refusal throws
             for (Object key : ids) {
                 DescriptorInfo partial =

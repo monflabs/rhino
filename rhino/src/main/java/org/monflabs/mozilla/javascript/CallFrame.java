@@ -169,8 +169,9 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
             if (argCount >= desc.getParamCount()) {
                 vals = new Object[argCount - offset];
 
-                // the arguments are the bound ones, then those on the stack from argShift
-                int bound = boundArgs == null ? 0 : boundArgs.length;
+                // the arguments are the bound ones, then those on the stack from argShift (only
+                // those on the stack before VERSION_ECMASCRIPT)
+                int bound = boundArgs == null || !desc.isLatestEcmaScript() ? 0 : boundArgs.length;
                 for (int valsIdx = 0; valsIdx != vals.length; ++valsIdx) {
                     int k = offset + valsIdx;
                     Object val;

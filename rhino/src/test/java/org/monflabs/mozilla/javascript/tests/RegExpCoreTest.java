@@ -10,14 +10,10 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 /** RegExp, ES2015 core (plan 1.9). */
 class RegExpCoreTest {
 
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
-
     @Test
     void prototypeIsOrdinaryObject() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "[object RegExp]|false|||/(?:)/",
                 "[object Object]|undefined|(?:)|TypeError|/(?:)/",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => Object.prototype.toString.call(RegExp.prototype));"
@@ -30,7 +26,8 @@ class RegExpCoreTest {
 
     @Test
     void flagsAndConstructor() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "gimsyu|gimsyu|true|true|[object Object]/|x",
                 "dgimsuy|g|true|false|ab/gi|x",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var c = ''; var o = {};"
@@ -48,7 +45,8 @@ class RegExpCoreTest {
 
     @Test
     void sourceLexerAndQuantifiers() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "|\n|/x{1}{1,}/|SyntaxError|SyntaxError|TypeError|TypeError",
                 "(?:)|\\n|SyntaxError|true|true|­|cd2",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => new RegExp('').source);"
@@ -63,7 +61,8 @@ class RegExpCoreTest {
 
     @Test
     void symbolMethods() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "1|0|undefined|bb",
                 "TypeError|0|TypeError|ba",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => /./[Symbol.match].call({ exec() { return 1; }, flags: '' }, 'a'));"

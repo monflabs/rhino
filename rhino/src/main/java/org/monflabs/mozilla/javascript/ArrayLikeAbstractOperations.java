@@ -66,7 +66,8 @@ public class ArrayLikeAbstractOperations {
         }
 
         long length = lengthAccessor.getLength(cx, o);
-        return coercibleIterativeMethod(cx, operation, scope, o, args, length, isTypedArray(o));
+        return coercibleIterativeMethod(
+                cx, operation, scope, o, args, length, isTypedArray(o) && cx.isLatestEcmaScript());
     }
 
     public static Object coercibleIterativeMethod(
@@ -201,11 +202,10 @@ public class ArrayLikeAbstractOperations {
 
     /** ArraySpeciesCreate (ECMA-262 10.4.2.3). */
     static Scriptable arraySpeciesCreate(Context cx, VarScope scope, Object o, long length) {
-        boolean isArray =
-                cx.getLanguageVersion() >= Context.VERSION_ES6
-                        ? NativeArray.isArray(o)
-                        : o instanceof NativeArray;
-        if (isArray) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyArraySpeciesCreate(cx, scope, o, (int) length);
+        }
+        if (NativeArray.isArray(o)) {
             Object c = ScriptableObject.getProperty((Scriptable) o, "constructor");
             if (c instanceof Function f && f.isConstructor()) {
                 VarScope ctorScope = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
@@ -240,6 +240,36 @@ public class ArrayLikeAbstractOperations {
             throw ScriptRuntime.rangeError(msg);
         }
         return cx.newArray(scope, (int) length);
+    }
+
+    /** ArraySpeciesCreate of stock Rhino, before VERSION_ECMASCRIPT. */
+    private static Scriptable legacyArraySpeciesCreate(
+            Context cx, VarScope scope, Object o, int length) {
+        if (o instanceof NativeArray) {
+            Object c = ScriptableObject.getProperty((Scriptable) o, "constructor");
+            if (c instanceof Function f && f.isConstructor()) {
+                VarScope ctorScope = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
+                if (ctorScope != ScriptableObject.getTopLevelScope(scope)
+                        && c == ScriptableObject.getProperty(ctorScope, "Array")) {
+                    c = Undefined.instance;
+                }
+            }
+            if (c instanceof Scriptable) {
+                c = ScriptableObject.getProperty((Scriptable) c, SymbolKey.SPECIES);
+                if (c == null || c == NOT_FOUND) {
+                    c = Undefined.instance;
+                }
+            }
+            if (!Undefined.isUndefined(c)) {
+                if (c instanceof Constructable) {
+                    return ((Constructable) c)
+                            .construct(cx, scope, new Object[] {Double.valueOf(length)});
+                } else {
+                    throw ScriptRuntime.typeErrorById("msg.ctor.not.found", o);
+                }
+            }
+        }
+        return cx.newArray(scope, length);
     }
 
     static Function getCallbackArg(Context cx, Object callbackArg) {
@@ -312,7 +342,8 @@ public class ArrayLikeAbstractOperations {
         Scriptable o = ScriptRuntime.toObject(cx, scope, thisObj);
 
         long length = getLengthProperty(cx, o);
-        return reduceMethodWithLength(cx, operation, scope, o, args, length, isTypedArray(o));
+        return reduceMethodWithLength(
+                cx, operation, scope, o, args, length, isTypedArray(o) && cx.isLatestEcmaScript());
     }
 
     public static Object reduceMethodWithLength(

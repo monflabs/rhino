@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Array, Promise, Set, typed array and RegExp residuals only under VERSION_ECMASCRIPT (2026-10-13, plan G6)
+
+- `BACKWARD_COMPATIBILITY.md` 2.29-2.34 are gated, with the undocumented changes of the same commits. Under
+  `VERSION_ES6`, stock Rhino again for: ArraySpeciesCreate, `pop`/`shift`/`splice`/`copyWithin`/`flat`/`flatMap`/
+  `reverse` (the stock bodies kept as `legacy*` methods), `slice` with species, `toString`, `push` past 2^53-1 and
+  array length truncation; the Promise combinators (`resolve` read lazily, iterator closing, the `then` getter,
+  the `" rejected"` status); iterator `return` of the built-ins; IsRegExp in `startsWith`/`endsWith`/`includes`;
+  ToPrimitive with `null`; bound function `length`; the immutable `Object.prototype`, `__proto__` getter and
+  setter-only descriptors; the Set methods (`legacyUnion` and friends); the Error prototypes, `cause`, Date
+  `@@toPrimitive`, MakeTime/TimeClip and `Date.parse("-000000...")`; BigInt conversions of Numbers; the typed array
+  constructors, `from`, `with`, `set`, `subarray`, `toReversed`/`toSorted`, `@@species` (absent) and `@@iterator`
+  (its own function); the RegExp prototype, constructor, `compile(re, flags)`, `flags` order (`gimsyu`), `source`,
+  `toString`, quantifiers, negative `lastIndex`, `lastIndex` writes, RegExpExec, `@@search`, `@@replace` and
+  format-control characters in regexp literals.
+- Tests: the stock `harmony/typed-array-ctor.js`, `harmony/typedarrays.js` and `es2023/typedArray-with.js` are
+  restored, with a gated twin in `BuiltinsResidualsTest`; `BuiltinsResidualsTest` and `RegExpCoreTest` assert both
+  sides. The interpreter keeps a stock bug for rest parameters with `apply`/`bind` under `VERSION_ES6`.
+- test262: unchanged (41,080/42,616, 96.4%).
+
 ### Typed arrays, Reflect, Proxy and built-in residuals only under VERSION_ECMASCRIPT (2026-10-13, plan G5)
 
 - `BACKWARD_COMPATIBILITY.md` 2.23-2.28 are gated, with the undocumented changes of the same commits. Under

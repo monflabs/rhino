@@ -69,7 +69,7 @@ public class AccessorSlot extends StandardSlot<Scriptable> {
         if (getter != null) {
             Function f = getter.asGetterFunction(fName, scope);
             desc.getter = f == null ? Undefined.instance : f;
-        } else if (es6 && setter != null) {
+        } else if (cx.isLatestEcmaScript() && setter != null) {
             desc.getter = Undefined.instance;
         }
         if (setter != null) {

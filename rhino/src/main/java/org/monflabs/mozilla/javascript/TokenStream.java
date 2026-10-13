@@ -1381,7 +1381,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 case '/':
                     markCommentStart();
                     // is it a // comment? (a format-control character after / starts a regexp)
-                    if (matchCharKeepFormat('/')) {
+                    boolean keepFormat = parser.compilerEnv.isLatestEcmaScript();
+                    if (keepFormat ? matchCharKeepFormat('/') : matchChar('/')) {
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
                         tokenBeg = cursor - 2;
@@ -1390,7 +1391,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         return Token.COMMENT;
                     }
                     // is it a /* or /** comment?
-                    if (matchCharKeepFormat('*')) {
+                    if (keepFormat ? matchCharKeepFormat('*') : matchChar('*')) {
                         boolean lookForSlash = false;
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
@@ -1611,7 +1612,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
         boolean inCharSet = false; // true if inside a '['..']' pair
         int c;
         // the format-control characters (Cf) belong to the literal (ES5 7.1)
-        while ((c = getChar(false)) != '/' || inCharSet) {
+        boolean skipFormat = !parser.compilerEnv.isLatestEcmaScript();
+        while ((c = getChar(skipFormat)) != '/' || inCharSet) {
             if (c == '\n' || c == EOF_CHAR) {
                 ungetChar(c);
                 tokenEnd = cursor - 1;
@@ -1621,7 +1623,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
             }
             if (c == '\\') {
                 addToString(c);
-                c = getChar(false);
+                c = getChar(skipFormat);
                 if (c == '\n' || c == EOF_CHAR) {
                     ungetChar(c);
                     tokenEnd = cursor - 1;

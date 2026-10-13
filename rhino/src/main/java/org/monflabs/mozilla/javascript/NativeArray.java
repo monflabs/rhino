@@ -485,9 +485,13 @@ public class NativeArray extends ScriptableObject implements List {
             Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
         long index = toArrayIndex(id);
         boolean grows = index >= length;
-        if (grows
-                && (lengthAttr & READONLY) != 0
-                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        boolean latest = cx.isLatestEcmaScript();
+        if (grows && !latest) {
+            // stock Rhino: the length grows before the element is defined
+            length = index + 1;
+            modCount++;
+        }
+        if (grows && (lengthAttr & READONLY) != 0 && latest) {
             // ArrayDefineOwnProperty (10.4.2.1) step 1.e: no index at or above a read-only length
             if (checkValid) {
                 throw ScriptRuntime.typeErrorById("msg.modify.readonly", "length");
@@ -513,7 +517,7 @@ public class NativeArray extends ScriptableObject implements List {
         }
 
         boolean defined = super.defineOwnProperty(cx, id, desc, checkValid);
-        if (grows && defined) {
+        if (grows && defined && latest) {
             length = index + 1;
             modCount++;
         }
@@ -566,7 +570,7 @@ public class NativeArray extends ScriptableObject implements List {
             boolean isThrow) {
         double d;
         Context cx = Context.getCurrentContext();
-        if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx != null && cx.isLatestEcmaScript()) {
             // ArraySetLength (10.4.2.4): the conversion may make the length read-only
             d = checkLength(value);
             if ((builtIn.lengthAttr & READONLY) != 0) {
@@ -579,7 +583,7 @@ public class NativeArray extends ScriptableObject implements List {
             d = ScriptRuntime.toNumber(value);
         }
         try (var map = builtIn.startCompoundOp(true)) {
-            if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            if (cx != null && cx.isLatestEcmaScript()) {
                 long reached = builtIn.deleteDownTo(map, (long) d);
                 if (reached > d) {
                     builtIn.setLength(map, reached);
@@ -654,7 +658,7 @@ public class NativeArray extends ScriptableObject implements List {
             }
 
             Context cx = Context.getCurrentContext();
-            if (cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+            if (cx != null && cx.isLatestEcmaScript()) {
                 long reached = builtIn.deleteDownTo(map, newLength);
                 if (reached > newLength) {
                     // 10.4.2.4 step 17.b: the length stops above the element that stayed
@@ -1055,7 +1059,7 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // 23.1.3.36: the join method of the object, or Object.prototype.toString
             Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
             Object join = ScriptableObject.getProperty(o, "join");
@@ -1257,8 +1261,17 @@ public class NativeArray extends ScriptableObject implements List {
         long len = getLengthProperty(cx, o);
 
         long half = len / 2;
+        boolean latest = cx.isLatestEcmaScript();
         for (long i = 0; i < half; i++) {
             long j = len - i - 1;
+            if (!latest) {
+                // stock Rhino
+                Object temp1 = getRawElem(o, i);
+                Object temp2 = getRawElem(o, j);
+                setRawElem(cx, o, i, temp2);
+                setRawElem(cx, o, j, temp1);
+                continue;
+            }
             // 23.1.3.26 step 7: HasProperty and Get of each index, then Set or delete
             Object lower = getElemIfPresent(cx, o, i);
             boolean lowerExists = lower != NOT_FOUND;
@@ -1335,8 +1348,7 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
         long length = getLengthProperty(cx, o);
-        if (length + args.length > NativeNumber.MAX_SAFE_INTEGER
-                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (length + args.length > NativeNumber.MAX_SAFE_INTEGER && cx.isLatestEcmaScript()) {
             throw ScriptRuntime.typeErrorById("msg.arraylength.too.big", length + args.length);
         }
         for (int i = 0; i < args.length; i++) {
@@ -1349,6 +1361,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_pop(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyPop(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
 
         Object result;
@@ -1387,6 +1402,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_shift(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyShift(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
 
         if (o instanceof NativeArray) {
@@ -1476,6 +1494,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_splice(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacySplice(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
 
         long length = getLengthProperty(cx, o);
@@ -1720,7 +1741,8 @@ public class NativeArray extends ScriptableObject implements List {
         }
 
         Scriptable result =
-                ArrayLikeAbstractOperations.arraySpeciesCreate(cx, s, o, Math.max(0, end - begin));
+                ArrayLikeAbstractOperations.arraySpeciesCreate(
+                        cx, s, o, cx.isLatestEcmaScript() ? Math.max(0, end - begin) : 0);
         for (long slot = begin; slot < end; slot++) {
             Object temp = getRawElem(o, slot);
             if (temp != NOT_FOUND) {
@@ -2039,6 +2061,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_copyWithin(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyCopyWithin(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
         long len = getLengthProperty(cx, o);
 
@@ -2097,20 +2122,7 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
 
-        boolean latest = cx.isLatestEcmaScript();
         for (; count > 0; count--) {
-            if (!latest) {
-                // stock Rhino: an absent or undefined element is deleted at the destination
-                Object temp = getRawElem(o, from);
-                if (temp == Scriptable.NOT_FOUND || Undefined.isUndefined(temp)) {
-                    deleteElem(o, to);
-                } else {
-                    setElem(cx, o, to, temp);
-                }
-                from += direction;
-                to += direction;
-                continue;
-            }
             // HasProperty, then Get and Set, or DeletePropertyOrThrow (23.1.3.4 step 13)
             boolean fromPresent =
                     from > Integer.MAX_VALUE
@@ -2145,8 +2157,372 @@ public class NativeArray extends ScriptableObject implements List {
         return getElem(cx, o, k);
     }
 
+    // Array methods of stock Rhino, before VERSION_ECMASCRIPT
+
+    private static Object legacyPop(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
+
+        Object result;
+        if (o instanceof NativeArray) {
+            NativeArray na = (NativeArray) o;
+            if (na.denseOnly && na.length > 0) {
+                na.length--;
+                na.modCount++;
+                result = na.dense[(int) na.length];
+                na.dense[(int) na.length] = NOT_FOUND;
+                return result;
+            }
+        }
+        long length = getLengthProperty(cx, o);
+        if (length > 0) {
+            length--;
+
+            // Get the to-be-deleted property's value.
+            result = getElem(cx, o, length);
+
+            // We need to delete the last property, because 'thisObj' may not
+            // have setLength which does that for us.
+            deleteElem(o, length);
+        } else {
+            result = Undefined.instance;
+        }
+        // necessary to match js even when length < 0; js pop will give a
+        // length property to any target it is called on.
+        setLengthProperty(cx, o, length);
+
+        return result;
+    }
+
+    private static Object legacyShift(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
+
+        if (o instanceof NativeArray) {
+            NativeArray na = (NativeArray) o;
+            if (na.denseOnly && na.length > 0) {
+                na.length--;
+                na.modCount++;
+                Object result = na.dense[0];
+                System.arraycopy(na.dense, 1, na.dense, 0, (int) na.length);
+                na.dense[(int) na.length] = NOT_FOUND;
+                return result == NOT_FOUND ? Undefined.instance : result;
+            }
+        }
+        Object result;
+        long length = getLengthProperty(cx, o);
+        if (length > 0) {
+            long i = 0;
+            length--;
+
+            // Get the to-be-deleted property's value.
+            result = getElem(cx, o, i);
+
+            /*
+             * Slide down the array above the first element.  Leave i
+             * set to point to the last element.
+             */
+            if (length > 0) {
+                for (i = 1; i <= length; i++) {
+                    Object temp = getRawElem(o, i);
+                    setRawElem(cx, o, i - 1, temp);
+                }
+            }
+            // We need to delete the last property, because 'thisObj' may not
+            // have setLength which does that for us.
+            deleteElem(o, length);
+        } else {
+            result = Undefined.instance;
+        }
+        setLengthProperty(cx, o, length);
+        return result;
+    }
+
+    private static Object legacySplice(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
+
+        NativeArray na = null;
+        Object result = ArrayLikeAbstractOperations.arraySpeciesCreate(cx, s, o, 0);
+        NativeArray nar = null;
+        boolean denseFrom = false;
+        boolean denseRes = false;
+
+        if (o instanceof NativeArray) {
+            na = (NativeArray) o;
+            denseFrom = na.denseOnly;
+        }
+        if (result instanceof NativeArray) {
+            nar = (NativeArray) result;
+            denseRes = nar.denseOnly;
+        }
+
+        /* create an empty Array to return. */
+        s = getTopLevelScope(s);
+        int argc = args.length;
+        if (argc == 0) return cx.newArray(s, 0);
+        long length = getLengthProperty(cx, o);
+
+        /* Convert the first argument into a starting index. */
+        long begin =
+                ArrayLikeAbstractOperations.toSliceIndex(ScriptRuntime.toInteger(args[0]), length);
+        argc--;
+
+        /* Convert the second argument into count */
+        long actualDeleteCount;
+        if (args.length == 1) {
+            actualDeleteCount = length - begin;
+        } else {
+            double dcount = ScriptRuntime.toInteger(args[1]);
+            if (dcount < 0) {
+                actualDeleteCount = 0;
+            } else if (dcount > (length - begin)) {
+                actualDeleteCount = length - begin;
+            } else {
+                actualDeleteCount = (long) dcount;
+            }
+            argc--;
+        }
+
+        long end = begin + actualDeleteCount;
+        long delta = argc - actualDeleteCount;
+
+        if (length + delta > NativeNumber.MAX_SAFE_INTEGER) {
+            throw ScriptRuntime.typeErrorById("msg.arraylength.too.big", length + delta);
+        }
+        if (actualDeleteCount > Integer.MAX_VALUE) {
+            String msg = ScriptRuntime.getMessageById("msg.arraylength.bad");
+            throw ScriptRuntime.rangeError(msg);
+        }
+
+        /* If there are elements to remove, put them into the return value. */
+        if (actualDeleteCount != 0) {
+            if (denseFrom && denseRes) {
+                int intLen = (int) (end - begin);
+                Object[] copy = new Object[intLen];
+                System.arraycopy(na.dense, (int) begin, copy, 0, intLen);
+                nar.dense = copy;
+                try (var map = nar.startCompoundOp(true)) {
+                    nar.setLength(map, intLen);
+                }
+            } else {
+                for (long last = begin; last != end; last++) {
+                    Object temp = getRawElem(o, last);
+                    if (temp != NOT_FOUND) {
+                        ArrayLikeAbstractOperations.defineElem(
+                                cx, (ScriptableObject) result, last - begin, temp);
+                    }
+                }
+                // Need to set length for sparse result array
+                setLengthProperty(cx, (ScriptableObject) result, end - begin);
+            }
+        }
+
+        /* Find the direction (up or down) to copy and make way for argv. */
+        if (denseFrom
+                && length + delta < Integer.MAX_VALUE
+                && na.ensureCapacity((int) (length + delta))) {
+            System.arraycopy(
+                    na.dense, (int) end, na.dense, (int) (begin + argc), (int) (length - end));
+            if (argc > 0) {
+                System.arraycopy(args, 2, na.dense, (int) begin, argc);
+            }
+            if (delta < 0) {
+                Arrays.fill(na.dense, (int) (length + delta), (int) length, NOT_FOUND);
+            }
+            na.length = length + delta;
+            na.modCount++;
+            return result;
+        }
+
+        if (delta > 0) {
+            for (long last = length - 1; last >= end; last--) {
+                Object temp = getRawElem(o, last);
+                setRawElem(cx, o, last + delta, temp);
+            }
+        } else if (delta < 0) {
+            for (long last = end; last < length; last++) {
+                Object temp = getRawElem(o, last);
+                setRawElem(cx, o, last + delta, temp);
+            }
+            // Do this backwards because some implementations might use a
+            // non-sparse array and therefore might not be able to handle
+            // deleting elements "in the middle". This makes us compatible
+            // with older Rhino releases.
+            for (long k = length - 1; k >= length + delta; --k) {
+                deleteElem(o, k);
+            }
+        }
+
+        /* Copy from argv into the hole to complete the splice. */
+        int argoffset = args.length - argc;
+        for (int i = 0; i < argc; i++) {
+            setElem(cx, o, begin + i, args[i + argoffset]);
+        }
+
+        /* Update length in case we deleted elements from the end. */
+        setLengthProperty(cx, o, length + delta);
+        return result;
+    }
+
+    private static Object legacyCopyWithin(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+        long len = getLengthProperty(cx, o);
+
+        Object targetArg = (args.length >= 1) ? args[0] : Undefined.instance;
+        long relativeTarget = (long) ScriptRuntime.toInteger(targetArg);
+        long to;
+        if (relativeTarget < 0) {
+            to = Math.max((len + relativeTarget), 0);
+        } else {
+            to = Math.min(relativeTarget, len);
+        }
+
+        Object startArg = (args.length >= 2) ? args[1] : Undefined.instance;
+        long relativeStart = (long) ScriptRuntime.toInteger(startArg);
+        long from;
+        if (relativeStart < 0) {
+            from = Math.max((len + relativeStart), 0);
+        } else {
+            from = Math.min(relativeStart, len);
+        }
+
+        long relativeEnd = len;
+        if (args.length >= 3 && !Undefined.isUndefined(args[2])) {
+            relativeEnd = (long) ScriptRuntime.toInteger(args[2]);
+        }
+        final long fin;
+        if (relativeEnd < 0) {
+            fin = Math.max((len + relativeEnd), 0);
+        } else {
+            fin = Math.min(relativeEnd, len);
+        }
+
+        long count = Math.min(fin - from, len - to);
+        int direction = 1;
+        if (from < to && to < from + count) {
+            direction = -1;
+            from = from + count - 1;
+            to = to + count - 1;
+        }
+
+        // Optimize for a native array. If properties were overridden with setters
+        // and other non-default options then we won't get here.
+        if ((o instanceof NativeArray) && (count <= Integer.MAX_VALUE)) {
+            NativeArray na = (NativeArray) o;
+            if (na.denseOnly) {
+                for (; count > 0; count--) {
+                    na.dense[(int) to] = na.dense[(int) from];
+                    from += direction;
+                    to += direction;
+                }
+
+                return thisObj;
+            }
+        }
+
+        for (; count > 0; count--) {
+            // an absent or undefined element is deleted at the destination
+            Object temp = getRawElem(o, from);
+            if (temp == Scriptable.NOT_FOUND || Undefined.isUndefined(temp)) {
+                deleteElem(o, to);
+            } else {
+                setElem(cx, o, to, temp);
+            }
+
+            from += direction;
+            to += direction;
+        }
+
+        return thisObj;
+    }
+
+    private static Object legacyFlat(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+        double depth;
+        if (args.length < 1 || Undefined.isUndefined(args[0])) {
+            depth = 1;
+        } else {
+            depth = ScriptRuntime.toInteger(args[0]);
+        }
+
+        return legacyFlatten(cx, s, o, depth);
+    }
+
+    private static Object legacyFlatMap(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
+        Object callbackArg = args.length > 0 ? args[0] : Undefined.instance;
+
+        Function cbf = ArrayLikeAbstractOperations.getCallbackArg(cx, callbackArg);
+        VarScope parent = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
+        Scriptable thisArg;
+        if (args.length < 2 || args[1] == null || args[1] == Undefined.instance) {
+            thisArg = Undefined.SCRIPTABLE_UNDEFINED;
+        } else {
+            thisArg = ScriptRuntime.toObject(cx, s, args[1]);
+        }
+
+        long length = getLengthProperty(cx, o);
+
+        Scriptable result = ArrayLikeAbstractOperations.arraySpeciesCreate(cx, s, o, 0);
+        long j = 0;
+        for (long i = 0; i < length; i++) {
+            Object elem = getRawElem(o, i);
+            if (elem == Scriptable.NOT_FOUND) {
+                continue;
+            }
+            Object[] innerArgs = new Object[] {elem, Long.valueOf(i), o};
+            Object mapCall = cbf.call(cx, parent, thisArg, innerArgs);
+            if (js_isArray(mapCall)) {
+                Scriptable arr = (Scriptable) mapCall;
+                long arrLength = getLengthProperty(cx, arr);
+                for (long k = 0; k < arrLength; k++) {
+                    Object temp = getRawElem(arr, k);
+                    defineElemOrThrow(cx, result, j++, temp);
+                }
+            } else {
+                defineElemOrThrow(cx, result, j++, mapCall);
+            }
+        }
+        setLengthProperty(cx, result, j);
+        return result;
+    }
+
+    private static Scriptable legacyFlatten(
+            Context cx, VarScope scope, Scriptable source, double depth) {
+        long length = getLengthProperty(cx, source);
+
+        Scriptable result;
+        result = ArrayLikeAbstractOperations.arraySpeciesCreate(cx, scope, source, 0);
+        long j = 0;
+        for (long i = 0; i < length; i++) {
+            Object elem = getRawElem(source, i);
+            if (elem == Scriptable.NOT_FOUND) {
+                continue;
+            }
+            if (depth >= 1 && js_isArray(elem)) {
+                Scriptable arr = legacyFlatten(cx, scope, (Scriptable) elem, depth - 1);
+                long arrLength = getLengthProperty(cx, arr);
+                for (long k = 0; k < arrLength; k++) {
+                    Object temp = getRawElem(arr, k);
+                    defineElemOrThrow(cx, result, j++, temp);
+                }
+            } else {
+                defineElemOrThrow(cx, result, j++, elem);
+            }
+        }
+        setLengthProperty(cx, result, j);
+        return result;
+    }
+
     private static Object js_flat(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyFlat(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
         double depth;
         if (args.length < 1 || Undefined.isUndefined(args[0])) {
@@ -2209,6 +2585,9 @@ public class NativeArray extends ScriptableObject implements List {
 
     private static Object js_flatMap(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        if (!cx.isLatestEcmaScript()) {
+            return legacyFlatMap(cx, f, nt, s, thisObj, args);
+        }
         Scriptable o = ScriptRuntime.toObject(cx, s, thisObj);
         long length = getLengthProperty(cx, o);
         Object callbackArg = args.length > 0 ? args[0] : Undefined.instance;

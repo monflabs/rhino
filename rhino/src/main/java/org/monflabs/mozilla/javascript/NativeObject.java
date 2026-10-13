@@ -117,7 +117,7 @@ public class NativeObject extends ScriptableObject implements Map {
                         : cx.version >= Context.VERSION_ES6 ? ES6_DESCRIPTOR : LEGACY_DESCRIPTOR;
         NativeObject proto = new NativeObject();
         // Object.prototype is an immutable prototype exotic object (10.4.7)
-        proto.immutableProto = cx.version >= Context.VERSION_ES6;
+        proto.immutableProto = cx.isLatestEcmaScript();
         return desc.buildConstructor(cx, s, proto, sealed);
     }
 
@@ -287,7 +287,8 @@ public class NativeObject extends ScriptableObject implements Map {
         Let O be ? ToObject(this value).
         2. Return ? O.[[GetPrototypeOf]]().
         */
-        if (thisObj == null || Undefined.isUndefined(thisObj)) {
+        if ((thisObj == null || Undefined.isUndefined(thisObj))
+                && Context.getCurrentContext().isLatestEcmaScript()) {
             throw ScriptRuntime.typeErrorById(
                     "msg.called.null.or.undefined", CLASS_NAME, "__proto__");
         }
@@ -505,7 +506,7 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, f.getDeclarationScope(), arg);
-        if (obj instanceof NativeProxy) {
+        if (obj instanceof NativeProxy && cx.isLatestEcmaScript()) {
             return cx.newArray(
                     f.getDeclarationScope(),
                     AbstractEcmaObjectOperations.enumerableOwnKeys(cx, obj).toArray());
@@ -521,7 +522,7 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, s, arg);
-        if (obj instanceof NativeProxy) {
+        if (obj instanceof NativeProxy && cx.isLatestEcmaScript()) {
             return cx.newArray(s, proxyEnumerableOwnProperties(cx, s, (NativeProxy) obj, true));
         }
         Object[] ids = obj.getIds();
@@ -599,7 +600,7 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
         Scriptable obj = getCompatibleObject(cx, s, arg);
-        if (obj instanceof NativeProxy) {
+        if (obj instanceof NativeProxy && cx.isLatestEcmaScript()) {
             return cx.newArray(s, proxyEnumerableOwnProperties(cx, s, (NativeProxy) obj, false));
         }
         Object[] ids = obj.getIds();
@@ -914,8 +915,7 @@ public class NativeObject extends ScriptableObject implements Map {
                         Object val = sourceObj.get(intId, sourceObj);
                         if (targetIsArray) {
                             targetObj.put(intId, targetObj, val);
-                        } else if (targetObj instanceof NativeString
-                                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                        } else if (targetObj instanceof NativeString && cx.isLatestEcmaScript()) {
                             // the virtual, read-only index properties of a String object
                             setOrThrow(cx, targetObj, intId, val);
                         } else {
@@ -928,8 +928,7 @@ public class NativeObject extends ScriptableObject implements Map {
                         Object val = sourceObj.get(stringId, sourceObj);
                         if (targetIsArray) {
                             targetObj.put(stringId, targetObj, val);
-                        } else if (targetObj instanceof NativeString
-                                && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                        } else if (targetObj instanceof NativeString && cx.isLatestEcmaScript()) {
                             // the virtual, read-only index properties of a String object
                             setOrThrow(cx, targetObj, stringId, val);
                         } else {

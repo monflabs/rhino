@@ -209,6 +209,12 @@ public class Context implements Closeable {
      *       Symbol methods of objects only; Array methods throw when a write fails; Date setters,
      *       the Object.prototype methods, JSON, Object.hasOwn, Object.assign and
      *       Date.prototype.toJSON follow the spec steps.
+     *   <li>Array, Promise, Set, typed array and RegExp built-ins follow the spec steps: species,
+     *       HasProperty before Get, Promise combinators and iterator closing, IsRegExp, array
+     *       length truncation, the immutable Object.prototype, Error prototypes as plain objects,
+     *       ToIndex and ToBigInt in typed arrays; RegExp.prototype is an ordinary object, the
+     *       RegExp constructor, {@code flags}, {@code source}, {@code toString} and the Symbol
+     *       methods follow ES2026, and format-control characters stay in regexp literals.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

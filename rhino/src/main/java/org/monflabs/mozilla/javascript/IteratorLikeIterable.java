@@ -26,6 +26,11 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
     private final Scriptable iterator;
     private boolean closed;
 
+    /** Before VERSION_ECMASCRIPT, return is read when the iteration starts (or null). */
+    private final boolean eagerReturn;
+
+    private final Callable returnFunc;
+
     public IteratorLikeIterable(Context cx, VarScope scope, Object target) {
         this.cx = cx;
         this.scope = scope;
@@ -33,12 +38,33 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
         var nextCall = ScriptRuntime.getPropAndThis(target, ES6Iterator.NEXT_METHOD, cx, scope);
         next = nextCall.getCallable();
         iterator = nextCall.getThis();
+        eagerReturn = !cx.isLatestEcmaScript();
+        Callable ret = null;
+        if (eagerReturn) {
+            Object retObj =
+                    ScriptRuntime.getObjectPropNoWarn(
+                            target, ES6Iterator.RETURN_PROPERTY, cx, scope);
+            if ((retObj != null) && !Undefined.isUndefined(retObj)) {
+                if (!(retObj instanceof Callable)) {
+                    throw ScriptRuntime.notFunctionError(
+                            target, retObj, ES6Iterator.RETURN_PROPERTY);
+                }
+                ret = (Callable) retObj;
+            }
+        }
+        returnFunc = ret;
     }
 
     @Override
     public void close() {
         if (!closed) {
             closed = true;
+            if (eagerReturn) {
+                if (returnFunc != null) {
+                    returnFunc.call(cx, scope, iterator, ScriptRuntime.emptyArgs);
+                }
+                return;
+            }
             // IteratorClose (7.4.11): "return" is read when the iteration is closed
             Object retObj =
                     ScriptRuntime.getObjectPropNoWarn(

@@ -789,6 +789,8 @@ Object.assign(Object.freeze({ a: 1 }), { a: 2 });             // before: ignored
 
 ### 2.29 Array methods and species
 
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 Array.prototype.toString.call({ join() { return "x"; } });   // before: ""   now: "x"
 Array.prototype.push.call({ length: 2 ** 53 - 1 }, 1);       // before: length unchanged   now: TypeError
@@ -806,6 +808,8 @@ Reflect.has([1], "0");                                        // before: false  
   §28.1.9 (Reflect.has), §20.1.3.6 (Object.prototype.toString).
 
 ### 2.30 Promise combinators, IsRegExp, ToPrimitive and null
+
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now: status "rejected"
@@ -825,6 +829,8 @@ Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now:
 
 ### 2.31 Array length truncation, Object.prototype, String indexes
 
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 var a = [0, 1, 2]; Object.defineProperty(a, "1", { configurable: false });
 a.length = 0;                               // before: length 0   now: length 2 (TypeError in strict mode)
@@ -841,6 +847,8 @@ Object.setPrototypeOf(Object.prototype, {}); // before: allowed   now: TypeError
 
 ### 2.32 Set methods, BigInt.asIntN, Error prototypes
 
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 new Set([1]).symmetricDifference({ size: 1, has() { throw 0; }, keys() { /* ... */ } });  // before: throws 0
 BigInt.asIntN(8, 1);                                    // before: 1n   now: TypeError
@@ -856,6 +864,8 @@ Object.prototype.toString.call(TypeError.prototype);    // before: "[object Erro
 
 ### 2.33 Typed array constructors and conversions
 
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
+
 ```js
 new Int8Array(-1);                     // before: Error "invalid argument"   now: RangeError
 new BigInt64Array([1]);                // before: BigInt64Array [1n]   now: TypeError (1 is a Number)
@@ -870,6 +880,8 @@ Float64Array.from([, 1])[0];           // before: 0   now: NaN
   (%TypedArray%.prototype).
 
 ### 2.34 RegExp.prototype, constructor and patterns
+
+*Since plan G6 (2026-10-13): only under `VERSION_ECMASCRIPT`; `VERSION_ES6` keeps the "before" behavior.*
 
 ```js
 Object.prototype.toString.call(RegExp.prototype);   // before: "[object RegExp]"   now: "[object Object]"

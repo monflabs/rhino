@@ -620,7 +620,8 @@ batches by area, each verified (test262 must not move), perf-gated and committed
   for-of iteration is restored in `ScriptRuntime`.
 - *G5 (done)* 2.23-2.28 (typed arrays, Reflect and Proxy, String symbols, Array writes, Date, JSON); the stock
   Reflect and Proxy methods are kept as `legacy*` methods.
-- *G6* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp).
+- *G6 (done)* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp); the stock Array, Set, typed
+  array and RegExp algorithms are kept as `legacy*` methods.
 - *G7* 2.35-2.46 (language residuals, Annex B, `await`, generators, realms, array-likes).
 
 ### M9 — ES2023
