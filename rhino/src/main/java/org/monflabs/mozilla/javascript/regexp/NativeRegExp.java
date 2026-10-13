@@ -63,6 +63,7 @@ public class NativeRegExp extends ScriptableObject {
     public static final int JSREG_DOTALL = 0x8; // 's' flag: dotAll
     public static final int JSREG_STICKY = 0x10; // 'y' flag: sticky
     public static final int JSREG_UNICODE = 0x20; // 'u' flag: unicode mode
+    public static final int JSREG_HASINDICES = 0x40; // 'd' flag: match indices
 
     // type of match to perform
     public static final int TEST = 0;
@@ -200,6 +201,12 @@ public class NativeRegExp extends ScriptableObject {
                                 DONTENUM | READONLY)
                         .withProp(
                                 PROTO,
+                                "hasIndices",
+                                (c) -> flagGetter(c, JSREG_HASINDICES, "hasIndices"),
+                                null,
+                                DONTENUM | READONLY)
+                        .withProp(
+                                PROTO,
                                 "global",
                                 (c) -> flagGetter(c, JSREG_GLOB, "global"),
                                 null,
@@ -261,6 +268,7 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private static final Object[][] FLAG_GETTERS = {
+        {"hasIndices", JSREG_HASINDICES},
         {"global", JSREG_GLOB},
         {"ignoreCase", JSREG_FOLD},
         {"multiline", JSREG_MULTILINE},
@@ -535,6 +543,7 @@ public class NativeRegExp extends ScriptableObject {
     /** The flags of a compiled regexp, in the order of get RegExp.prototype.flags. */
     private static String flagsString(int flags) {
         StringBuilder buf = new StringBuilder();
+        if ((flags & JSREG_HASINDICES) != 0) buf.append('d');
         if ((flags & JSREG_GLOB) != 0) buf.append('g');
         if ((flags & JSREG_FOLD) != 0) buf.append('i');
         if ((flags & JSREG_MULTILINE) != 0) buf.append('m');
@@ -1097,6 +1106,8 @@ public class NativeRegExp extends ScriptableObject {
                     f = JSREG_STICKY;
                 } else if (c == 'u') {
                     f = JSREG_UNICODE;
+                } else if (c == 'd' && cx.getLanguageVersion() >= Context.VERSION_ES6) {
+                    f = JSREG_HASINDICES;
                 } else {
                     reportError("msg.invalid.re.flag", String.valueOf(c));
                 }
@@ -4412,6 +4423,10 @@ public class NativeRegExp extends ScriptableObject {
         final String match;
         final ArrayList<String> captures = new ArrayList<>();
         final LinkedHashMap<String, String> groups = new LinkedHashMap<>();
+
+        /** With the d flag: the start and end of each capture, or -1. */
+        int[] captureIndices;
+
         final int index;
         final String input;
 
@@ -4464,8 +4479,45 @@ public class NativeRegExp extends ScriptableObject {
             } else {
                 obj.put("groups", obj, Undefined.instance);
             }
+            if (result.captureIndices != null) {
+                obj.put("indices", obj, matchIndices(cx, scope, result));
+            }
             return obj;
         }
+    }
+
+    /** MakeMatchIndicesIndexPairArray (22.2.7.8): the indices property of a match with d. */
+    private Scriptable matchIndices(Context cx, VarScope scope, ExecResult result) {
+        int[] bounds = result.captureIndices;
+        int count = bounds.length / 2;
+        Scriptable indices = cx.newArray(scope, count);
+        NativeObject groups = re.namedCaptureGroups.isEmpty() ? null : new NativeObject();
+        String[] names = new String[count];
+        for (Map.Entry<String, List<Integer>> entry : re.namedCaptureGroups.entrySet()) {
+            for (int i : entry.getValue()) {
+                names[i + 1] = entry.getKey();
+            }
+        }
+        for (int i = 0; i < count; i++) {
+            Object pair =
+                    bounds[2 * i] < 0
+                            ? Undefined.instance
+                            : cx.newArray(
+                                    scope,
+                                    new Object[] {
+                                        Integer.valueOf(bounds[2 * i]),
+                                        Integer.valueOf(bounds[2 * i + 1])
+                                    });
+            indices.put(i, indices, pair);
+            if (groups != null && names[i] != null) {
+                // a duplicate name keeps the pair of the group that matched
+                if (pair != Undefined.instance || !groups.has(names[i], groups)) {
+                    groups.put(names[i], groups, pair);
+                }
+            }
+        }
+        indices.put("groups", indices, groups == null ? Undefined.instance : groups);
+        return indices;
     }
 
     /*
@@ -4502,6 +4554,17 @@ public class NativeRegExp extends ScriptableObject {
 
             String matchstr = str.substring(index, index + matchlen);
             result = new ExecResult(index, str, matchstr);
+            if ((re.flags & JSREG_HASINDICES) != 0) {
+                int[] bounds = new int[2 * (re.parenCount + 1)];
+                bounds[0] = index;
+                bounds[1] = index + matchlen;
+                for (int num = 0; num < re.parenCount; num++) {
+                    int capIndex = gData.parensIndex(num);
+                    bounds[2 * num + 2] = capIndex;
+                    bounds[2 * num + 3] = capIndex == -1 ? -1 : capIndex + gData.parensLength(num);
+                }
+                result.captureIndices = bounds;
+            }
         }
 
         if (re.parenCount == 0) {

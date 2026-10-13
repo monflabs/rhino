@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### RegExp match indices (2026-10-13, plan 8.4)
+
+- New (ES6 and later): the RegExp `d` flag, in literals and for the constructor; `RegExp.prototype.hasIndices`; a
+  match of a regexp with `d` has an `indices` array of `[start, end]` pairs (undefined for a capture that did not
+  participate) with a `groups` object for the named groups (a duplicate name keeps the pair of the group that
+  matched).
+- test262: 40,817/42,616 (95.8%), 26 more tests pass. Perf gate: no regression against 8.3.
+
 ### Class static blocks (2026-10-13, plan 8.3)
 
 - New: `static { ... }` in a class body, run in order with the static fields, with the class as `this`, `super.x`

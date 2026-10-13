@@ -1645,6 +1645,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
             else if (matchChar('s')) addToString('s');
             else if (matchChar('y')) addToString('y');
             else if (matchChar('u')) addToString('u');
+            else if (parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
+                    && matchChar('d')) addToString('d');
             else break;
         }
         tokenEnd = start + stringBufferTop + 2; // include slashes
