@@ -37,6 +37,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private static final int SELF_NAME_BINDING_FLAG = 1 << 16;
     private static final int IS_ASYNC_FLAG = 1 << 17;
     private static final int IS_ASYNC_GENERATOR_FLAG = 1 << 18;
+    private static final int FIELD_INITIALIZER_FLAG = 1 << 19;
 
     private final JSCode<T> code;
     private final JSCode<T> constructor;
@@ -97,6 +98,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             boolean selfNameBinding,
             boolean isAsync,
             boolean isAsyncGenerator,
+            boolean fieldInitializer,
             SecurityController securityController,
             Object securityDomain,
             int functionType) {
@@ -127,6 +129,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         flags = flags | (selfNameBinding ? SELF_NAME_BINDING_FLAG : 0);
         flags = flags | (isAsync ? IS_ASYNC_FLAG : 0);
         flags = flags | (isAsyncGenerator ? IS_ASYNC_GENERATOR_FLAG : 0);
+        flags = flags | (fieldInitializer ? FIELD_INITIALIZER_FLAG : 0);
         this.flags = flags;
 
         this.sourceFile = sourceFile;
@@ -194,6 +197,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     public boolean isAsyncGenerator() {
         return (flags & IS_ASYNC_GENERATOR_FLAG) != 0;
+    }
+
+    /** Whether this is the initializer of a class field (see ClassDefinition). */
+    public boolean isFieldInitializer() {
+        return (flags & FIELD_INITIALIZER_FLAG) != 0;
     }
 
     public boolean isShorthand() {
@@ -413,6 +421,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean selfNameBinding;
         public boolean isAsync;
         public boolean isAsyncGenerator;
+        public boolean fieldInitializer;
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
@@ -491,6 +500,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             selfNameBinding,
                             isAsync,
                             isAsyncGenerator,
+                            fieldInitializer,
                             securityController,
                             securityDomain,
                             functionType);

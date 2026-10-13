@@ -350,6 +350,8 @@ public final class IRFactory {
                     Node fieldKey = new Node(Token.FIELD_KEY, transform(key.getKey()));
                     if (key.isNamed()) {
                         fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 1);
+                    } else if (key.isMethod()) {
+                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 2);
                     }
                     return fieldKey;
                 }
@@ -1300,15 +1302,30 @@ public final class IRFactory {
             def.addChildToBack(transformObjectLiteral(cls.getStaticMembers()));
             def.setLineColumnNumber(cls.getLineno(), cls.getColumn());
             boolean hasStaticElements = cls.hasStaticElements();
+            // let (#x = new private name, ...): the class body closes over its private names
+            Node let = new Node(Token.LET);
+            for (String privateName : cls.getPrivateNames()) {
+                Node privateBinding = Node.newString(Token.NAME, privateName);
+                Node newName = new Node(Token.FIELD_KEY, Node.newString(privateName));
+                newName.putIntProp(Node.AWAIT_KIND_PROP, 3);
+                privateBinding.addChildToBack(newName);
+                let.addChildToBack(privateBinding);
+            }
             if (className == null) {
                 // the static fields of an anonymous class are defined at once
-                return hasStaticElements ? new Node(Token.CLASS_STATIC, def) : def;
+                Node result = hasStaticElements ? new Node(Token.CLASS_STATIC, def) : def;
+                if (!let.hasChildren()) {
+                    return result;
+                }
+                scope.addChildToBack(let);
+                scope.addChildToBack(result);
+                return scope;
             }
             // let (C) { C = class ...; C }: the methods close over the binding of the name
             Node binding = Node.newString(Token.NAME, name);
             // uninitialized (in its temporal dead zone) until the class is defined
             binding.putIntProp(Node.LEXICAL_PROP, 1);
-            Node let = new Node(Token.LET, binding);
+            let.addChildToFront(binding);
             Node init = new Node(Token.SETCONST, Node.newString(Token.BINDNAME, name), def);
             init.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
             scope.addChildToBack(let);

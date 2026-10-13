@@ -1004,9 +1004,12 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 addIcode(
                         type == Token.CLASS_STATIC
                                 ? Icode.CLASS_STATIC
-                                : node.getIntProp(Node.AWAIT_KIND_PROP, 0) == 1
-                                        ? Icode.FIELD_KEY_NAMED
-                                        : Icode.FIELD_KEY);
+                                : switch (node.getIntProp(Node.AWAIT_KIND_PROP, 0)) {
+                                    case 1 -> Icode.FIELD_KEY_NAMED;
+                                    case 2 -> Icode.METHOD_KEY;
+                                    case 3 -> Icode.NEW_PRIVATE_NAME;
+                                    default -> Icode.FIELD_KEY;
+                                });
                 break;
 
             case Token.ITER_STEP:

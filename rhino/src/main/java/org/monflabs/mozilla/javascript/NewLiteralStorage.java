@@ -262,6 +262,14 @@ public abstract class NewLiteralStorage {
             }
 
             Object propKey = this.keys[index];
+            if (propKey instanceof ClassDefinition.FieldKey) {
+                // a private method or accessor is named after its private name
+                ClassDefinition.FieldKey fieldKey = (ClassDefinition.FieldKey) propKey;
+                if (fieldKey.method) {
+                    fun.setFunctionName(prefix + fieldKey.key);
+                }
+                return;
+            }
             if (propKey instanceof Symbol) {
                 // For symbol keys, valid names are: `[foo]`, `get [foo]`
                 // However `[]` or `get []` aren't, and become `` and `get `

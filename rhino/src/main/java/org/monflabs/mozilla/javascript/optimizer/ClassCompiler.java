@@ -358,6 +358,7 @@ public class ClassCompiler {
         cfw.add(builder.selfNameBinding ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.isAsync ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(builder.isAsyncGenerator ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
+        cfw.add(builder.fieldInitializer ? ByteCode.ICONST_1 : ByteCode.ICONST_0);
         cfw.add(ByteCode.ACONST_NULL);
         cfw.add(ByteCode.ACONST_NULL);
         cfw.addLoadConstant(builder.functionType);

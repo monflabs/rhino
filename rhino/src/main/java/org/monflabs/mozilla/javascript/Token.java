@@ -278,7 +278,9 @@ public class Token {
             FIELD_KEY = IMPORT_CALL + 1,
             // the static fields of a class, defined once its name is bound
             CLASS_STATIC = FIELD_KEY + 1,
-            LAST_TOKEN = CLASS_STATIC + 1;
+            // #name: a private name of a class; parser only (its string includes the #)
+            PRIVATE_NAME = CLASS_STATIC + 1,
+            LAST_TOKEN = PRIVATE_NAME + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -671,6 +673,8 @@ public class Token {
                 return "FIELD_KEY";
             case CLASS_STATIC:
                 return "CLASS_STATIC";
+            case PRIVATE_NAME:
+                return "PRIVATE_NAME";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

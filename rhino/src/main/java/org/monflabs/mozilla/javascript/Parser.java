@@ -892,6 +892,7 @@ public class Parser {
         if (inUseStrictDirective) {
             root.setInStrictMode(true);
         }
+        inFieldInitializer = compilerEnv.isInEval() && compilerEnv.isEvalInFieldInitializer();
 
         try {
             for (; ; ) {
@@ -4330,7 +4331,20 @@ public class Parser {
     }
 
     private AstNode relExpr() throws IOException {
-        AstNode pn = shiftExpr();
+        AstNode pn;
+        if (peekToken() == Token.PRIVATE_NAME) {
+            // #x in obj
+            consumeToken();
+            Name name = privateReference();
+            int opPos = ts.tokenBeg;
+            if (peekToken() != Token.IN || inForInit) {
+                reportError("msg.private.unexpected", name.getIdentifier());
+            }
+            consumeToken();
+            pn = new InfixExpression(Token.IN, name, shiftExpr(), opPos);
+        } else {
+            pn = shiftExpr();
+        }
         for (; ; ) {
             int tt = peekToken(), opPos = ts.tokenBeg;
             switch (tt) {
@@ -4500,6 +4514,11 @@ public class Parser {
                         && compilerEnv.isLatestEcmaScript()
                         && removeParens(((UnaryExpression) node).getOperand()) instanceof Name) {
                     reportError("msg.delete.name.strict");
+                }
+                AstNode deleted = removeParens(((UnaryExpression) node).getOperand());
+                if (deleted instanceof ElementGet
+                        && isPrivateName(((ElementGet) deleted).getElement())) {
+                    reportError("msg.private.delete");
                 }
                 node.setLineColumnNumber(line, column);
                 return node;
@@ -4879,6 +4898,25 @@ public class Parser {
                     saveNameTokenData(ts.tokenBeg, name, lineNumber(), columnNumber());
                     ref = propertyName(-1, memberTypeFlags);
                     break;
+                }
+
+            case Token.PRIVATE_NAME:
+                {
+                    if (pn.getType() == Token.SUPER || tt == Token.DOTDOT) {
+                        reportError("msg.private.unexpected", ts.getString());
+                        return makeErrorNode();
+                    }
+                    // obj.#x: an element access whose key is the binding of the private name
+                    Name name = privateReference();
+                    int pos = pn.getPosition();
+                    ElementGet g = new ElementGet(pos, ts.tokenEnd - pos);
+                    g.setTarget(pn);
+                    g.setElement(name);
+                    g.setLineColumnNumber(lineno, column);
+                    if (isOptionalChain) {
+                        g.setType(Token.QUESTION_DOT);
+                    }
+                    return g;
                 }
 
             case Token.LB:
@@ -5938,6 +5976,10 @@ public class Parser {
                     int lineno = lineNumber();
                     int column = columnNumber();
                     pname = objliteralProperty();
+                    if (pname == null) {
+                        reportError("msg.bad.prop");
+                        return null;
+                    }
 
                     pname = new GeneratorMethodDefinition(pos, ts.tokenEnd - pos, pname);
                     pname.setLineColumnNumber(lineno, column);
@@ -6864,7 +6906,14 @@ public class Parser {
                     // in its temporal dead zone until the class is defined (heritage, keys)
                     scope.getSymbol(cls.getClassName().getIdentifier()).setNode(cls);
                 }
-                classBody(cls, pos);
+                privateScope = new PrivateScope(privateScope);
+                try {
+                    classBody(cls, pos);
+                } finally {
+                    PrivateScope classScope = privateScope;
+                    privateScope = classScope.outer;
+                    resolvePrivateReferences(classScope);
+                }
             } finally {
                 popScope();
             }
@@ -6914,7 +6963,7 @@ public class Parser {
                 isStatic = true;
             }
             int propStart = ts.tokenBeg;
-            AstNode pname = objliteralProperty();
+            AstNode pname = classElementName();
             if (pname == null || pname instanceof Spread) {
                 reportError("msg.bad.prop");
                 break;
@@ -6969,7 +7018,7 @@ public class Parser {
                 reportError("msg.bad.prop");
             }
             // the source text of an accessor starts with get/set
-            pname = objliteralProperty();
+            pname = classElementName();
             if (pname == null) {
                 reportError("msg.bad.prop");
                 return;
@@ -7004,10 +7053,145 @@ public class Parser {
             return;
         }
         functionIsAsync = isAsync;
-        ObjectProperty prop =
-                methodDefinition(ppos, propStart, pname, entryKind, isGenerator, true);
+        AstNode methodName =
+                pname instanceof GeneratorMethodDefinition
+                        ? ((GeneratorMethodDefinition) pname).getMethodName()
+                        : pname;
+        boolean isPrivate = isPrivateName(methodName);
+        if (isPrivate) {
+            declarePrivateName(
+                    cls,
+                    (Name) methodName,
+                    entryKind == GET_ENTRY
+                            ? PRIVATE_GETTER
+                            : entryKind == SET_ENTRY ? PRIVATE_SETTER : PRIVATE_OTHER,
+                    isStatic);
+        }
+        AstNode key = pname;
+        if (isPrivate) {
+            // the key of a private method is its private name, see ClassDefinition
+            ClassFieldKey fieldKey =
+                    new ClassFieldKey(
+                            methodName.getPosition(), privateNameReference(methodName), false);
+            fieldKey.setMethod();
+            key = new ComputedPropertyKey(methodName.getPosition(), methodName.getLength());
+            ((ComputedPropertyKey) key).setExpression(fieldKey);
+            if (isStatic) {
+                cls.setHasStaticElements();
+            }
+        }
+        ObjectProperty prop = methodDefinition(ppos, propStart, key, entryKind, isGenerator, true);
         ((FunctionNode) prop.getValue()).setInStrictMode(true);
         elems.add(prop);
+    }
+
+    private static final int PRIVATE_GETTER = 1, PRIVATE_SETTER = 2, PRIVATE_OTHER = 3;
+
+    /**
+     * The private names declared by the classes being parsed, innermost first, and the references
+     * to private names in their bodies, resolved at the end of each class (15.7.1 AllPrivate
+     * IdentifiersValid).
+     */
+    private static final class PrivateScope {
+        final PrivateScope outer;
+
+        /** The kinds of the names declared (PRIVATE_*), plus 4 when static. */
+        final Map<String, Integer> declared = new HashMap<>();
+
+        final List<Name> references = new ArrayList<>();
+
+        PrivateScope(PrivateScope outer) {
+            this.outer = outer;
+        }
+    }
+
+    private PrivateScope privateScope;
+
+    private static boolean isPrivateName(AstNode node) {
+        return node instanceof Name && ((Name) node).getIdentifier().startsWith("#");
+    }
+
+    /** The name of a class element (peeked): a property name, or a private name. */
+    private AstNode classElementName() throws IOException {
+        if (peekToken() == Token.PRIVATE_NAME) {
+            Name name = new Name(ts.tokenBeg, ts.getString());
+            name.setLineColumnNumber(lineNumber(), columnNumber());
+            return name;
+        }
+        if (peekToken() == Token.MUL) {
+            // a generator method, whose name may be private
+            int pos = ts.tokenBeg;
+            consumeToken();
+            int lineno = lineNumber();
+            int column = columnNumber();
+            AstNode name = classElementName();
+            AstNode pname = new GeneratorMethodDefinition(pos, ts.tokenEnd - pos, name);
+            pname.setLineColumnNumber(lineno, column);
+            return pname;
+        }
+        return objliteralProperty();
+    }
+
+    /** Declares a private name of the class (15.7.1 early errors: no duplicates). */
+    private void declarePrivateName(ClassNode cls, Name name, int kind, boolean isStatic) {
+        String id = name.getIdentifier();
+        if ("#constructor".equals(id)) {
+            reportError("msg.private.ctor");
+        }
+        int entry = kind | (isStatic ? 4 : 0);
+        Integer previous = privateScope.declared.get(id);
+        if (previous == null) {
+            privateScope.declared.put(id, entry);
+            cls.addPrivateName(id);
+            defineSymbol(Token.CONST, id, true);
+        } else if ((previous ^ entry) == (PRIVATE_GETTER ^ PRIVATE_SETTER)) {
+            // a getter and a setter
+            privateScope.declared.put(id, PRIVATE_OTHER | (entry & 4));
+        } else {
+            reportError("msg.private.dup", id);
+        }
+    }
+
+    /** A reference to a private name, as the binding of the private name. */
+    private Name privateNameReference(AstNode name) {
+        Name ref = new Name(name.getPosition(), ((Name) name).getIdentifier());
+        ref.setLineColumnNumber(name.getLineno(), name.getColumn());
+        return ref;
+    }
+
+    /** A reference to the private name just consumed (obj.#x, #x in obj). */
+    private Name privateReference() {
+        Name name = new Name(ts.tokenBeg, ts.getString());
+        name.setLineColumnNumber(lineNumber(), columnNumber());
+        if (privateScope != null) {
+            privateScope.references.add(name);
+        } else if (!isEvalPrivateName(name.getIdentifier())) {
+            reportError("msg.private.undeclared", name.getIdentifier(), name.getPosition(), 0);
+        }
+        return name;
+    }
+
+    /** Whether eval code is in a class that declares the private name. */
+    private boolean isEvalPrivateName(String name) {
+        Predicate<String> names = compilerEnv.getEvalPrivateNames();
+        return compilerEnv.isInEval() && names != null && names.test(name);
+    }
+
+    private void resolvePrivateReferences(PrivateScope scope) {
+        for (Name name : scope.references) {
+            if (scope.declared.containsKey(name.getIdentifier())) {
+                continue;
+            }
+            if (scope.outer != null) {
+                scope.outer.references.add(name);
+            } else if (!isEvalPrivateName(name.getIdentifier())) {
+                addError(
+                        "msg.private.undeclared",
+                        name.getIdentifier(),
+                        name.getPosition(),
+                        name.getLength());
+            }
+        }
     }
 
     /**
@@ -7056,7 +7240,10 @@ public class Parser {
             reportError("msg.class.field.name", propertyName);
         }
         AstNode keyExpr;
-        if (pname instanceof ComputedPropertyKey) {
+        if (isPrivateName(pname)) {
+            declarePrivateName(cls, (Name) pname, PRIVATE_OTHER, isStatic);
+            keyExpr = privateNameReference(pname);
+        } else if (pname instanceof ComputedPropertyKey) {
             keyExpr = ((ComputedPropertyKey) pname).getExpression();
         } else if (pname instanceof Name) {
             StringLiteral literal = new StringLiteral(pname.getPosition(), pname.getLength());

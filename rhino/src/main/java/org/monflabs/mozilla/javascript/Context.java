@@ -170,6 +170,8 @@ public class Context implements Closeable {
      *       prototype of an object literal; a global {@code var} shadows the properties of
      *       Object.prototype.
      *   <li>{@code for (async of ...)} is a SyntaxError.
+     *   <li>ZWNJ (U+200C) and ZWJ (U+200D) in an identifier are part of it, instead of being
+     *       stripped as format characters.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

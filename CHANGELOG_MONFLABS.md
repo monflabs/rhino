@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Private names (2026-10-12, plan 8.2)
+
+- New: private fields, methods and accessors, instance and static (`#x`, `#m() {}`, `get #a() {}`), `obj.#x` (also
+  in optional chains, calls, compound assignments, `++`, destructuring targets) and `#x in obj`, with their brand
+  checks (a TypeError of the accessing code's realm) and early errors (undeclared or duplicate names,
+  `#constructor`, `delete this.#x`, `super.#x`), also in direct eval code.
+- Implementation: each private identifier a class declares is a const binding `#x` of the class scope, initialized
+  with a new PrivateName each time the class is evaluated; `obj.#x` is an element access with that key, which
+  ScriptRuntime hands to PrivateName (PrivateGet/PrivateSet/`in`). Private elements live in a lazily allocated
+  identity map of the ScriptableObject (a weak side table for other Scriptables), invisible to reflection, Java
+  interop and Proxy. Private methods and accessors are entries of the member literals keyed by a FieldKey
+  (Token#FIELD_KEY kind 2), added to each instance before its fields, or to the constructor.
+- `eval` inside a class sees its private names (checked against the scope chain at compile time); `arguments` in
+  eval code in a field initializer is now a SyntaxError (a 8.1 limit), using a new JSDescriptor flag.
+- Gated by `VERSION_ECMASCRIPT`: ZWNJ and ZWJ in identifiers are no longer stripped (BACKWARD_COMPATIBILITY.md
+  1.16).
+- test262: `class-fields-private` is no longer an unsupported feature: 40,755/42,616 (95.6%), 3,911 more tests
+  pass; no new failure. Perf gate: no regression against 8.1.
+
 ### Public class fields (2026-10-12, plan 8.1)
 
 - New: public instance and static class fields, with computed keys, initializers (`this` is the instance or the

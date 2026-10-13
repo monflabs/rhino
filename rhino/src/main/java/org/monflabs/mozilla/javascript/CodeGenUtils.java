@@ -70,6 +70,9 @@ public class CodeGenUtils {
         if (fn.hasSelfNameBinding()) {
             builder.selfNameBinding = true;
         }
+        if (fn.isFieldInitializer()) {
+            builder.fieldInitializer = true;
+        }
         if (fn.isAsyncGenerator()) {
             builder.isAsync = true;
             builder.isAsyncGenerator = true;

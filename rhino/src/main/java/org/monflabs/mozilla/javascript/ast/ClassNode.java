@@ -23,6 +23,7 @@ public class ClassNode extends AstNode {
     private int sourceStart;
     private int sourceEnd;
     private boolean hasStaticElements;
+    private final java.util.List<String> privateNames = new java.util.ArrayList<>();
 
     {
         type = Token.CLASS;
@@ -33,6 +34,15 @@ public class ClassNode extends AstNode {
     }
 
     /** Whether the class has static fields, which are defined once its name is bound. */
+    /** The private names the class declares ({@code #x}), bindings of its scope. */
+    public java.util.List<String> getPrivateNames() {
+        return privateNames;
+    }
+
+    public void addPrivateName(String name) {
+        privateNames.add(name);
+    }
+
     public boolean hasStaticElements() {
         return hasStaticElements;
     }

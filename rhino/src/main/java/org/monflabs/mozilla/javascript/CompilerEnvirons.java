@@ -319,6 +319,24 @@ public class CompilerEnvirons {
         return evalForbiddenVarNames;
     }
 
+    /** The private names of the classes enclosing the eval code being compiled, or null. */
+    public void setEvalPrivateNames(Predicate<String> names) {
+        this.evalPrivateNames = names;
+    }
+
+    public Predicate<String> getEvalPrivateNames() {
+        return evalPrivateNames;
+    }
+
+    /** Whether the eval code being compiled is in the initializer of a class field. */
+    public void setEvalInFieldInitializer(boolean inFieldInitializer) {
+        this.evalInFieldInitializer = inFieldInitializer;
+    }
+
+    public boolean isEvalInFieldInitializer() {
+        return evalInFieldInitializer;
+    }
+
     public void setHomeObject(Scriptable homeObject) {
         this.homeObjecgt = homeObject;
     }
@@ -383,6 +401,8 @@ public class CompilerEnvirons {
     Set<String> activationNames;
     private boolean inEval;
     private Predicate<String> evalForbiddenVarNames;
+    private Predicate<String> evalPrivateNames;
+    private boolean evalInFieldInitializer;
     private Scriptable homeObjecgt;
     private SecurityController securityController;
     private Object securityDomain;

@@ -14,6 +14,7 @@ public class ClassFieldKey extends AstNode {
 
     private AstNode key;
     private boolean named;
+    private boolean method;
 
     {
         type = Token.FIELD_KEY;
@@ -34,6 +35,15 @@ public class ClassFieldKey extends AstNode {
         assertNotNull(key);
         this.key = key;
         key.setParent(this);
+    }
+
+    /** Whether the entry is a private method or accessor, whose key is its private name. */
+    public boolean isMethod() {
+        return method;
+    }
+
+    public void setMethod() {
+        method = true;
     }
 
     /** Whether the initializer is an anonymous function definition that the key names. */

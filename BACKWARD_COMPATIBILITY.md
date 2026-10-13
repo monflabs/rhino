@@ -286,6 +286,17 @@ for (async of []);   // VERSION_ES6: a for-of loop assigning to `async`   VERSIO
   arrow function); `for ((async) of [])`, `for (\u0061sync of [])` and `for await (async of [])` stay valid.
 - **Why:** ECMA-262 2026, §14.7.5 (for-in, for-of and for-await statements: `[lookahead ≠ async of]`).
 
+### 1.16 ZWNJ and ZWJ in identifiers
+
+```js
+var a‌b = 1; typeof ab;   // (a raw U+200C between a and b) VERSION_ES6: "number"   VERSION_ECMASCRIPT: "undefined"
+```
+
+- A raw ZERO WIDTH NON-JOINER or ZERO WIDTH JOINER in an identifier is one of its characters, as its `\u200C` or
+  `\u200D` escape is; before, the lexer stripped it like any other format character (an ES3 rule), so `a‌b` was
+  the identifier `ab`. The other format characters are still stripped.
+- **Why:** ECMA-262 2026, §12.7 (Names and Keywords: `IdentifierPartChar` includes ZWNJ and ZWJ).
+
 ---
 
 ## 2. Changes that also apply to `VERSION_ES6`

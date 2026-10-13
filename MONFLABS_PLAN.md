@@ -585,7 +585,10 @@ representation; Nashorn uses a per-object slot). **8.3** Class static blocks (23
 Steps:
 - *8.1 (done)* public instance and static fields (entries of the member literals keyed by a ClassFieldKey, recorded
   on the constructor; Token#FIELD_KEY, Token#CLASS_STATIC). Limits: static and instance computed keys are not
-  interleaved in source order; `eval('arguments')` in an initializer.
+  interleaved in source order; `eval('arguments')` in an initializer (fixed in 8.2).
+- *8.2 (done)* private names (a const binding `#x` of the class scope holding a PrivateName; an element access with
+  it as the key; per-object identity map), direct eval early errors, ZWNJ/ZWJ identifier parts (gated). Limit: a
+  destructuring target `this.#x` is evaluated after the value is read (as for public members).
 
 ### M9 — ES2023
 
@@ -678,7 +681,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 5.x  | ES2019 residuals                                | done        | 83.3% (no change needed)     | 8f111e95f |
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
-| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 86.5% (8.1)          | 92ad3e6c9 |
+| 8.x  | ES2022 (class fields, private names, TLA)       | in progress | 84.6% → 95.6% (8.1–8.2)      | 92ad3e6c9 |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |

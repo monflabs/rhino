@@ -766,7 +766,12 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         addToString(escapeVal);
                         isUnicodeEscapeStart = false;
                     } else {
-                        c = getChar();
+                        // ZWNJ and ZWJ are identifier parts, not stripped format characters
+                        boolean keepJoiners = parser.compilerEnv.isLatestEcmaScript();
+                        c = getChar(!keepJoiners);
+                        if (keepJoiners && isJSFormatChar(c) && c != 0x200C && c != 0x200D) {
+                            continue;
+                        }
                         if (c == '\\') {
                             c = getChar();
                             if (c == 'u') {
@@ -1194,6 +1199,25 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 // #! hashbang: only on the first line of a Script, no leading whitespace
                 skipLine();
                 return Token.COMMENT;
+            }
+
+            if (c == '#' && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                int hashBeg = tokenBeg;
+                int next = peekChar();
+                if (next == '\\'
+                        || next == '$'
+                        || next == '_'
+                        || Character.isUnicodeIdentifierStart(next)) {
+                    // PrivateIdentifier (12.7): # IdentifierName, which may be a reserved word
+                    int tt = getToken();
+                    if (tokenBeg == hashBeg + 1 && tt != Token.ERROR && this.string != null) {
+                        this.string = "#" + this.string;
+                        tokenBeg = hashBeg;
+                        return Token.PRIVATE_NAME;
+                    }
+                    parser.addError("msg.illegal.character", '#');
+                    return Token.ERROR;
+                }
             }
 
             switch (c) {

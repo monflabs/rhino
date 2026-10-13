@@ -1078,6 +1078,9 @@ public class BaseFunction extends ScriptableObject implements Function {
      */
     ClassDefinition.Element[] classFields;
 
+    /** The private methods and accessors of the instances of the class, or null. */
+    PrivateName.Method[] classPrivateMethods;
+
     /** The static fields of the class, until they are defined (see ClassDefinition). */
     ClassDefinition.Element[] classStaticElements;
 

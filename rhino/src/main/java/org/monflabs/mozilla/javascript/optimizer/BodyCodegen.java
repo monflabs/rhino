@@ -1471,9 +1471,12 @@ class BodyCodegen {
                 addScriptRuntimeInvoke(
                         type == Token.CLASS_STATIC
                                 ? "classStaticInit"
-                                : node.getIntProp(Node.AWAIT_KIND_PROP, 0) == 1
-                                        ? "classFieldKeyNamed"
-                                        : "classFieldKey",
+                                : switch (node.getIntProp(Node.AWAIT_KIND_PROP, 0)) {
+                                    case 1 -> "classFieldKeyNamed";
+                                    case 2 -> "classMethodKey";
+                                    case 3 -> "newPrivateName";
+                                    default -> "classFieldKey";
+                                },
                         "(Ljava/lang/Object;"
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"

@@ -116,6 +116,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
 
     private boolean isExtensible = true;
 
+    /** The private elements of this object (see PrivateName), or null. */
+    java.util.Map<PrivateName, Object> privateElements;
+
     private static final Method GET_ARRAY_LENGTH;
 
     static {

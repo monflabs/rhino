@@ -168,7 +168,6 @@ public class Test262SuiteTest {
                     Arrays.asList(
                             "IsHTMLDDA",
                             "CanBlockIsFalse",
-                            "class-fields-private",
                             "tail-call-optimization",
                             "top-level-await",
                             "import-attributes",

@@ -2006,6 +2006,9 @@ public class ScriptRuntime {
 
     /** Call obj.[[Get]](id) */
     public static Object getObjectElem(Object obj, Object elem, Context cx, VarScope scope) {
+        if (elem instanceof PrivateName) {
+            return PrivateName.get(obj, (PrivateName) elem, cx, scope);
+        }
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, elem);
         return getObjectElem(sobj, elem, cx);
     }
@@ -2228,6 +2231,10 @@ public class ScriptRuntime {
     /** Call obj.[[Put]](id, value) */
     public static Object setObjectElem(
             Object obj, Object elem, Object value, Context cx, VarScope scope) {
+        if (elem instanceof PrivateName) {
+            PrivateName.set(obj, (PrivateName) elem, value, cx, scope);
+            return value;
+        }
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(obj, elem, value, cx);
         Scriptable sobj = asScriptableOrThrowUndefWriteError(cx, scope, obj, elem, value);
         return setObjectElem(sobj, elem, value, cx);
@@ -3467,6 +3474,19 @@ public class ScriptRuntime {
         Scriptable thisObj;
         Object value;
 
+        if (elem instanceof PrivateName) {
+            if (isOptionalChainingCall && (obj == null || Undefined.isUndefined(obj))) {
+                return null;
+            }
+            value = PrivateName.get(obj, (PrivateName) elem, cx, scope);
+            if (!(value instanceof Callable)) {
+                if (isOptionalChainingCall && (value == null || Undefined.isUndefined(value))) {
+                    return null;
+                }
+                throw notFunctionError(value, elem);
+            }
+            return new LookupResult(value, (Scriptable) obj, elem.toString());
+        }
         if (isSymbol(elem)) {
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
@@ -4015,6 +4035,8 @@ public class ScriptRuntime {
                     compilerEnvs.setHomeObject(homeObject);
                     compilerEnvs.setEvalForbiddenVarNames(
                             evalForbiddenVarNames(cx, scope, inParameters));
+                    compilerEnvs.setEvalPrivateNames(name -> hasPrivateName(scope, name));
+                    compilerEnvs.setEvalInFieldInitializer(isInFieldInitializer(scope));
                 };
 
         Script script =
@@ -4039,6 +4061,32 @@ public class ScriptRuntime {
             return ((JSScript) script).exec(cx, evalScope, thisObject, newTarget);
         }
         return script.exec(cx, evalScope, thisObject);
+    }
+
+    /** Whether a class enclosing the code of scope declares the private name (see PrivateName). */
+    private static boolean hasPrivateName(VarScope scope, String name) {
+        for (VarScope s = scope; s != null; s = s.getParentScope()) {
+            if ((s instanceof LocalScope || s instanceof NativeCall) && s.has(name, s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the function whose this binding the code of scope uses is the initializer of a class
+     * field, where arguments is a SyntaxError (ECMA-262 19.2.1.1 step 5).
+     */
+    private static boolean isInFieldInitializer(VarScope scope) {
+        for (VarScope s = scope; s != null; s = s.getParentScope()) {
+            if (s instanceof NativeCall) {
+                JSDescriptor<?> fn = ((NativeCall) s).function.getDescriptor();
+                if (!fn.hasLexicalThis()) {
+                    return fn.isFieldInitializer();
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -5357,6 +5405,9 @@ public class ScriptRuntime {
      * @return true if property name or element number a is a property of b
      */
     public static boolean in(Object a, Object b, Context cx) {
+        if (a instanceof PrivateName) {
+            return PrivateName.has(b, (PrivateName) a);
+        }
         if (!(b instanceof Scriptable)) {
             throw typeErrorById("msg.in.not.object");
         }
@@ -6066,12 +6117,26 @@ public class ScriptRuntime {
      * the order of the elements of the class.
      */
     public static Object classFieldKey(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(toPropertyKey(key), false);
+        return new ClassDefinition.FieldKey(fieldKey(key), false, false);
     }
 
     /** The key of a class field whose initializer is an anonymous function the key names. */
     public static Object classFieldKeyNamed(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(toPropertyKey(key), true);
+        return new ClassDefinition.FieldKey(fieldKey(key), true, false);
+    }
+
+    /** The key of a private method or accessor of a class: its PrivateName. */
+    public static Object classMethodKey(Object key, Context cx, VarScope scope) {
+        return new ClassDefinition.FieldKey(key, false, true);
+    }
+
+    /** A new Private Name, for a private identifier declared by a class being evaluated. */
+    public static Object newPrivateName(Object description, Context cx, VarScope scope) {
+        return new PrivateName((String) description);
+    }
+
+    private static Object fieldKey(Object key) {
+        return key instanceof PrivateName ? key : toPropertyKey(key);
     }
 
     /** The static fields of a class, once its name is bound (Token#CLASS_STATIC). */
@@ -6549,7 +6614,8 @@ public class ScriptRuntime {
 
             if (id instanceof ClassDefinition.FieldKey) {
                 // a field of a class, not a property of the literal of its members
-                ClassDefinition.addElement(object, (ClassDefinition.FieldKey) id, value);
+                ClassDefinition.addElement(
+                        object, (ClassDefinition.FieldKey) id, value, getterSetter);
                 continue;
             }
 

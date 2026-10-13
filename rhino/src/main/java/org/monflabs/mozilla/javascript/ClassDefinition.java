@@ -17,30 +17,41 @@ final class ClassDefinition {
      * The key of a field, in the literal of the members of a class (Token#FIELD_KEY): the entry is
      * not a property of the literal but a field of the class, defined on each instance (or once on
      * the constructor, for a static field). {@code named}: the initializer is an anonymous function
-     * definition, which the key names (NamedEvaluation).
+     * definition, which the key names (NamedEvaluation). {@code method}: the entry is a private
+     * method or accessor, whose key is a PrivateName.
      */
     static final class FieldKey implements java.io.Serializable {
         private static final long serialVersionUID = 1L;
         final Object key;
         final boolean named;
+        final boolean method;
 
-        FieldKey(Object key, boolean named) {
+        FieldKey(Object key, boolean named, boolean method) {
             this.key = key;
             this.named = named;
+            this.method = method;
         }
     }
 
-    /** A field of a class (ClassFieldDefinition): its key and its initializer, or null. */
+    /**
+     * A field of a class (ClassFieldDefinition): its key and its initializer, or null; or a private
+     * method or accessor, whose initializer is the function, and getterSetter as in
+     * fillObjectLiteral.
+     */
     static final class Element implements java.io.Serializable {
         private static final long serialVersionUID = 1L;
         final Object key;
         final Object initializer;
         final boolean named;
+        final boolean method;
+        final int getterSetter;
 
-        Element(FieldKey key, Object initializer) {
+        Element(FieldKey key, Object initializer, int getterSetter) {
             this.key = key.key;
             this.initializer = initializer;
             this.named = key.named;
+            this.method = key.method;
+            this.getterSetter = getterSetter;
         }
     }
 
@@ -48,7 +59,7 @@ final class ClassDefinition {
 
     /** Records a field entry of the literal of the members of a class (fillObjectLiteral). */
     @SuppressWarnings("unchecked")
-    static void addElement(Scriptable literal, FieldKey key, Object initializer) {
+    static void addElement(Scriptable literal, FieldKey key, Object initializer, int getterSetter) {
         ScriptableObject obj = (ScriptableObject) literal;
         java.util.List<Element> elements =
                 (java.util.List<Element>) obj.getAssociatedValue(ELEMENTS);
@@ -56,7 +67,7 @@ final class ClassDefinition {
             elements = new java.util.ArrayList<>();
             obj.associateValue(ELEMENTS, elements);
         }
-        elements.add(new Element(key, initializer));
+        elements.add(new Element(key, initializer, getterSetter));
     }
 
     @SuppressWarnings("unchecked")
@@ -71,9 +82,55 @@ final class ClassDefinition {
         return result;
     }
 
+    /**
+     * The private methods and accessors among elements, a getter and a setter of the same name
+     * combined; null if there are none.
+     */
+    private static PrivateName.Method[] privateMethods(Element[] elements) {
+        if (elements == null) {
+            return null;
+        }
+        java.util.Map<Object, PrivateName.Method> methods = new java.util.LinkedHashMap<>();
+        for (Element element : elements) {
+            if (!element.method) {
+                continue;
+            }
+            PrivateName name = (PrivateName) element.key;
+            if (element.getterSetter == 0) {
+                methods.put(name, new PrivateName.Method(name, element.initializer, null, null));
+                continue;
+            }
+            PrivateName.Method accessor =
+                    methods.computeIfAbsent(
+                            name, k -> new PrivateName.Method(name, null, null, null));
+            if (element.getterSetter == -1) {
+                accessor.getter = element.initializer;
+            } else {
+                accessor.setter = element.initializer;
+            }
+        }
+        return methods.isEmpty() ? null : methods.values().toArray(new PrivateName.Method[0]);
+    }
+
+    /** The fields among elements, or null if there are none. */
+    private static Element[] fields(Element[] elements) {
+        if (elements == null) {
+            return null;
+        }
+        Element[] fields =
+                java.util.Arrays.stream(elements).filter(e -> !e.method).toArray(Element[]::new);
+        return fields.length == 0 ? null : fields;
+    }
+
     /** InitializeInstanceElements (7.3.34) of the fields of a class, on a new instance. */
     static void initializeInstanceElements(
             BaseFunction constructor, Scriptable instance, Context cx, VarScope scope) {
+        PrivateName.Method[] methods = constructor.classPrivateMethods;
+        if (methods != null) {
+            for (PrivateName.Method method : methods) {
+                PrivateName.addMethod(instance, method);
+            }
+        }
         Element[] fields = constructor.classFields;
         if (fields == null) {
             return;
@@ -113,6 +170,10 @@ final class ClassDefinition {
                 nameAfterKey((BaseFunction) value, field.key);
             }
         }
+        if (field.key instanceof PrivateName) {
+            PrivateName.addField(receiver, (PrivateName) field.key, value);
+            return;
+        }
         // CreateDataPropertyOrThrow
         var desc = new ScriptableObject.DescriptorInfo(true, true, true, value);
         if (receiver instanceof ScriptableObject) {
@@ -132,7 +193,9 @@ final class ClassDefinition {
         if (!"".equals(f.get("name", f))) {
             return;
         }
-        if (key instanceof Symbol) {
+        if (key instanceof PrivateName) {
+            f.setFunctionName(((PrivateName) key).getDescription());
+        } else if (key instanceof Symbol) {
             String description = ((Symbol) key).getName();
             f.setFunctionName(description.isEmpty() ? "" : "[" + description + "]");
         } else {
@@ -202,17 +265,25 @@ final class ClassDefinition {
                 ScriptableObject.DONTENUM | ScriptableObject.READONLY | ScriptableObject.PERMANENT);
 
         ScriptableObject statics = (ScriptableObject) staticMembers;
-        f.classFields = takeElements(proto);
+        Element[] instanceElements = takeElements(proto);
+        f.classFields = fields(instanceElements);
+        f.classPrivateMethods = privateMethods(instanceElements);
         Element[] staticElements = takeElements(statics);
         if (staticElements != null) {
-            // the home object of a static initializer is the constructor
+            // the home object of a static initializer or private method is the constructor
             for (Element element : staticElements) {
                 if (element.initializer instanceof JSFunction
                         && ((JSFunction) element.initializer).getHomeObject() == statics) {
                     ((JSFunction) element.initializer).initClassHomeObject(f);
                 }
             }
-            f.classStaticElements = staticElements;
+            PrivateName.Method[] staticMethods = privateMethods(staticElements);
+            if (staticMethods != null) {
+                for (PrivateName.Method method : staticMethods) {
+                    PrivateName.addMethod(f, method);
+                }
+            }
+            f.classStaticElements = fields(staticElements);
         }
         for (Object id : ownKeys(statics)) {
             ScriptableObject.DescriptorInfo own = statics.getOwnPropertyDescriptor(cx, id);
