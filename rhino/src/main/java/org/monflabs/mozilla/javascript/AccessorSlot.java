@@ -95,7 +95,8 @@ public class AccessorSlot extends StandardSlot<Scriptable> {
                 return true;
             }
         } else if (setter instanceof FunctionSetter
-                && !(((FunctionSetter) setter).target instanceof Function)) {
+                && !(((FunctionSetter) setter).target instanceof Function)
+                && ScriptableObject.isLatestEcmaScript()) {
             // an accessor defined with set: undefined has no setter either (10.1.9.2 step 7)
             throwNoSetterException(start, value);
             return true;

@@ -1100,7 +1100,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 visitExpression(child, 0);
                 child = child.getNext();
                 if (type == Token.SETELEM_OP) {
-                    if (compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+                    if (compilerEnv.isLatestEcmaScript()) {
                         // the key is converted once, for the get and the set (13.15.2)
                         addIcode(Icode.ELEM_KEY);
                     }

@@ -622,7 +622,9 @@ batches by area, each verified (test262 must not move), perf-gated and committed
   Reflect and Proxy methods are kept as `legacy*` methods.
 - *G6 (done)* 2.29-2.34 (Array, Promise, Object, Set methods, typed arrays, RegExp); the stock Array, Set, typed
   array and RegExp algorithms are kept as `legacy*` methods.
-- *G7* 2.35-2.46 (language residuals, Annex B, `await`, generators, realms, array-likes).
+- *G7 (done)* 2.35-2.46 (language residuals, Annex B, `await`, generators, realms, array-likes); the stock
+  compiled `finally` and exception ranges are restored under `VERSION_ES6`. BACKWARD_COMPATIBILITY.md section 2
+  became 1.17-1.62.
 
 ### M9 — ES2023
 
@@ -716,7 +718,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 6.x  | ES2020                                          | done        | 83.3% → 84.6% (6.6)          | 3b5acfd55 |
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
 | 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
-| G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | in progress |                              |        |
+| G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | done        | 96.4% (unchanged)            |        |
 | 9.x  | ES2023 residuals                                | todo        |                              |        |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |

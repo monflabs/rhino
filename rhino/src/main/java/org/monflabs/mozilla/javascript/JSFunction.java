@@ -31,7 +31,8 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
             return;
         }
         ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, descriptor.isES6Generator());
-        if (!descriptor.isShorthand() || descriptor.isES6Generator()) {
+        if (!descriptor.isShorthand()
+                || (descriptor.isES6Generator() && cx != null && cx.isLatestEcmaScript())) {
             setupDefaultPrototype(scope);
         }
     }

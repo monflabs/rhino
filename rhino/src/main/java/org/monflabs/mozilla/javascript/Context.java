@@ -215,6 +215,18 @@ public class Context implements Closeable {
      *       ToIndex and ToBigInt in typed arrays; RegExp.prototype is an ordinary object, the
      *       RegExp constructor, {@code flags}, {@code source}, {@code toString} and the Symbol
      *       methods follow ES2026, and format-control characters stay in regexp literals.
+     *   <li>Language residuals: logical assignment does not write when it short-circuits; compound
+     *       assignment converts a key once; {@code with} honors {@code Symbol.unscopables}; {@code
+     *       instanceof} follows InstanceofOperator; arrow parameters and nested patterns accept
+     *       cover initializers; {@code eval(...args)} is direct; object rest and spread use
+     *       CopyDataProperties; generator methods have a {@code prototype}; {@code >>>} converts
+     *       both operands; a compiled {@code finally} runs once; {@code for-in} skips shadowed
+     *       keys; only the exact {@code "use strict"} is a directive; the Annex B String and RegExp
+     *       built-ins, {@code setYear} and HTML-like comments follow Annex B; {@code await} is an
+     *       identifier outside async code; optional chains short-circuit element accesses and
+     *       calls; strict generators stay strict when resumed; a {@code finally} run by {@code
+     *       return()} can yield; array-likes too long for Java are a RangeError;
+     *       GetPrototypeFromConstructor uses the intrinsic of the right type and realm.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

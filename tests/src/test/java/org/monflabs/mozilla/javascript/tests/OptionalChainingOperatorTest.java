@@ -212,11 +212,18 @@ public class OptionalChainingOperatorTest {
 
     @Test
     public void elementAccessInAChainIsShortCircuited() {
-        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.b[0]");
-        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.[0][1]");
-        Utils.assertWithAllModes_ES6(0, "var n = 0, a; a?.b[n++]; a?.b.c[n++]; n");
-        Utils.assertWithAllModes_ES6(Undefined.instance, "var a; a?.b.c[0]()");
-        Utils.assertWithAllModes_ES6(2, "var a = {b: [1, 2]}; a?.b[1]");
+        Utils.assertGatedBehavior(
+                "TypeError|TypeError|TypeError,1|TypeError|2",
+                "undefined|undefined|0|undefined|2",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => { var a; return a?.b[0]; });"
+                        + " t(() => { var a; return a?.[0][1]; });"
+                        + " var n = 0;"
+                        + " t(() => { var a; try { a?.b[n++]; a?.b.c[n++]; } catch (e) { return [e.name, n]; }"
+                        + " return n; });"
+                        + " t(() => { var a; return a?.b.c[0](); });"
+                        + " t(() => { var a = { b: [1, 2] }; return a?.b[1]; });"
+                        + " r.join('|')");
     }
 
     @Test

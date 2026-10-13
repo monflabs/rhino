@@ -44,10 +44,13 @@ final class NativeString extends ScriptableObject {
 
     private final CharSequence string;
 
-    private static final ClassDescriptor DESCRIPTOR;
+    private static final ClassDescriptor DESCRIPTOR = makeDescriptor(true);
+    private static final ClassDescriptor LEGACY_DESCRIPTOR = makeDescriptor(false);
 
-    static {
-        DESCRIPTOR =
+    /** The stock descriptor: separate trimLeft/trimRight functions, HTML methods of length 0. */
+    private static ClassDescriptor makeDescriptor(boolean latest) {
+        int htmlLength = latest ? 1 : 0;
+        ClassDescriptor.Builder builder =
                 new ClassDescriptor.Builder(
                                 CLASS_NAME,
                                 1,
@@ -117,10 +120,10 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "blink", 0, NativeString::js_blink)
                         .withMethod(PROTO, "sup", 0, NativeString::js_sup)
                         .withMethod(PROTO, "sub", 0, NativeString::js_sub)
-                        .withMethod(PROTO, "fontsize", 1, NativeString::js_fontsize)
-                        .withMethod(PROTO, "fontcolor", 1, NativeString::js_fontcolor)
-                        .withMethod(PROTO, "link", 1, NativeString::js_link)
-                        .withMethod(PROTO, "anchor", 1, NativeString::js_anchor)
+                        .withMethod(PROTO, "fontsize", htmlLength, NativeString::js_fontsize)
+                        .withMethod(PROTO, "fontcolor", htmlLength, NativeString::js_fontcolor)
+                        .withMethod(PROTO, "link", htmlLength, NativeString::js_link)
+                        .withMethod(PROTO, "anchor", htmlLength, NativeString::js_anchor)
                         .withMethod(PROTO, "equals", 1, NativeString::js_equals)
                         .withMethod(PROTO, "equalsIgnoreCase", 1, NativeString::js_equalsIgnoreCase)
                         .withMethod(PROTO, "match", 1, NativeString::js_match)
@@ -134,22 +137,29 @@ final class NativeString extends ScriptableObject {
                                 PROTO, "toLocaleLowerCase", 0, NativeString::js_toLocaleLowerCase)
                         .withMethod(
                                 PROTO, "toLocaleUpperCase", 0, NativeString::js_toLocaleUpperCase)
-                        .withMethod(PROTO, "trim", 0, NativeString::js_trim)
-                        .withMethod(PROTO, "trimStart", 0, NativeString::js_trimLeft)
-                        .withProp(PROTO, "trimLeft", alias("trimStart", DONTENUM))
-                        .withMethod(PROTO, "trimEnd", 0, NativeString::js_trimRight)
-                        .withProp(PROTO, "trimRight", alias("trimEnd", DONTENUM))
-                        .withMethod(PROTO, "includes", 1, NativeString::js_includes)
-                        .withMethod(PROTO, "startsWith", 1, NativeString::js_startsWith)
-                        .withMethod(PROTO, "endsWith", 1, NativeString::js_endsWith)
-                        .withMethod(PROTO, "normalize", 0, NativeString::js_normalize)
-                        .withMethod(PROTO, "repeat", 1, NativeString::js_repeat)
-                        .withMethod(PROTO, "codePointAt", 1, NativeString::js_codePointAt)
-                        .withMethod(PROTO, "padStart", 1, NativeString::js_padStart)
-                        .withMethod(PROTO, "padEnd", 1, NativeString::js_padEnd)
-                        .withMethod(PROTO, "isWellFormed", 0, NativeString::js_isWellFormed)
-                        .withMethod(PROTO, "toWellFormed", 0, NativeString::js_toWellFormed)
-                        .build();
+                        .withMethod(PROTO, "trim", 0, NativeString::js_trim);
+        if (latest) {
+            builder.withMethod(PROTO, "trimStart", 0, NativeString::js_trimLeft)
+                    .withProp(PROTO, "trimLeft", alias("trimStart", DONTENUM))
+                    .withMethod(PROTO, "trimEnd", 0, NativeString::js_trimRight)
+                    .withProp(PROTO, "trimRight", alias("trimEnd", DONTENUM));
+        } else {
+            builder.withMethod(PROTO, "trimLeft", 0, NativeString::js_trimLeft)
+                    .withMethod(PROTO, "trimStart", 0, NativeString::js_trimLeft)
+                    .withMethod(PROTO, "trimRight", 0, NativeString::js_trimRight)
+                    .withMethod(PROTO, "trimEnd", 0, NativeString::js_trimRight);
+        }
+        return builder.withMethod(PROTO, "includes", 1, NativeString::js_includes)
+                .withMethod(PROTO, "startsWith", 1, NativeString::js_startsWith)
+                .withMethod(PROTO, "endsWith", 1, NativeString::js_endsWith)
+                .withMethod(PROTO, "normalize", 0, NativeString::js_normalize)
+                .withMethod(PROTO, "repeat", 1, NativeString::js_repeat)
+                .withMethod(PROTO, "codePointAt", 1, NativeString::js_codePointAt)
+                .withMethod(PROTO, "padStart", 1, NativeString::js_padStart)
+                .withMethod(PROTO, "padEnd", 1, NativeString::js_padEnd)
+                .withMethod(PROTO, "isWellFormed", 0, NativeString::js_isWellFormed)
+                .withMethod(PROTO, "toWellFormed", 0, NativeString::js_toWellFormed)
+                .build();
     }
 
     private static BuiltInJSCodeExec<JSFunction> forCtor(BuiltInJSCodeExec<JSFunction> code) {
@@ -169,7 +179,8 @@ final class NativeString extends ScriptableObject {
     }
 
     static void init(Context cx, VarScope scope, boolean sealed) {
-        DESCRIPTOR.buildConstructor(cx, scope, new NativeString(""), sealed);
+        (cx.isLatestEcmaScript() ? DESCRIPTOR : LEGACY_DESCRIPTOR)
+                .buildConstructor(cx, scope, new NativeString(""), sealed);
     }
 
     NativeString(CharSequence s) {

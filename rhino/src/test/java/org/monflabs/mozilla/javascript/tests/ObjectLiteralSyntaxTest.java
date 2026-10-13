@@ -92,9 +92,10 @@ class ObjectLiteralSyntaxTest {
     @Test
     void inIsAllowedInAComputedKeyOfAForHead() {
         Utils.assertGatedBehavior(
+                "SyntaxError",
                 "g",
-                "g",
-                "var empty = Object.create(null); var obj;"
-                        + " for (obj = { get ['x' in empty]() { return 'g'; } }; ; ) { break; } obj.false");
+                "try { eval(\"var empty = Object.create(null); var obj;"
+                        + " for (obj = { get ['x' in empty]() { return 'g'; } }; ; ) { break; }"
+                        + " obj.false\"); } catch (e) { e.name }");
     }
 }

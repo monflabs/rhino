@@ -70,7 +70,7 @@ public class WithScope implements VarScope {
 
     @Override
     public Object get(String name, VarScope start) {
-        if (isES6()) {
+        if (isLatest()) {
             // HasBinding (9.1.1.2.1), then GetBindingValue (9.1.1.2.6)
             if (!hasBinding(name)) {
                 return NOT_FOUND;
@@ -90,9 +90,9 @@ public class WithScope implements VarScope {
         return ScriptableObject.getProperty(obj, name);
     }
 
-    private static boolean isES6() {
+    private static boolean isLatest() {
         Context cx = Context.getCurrentContext();
-        return cx != null && cx.getLanguageVersion() >= Context.VERSION_ES6;
+        return cx != null && cx.isLatestEcmaScript();
     }
 
     /**
@@ -128,7 +128,7 @@ public class WithScope implements VarScope {
 
     @Override
     public boolean has(String name, VarScope start) {
-        return isES6() ? hasBinding(name) : ScriptableObject.hasProperty(obj, name);
+        return isLatest() ? hasBinding(name) : ScriptableObject.hasProperty(obj, name);
     }
 
     @Override

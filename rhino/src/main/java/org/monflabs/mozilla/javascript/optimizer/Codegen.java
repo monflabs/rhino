@@ -428,6 +428,7 @@ public class Codegen implements Evaluator {
 
         String sourceFile = scriptOrFnNodes[0].getSourceName();
         ClassFileWriter cfw = new ClassFileWriter(mainClassName, SUPER_CLASS_NAME, sourceFile);
+        cfw.setKeepLiveExceptionRanges(compilerEnv.isLatestEcmaScript());
         cfw.addField(ID_FIELD_NAME, "I", ACC_PRIVATE);
         cfw.addField(
                 DESCRIPTORS_FIELD_NAME,

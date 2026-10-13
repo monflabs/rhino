@@ -113,7 +113,7 @@ public abstract class NewLiteralStorage {
         if (source != null && !Undefined.isUndefined(source)) {
             Scriptable src = ScriptRuntime.toObject(cx, scope, source);
             Object[] ids;
-            if (src instanceof NativeProxy) {
+            if (src instanceof NativeProxy && cx.isLatestEcmaScript()) {
                 ids =
                         AbstractEcmaObjectOperations.proxyCopyKeys(
                                         cx, (NativeProxy) src, k -> false)

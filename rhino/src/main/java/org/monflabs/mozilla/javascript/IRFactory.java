@@ -1267,7 +1267,7 @@ public final class IRFactory {
         }
         call.addChildToBack(array);
         call.putIntProp(Node.SPREAD_ARGS_PROP, 1);
-        if (call.getType() != Token.CALL) {
+        if (call.getType() != Token.CALL || !parser.compilerEnv.isLatestEcmaScript()) {
             // a direct eval with spread arguments is a call only (eval(...args))
             call.removeProp(Node.SPECIALCALL_PROP);
         }
@@ -3107,7 +3107,8 @@ public final class IRFactory {
                 && left.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 0
                 && (nodeType == Token.NAME
                         || nodeType == Token.GETPROP
-                        || nodeType == Token.GETELEM)) {
+                        || nodeType == Token.GETELEM)
+                && parser.compilerEnv.isLatestEcmaScript()) {
             return createLogicalAssignment(assignOp, left, right);
         }
         switch (nodeType) {

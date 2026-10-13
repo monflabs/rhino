@@ -14,14 +14,10 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 /** Annex B (plan 1.11). */
 class AnnexBTest {
 
-    private static void assertBoth(Object expected, String script) {
-        Utils.assertWithAllModes_ES6(expected, script);
-        Utils.assertWithAllModes_ECMASCRIPT(expected, script);
-    }
-
     @Test
     void stringAndDateMethods() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "false,trimRight,0,-1",
                 "true,trimEnd,1,1900",
                 "var d = new Date(2000, 0, 1); d.setYear(-0.5);"
                         + " [String.prototype.trimLeft === String.prototype.trimStart,"
@@ -41,6 +37,17 @@ class AnnexBTest {
     }
 
     @Test
+    void regExpLegacyFeaturesGated() {
+        Utils.assertGatedBehavior(
+                "true,no",
+                "false,TypeError",
+                "var r = [];"
+                        + " r.push(Object.getOwnPropertyDescriptor(RegExp, 'lastMatch').enumerable);"
+                        + " try { /a/.compile(/b/, 'g'); r.push('no'); } catch (e) { r.push(e.name); }"
+                        + " r.join()");
+    }
+
+    @Test
     void regExpPatternGrammar() {
         Utils.assertGatedBehavior(
                 "false,false,false",
@@ -50,7 +57,11 @@ class AnnexBTest {
 
     @Test
     void htmlCloseCommentAfterBlockComment() {
-        assertBoth("0", "var n = 0;\n/*\n*/--> n += 1;\n/* c */ --> n += 1;\nString(n)");
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "0",
+                "try { eval('var n = 0;\\n/*\\n*/--> n += 1;\\n/* c */ --> n += 1;\\nString(n)'); }"
+                        + " catch (e) { e.name }");
     }
 
     @Test

@@ -1251,8 +1251,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             InterpreterState state,
             GeneratorState generatorState,
             boolean yieldStar) {
+        JSDescriptor<?> desc = frame.fnOrScript.getDescriptor();
         if (generatorState.operation == NativeGenerator.GENERATOR_CLOSE
-                && !frame.fnOrScript.getDescriptor().isES6Generator()) {
+                && (!desc.isES6Generator() || (!cx.isLatestEcmaScript() && !desc.isAsync()))) {
             // Error: no yields when a legacy generator is closing (an ES6 generator can yield in
             // a finally block run by return())
             throw ScriptRuntime.typeErrorById("msg.yield.closing");
@@ -1915,6 +1916,13 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             final Object[] stack = frame.stack;
             final double[] sDbl = frame.doubleStack;
+            if (!cx.isLatestEcmaScript()) {
+                double lDbl = stack_double(frame, frame.stackTop - 1);
+                int rIntValue = stack_int32(frame, frame.stackTop) & 0x1F;
+                stack[--frame.stackTop] = DOUBLE_MARK;
+                sDbl[frame.stackTop] = ScriptRuntime.toUint32(lDbl) >>> rIntValue;
+                return null;
+            }
             Number lNum = stack_numeric(frame, frame.stackTop - 1);
             Number rNum = stack_numeric(frame, frame.stackTop);
             stack[--frame.stackTop] = DOUBLE_MARK;
@@ -4108,7 +4116,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 if (computedKey == DOUBLE_MARK) {
                     computedKey = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
                 }
-                excludeKeys[staticKeyCount + i] = ScriptRuntime.toPropertyKey(computedKey);
+                excludeKeys[staticKeyCount + i] =
+                        cx.isLatestEcmaScript()
+                                ? ScriptRuntime.toPropertyKey(computedKey)
+                                : ScriptRuntime.toString(computedKey);
                 frame.stackTop--;
             }
 

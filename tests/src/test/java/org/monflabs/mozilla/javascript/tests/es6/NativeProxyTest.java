@@ -1186,9 +1186,8 @@ public class NativeProxyTest {
                         + "}\n"
                         + "'' + log";
 
-        // finally should be
-        // "has:p,get:Symbol(Symbol.unscopables),has:p,set:p,getOwnPropertyDescriptor:p,defineProperty:p"
-        Utils.assertWithAllModes_ES6(
+        Utils.assertGatedBehavior(
+                "has:p,has:p,set:p,getOwnPropertyDescriptor:p,defineProperty:p",
                 "has:p,get:Symbol(Symbol.unscopables),has:p,set:p,getOwnPropertyDescriptor:p,defineProperty:p",
                 js);
     }

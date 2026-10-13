@@ -3659,7 +3659,11 @@ class BodyCodegen {
         cfw.markLabel(realEnd);
 
         // also in a generator: the catch of an enclosing try finds its own handlers on top
-        exceptionManager.popExceptionInfo();
+        if (!isGenerator
+                || compilerEnv.isLatestEcmaScript()
+                || (scriptOrFn instanceof FunctionNode && ((FunctionNode) scriptOrFn).isAsync())) {
+            exceptionManager.popExceptionInfo();
+        }
     }
 
     private static final int JAVASCRIPT_EXCEPTION = 0;
@@ -3823,7 +3827,15 @@ class BodyCodegen {
             Iterator<ExceptionInfo> iter = exceptionInfo.descendingIterator();
             while (iter.hasNext()) {
                 ExceptionInfo ei = iter.next();
-                if (ei.currentFinally == null) {
+                if (!compilerEnv.isLatestEcmaScript()) {
+                    for (int i = 0; i < EXCEPTION_MAX; i++) {
+                        if (ei.handlerLabels[i] != 0 && ei.currentFinally == null) {
+                            endCatch(ei, i, finallyStart);
+                            ei.exceptionStarts[i] = 0;
+                            ei.currentFinally = finallyBlock;
+                        }
+                    }
+                } else if (ei.currentFinally == null) {
                     for (int i = 0; i < EXCEPTION_MAX; i++) {
                         if (ei.handlerLabels[i] != 0) {
                             endCatch(ei, i, finallyStart);
@@ -3851,7 +3863,14 @@ class BodyCodegen {
             Iterator<ExceptionInfo> iter = exceptionInfo.descendingIterator();
             while (iter.hasNext()) {
                 ExceptionInfo ei = iter.next();
-                if (ei.currentFinally == finallyBlock) {
+                if (!compilerEnv.isLatestEcmaScript()) {
+                    for (int i = 0; i < EXCEPTION_MAX; i++) {
+                        if (ei.handlerLabels[i] != 0 && ei.currentFinally == finallyBlock) {
+                            ei.exceptionStarts[i] = finallyEnd;
+                            ei.currentFinally = null;
+                        }
+                    }
+                } else if (ei.currentFinally == finallyBlock) {
                     for (int i = 0; i < EXCEPTION_MAX; i++) {
                         if (ei.handlerLabels[i] != 0) {
                             ei.exceptionStarts[i] = finallyEnd;
@@ -4481,6 +4500,22 @@ class BodyCodegen {
         // special-case URSH; work with the target arg as a long, so
         // that we can return a 32-bit unsigned value, and call
         // toUint32 instead of toInt32.
+        if (type == Token.URSH && !compilerEnv.isLatestEcmaScript()) {
+            generateExpression(child.getNext(), node);
+            cfw.add(ByteCode.SWAP);
+            addDynamicInvoke("MATH:TOUINT32", Signatures.MATH_TO_UINT32);
+            cfw.add(ByteCode.DUP2_X1);
+            cfw.add(ByteCode.POP2);
+            addDynamicInvoke("MATH:TOINT32", Signatures.MATH_TO_INT32);
+            // Looks like we need to explicitly mask the shift to 5 bits -
+            // LUSHR takes 6 bits.
+            cfw.addPush(31);
+            cfw.add(ByteCode.IAND);
+            cfw.add(ByteCode.LUSHR);
+            cfw.add(ByteCode.L2D);
+            addDoubleWrap();
+            return;
+        }
         if (type == Token.URSH) {
             // both operands are converted (ToNumeric) before a BigInt operand throws
             generateExpression(child.getNext(), node);
@@ -5006,9 +5041,7 @@ class BodyCodegen {
         child = child.getNext();
         boolean indexIsNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);
         boolean isSuper = node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1;
-        if (type == Token.SETELEM_OP
-                && !indexIsNumber
-                && compilerEnv.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (type == Token.SETELEM_OP && !indexIsNumber && compilerEnv.isLatestEcmaScript()) {
             // the key is converted once, for the get and the set (13.15.2)
             // stack: ... object object key -> ... object object key'
             cfw.add(ByteCode.DUP2);

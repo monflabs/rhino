@@ -1018,15 +1018,20 @@ public class ScriptRuntime {
             }
         }
 
-        if (sourceObj instanceof NativeProxy) {
+        boolean latest = cx.isLatestEcmaScript();
+        if (latest && sourceObj instanceof NativeProxy) {
             for (Object id :
                     AbstractEcmaObjectOperations.proxyCopyKeys(
                             cx,
                             (NativeProxy) sourceObj,
                             k ->
                                     shouldExcludeProperty(
-                                            k, excludeStrings, excludeIntegers, excludeSymbols))) {
-                copyProperty(sourceObj, result, id, cx, scope);
+                                            k,
+                                            excludeStrings,
+                                            excludeIntegers,
+                                            excludeSymbols,
+                                            true))) {
+                copyProperty(sourceObj, result, id, cx, scope, latest);
             }
         } else if (sourceObj instanceof ScriptableObject) {
             ScriptableObject so = (ScriptableObject) sourceObj;
@@ -1037,16 +1042,17 @@ public class ScriptRuntime {
                 for (Object id : allIds) {
                     // Check exclusion and copy property
                     if (!shouldExcludeProperty(
-                            id, excludeStrings, excludeIntegers, excludeSymbols)) {
-                        copyProperty(sourceObj, result, id, cx, scope);
+                            id, excludeStrings, excludeIntegers, excludeSymbols, latest)) {
+                        copyProperty(sourceObj, result, id, cx, scope, latest);
                     }
                 }
             }
         } else {
             Object[] ids = sourceObj.getIds();
             for (Object id : ids) {
-                if (!shouldExcludeProperty(id, excludeStrings, excludeIntegers, excludeSymbols)) {
-                    copyProperty(sourceObj, result, id, cx, scope);
+                if (!shouldExcludeProperty(
+                        id, excludeStrings, excludeIntegers, excludeSymbols, latest)) {
+                    copyProperty(sourceObj, result, id, cx, scope, latest);
                 }
             }
         }
@@ -1059,10 +1065,14 @@ public class ScriptRuntime {
             Object id,
             java.util.Set<String> excludeStrings,
             java.util.Set<Integer> excludeIntegers,
-            java.util.Set<Symbol> excludeSymbols) {
+            java.util.Set<Symbol> excludeSymbols,
+            boolean latest) {
         if (id instanceof String) {
             if (excludeStrings.contains((String) id)) {
                 return true;
+            }
+            if (!latest) {
+                return false;
             }
             // an index key given as an integer
             StringIdOrIndex soi = toStringIdOrIndex(id);
@@ -1077,10 +1087,15 @@ public class ScriptRuntime {
 
     /** Copy a single property from source to result */
     private static void copyProperty(
-            Scriptable source, Scriptable result, Object id, Context cx, VarScope scope) {
+            Scriptable source,
+            Scriptable result,
+            Object id,
+            Context cx,
+            VarScope scope,
+            boolean latest) {
         Object value;
 
-        if (id instanceof String) {
+        if (latest && id instanceof String) {
             // an index key from [[OwnPropertyKeys]] (a proxy) is a string
             StringIdOrIndex soi = toStringIdOrIndex(id);
             if (soi.stringId == null) {
@@ -2926,7 +2941,7 @@ public class ScriptRuntime {
                 throw typeErrorById("msg.fn.name.assign", id);
             }
             if (bound instanceof TopLevel
-                    && cx.getLanguageVersion() >= Context.VERSION_ES6
+                    && cx.isLatestEcmaScript()
                     && !ScriptableObject.hasProperty(bound, id)) {
                 // Object Environment Record SetMutableBinding (9.1.1.2.5): the binding was
                 // deleted after the reference was resolved
@@ -2964,6 +2979,7 @@ public class ScriptRuntime {
         HashSet<Object> used;
         // the objects already enumerated: their non-enumerable properties shadow the prototypes'
         ArrayList<Scriptable> visited;
+        boolean shadowing;
         Object currentId;
         int index;
         int enumType; /* one of ENUM_INIT_KEYS, ENUM_INIT_VALUES,
@@ -3031,6 +3047,7 @@ public class ScriptRuntime {
 
     public static Object enumInit(Object value, Context cx, VarScope scope, int enumType) {
         IdEnumeration x = new IdEnumeration();
+        x.shadowing = cx.isLatestEcmaScript();
         if (value instanceof AsyncIteration.Open) {
             // for await (see Node#AWAIT_ITER_OPEN)
             x.enumType = enumType;
@@ -3267,6 +3284,9 @@ public class ScriptRuntime {
     }
 
     private static void addVisited(IdEnumeration x, Scriptable obj) {
+        if (!x.shadowing) {
+            return;
+        }
         if (x.visited == null) {
             x.visited = new ArrayList<>();
         }
@@ -3560,10 +3580,11 @@ public class ScriptRuntime {
             }
             return new LookupResult(value, (Scriptable) obj, elem.toString());
         }
+        boolean shortCircuit = isOptionalChainingCall && cx.isLatestEcmaScript();
         if (isSymbol(elem)) {
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
-                if (isOptionalChainingCall) {
+                if (shortCircuit) {
                     return null;
                 }
                 throw undefCallError(obj, String.valueOf(elem));
@@ -3573,12 +3594,14 @@ public class ScriptRuntime {
         } else {
             StringIdOrIndex s = toStringIdOrIndex(elem);
             if (s.stringId != null) {
-                return getPropAndThisInner(obj, s.stringId, cx, scope, isOptionalChainingCall);
+                return cx.isLatestEcmaScript()
+                        ? getPropAndThisInner(obj, s.stringId, cx, scope, isOptionalChainingCall)
+                        : getPropAndThis(obj, s.stringId, cx, scope);
             }
 
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
-                if (isOptionalChainingCall) {
+                if (shortCircuit) {
                     return null;
                 }
                 throw undefCallError(obj, String.valueOf(elem));
@@ -4868,7 +4891,7 @@ public class ScriptRuntime {
             Context cx = Context.getCurrentContext();
             if (cx != null
                     && cx.isStrictMode()
-                    && cx.getLanguageVersion() >= Context.VERSION_ES6
+                    && cx.isLatestEcmaScript()
                     && !ScriptableObject.hasProperty(target, id)) {
                 // Object Environment Record SetMutableBinding (9.1.1.2.5)
                 throw notFoundError(target, id);
@@ -4891,7 +4914,7 @@ public class ScriptRuntime {
 
     public static Object elemIncrDecr(
             Object obj, Object index, Context cx, VarScope scope, int incrDecrMask) {
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6) {
+        if (cx.isLatestEcmaScript()) {
             // the key is converted once, for the get and the set (13.4.2.1)
             index = elementKey(obj, index);
         }
@@ -5428,7 +5451,7 @@ public class ScriptRuntime {
             throw typeErrorById("msg.instanceof.not.object");
         }
 
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6 && isObject(b)) {
+        if (cx.isLatestEcmaScript() && isObject(b)) {
             // InstanceofOperator (13.10.2): the @@hasInstance method, for any left-hand value
             Scriptable target = (Scriptable) b;
             Object handler = ScriptableObject.getProperty(target, SymbolKey.HAS_INSTANCE);
@@ -6798,6 +6821,9 @@ public class ScriptRuntime {
         long longLen = NativeArray.getLengthProperty(cx, object);
         if (longLen > Integer.MAX_VALUE) {
             // arrays beyond MAX_INT is not in Java in any case
+            if (cx == null || !cx.isLatestEcmaScript()) {
+                throw new IllegalArgumentException();
+            }
             throw rangeErrorById("msg.arraylength.too.big", String.valueOf(longLen));
         }
         int len = (int) longLen;
@@ -7065,7 +7091,11 @@ public class ScriptRuntime {
      * access on null/undefined comes before ToPropertyKey (13.3.2.1, 13.3.3).
      */
     private static String describeKey(Object id) {
-        if (id instanceof Scriptable && !(id instanceof Symbol)) {
+        Context cx = Context.getCurrentContext();
+        if (id instanceof Scriptable
+                && !(id instanceof Symbol)
+                && cx != null
+                && cx.isLatestEcmaScript()) {
             return "[object " + ((Scriptable) id).getClassName() + "]";
         }
         return toString(id);

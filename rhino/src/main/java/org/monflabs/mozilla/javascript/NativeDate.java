@@ -770,9 +770,13 @@ final class NativeDate extends ScriptableObject {
                 t = LocalTime(cx, t);
             }
 
-            // B.2.3.4: the two-digit test uses ToIntegerOrInfinity(year)
-            double yi = ScriptRuntime.toIntegerOrInfinity(year);
-            if (yi >= 0 && yi <= 99) year = 1900 + yi;
+            if (cx.isLatestEcmaScript()) {
+                // B.2.3.4: the two-digit test uses ToIntegerOrInfinity(year)
+                double yi = ScriptRuntime.toIntegerOrInfinity(year);
+                if (yi >= 0 && yi <= 99) year = 1900 + yi;
+            } else if (year >= 0 && year <= 99) {
+                year += 1900;
+            }
 
             double day = MakeDay(year, MonthFromTime(t), DateFromTime(t));
             t = MakeDate(day, TimeWithinDay(t));

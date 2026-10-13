@@ -432,6 +432,8 @@ public class NativeRegExp extends ScriptableObject {
      * that the receiver is the RegExp constructor of their own realm.
      */
     private static void defineLegacyAccessors(Context cx, VarScope scope, JSFunction ctor) {
+        // stock Rhino: enumerable and non-configurable (B.2.4 legacy features: non-enumerable)
+        int attributes = cx.isLatestEcmaScript() ? DONTENUM : PERMANENT;
         ScriptableObject.LambdaSetterFunction inputSetter =
                 (c, v) -> getImpl().input = legacyStr(ctor, c, ScriptRuntime.toString(v));
         for (String name : new String[] {"input", "$_"}) {
@@ -441,23 +443,23 @@ public class NativeRegExp extends ScriptableObject {
                     name,
                     (c) -> legacyStr(ctor, c, getImpl().input),
                     inputSetter,
-                    DONTENUM);
+                    attributes);
         }
         for (String name : new String[] {"lastMatch", "$&"}) {
             ctor.defineProperty(
-                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastMatch), DONTENUM);
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastMatch), attributes);
         }
         for (String name : new String[] {"lastParen", "$+"}) {
             ctor.defineProperty(
-                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastParen), DONTENUM);
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().lastParen), attributes);
         }
         for (String name : new String[] {"leftContext", "$`"}) {
             ctor.defineProperty(
-                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().leftContext), DONTENUM);
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().leftContext), attributes);
         }
         for (String name : new String[] {"rightContext", "$'"}) {
             ctor.defineProperty(
-                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().rightContext), DONTENUM);
+                    cx, scope, name, (c) -> legacyStr(ctor, c, getImpl().rightContext), attributes);
         }
         for (int i = 1; i < 10; i++) {
             int n = i - 1;
@@ -466,7 +468,7 @@ public class NativeRegExp extends ScriptableObject {
                     scope,
                     "$" + i,
                     (c) -> legacyStr(ctor, c, getImpl().getParenSubString(n)),
-                    DONTENUM);
+                    attributes);
         }
     }
 
@@ -4713,7 +4715,8 @@ public class NativeRegExp extends ScriptableObject {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeRegExp re = realThis(thisObj, f);
         TopLevel thisRealm = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
-        if (re.legacyFeaturesDisabled || (re.realm != null && re.realm != thisRealm)) {
+        if (cx.isLatestEcmaScript()
+                && (re.legacyFeaturesDisabled || (re.realm != null && re.realm != thisRealm))) {
             // B.2.4.1: not for an instance of a subclass or of another realm
             throw ScriptRuntime.typeErrorInRealm(
                     cx, thisRealm, "msg.regexp.legacy.disabled", "compile");

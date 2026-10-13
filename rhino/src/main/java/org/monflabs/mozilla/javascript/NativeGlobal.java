@@ -67,9 +67,11 @@ public class NativeGlobal implements Serializable {
                                 e.name(),
                                 1,
                                 (c, f, nt, s, thisObj, args) ->
-                                        NativeError.make(c, f, nt, s, thisObj, args, type),
+                                        NativeError.make(
+                                                c, f, nt, s, thisObj, args, protoType(c, type)),
                                 (c, f, nt, s, thisObj, args) ->
-                                        NativeError.make(c, f, nt, s, thisObj, args, type));
+                                        NativeError.make(
+                                                c, f, nt, s, thisObj, args, protoType(c, type)));
             } else {
                 builder =
                         new ClassDescriptor.Builder(
@@ -714,5 +716,10 @@ public class NativeGlobal implements Serializable {
             utf8Buffer[0] = (byte) (0x100 - (1 << (8 - utf8Length)) + ucs4Char);
         }
         return utf8Length;
+    }
+
+    /** Stock Rhino: the prototype fallback of every native error is Error.prototype. */
+    private static TopLevel.NativeErrors protoType(Context cx, TopLevel.NativeErrors type) {
+        return cx.isLatestEcmaScript() ? type : TopLevel.NativeErrors.Error;
     }
 }

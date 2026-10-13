@@ -90,6 +90,9 @@ public final class ES6Generator extends ScriptableObject {
 
     /** Resumes the body with the strictness of the generator function, whoever resumes it. */
     private Object resume(Context cx, VarScope scope, int op, Object value) {
+        if (!cx.isLatestEcmaScript() && !function.getDescriptor().isAsync()) {
+            return function.resumeGenerator(cx, scope, op, savedState, value);
+        }
         boolean parentStrict = ScriptRuntime.enterFunctionStrictness(cx, function.isStrict());
         try {
             return function.resumeGenerator(cx, scope, op, savedState, value);
@@ -301,7 +304,9 @@ public final class ES6Generator extends ScriptableObject {
         } catch (NativeGenerator.GeneratorClosedException gce) {
             // a return() whose finally block yielded completes now, with its value
             state = State.COMPLETED;
-            ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, gce.getValue());
+            if (cx.isLatestEcmaScript() || function.getDescriptor().isAsync()) {
+                ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, gce.getValue());
+            }
         } catch (JavaScriptException jse) {
             state = State.COMPLETED;
             if (jse.getValue() instanceof NativeIterator.StopIteration) {

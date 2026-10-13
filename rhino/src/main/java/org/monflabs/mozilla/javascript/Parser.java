@@ -484,7 +484,9 @@ public class Parser {
                 // a multi-line comment with a line terminator is a LineTerminator (12.4)
                 if (ts.commentHasLineTerminator) {
                     ts.commentHasLineTerminator = false;
-                    sawEOL = true;
+                    if (compilerEnv.isLatestEcmaScript()) {
+                        sawEOL = true;
+                    }
                 }
                 if (compilerEnv.isRecordingComments()) {
                     String comment = ts.getAndResetCurrentComment();
@@ -1526,14 +1528,16 @@ public class Parser {
         moduleInfo.sortExportEntries();
     }
 
-    private static String getDirective(AstNode n) {
+    private String getDirective(AstNode n) {
         if (n instanceof ExpressionStatement) {
             AstNode e = ((ExpressionStatement) n).getExpression();
             if (e instanceof StringLiteral) {
                 String value = ((StringLiteral) e).getValue();
                 // 'use str\<LF>ict' is a directive, but not a Use Strict Directive: that is the
                 // exact source text "use strict"
-                return e.getLength() == value.length() + 2 ? value : "";
+                return e.getLength() == value.length() + 2 || !compilerEnv.isLatestEcmaScript()
+                        ? value
+                        : "";
             }
         }
         return null;
@@ -4161,7 +4165,7 @@ public class Parser {
             }
         } else if (pn.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
                 && !inDestructuringAssignment) {
-            if (inParenthesizedCover) {
+            if (inParenthesizedCover && compilerEnv.isLatestEcmaScript()) {
                 pendingCoverInitializedNames++;
             } else {
                 reportError("msg.syntax");
@@ -4831,7 +4835,7 @@ public class Parser {
                 case Token.LB:
                     consumeToken();
                     pn = makeElemGet(pn, ts.tokenBeg);
-                    if (isOptionalChain) {
+                    if (isOptionalChain && compilerEnv.isLatestEcmaScript()) {
                         // a?.b[c]: the element is not evaluated when a is null or undefined
                         pn.setType(Token.QUESTION_DOT);
                     }
@@ -5474,7 +5478,9 @@ public class Parser {
     private AstNode arrayLiteral() throws IOException {
         // the in operator is allowed inside brackets, also in a for head
         boolean wasInForInit = inForInit;
-        inForInit = false;
+        if (compilerEnv.isLatestEcmaScript()) {
+            inForInit = false;
+        }
         // [{ x = 1 }] = a: a CoverInitializedName nested in a literal is valid if the literal
         // becomes a pattern
         boolean wasInCover = inParenthesizedCover;
@@ -5759,7 +5765,9 @@ public class Parser {
 
     private ObjectLiteral objectLiteral() throws IOException {
         boolean wasInForInit = inForInit;
-        inForInit = false;
+        if (compilerEnv.isLatestEcmaScript()) {
+            inForInit = false;
+        }
         // [{ x = 1 }] = a: a CoverInitializedName nested in a literal is valid if the literal
         // becomes a pattern
         boolean wasInCover = inParenthesizedCover;
@@ -7065,7 +7073,9 @@ public class Parser {
         Node set = new Node(setOp, createName(Token.BINDNAME, name, null), value);
         if (variableType == -1) {
             set.putIntProp(Node.DESTRUCTURING_TARGET_PROP, 1);
-            if (inUseStrictDirective && ("eval".equals(name) || "arguments".equals(name))) {
+            if (inUseStrictDirective
+                    && ("eval".equals(name) || "arguments".equals(name))
+                    && compilerEnv.isLatestEcmaScript()) {
                 // 13.15.5.1: an assignment target must not be eval or arguments in strict code
                 reportError("msg.bad.id.strict", name);
             }
@@ -7987,6 +7997,12 @@ public class Parser {
                 Node s = Node.newString(keyName);
                 rightElem = new Node(Token.GETPROP, createName(tempName), s);
                 extractedKeys.add(keyName);
+            } else if (id instanceof NumberLiteral && !compilerEnv.isLatestEcmaScript()) {
+                Node s = createNumber((int) ((NumberLiteral) id).getNumber());
+                rightElem = new Node(Token.GETELEM, createName(tempName), s);
+            } else if (id instanceof BigIntLiteral && !compilerEnv.isLatestEcmaScript()) {
+                Node s = Node.newString(((BigIntLiteral) id).getBigInt().toString());
+                rightElem = new Node(Token.GETELEM, createName(tempName), s);
             } else if (id instanceof NumberLiteral) {
                 // the key is the number's string ({1.5: x} reads "1.5")
                 String key = ScriptRuntime.toString(((NumberLiteral) id).getNumber());

@@ -560,7 +560,7 @@ public class BaseFunction extends ScriptableObject implements Function {
         if (!(thisObj instanceof Callable && thisObj instanceof Scriptable)) {
             return false;
         }
-        if (cx.getLanguageVersion() >= Context.VERSION_ES6
+        if (cx.isLatestEcmaScript()
                 && !(thisObj instanceof BoundFunction)
                 && (args.length == 0 || ScriptRuntime.isPrimitive(args[0]))) {
             // OrdinaryHasInstance (7.3.21) step 4: a primitive is not an instance
@@ -796,7 +796,7 @@ public class BaseFunction extends ScriptableObject implements Function {
 
         if (proto instanceof Scriptable) {
             newInstance.setPrototype((Scriptable) proto);
-        } else if (nt instanceof BaseFunction && nt != this) {
+        } else if (nt instanceof BaseFunction && nt != this && cx.isLatestEcmaScript()) {
             // %Object.prototype% of the realm of newTarget (10.1.14 GetPrototypeFromConstructor)
             newInstance.setPrototype(
                     ScriptableObject.getObjectPrototype(

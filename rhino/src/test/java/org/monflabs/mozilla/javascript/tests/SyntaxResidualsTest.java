@@ -19,6 +19,17 @@ class SyntaxResidualsTest {
         Utils.assertWithAllModes_ECMASCRIPT(expected, script);
     }
 
+    private static void assertES6(Context.EvaluationMethod mode, Object expected, String script) {
+        Utils.runWithMode(
+                cx -> {
+                    cx.setLanguageVersion(Context.VERSION_ES6);
+                    var scope = cx.initStandardObjects();
+                    assertEquals(expected, cx.evaluateString(scope, script, "test.js", 1, null));
+                    return null;
+                },
+                mode);
+    }
+
     @Test
     void completionValues() {
         Utils.assertGatedBehavior(
@@ -44,8 +55,22 @@ class SyntaxResidualsTest {
     }
 
     @Test
+    void logicalAssignmentShortCircuitsInStrictCode() {
+        Utils.assertGatedBehavior(
+                "TypeError|TypeError",
+                "0|1",
+                "(function () { 'use strict'; var r = [];"
+                        + " var o = {}; Object.defineProperty(o, 'p', { value: 0, writable: false });"
+                        + " try { r.push(o.p &&= 1); } catch (e) { r.push(e.name); }"
+                        + " var q = { get p() { return 1; } };"
+                        + " try { r.push(q.p ||= 2); } catch (e) { r.push(e.name); }"
+                        + " return r.join('|'); })()");
+    }
+
+    @Test
     void compoundAssignmentConvertsKeyOnce() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "2|evaluated|2",
                 "1|TypeError|1",
                 "var r = []; var calls = 0;"
                         + " var k = { toString() { calls++; return 'a'; } };"
@@ -57,7 +82,8 @@ class SyntaxResidualsTest {
 
     @Test
     void withUnscopablesAndStrictPutValue() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "inner|no|no",
                 "outer|ReferenceError|TypeError",
                 "var r = []; var v = 'outer';"
                         + " var env = { v: 'inner', [Symbol.unscopables]: { v: true } };"
@@ -87,8 +113,21 @@ class SyntaxResidualsTest {
     }
 
     @Test
+    void arrowCoverAndCommentLineTerminator() {
+        Utils.assertGatedBehavior(
+                "SyntaxError|SyntaxError",
+                "1|2",
+                "var r = [];"
+                        + " try { r.push(eval('var af = ({ x = 1 }) => x; af({})')); }"
+                        + " catch (e) { r.push(e.name); }"
+                        + " try { r.push(eval(\"1 /*\\n*/ 2\")); } catch (e) { r.push(e.name); }"
+                        + " r.join('|')");
+    }
+
+    @Test
     void instanceofAndRestWithProxies() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "false|false|0,a,1",
                 "true|false|TypeError|a,1",
                 "var r = [];"
                         + " var F = { [Symbol.hasInstance](v) { return v === 0; } }; r.push(0 instanceof F);"
@@ -138,35 +177,41 @@ class SyntaxResidualsTest {
 
     @Test
     void finallyAfterReturnRunsOnce() {
-        assertBoth(
-                "f|1|c",
+        String script =
                 "var r = []; var c = 0;"
                         + " function f1() { try { return 1; } catch (e) { } finally { c++; throw 'f'; } }"
                         + " try { f1(); } catch (e) { r.push(e, c); }"
                         + " function f2() { try { throw 'a'; return 1; } catch (e) { throw 'b'; }"
                         + " finally { throw 'c'; } }"
                         + " try { f2(); } catch (e) { r.push(e); }"
-                        + " r.join('|')");
+                        + " r.join('|')";
+        Utils.assertWithAllModes_ECMASCRIPT("f|1|c", script);
+        // VERSION_ES6: the compiled finally block runs twice, as in stock Rhino
+        assertES6(Context.EvaluationMethod.Interpreter, "f|1|c", script);
+        assertES6(Context.EvaluationMethod.Compiler, "f|2|c", script);
     }
 
     @Test
     void generatorMethodPrototypeAndShiftOrder() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "false|TypeError",
                 "true|mine",
                 "var r = [];"
-                        + " r.push(Object.getPrototypeOf({ *g() {} }.g.prototype)"
-                        + " === Object.getPrototypeOf(function* () {}).prototype);"
+                        + " r.push(({ *g() {} }).g.hasOwnProperty('prototype'));"
                         + " try { 0n >>> { [Symbol.toPrimitive]() { throw 'mine'; } }; }"
-                        + " catch (e) { r.push(e); }"
+                        + " catch (e) { r.push(e === 'mine' ? e : e.name); }"
                         + " r.join('|')");
     }
 
     @Test
     void nestedCoverInitializedNames() {
-        assertBoth(
-                "3", "var x, y; [{ x = 1 }] = [{}]; ({ a: { y = 2 } } = { a: {} }); String(x + y)");
         Utils.assertGatedBehavior(
-                "ok,ok",
+                "SyntaxError",
+                "3",
+                "try { eval('var x, y; [{ x = 1 }] = [{}]; ({ a: { y = 2 } } = { a: {} });"
+                        + " String(x + y)'); } catch (e) { e.name }");
+        Utils.assertGatedBehavior(
+                "SyntaxError,ok",
                 "SyntaxError,SyntaxError",
                 "['[{x = 1}].length', 'var a = {x = 1} + 1'].map(function (s) {"
                         + " try { eval(s); return 'ok'; } catch (e) { return e.name; } }).join()");
@@ -174,7 +219,8 @@ class SyntaxResidualsTest {
 
     @Test
     void forInShadowingAndEscapedDirective() {
-        assertBoth(
+        Utils.assertGatedBehavior(
+                "p,q|true",
                 "q|false",
                 "var keys = [];"
                         + " var o = Object.create({ p: 1, q: 2 }, { p: { value: 0, enumerable: false } });"

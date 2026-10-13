@@ -1422,7 +1422,9 @@ class TokenStream implements Parser.CurrentPositionReporter {
                                     tokenEnd = cursor;
                                     // a comment does not make the line dirty, and one with a line
                                     // terminator starts a new line (B.1.1 HTML-like comments)
-                                    dirtyLine = !commentHasLineTerminator && dirtyBeforeToken;
+                                    if (parser.compilerEnv.isLatestEcmaScript()) {
+                                        dirtyLine = !commentHasLineTerminator && dirtyBeforeToken;
+                                    }
                                     return Token.COMMENT;
                                 }
                             } else {

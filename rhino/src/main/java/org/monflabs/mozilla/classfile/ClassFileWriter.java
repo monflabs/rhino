@@ -55,6 +55,8 @@ public class ClassFileWriter {
      * @param sourceFileName the name of the source file to use for producing debug information, or
      *     null if debug information is not desired
      */
+    private boolean keepLiveExceptionRanges;
+
     public ClassFileWriter(String className, String superClassName, String sourceFileName) {
         generatedClassName = className;
         itsConstantPool = new ConstantPool(this);
@@ -110,6 +112,14 @@ public class ClassFileWriter {
      */
     public void setFlags(short flags) {
         itsFlags = flags;
+    }
+
+    /**
+     * Keep the live part of an exception range that starts in a dead block, instead of dropping the
+     * whole range.
+     */
+    public void setKeepLiveExceptionRanges(boolean keepLiveExceptionRanges) {
+        this.keepLiveExceptionRanges = keepLiveExceptionRanges;
     }
 
     static String getSlashedForm(String name) {
@@ -1719,7 +1729,8 @@ public class ClassFileWriter {
             for (int i = 0; i < itsExceptionTableTop; i++) {
                 ExceptionTableEntry ete = itsExceptionTable[i];
                 int eteStart = getLabelPC(ete.itsStartLabel);
-                if (eteStart == sb.getStart()
+                if (keepLiveExceptionRanges
+                        && eteStart == sb.getStart()
                         && getLabelPC(ete.itsHandlerLabel) != sb.getStart()
                         && getLabelPC(ete.itsEndLabel) > sb.getEnd()) {
                     // The range continues past the killed block: keep the rest of it (a later

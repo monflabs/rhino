@@ -6,6 +6,27 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Language residuals, Annex B, generators and realms only under VERSION_ECMASCRIPT (2026-10-13, plan G7)
+
+- `BACKWARD_COMPATIBILITY.md` 2.35-2.46 are gated, with the undocumented changes of the same commits. Under
+  `VERSION_ES6`, stock Rhino again for: logical assignment writing back, `set: undefined` accessors, compound
+  assignment keys, error messages of null bases, strict writes to deleted globals, `with` and
+  `Symbol.unscopables`, `instanceof`, arrow and nested cover initializers, `eval(...args)`, ASI after multi-line
+  comments, object rest/spread of proxies and numeric pattern keys, `in` in for heads, strict `eval`/`arguments`
+  targets, generator method prototypes, `>>>` with BigInt, the compiled `finally` and exception ranges
+  (`ClassFileWriter.setKeepLiveExceptionRanges`), `for-in` shadowing, inexact Use Strict Directives,
+  `trimLeft`/`trimRight` and the HTML method lengths (a second String descriptor), the RegExp legacy statics
+  (enumerable, non-configurable), `compile` on subclasses, `setYear`, HTML close comments, optional element
+  accesses and calls, strict generators resumed from sloppy code, `yield` in a `finally` run by `return()`,
+  array-likes too long for Java (`IllegalArgumentException`) and the GetPrototypeFromConstructor fallbacks.
+- `BACKWARD_COMPATIBILITY.md`: section 2 moves into section 1 (1.17-1.62, formerly 2.1-2.46); the platform section
+  is now 2. The entries of 2.40-2.46 are corrected (frozen writes and `delete` in strict generators, same-realm
+  prototype fallbacks, optional element calls).
+- Tests: `SyntaxResidualsTest`, `AnnexBTest`, `OptionalChainingOperatorTest`, `NativeProxyTest` and
+  `ObjectLiteralSyntaxTest` assert both sides; new `LanguageResidualsGateTest`. The compiled `finally` and the
+  generator `return()` behaviors differ by mode under `VERSION_ES6`, as in stock Rhino, and are asserted per mode.
+- test262: unchanged (41,080/42,616, 96.4%).
+
 ### Array, Promise, Set, typed array and RegExp residuals only under VERSION_ECMASCRIPT (2026-10-13, plan G6)
 
 - `BACKWARD_COMPATIBILITY.md` 2.29-2.34 are gated, with the undocumented changes of the same commits. Under
