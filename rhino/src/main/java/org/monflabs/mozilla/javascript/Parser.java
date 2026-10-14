@@ -7269,10 +7269,14 @@ public class Parser {
             }
             boolean isStatic = false;
             if ((tt == Token.NAME || tt == Token.RESERVED) && "static".equals(ts.getString())) {
+                boolean escaped = ts.nameHadEscape;
                 consumeToken();
                 int staticPos = ts.tokenBeg;
                 int next = peekToken();
                 if (next == Token.LC) {
+                    if (escaped) {
+                        reportError("msg.invalid.escape");
+                    }
                     staticBlock(cls, staticElems);
                     continue;
                 }
@@ -7281,6 +7285,10 @@ public class Parser {
                     Name name = new Name(staticPos, "static");
                     classMember(cls, name, staticPos, protoElems, false, true);
                     continue;
+                }
+                if (escaped) {
+                    // a keyword cannot contain escapes
+                    reportError("msg.invalid.escape");
                 }
                 isStatic = true;
             }
@@ -7354,6 +7362,15 @@ public class Parser {
                                     : null;
         }
         boolean isGenerator = pname instanceof GeneratorMethodDefinition;
+        if (isGenerator) {
+            AstNode methodName = ((GeneratorMethodDefinition) pname).getMethodName();
+            propertyName =
+                    methodName instanceof Name
+                            ? ((Name) methodName).getIdentifier()
+                            : methodName instanceof StringLiteral
+                                    ? ((StringLiteral) methodName).getValue()
+                                    : null;
+        }
         if (isStatic && "prototype".equals(propertyName)) {
             reportError("msg.class.static.prototype");
         }

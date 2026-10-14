@@ -664,6 +664,13 @@ final class NativeMath extends ScriptableObject {
     private static Object log2(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         double x = ScriptRuntime.toNumber(args, 0);
+        if (cx.isLatestEcmaScript() && x > 0 && x < Double.POSITIVE_INFINITY) {
+            // exact for a power of two, which log(x) * LOG2E is not (log2(8) = 2.9999999999999996)
+            int exponent = Math.getExponent(x);
+            if (exponent >= Double.MIN_EXPONENT && x == Math.scalb(1.0, exponent)) {
+                return ScriptRuntime.wrapNumber(exponent);
+            }
+        }
         // Java's log(<0) = -Infinity; we need NaN
         x = (x < 0) ? Double.NaN : Math.log(x) * LOG2E;
         return ScriptRuntime.wrapNumber(x);

@@ -77,6 +77,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.62 | The prototype of objects constructed for a newTarget whose `prototype` is not an object | `VERSION_ECMASCRIPT` |
 | 1.63 | RegExp alternatives in a lookbehind, supplementary characters in an alternative class | `VERSION_ECMASCRIPT` |
 | 1.64 | `Iterator` is the ES2025 Iterator, built-in iterators inherit `Iterator.prototype` | `VERSION_ECMASCRIPT` |
+| 1.65 | `decodeURI` noncharacters, `Math.log2`, final sigma, `Proxy.revocable` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1087,6 +1088,24 @@ p([].values()).hasOwnProperty(Symbol.iterator); // before: true               no
   own `@@iterator`.
 - **Why:** ECMA-262 2026, §27.1.3 (the Iterator constructor), §27.1.4 (%Iterator.prototype%), §23.1.5.2,
   §22.1.5.1, §24.1.5.1, §24.2.6.1, §22.2.9.1, §27.5.1 (the iterator prototypes inherit it).
+
+### 1.65 `decodeURI` noncharacters, `Math.log2`, final sigma, `Proxy.revocable`
+
+```js
+decodeURI("%EF%BF%BE").charCodeAt(0);              // before: 0xFFFD   now: 0xFFFE
+Math.log2(8);                                       // before: 2.9999999999999996   now: 3
+"a\u{1D242}\u03A3".toLowerCase().at(-1);              // before: "σ"   now: "ς"
+Proxy.revocable({}, {}).revoke.hasOwnProperty("prototype"); // before: true   now: false
+```
+
+- `decodeURI` and `decodeURIComponent` decode U+FFFE and U+FFFF to themselves, not to U+FFFD.
+- `Math.log2` is exact for the powers of two.
+- `toLowerCase` and `toLocaleLowerCase` apply the Final_Sigma condition over code points: a supplementary
+  case-ignorable character (such as U+1D242) no longer hides the cased letter before a capital sigma.
+- The revoke function of `Proxy.revocable` is not a constructor and has no `prototype`.
+- **Why:** ECMA-262 2026, §19.2.6.5 (Decode), §21.3.2.23 (Math.log2, an implementation-approximated value that
+  test262 requires exact for powers of two), §22.1.3.30 (toLowerCase, with SpecialCasing.txt), §28.2.2.1
+  (Proxy.revocable, a built-in function that is not a constructor).
 
 ---
 

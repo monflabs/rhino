@@ -1178,7 +1178,11 @@ class NativeProxy extends ScriptableObject {
         NativeObject revocable = (NativeObject) cx.newObject(s);
 
         revocable.put("proxy", revocable, proxy);
-        revocable.put("revoke", revocable, new LambdaFunction(s, "", 0, new Revoker(proxy)));
+        // a built-in function that is not a constructor has no prototype (10.3.4)
+        revocable.put(
+                "revoke",
+                revocable,
+                new LambdaFunction(s, "", 0, new Revoker(proxy), !cx.isLatestEcmaScript()));
         return revocable;
     }
 

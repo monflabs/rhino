@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Long tail: class early errors, decodeURI, Math.log2, final sigma, Proxy.revocable (2026-10-14, plan M13)
+
+- Fixed (classes, a `VERSION_ECMASCRIPT` feature): a generator or async generator `constructor` and a static
+  generator `prototype` method are early errors, and so is an escaped `static` used as a modifier.
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.65): `decodeURI` decodes U+FFFE/U+FFFF to themselves;
+  `Math.log2` is exact for powers of two; lower casing applies Final_Sigma over code points (the JDK misses a
+  supplementary case-ignorable before the sigma); the revoke function of `Proxy.revocable` has no `prototype`.
+- Tests: `ConformanceResidualsTest`.
+
 ### JSON source text access, Array.fromAsync (2026-10-14, plan 12.6-12.8)
 
 - New (`VERSION_ECMASCRIPT`): a `JSON.parse` reviver gets a third argument, a context object whose `source` is the

@@ -708,13 +708,102 @@ final class NativeString extends ScriptableObject {
         return target.subSequence((int) start, (int) end);
     }
 
+    /**
+     * The lower case of a string. Under VERSION_ECMASCRIPT, a capital sigma is final or not by the
+     * Final_Sigma condition of Unicode (SpecialCasing.txt), over code points: the JDK does not skip
+     * the supplementary case-ignorable characters.
+     */
+    private static String lowerCase(Context cx, String str, Locale locale) {
+        int sigma = str.indexOf('\u03A3');
+        if (sigma < 0 || !cx.isLatestEcmaScript()) {
+            return str.toLowerCase(locale);
+        }
+        StringBuilder lower = new StringBuilder(str.length());
+        int start = 0;
+        while (sigma >= 0) {
+            lower.append(str.substring(start, sigma).toLowerCase(locale));
+            lower.append(isFinalSigma(str, sigma) ? '\u03C2' : '\u03C3');
+            start = sigma + 1;
+            sigma = str.indexOf('\u03A3', start);
+        }
+        return lower.append(str.substring(start).toLowerCase(locale)).toString();
+    }
+
+    /** Final_Sigma: a cased letter before, and none after, past the case-ignorable ones. */
+    private static boolean isFinalSigma(String str, int index) {
+        int i = index;
+        int before = -1;
+        while (i > 0) {
+            int cp = str.codePointBefore(i);
+            i -= Character.charCount(cp);
+            if (!isCaseIgnorable(cp)) {
+                before = cp;
+                break;
+            }
+        }
+        if (before < 0 || !isCased(before)) {
+            return false;
+        }
+        i = index + 1;
+        while (i < str.length()) {
+            int cp = str.codePointAt(i);
+            i += Character.charCount(cp);
+            if (!isCaseIgnorable(cp)) {
+                return !isCased(cp);
+            }
+        }
+        return true;
+    }
+
+    private static boolean isCased(int cp) {
+        return Character.isLowerCase(cp) || Character.isUpperCase(cp) || Character.isTitleCase(cp);
+    }
+
+    /**
+     * Case_Ignorable: Mn, Me, Cf, Lm, Sk, and the Word_Break MidLetter, MidNumLet, Single_Quote.
+     */
+    private static boolean isCaseIgnorable(int cp) {
+        switch (Character.getType(cp)) {
+            case Character.NON_SPACING_MARK:
+            case Character.ENCLOSING_MARK:
+            case Character.FORMAT:
+            case Character.MODIFIER_LETTER:
+            case Character.MODIFIER_SYMBOL:
+                return true;
+            default:
+                break;
+        }
+        switch (cp) {
+            case 0x27:
+            case 0x2E:
+            case 0x3A:
+            case 0xB7:
+            case 0x387:
+            case 0x55F:
+            case 0x5F4:
+            case 0x2018:
+            case 0x2019:
+            case 0x2024:
+            case 0x2027:
+            case 0xFE13:
+            case 0xFE52:
+            case 0xFE55:
+            case 0xFF07:
+            case 0xFF0E:
+            case 0xFF1A:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private static Object js_toLowerCase(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         // See ECMA 15.5.4.11
         String thisStr =
                 ScriptRuntime.toString(
                         requireObjectCoercible(cx, thisObj, CLASS_NAME, "toLowerCase"));
-        return thisStr.toLowerCase(Locale.ROOT);
+        return lowerCase(cx, thisStr, Locale.ROOT);
     }
 
     private static Object js_toUpperCase(
@@ -1158,7 +1247,7 @@ final class NativeString extends ScriptableObject {
                 // ignore and fall back to the context locale
             }
         }
-        return thisStr.toLowerCase(locale);
+        return lowerCase(cx, thisStr, locale);
     }
 
     private static Object js_toLocaleUpperCase(

@@ -644,7 +644,9 @@ public class NativeGlobal implements Serializable {
                     // Check for overlongs and other should-not-present codes
                     if (ucs4Char < minUcs4Char || (ucs4Char >= 0xD800 && ucs4Char <= 0xDFFF)) {
                         ucs4Char = INVALID_UTF8;
-                    } else if (ucs4Char == 0xFFFE || ucs4Char == 0xFFFF) {
+                    } else if ((ucs4Char == 0xFFFE || ucs4Char == 0xFFFF)
+                            && !Context.getCurrentContext().isLatestEcmaScript()) {
+                        // the noncharacters decode to themselves (19.2.6.1.2 Decode)
                         ucs4Char = 0xFFFD;
                     }
                     if (ucs4Char >= 0x10000) {

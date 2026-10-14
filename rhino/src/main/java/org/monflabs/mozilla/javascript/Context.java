@@ -236,6 +236,9 @@ public class Context implements Closeable {
      *   <li>{@code Iterator} is the ES2025 abstract constructor with {@code Iterator.from} and the
      *       iterator helpers, instead of the {@code Iterator} function of JavaScript 1.7; the
      *       built-in iterators and generators inherit {@code Iterator.prototype}.
+     *   <li>{@code decodeURI} keeps U+FFFE and U+FFFF, {@code Math.log2} is exact for powers of
+     *       two, lower casing applies Final_Sigma over code points, and the revoke function of
+     *       {@code Proxy.revocable} is not a constructor.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
