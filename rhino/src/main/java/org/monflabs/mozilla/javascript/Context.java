@@ -175,8 +175,9 @@ public class Context implements Closeable {
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}
-     *       flags, {@code SharedArrayBuffer}, {@code Atomics}, {@code Symbol.asyncIterator} and the
-     *       iterator helpers; {@code await} is a reserved word in the other versions.
+     *       flags, RegExp modifiers and {@code RegExp.escape}, {@code SharedArrayBuffer}, {@code
+     *       Atomics}, {@code Symbol.asyncIterator} and the iterator helpers; {@code await} is a
+     *       reserved word in the other versions.
      *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
      *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
      *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each

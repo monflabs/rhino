@@ -158,7 +158,13 @@ public class NativeRegExp extends ScriptableObject {
     private static final byte REOP_ASSERTBACKNOTTEST =
             REOP_ASSERTBACKTEST + 1; /* sentinel at end of !assertion child */
 
-    private static final byte REOP_END = REOP_ASSERTBACKNOTTEST + 1;
+    private static final byte REOP_SETFLAGS =
+            REOP_ASSERTBACKNOTTEST + 1; /* the i, m and s flags of a modifiers group */
+
+    private static final byte REOP_END = REOP_SETFLAGS + 1;
+
+    /* the flags a modifiers group (?ims-ims:...) can change */
+    private static final int MODIFIER_FLAGS = JSREG_FOLD | JSREG_MULTILINE | JSREG_DOTALL;
 
     private static final int ANCHOR_BOL = -2;
 
@@ -175,6 +181,7 @@ public class NativeRegExp extends ScriptableObject {
     static {
         DESCRIPTOR =
                 makeCtorBuilder()
+                        .withMethod(CTOR, "escape", 1, NativeRegExp::js_escape)
                         .withMethod(PROTO, "compile", 2, NativeRegExp::js_compile)
                         .withMethod(PROTO, "toString", 0, NativeRegExp::js_toString)
                         .withMethod(PROTO, "toSource", 0, NativeRegExp::js_toSource)
@@ -282,7 +289,74 @@ public class NativeRegExp extends ScriptableObject {
                 (c, ctor) -> {
                     defineLegacyAccessors(c, scope, ctor);
                     removeLatestFlags(c, proto);
+                    if (!c.isLatestEcmaScript()) {
+                        ctor.delete("escape");
+                    }
                 });
+    }
+
+    /** RegExp.escape ( S ) (22.2.5.1): a pattern that matches S literally. */
+    private static Object js_escape(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Object arg = args.length > 0 ? args[0] : Undefined.instance;
+        if (!(arg instanceof CharSequence)) {
+            throw ScriptRuntime.typeErrorById("msg.not.a.string");
+        }
+        String str = arg.toString();
+        StringBuilder escaped = new StringBuilder(str.length() + 8);
+        for (int i = 0; i < str.length(); ) {
+            int c = str.codePointAt(i);
+            if (i == 0 && c < 128 && Character.isLetterOrDigit(c)) {
+                appendHex(escaped, "\\x", c, 2);
+            } else {
+                encodeForRegExpEscape(escaped, c);
+            }
+            i += Character.charCount(c);
+        }
+        return escaped.toString();
+    }
+
+    /** EncodeForRegExpEscape ( c ) (22.2.5.1.1). */
+    private static void encodeForRegExpEscape(StringBuilder escaped, int c) {
+        switch (c) {
+            case '^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '/':
+                escaped.append('\\').append((char) c);
+                return;
+            case '\t':
+                escaped.append("\\t");
+                return;
+            case '\n':
+                escaped.append("\\n");
+                return;
+            case 0x0B:
+                escaped.append("\\v");
+                return;
+            case '\f':
+                escaped.append("\\f");
+                return;
+            case '\r':
+                escaped.append("\\r");
+                return;
+            case ',', '-', '=', '<', '>', '#', '&', '!', '%', ':', ';', '@', '~', '\'', '`', '"':
+                appendHex(escaped, "\\x", c, 2);
+                return;
+            default:
+                break;
+        }
+        if (ScriptRuntime.isJSWhitespaceOrLineTerminator(c) || (c >= 0xD800 && c <= 0xDFFF)) {
+            if (c <= 0xFF) {
+                appendHex(escaped, "\\x", c, 2);
+            } else {
+                appendHex(escaped, "\\u", c, 4);
+            }
+            return;
+        }
+        escaped.appendCodePoint(c);
+    }
+
+    private static void appendHex(StringBuilder sb, String prefix, int c, int width) {
+        String hex = Integer.toHexString(c);
+        sb.append(prefix).append("0".repeat(width - hex.length())).append(hex);
     }
 
     /** The d flag (hasIndices) is a feature of VERSION_ECMASCRIPT. */
@@ -1070,6 +1144,9 @@ public class NativeRegExp extends ScriptableObject {
                     pc += INDEX_LEN;
                     System.out.println(opCode + " " + matchCh1 + " " + matchCh2 + " " + nextPc);
                     break;
+                case REOP_SETFLAGS:
+                    System.out.println("SETFLAGS: " + regexp.program[pc++]);
+                    break;
                 case REOP_END:
                     System.out.println("END");
                     break;
@@ -1799,6 +1876,37 @@ public class NativeRegExp extends ScriptableObject {
             reportError(overflowMessageId, String.valueOf(src, start, state.cp - start));
         }
         return value;
+    }
+
+    private static boolean isModifierStart(char c) {
+        return c == 'i' || c == 'm' || c == 's' || c == '-';
+    }
+
+    /** The flags of RegularExpressionModifiers; a repeated one is a SyntaxError. */
+    private static int parseModifiers(CompilerState state) {
+        int flags = 0;
+        while (state.cp < state.cpend) {
+            int f;
+            switch (state.cpbegin[state.cp]) {
+                case 'i':
+                    f = JSREG_FOLD;
+                    break;
+                case 'm':
+                    f = JSREG_MULTILINE;
+                    break;
+                case 's':
+                    f = JSREG_DOTALL;
+                    break;
+                default:
+                    return flags;
+            }
+            if ((flags & f) != 0) {
+                reportError("msg.invalid.re.modifiers", "");
+            }
+            flags |= f;
+            state.cp++;
+        }
+        return flags;
     }
 
     private static RENode reverseNodeList(RENode head, boolean latest) {
@@ -3064,6 +3172,48 @@ public class NativeRegExp extends ScriptableObject {
                             /* ASSERTNOT, <next>, ... ASSERTBACKNOTTEST */
                             state.progLength += 4;
                         }
+                    } else if (state.cp + 1 < state.cpend
+                            && src[state.cp] == '?'
+                            && isModifierStart(src[state.cp + 1])
+                            && state.cx.isLatestEcmaScript()) {
+                        // a modifiers group (?ims-ims:Disjunction) (22.2.1)
+                        state.cp++;
+                        int added = parseModifiers(state);
+                        int removed = 0;
+                        if (state.cp < state.cpend && src[state.cp] == '-') {
+                            state.cp++;
+                            removed = parseModifiers(state);
+                            if ((added | removed) == 0 || (added & removed) != 0) {
+                                reportError("msg.invalid.re.modifiers", "");
+                                return false;
+                            }
+                        }
+                        if (state.cp == state.cpend || src[state.cp] != ':') {
+                            reportError("msg.invalid.re.modifiers", "");
+                            return false;
+                        }
+                        state.cp++;
+                        int outer = state.flags;
+                        state.flags = (outer | added) & ~removed;
+                        ++state.parenNesting;
+                        boolean parsed = parseDisjunction(state, params);
+                        --state.parenNesting;
+                        int inner = state.flags;
+                        state.flags = outer;
+                        if (!parsed) return false;
+                        if (state.cp == state.cpend || src[state.cp] != ')') {
+                            reportError("msg.unterm.paren", "");
+                            return false;
+                        }
+                        ++state.cp;
+                        result = new RENode(REOP_SETFLAGS);
+                        result.min = inner & MODIFIER_FLAGS;
+                        result.max = outer & MODIFIER_FLAGS;
+                        result.kid = state.result;
+                        state.result = result;
+                        /* SETFLAGS, <flags>, ... SETFLAGS, <flags> */
+                        state.progLength += 4;
+                        break;
                     } else {
                         result = new RENode(REOP_LPAREN);
                         if (state.cp + 2 < state.cpend
@@ -3406,6 +3556,17 @@ public class NativeRegExp extends ScriptableObject {
                         }
                     }
                     break;
+                case REOP_SETFLAGS:
+                    {
+                        program[pc++] = (byte) t.min;
+                        int outer = state.flags;
+                        state.flags = (outer & ~MODIFIER_FLAGS) | t.min;
+                        pc = emitREBytecode(state, re, pc, t.kid);
+                        state.flags = outer;
+                        program[pc++] = REOP_SETFLAGS;
+                        program[pc++] = (byte) t.max;
+                        break;
+                    }
                 case REOP_LPAREN:
                     pc = addIndex(program, pc, t.parenIndex);
                     pc = emitREBytecode(state, re, pc, t.kid);
@@ -3490,7 +3651,9 @@ public class NativeRegExp extends ScriptableObject {
                 case REOP_CLASS:
                     if (!t.classContents.sense) program[pc - 1] = REOP_NCLASS;
                     pc = addIndex(program, pc, t.index);
-                    re.classList[t.index] = new RECharSet(t.classContents, t.bmsize);
+                    re.classList[t.index] =
+                            new RECharSet(
+                                    t.classContents, t.bmsize, (state.flags & JSREG_FOLD) != 0);
                     break;
                 case REOP_UPROP:
                 case REOP_UPROP_NOT:
@@ -3587,8 +3750,7 @@ public class NativeRegExp extends ScriptableObject {
             REGlobalData gData, int matchChars, int length, String input, int end) {
         if ((gData.cp + length) > end) return false;
         char[] source = gData.regexp.source;
-        if ((gData.regexp.flags & JSREG_FOLD) != 0
-                && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
+        if ((gData.flags & JSREG_FOLD) != 0 && (gData.flags & JSREG_UNICODE_MODE) != 0) {
             int inputPointer = gData.cp;
             for (int i = 0; i < length && inputPointer < end; i++) {
                 int codepoint1 = input.codePointAt(inputPointer);
@@ -3617,8 +3779,7 @@ public class NativeRegExp extends ScriptableObject {
         if ((gData.cp - length) < 0) return false;
 
         char[] source = gData.regexp.source;
-        if ((gData.regexp.flags & JSREG_FOLD) != 0
-                && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
+        if ((gData.flags & JSREG_FOLD) != 0 && (gData.flags & JSREG_UNICODE_MODE) != 0) {
             int inputPointer = gData.cp;
             for (int i = 1; i <= length && inputPointer > 0; i++) {
                 int codepoint1 = input.codePointBefore(inputPointer);
@@ -3680,7 +3841,7 @@ public class NativeRegExp extends ScriptableObject {
         if (matchBackward) {
             if ((gData.cp - len) < 0) return false;
 
-            if ((gData.regexp.flags & JSREG_FOLD) != 0) {
+            if ((gData.flags & JSREG_FOLD) != 0) {
                 // start from (cp - len) on the left and go to cp - 1 on the right
                 if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                     int currentInputPointer = gData.cp - len;
@@ -3706,7 +3867,7 @@ public class NativeRegExp extends ScriptableObject {
         } else {
             if ((gData.cp + len) > end) return false;
 
-            if ((gData.regexp.flags & JSREG_FOLD) != 0) {
+            if ((gData.flags & JSREG_FOLD) != 0) {
                 if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                     int currentInputPointer = gData.cp;
                     for (i = 0; i < len && currentInputPointer < input.length(); ) {
@@ -3779,14 +3940,13 @@ public class NativeRegExp extends ScriptableObject {
         int i;
         ClassContents classContents = charSet.classContents;
         boolean isCaseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_FOLD) != 0
-                        && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
+                charSet.foldCase && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
         byteLength = (charSet.length + 7) / 8;
         charSet.bits = new byte[byteLength];
 
         for (char ch : classContents.chars) {
             addCharacterToCharSet(charSet, ch);
-            if ((gData.regexp.flags & JSREG_FOLD) != 0) {
+            if (charSet.foldCase) {
                 char uch = upcase(ch);
                 char dch = downcase(ch);
                 if (ch != uch) addCharacterToCharSet(charSet, uch);
@@ -3797,7 +3957,7 @@ public class NativeRegExp extends ScriptableObject {
         for (int j = 0; j < classContents.bmpRanges.size(); j += 2) {
             char start = classContents.bmpRanges.get(j);
             char end = classContents.bmpRanges.get(j + 1);
-            if ((gData.regexp.flags & JSREG_FOLD) != 0) {
+            if (charSet.foldCase) {
                 for (char ch = start; ch <= end; ) {
                     addCharacterToCharSet(charSet, ch);
                     char uch = upcase(ch);
@@ -3902,11 +4062,10 @@ public class NativeRegExp extends ScriptableObject {
 
         ClassSetNode setExpression = charSet.classContents.setExpression;
         if (setExpression != null) {
-            return setExpression.contains(codePoint, (gData.regexp.flags & JSREG_FOLD) != 0);
+            return setExpression.contains(codePoint, charSet.foldCase);
         }
         boolean caseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_UNICODE_MODE) != 0
-                        && (gData.regexp.flags & JSREG_FOLD) != 0;
+                (gData.regexp.flags & JSREG_UNICODE_MODE) != 0 && charSet.foldCase;
         boolean sense = charSet.classContents.sense;
 
         if (caseInsensitiveUnicode) {
@@ -3947,8 +4106,7 @@ public class NativeRegExp extends ScriptableObject {
         final int cpToMatch;
         final boolean cpInBounds;
         final boolean isCaseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_FOLD) != 0
-                        && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
+                (gData.flags & JSREG_FOLD) != 0 && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
         boolean prevIsWord, currIsWord;
 
         if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0 && gData.cp < end) {
@@ -3981,7 +4139,7 @@ public class NativeRegExp extends ScriptableObject {
             // since their behaviour is identical in both forward and backward matching
             case REOP_BOL:
                 if (gData.cp != 0) {
-                    if (!gData.multiline || !isLineTerm(input.charAt(gData.cp - 1))) {
+                    if (!gData.isMultiline() || !isLineTerm(input.charAt(gData.cp - 1))) {
                         break;
                     }
                 }
@@ -3989,7 +4147,7 @@ public class NativeRegExp extends ScriptableObject {
                 break;
             case REOP_EOL:
                 if (gData.cp != end) {
-                    if (!gData.multiline || !isLineTerm(input.charAt(gData.cp))) {
+                    if (!gData.isMultiline() || !isLineTerm(input.charAt(gData.cp))) {
                         break;
                     }
                 }
@@ -4021,7 +4179,7 @@ public class NativeRegExp extends ScriptableObject {
                 break;
             case REOP_DOT:
                 if (cpInBounds
-                        && ((gData.regexp.flags & JSREG_DOTALL) != 0
+                        && ((gData.flags & JSREG_DOTALL) != 0
                                 || !isLineTerm(input.charAt(cpToMatch)))) {
                     result = true;
                     gData.cp += cpDelta;
@@ -4299,6 +4457,7 @@ public class NativeRegExp extends ScriptableObject {
             Context cx, REGlobalData gData, String input, int end) {
         int pc = 0;
         byte[] program = gData.regexp.program;
+        gData.flags = gData.regexp.flags;
         int continuationOp = REOP_END;
         int continuationPc = 0;
         boolean result = false;
@@ -4422,6 +4581,11 @@ public class NativeRegExp extends ScriptableObject {
                             pc += offset;
                             op = program[pc++];
                         }
+                        continue;
+
+                    case REOP_SETFLAGS:
+                        gData.flags = (gData.flags & ~MODIFIER_FLAGS) | program[pc++];
+                        op = program[pc++];
                         continue;
 
                     case REOP_LPAREN:
@@ -4877,6 +5041,7 @@ public class NativeRegExp extends ScriptableObject {
                     gData.parens = backTrackData.parens;
                     gData.cp = backTrackData.cp;
                     gData.stateStackTop = backTrackData.stateStackTop;
+                    gData.flags = backTrackData.flags;
                     continuationOp = backTrackData.continuationOp;
                     continuationPc = backTrackData.continuationPc;
                     pc = backTrackData.pc;
@@ -4907,7 +5072,7 @@ public class NativeRegExp extends ScriptableObject {
         gData.backTrackStackTop = null;
         gData.stateStackTop = null;
 
-        gData.multiline = multiline || (re.flags & JSREG_MULTILINE) != 0;
+        gData.multiline = multiline;
         gData.regexp = re;
 
         int anchorCodePoint = gData.regexp.anchorCodePoint;
@@ -4967,7 +5132,7 @@ public class NativeRegExp extends ScriptableObject {
             if (result) {
                 return true;
             }
-            if (anchorCodePoint == ANCHOR_BOL && !gData.multiline) {
+            if (anchorCodePoint == ANCHOR_BOL && !multiline && (re.flags & JSREG_MULTILINE) == 0) {
                 gData.skipped = end;
                 return false;
             }
@@ -6142,6 +6307,7 @@ class REBackTrackData {
         this.continuationPc = continuationPc;
         parens = gData.parens;
         stateStackTop = gData.stateStackTop;
+        flags = gData.flags;
     }
 
     final REBackTrackData previous;
@@ -6153,10 +6319,17 @@ class REBackTrackData {
     final int continuationPc; /* continuation pc */
     final long[] parens; /* parenthesis captures */
     final REProgState stateStackTop; /* state of op that backtracked */
+    final int flags; /* the flags of the modifiers groups */
 }
 
 class REGlobalData {
-    boolean multiline;
+    boolean multiline; /* the static RegExp.multiline */
+    int flags; /* the flags of the regexp, as changed by the modifiers groups */
+
+    boolean isMultiline() {
+        return multiline || (flags & NativeRegExp.JSREG_MULTILINE) != 0;
+    }
+
     RECompiled regexp; /* the RE in execution */
     int skipped; /* chars skipped anchoring this r.e. */
 
@@ -6199,12 +6372,14 @@ final class RECharSet implements Serializable {
     ArrayList<Integer> unicodeProps = new ArrayList<Integer>();
     ArrayList<Integer> negUnicodeProps = new ArrayList<Integer>();
 
-    RECharSet(NativeRegExp.ClassContents classContents, int length) {
+    RECharSet(NativeRegExp.ClassContents classContents, int length, boolean foldCase) {
         this.length = length;
         this.classContents = classContents;
+        this.foldCase = foldCase;
     }
 
     final int length;
+    final boolean foldCase;
     final NativeRegExp.ClassContents classContents;
 
     transient volatile boolean converted;

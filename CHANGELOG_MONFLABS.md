@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### RegExp pattern modifiers (2026-10-14, plan 11.4)
+
+- New (`VERSION_ECMASCRIPT`): modifiers groups `(?ims-ims:...)`, which set or clear the `i`, `m` and `s` flags for
+  their disjunction, with the early errors (repeated or unknown flags, `(?-:`). The flags are recorded on the parse
+  tree and selected at emit time where the engine decides at compile time (case-insensitive literals, the case
+  folding of each class); a `SETFLAGS` opcode at the entry and exit of the group sets a flags register the matcher
+  reads for the rest (back references, `.`, `^`/`$`, `\b` under `iu`), saved in the backtrack frames so that
+  backtracking out of the group restores the outer flags. A static `RegExp.multiline` still makes `^` and `$`
+  multiline inside `(?-m:...)`.
+- Duplicate named groups (11.4) already passed.
+- Tests: `RegExpModifiersTest` (gated syntax, each flag added and removed, classes, back references, nesting,
+  lookbehind, quantified groups, backtracking, early errors).
+- test262 (with 11.3): 41,631 → 41,721 of 42,616 (97.7% → 97.9%); `regexp-modifiers` 69.6% → 100%,
+  `RegExp.escape` 0% → 100%.
+
+### RegExp.escape (2026-10-14, plan 11.3)
+
+- New (`VERSION_ECMASCRIPT`): `RegExp.escape(string)` (EncodeForRegExpEscape: syntax characters and `/` with a
+  backslash, control escapes, the other punctuators, white space and lone surrogates as `\x`/`\u` escapes, and a
+  leading ASCII letter or digit as `\x`); a TypeError for a non-string.
+- Tests: `RegExpEscapeTest`.
+
 ### Iterator helpers (2026-10-14, plan 11.1)
 
 - New (`VERSION_ECMASCRIPT`): the ES2025 `Iterator` global, an abstract constructor (a subclass constructs, `new
