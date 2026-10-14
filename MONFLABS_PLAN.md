@@ -630,6 +630,10 @@ batches by area, each verified (test262 must not move), perf-gated and committed
 
 **9.1** Residuals: `findLast*`, change-array-by-copy (96%), hashbang (93%), symbols as `WeakMap`/`WeakRef` keys.
 
+Status (2026-10-13, done): no engine change needed. Every ES2023 test passes (the earlier failures were fixed by
+M2-M8); the only ones not run need `upsert` (12.3). Stock Rhino already had all four features, with the same
+results as `VERSION_ES6` and `VERSION_ECMASCRIPT` in both modes (checked against the stock jar), so nothing is gated.
+
 ### M10 — ES2024
 
 **10.1 Resizable `ArrayBuffer` / growable `SharedArrayBuffer`** (45%): `maxByteLength`, `resize`/`grow`,
@@ -719,7 +723,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 7.x  | ES2021                                          | done        | 84.6% (+11)                  | 162d5a13f |
 | 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
 | G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | done        | 96.4% (unchanged)            | 387bb2191 |
-| 9.x  | ES2023 residuals                                | todo        |                              |        |
+| 9.x  | ES2023 residuals                                | done        | 100% (no change needed)      | (this) |
 | 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |
 | 12.x | ES2026                                          | todo        |                              |        |
