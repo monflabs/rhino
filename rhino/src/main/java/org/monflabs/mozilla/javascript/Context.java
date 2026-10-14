@@ -2727,7 +2727,30 @@ public class Context implements Closeable {
         Runnable head;
         while ((head = microtasks.poll()) != null) {
             head.run();
+            if (hostJobScheduler instanceof EventLoop) {
+                ((EventLoop) hostJobScheduler).runReady(this);
+            }
         }
+    }
+
+    /**
+     * The scheduler of the jobs that host operations enqueue to finish later, such as the
+     * settlement of {@code Atomics.waitAsync}; null (the default) when there is none.
+     */
+    public HostJobScheduler getHostJobScheduler() {
+        return hostJobScheduler;
+    }
+
+    /**
+     * Sets the scheduler of the jobs that host operations enqueue to finish later, from another
+     * thread or after a delay. Without one, {@code Atomics.waitAsync} throws a TypeError when it
+     * would have to wait.
+     *
+     * @see EventLoop
+     */
+    public void setHostJobScheduler(HostJobScheduler scheduler) {
+        if (sealed) onSealedMutation();
+        hostJobScheduler = scheduler;
     }
 
     /**
@@ -3276,6 +3299,7 @@ public class Context implements Closeable {
     private ClassShutter classShutter;
     private ErrorReporter errorReporter;
     RegExpProxy regExpProxy;
+    private HostJobScheduler hostJobScheduler;
     private Locale locale;
     private TimeZone timezone;
     private boolean generatingDebug;

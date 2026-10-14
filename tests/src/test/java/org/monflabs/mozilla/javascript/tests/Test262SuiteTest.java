@@ -54,6 +54,7 @@ import org.monflabs.mozilla.javascript.Callable;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.EvaluatorException;
+import org.monflabs.mozilla.javascript.EventLoop;
 import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.LambdaFunction;
 import org.monflabs.mozilla.javascript.ModuleRecord;
@@ -553,6 +554,8 @@ public class Test262SuiteTest {
                                     cx.setInstructionObserverThreshold(10_000);
                                     cx.putThreadLocal(DEADLINE_KEY, deadline);
                                     mode.setup(cx);
+                                    EventLoop loop = new EventLoop();
+                                    cx.setHostJobScheduler(loop);
                                     TopLevel realm = cx.initSafeStandardObjects(new TopLevel());
                                     $262.install(realm, $262.init(cx, realm));
                                     cx.evaluateString(realm, source, "agent", 1, null);
@@ -569,7 +572,7 @@ public class Test262SuiteTest {
                                                 realm,
                                                 Undefined.SCRIPTABLE_UNDEFINED,
                                                 new Object[] {shared, message[1]});
-                                        cx.processMicrotasks();
+                                        loop.run(cx, (deadline - System.nanoTime()) / 1_000_000);
                                     }
                                 } catch (Throwable t) {
                                     // a failed agent sends no report: the test fails waiting
@@ -685,6 +688,8 @@ public class Test262SuiteTest {
             cx.putThreadLocal(DEADLINE_KEY, deadline);
 
             testMode.setup(cx);
+            EventLoop loop = new EventLoop();
+            cx.setHostJobScheduler(loop);
             AgentHost agentHost = new AgentHost(testMode, deadline);
             AGENT_HOST.set(agentHost);
             if (!ON_REFERENCE_JDK && isUnicodeDependent(testCase.file)) {
@@ -723,7 +728,7 @@ public class Test262SuiteTest {
                 }
 
                 if (testCase.hasFlag(FLAG_ASYNC)) {
-                    cx.processMicrotasks();
+                    loop.run(cx, (deadline - System.nanoTime()) / 1_000_000);
                     String failure = asyncFailure(output.toString());
                     if (failure != null) {
                         fail(failure);

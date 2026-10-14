@@ -10,20 +10,25 @@ import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.CTOR;
 import java.io.Serial;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import org.monflabs.mozilla.javascript.ClassDescriptor;
 import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.HostJobScheduler;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.NativeObject;
+import org.monflabs.mozilla.javascript.NativePromise;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
+import org.monflabs.mozilla.javascript.Scriptable;
 import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.SymbolKey;
 import org.monflabs.mozilla.javascript.Undefined;
 import org.monflabs.mozilla.javascript.VarScope;
 
 /**
- * The Atomics object (ECMA-262 25.4), except waitAsync. An atomic operation holds the lock of the
- * storage of its buffer: the operations on a location are totally ordered, and plain accesses of
- * the same bytes race with them, as the memory model allows.
+ * The Atomics object (ECMA-262 25.4). An atomic operation holds the lock of the storage of its
+ * buffer: the operations on a location are totally ordered, and plain accesses of the same bytes
+ * race with them, as the memory model allows.
  */
 public final class NativeAtomics extends ScriptableObject {
     @Serial private static final long serialVersionUID = 1L;
@@ -48,6 +53,7 @@ public final class NativeAtomics extends ScriptableObject {
                         .withMethod(CTOR, "pause", 0, NativeAtomics::pause)
                         .withMethod(CTOR, "store", 3, NativeAtomics::store)
                         .withMethod(CTOR, "wait", 4, NativeAtomics::doWait)
+                        .withMethod(CTOR, "waitAsync", 4, NativeAtomics::waitAsync)
                         .withMethod(CTOR, "sub", 3, (cx, f, nt, s, t, a) -> rmw(cx, a, Op.SUB))
                         .withMethod(CTOR, "xor", 3, (cx, f, nt, s, t, a) -> rmw(cx, a, Op.XOR))
                         .withProp(
@@ -365,6 +371,78 @@ public final class NativeAtomics extends ScriptableObject {
         }
     }
 
+    /**
+     * Atomics.waitAsync ( typedArray, index, value, timeout ) (25.4.14, DoWait in async mode): the
+     * promise settles in a job of the host job scheduler of the Context, posted by the notify (from
+     * any agent) or scheduled for the timeout.
+     */
+    private static Object waitAsync(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Access at = validate(arg(args, 0), arg(args, 1), true, true);
+        long expected =
+                at.bigint
+                        ? ScriptRuntime.toBigIntStrict(arg(args, 2)).longValue()
+                        : ScriptRuntime.toInt32(arg(args, 2));
+        double q = ScriptRuntime.toNumber(arg(args, 3));
+        double millis = Double.isNaN(q) ? Double.POSITIVE_INFINITY : Math.max(q, 0);
+        NativeSharedArrayBuffer.Storage storage =
+                ((NativeSharedArrayBuffer) at.view.arrayBuffer).getStorage();
+        NativeSharedArrayBuffer.Waiter waiter = new NativeSharedArrayBuffer.Waiter();
+        HostJobScheduler.Cancelable[] timer = new HostJobScheduler.Cancelable[1];
+        NativePromise.HostPromise promise;
+        HostJobScheduler.Pending pending;
+        synchronized (storage) {
+            if (at.read(storage.bytes) != expected) {
+                return waitResult(cx, s, false, "not-equal");
+            }
+            if (millis == 0) {
+                return waitResult(cx, s, false, "timed-out");
+            }
+            HostJobScheduler scheduler = cx.getHostJobScheduler();
+            if (scheduler == null) {
+                throw ScriptRuntime.typeErrorById("msg.atomics.no.scheduler");
+            }
+            promise = NativePromise.newHostPromise(cx, s);
+            pending = scheduler.expect();
+            HostJobScheduler.Job ok =
+                    jcx -> {
+                        if (timer[0] != null) {
+                            timer[0].cancel();
+                        }
+                        promise.resolve(jcx, "ok");
+                        jcx.processMicrotasks();
+                    };
+            waiter.onNotify = () -> pending.post(ok);
+            storage.waiters(at.byteIndex).addLast(waiter);
+        }
+        if (millis != Double.POSITIVE_INFINITY) {
+            timer[0] =
+                    cx.getHostJobScheduler()
+                            .schedule(
+                                    jcx -> {
+                                        synchronized (storage) {
+                                            if (waiter.notified) {
+                                                // the notify job settles it
+                                                return;
+                                            }
+                                            storage.removeWaiter(at.byteIndex, waiter);
+                                        }
+                                        pending.cancel();
+                                        promise.resolve(jcx, "timed-out");
+                                        jcx.processMicrotasks();
+                                    },
+                                    (long) Math.ceil(Math.min(millis, Long.MAX_VALUE)));
+        }
+        return waitResult(cx, s, true, promise.getPromise());
+    }
+
+    private static Scriptable waitResult(Context cx, VarScope s, boolean async, Object value) {
+        Scriptable result = cx.newObject(s);
+        ScriptableObject.putProperty(result, "async", async);
+        ScriptableObject.putProperty(result, "value", value);
+        return result;
+    }
+
     /** Atomics.notify ( typedArray, index, count ) (25.4.15). */
     private static Object notify(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
@@ -379,9 +457,15 @@ public final class NativeAtomics extends ScriptableObject {
         }
         NativeSharedArrayBuffer.Storage storage =
                 ((NativeSharedArrayBuffer) at.view.arrayBuffer).getStorage();
+        List<Runnable> wakeUps = new ArrayList<>();
+        int woken;
         synchronized (storage) {
-            return storage.notifyWaiters(at.byteIndex, c);
+            woken = storage.notifyWaiters(at.byteIndex, c, wakeUps);
         }
+        for (Runnable wakeUp : wakeUps) {
+            wakeUp.run();
+        }
+        return woken;
     }
 
     /** Atomics.pause ( [ N ] ) (25.4.10): a hint for a spin-wait loop. */

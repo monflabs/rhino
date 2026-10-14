@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Atomics.waitAsync and host job schedulers (2026-10-13, plan 10.3)
+
+- New (`VERSION_ECMASCRIPT`, like `Atomics`): `Atomics.waitAsync`. The result is `{async: false, value:
+  "not-equal" | "timed-out"}` when the wait would not block, otherwise `{async: true, value: promise}`; the promise
+  settles with `"ok"` in a job posted by the `Atomics.notify` (from any agent), or `"timed-out"` in a job scheduled
+  for the timeout. Notified async waiters count in the result of `notify`.
+- New API: `HostJobScheduler` (jobs posted from another thread, jobs after a delay), set with
+  `Context.setHostJobScheduler`. A server implements it over its own executor or event loop. `EventLoop` is the
+  default implementation: `run(cx)` runs the jobs on the Context's thread until none is posted, expected or
+  scheduled (no timer thread; jobs falling due while microtasks run, as with a script polling through promise
+  reactions, run between them). Without a scheduler, `waitAsync` throws a TypeError when it would have to wait.
+- Embeddings are unaffected: there is no scheduler unless the host sets one.
+- The test262 runner and its `$262.agent` agents run an `EventLoop` after the script (async tests).
+- Tests: `AtomicsWaitAsyncTest` (same-agent and cross-thread notify, timeouts, a timeout while microtasks poll, a
+  host scheduler).
+- test262: 41,182 → 41,283 of 42,616 (96.6% → 96.9%); `Atomics.waitAsync` 0% → 100%.
+
 ### RegExp v flag (2026-10-13, plan 10.2)
 
 - New (`VERSION_ECMASCRIPT`): the RegExp `v` flag (`unicodeSets`), in literals and for the constructor, with

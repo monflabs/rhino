@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.monflabs.mozilla.javascript.AbstractEcmaObjectOperations;
 import org.monflabs.mozilla.javascript.ClassDescriptor;
@@ -99,12 +100,19 @@ public final class NativeSharedArrayBuffer extends NativeArrayBuffer {
             }
         }
 
-        /** Wakes up to count waiters on a byte index; to be used holding the monitor. */
-        int notifyWaiters(int byteIndex, double count) {
+        /**
+         * Wakes up to count waiters on a byte index, adding the callbacks of the async ones to
+         * wakeUps; to be used holding the monitor.
+         */
+        int notifyWaiters(int byteIndex, double count, List<Runnable> wakeUps) {
             Deque<Waiter> list = waiters.get(byteIndex);
             int woken = 0;
             while (list != null && woken < count && !list.isEmpty()) {
-                list.removeFirst().notified = true;
+                Waiter waiter = list.removeFirst();
+                waiter.notified = true;
+                if (waiter.onNotify != null) {
+                    wakeUps.add(waiter.onNotify);
+                }
                 woken++;
             }
             if (list != null && list.isEmpty()) {
@@ -123,9 +131,11 @@ public final class NativeSharedArrayBuffer extends NativeArrayBuffer {
         }
     }
 
-    /** An agent suspended in Atomics.wait. */
+    /** An agent suspended in Atomics.wait, or a promise of Atomics.waitAsync. */
     static final class Waiter {
         boolean notified;
+        // for Atomics.waitAsync, run outside the monitor once notified
+        Runnable onNotify;
     }
 
     private final Storage storage;

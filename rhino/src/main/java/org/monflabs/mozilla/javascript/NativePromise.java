@@ -502,6 +502,31 @@ public class NativePromise extends ScriptableObject {
         }
     }
 
+    /** A promise that a host operation settles later, such as the one of Atomics.waitAsync. */
+    public static final class HostPromise {
+        private final Capability capability;
+        private final VarScope scope;
+
+        private HostPromise(Context cx, VarScope scope) {
+            this.capability = newCapability(cx, scope);
+            this.scope = scope;
+        }
+
+        public Object getPromise() {
+            return capability.promise;
+        }
+
+        public void resolve(Context cx, Object value) {
+            capability.resolve.call(
+                    cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {value});
+        }
+    }
+
+    /** A new pending promise of the realm of the scope, for a host operation. */
+    public static HostPromise newHostPromise(Context cx, VarScope scope) {
+        return new HostPromise(cx, scope);
+    }
+
     /** A new promise of the realm of the scope, with its resolving functions. */
     static Capability newCapability(Context cx, VarScope scope) {
         TopLevel top = ScriptableObject.getTopLevelScope(scope);
