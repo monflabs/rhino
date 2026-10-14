@@ -45,6 +45,7 @@ existing code and without slowing the engine down.
 | 2026-10-14 | **11.1: under `VERSION_ECMASCRIPT` the global `Iterator` is the ES2025 constructor** (as in Nashorn): the `Iterator` function of JavaScript 1.7 cannot coexist with it (calling the ES2025 one throws), so it stays for the other versions only; Java collections iterate with `for-of` or `Iterator.from`. Built-ins can opt in to a primitive `this` from `call`/`apply` (`ClassDescriptor.Builder.withPrimitiveThis`), used by the iterator built-ins, whose `this-non-object` tests passed before by accident; making it the default for every built-in is left to M13. |
 | 2026-10-14 | **11.6: JSON modules are built by the engine** (as in Nashorn): the `ModuleLoader` API is unchanged and loaders return the text as before; an import with `type: "json"` parses that text as JSON into a module whose `default` export is the value, registered apart from the same module imported as JavaScript; another `type` is a TypeError. Unlike Nashorn, this works with every loader of the chain. |
 | 2026-10-14 | **12.2: `Math.sumPrecise` uses Shewchuk's algorithm** (the proposal polyfill's, with its overflow handling), not Nashorn's `BigDecimal`: measured equal on 300,000 random and edge cases and 18 times faster on usual values (2.7 times on the whole exponent range). |
+| 2026-10-14 | **M13: functions have no `arity` under `VERSION_ECMASCRIPT`** (user decision): the JavaScript 1.2 property is not ECMAScript (as in Nashorn); `VERSION_ES6` keeps it. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -757,6 +758,6 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 10.x | ES2024 (resizable buffers, v flag)              | done        | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
-| 13   | Long tail to zero                               | todo        |                              |        |
+| 13   | Long tail to zero                               | in progress | 98.8% (42,118)               | 40075a55a |
 | 14   | Performance pass                                | continuous  |                              |        |
 | 15   | Single language version                         | todo        |                              |        |

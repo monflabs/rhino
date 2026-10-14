@@ -648,6 +648,22 @@ public class Parser {
                 });
     }
 
+    /** ArrowParameters may not contain a YieldExpression (15.3.1, early errors). */
+    private void checkYieldInArrowParams(AstNode params) {
+        params.visit(
+                node -> {
+                    if (node instanceof FunctionNode
+                            && ((FunctionNode) node).getFunctionType()
+                                    != FunctionNode.ARROW_FUNCTION) {
+                        return false;
+                    }
+                    if (node instanceof Yield && !((Yield) node).isAwait()) {
+                        reportError("msg.syntax");
+                    }
+                    return true;
+                });
+    }
+
     /** The parameters of async (...) => ..., from the call that covered them. */
     private AstNode asyncArrowParams(FunctionCall call) {
         int lp = call.getPosition() + call.getLp();
@@ -1965,6 +1981,9 @@ public class Parser {
             fnNode.setIsAsync();
         } else if (params != null && inAsyncFunction()) {
             checkAwaitInArrowParams(params, false);
+        }
+        if (params != null && compilerEnv.isLatestEcmaScript()) {
+            checkYieldInArrowParams(params);
         }
         fnNode.setJsDocNode(getAndResetJsDoc());
 

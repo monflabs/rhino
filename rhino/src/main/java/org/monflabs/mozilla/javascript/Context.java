@@ -239,6 +239,8 @@ public class Context implements Closeable {
      *   <li>{@code decodeURI} keeps U+FFFE and U+FFFF, {@code Math.log2} is exact for powers of
      *       two, lower casing applies Final_Sigma over code points, and the revoke function of
      *       {@code Proxy.revocable} is not a constructor.
+     *   <li>Functions have no {@code arity} property (JavaScript 1.2); use {@code length}.
+     *   <li>A {@code yield} expression in the parameters of an arrow function is an early error.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

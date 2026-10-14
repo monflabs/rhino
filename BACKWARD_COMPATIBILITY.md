@@ -78,6 +78,8 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.63 | RegExp alternatives in a lookbehind, supplementary characters in an alternative class | `VERSION_ECMASCRIPT` |
 | 1.64 | `Iterator` is the ES2025 Iterator, built-in iterators inherit `Iterator.prototype` | `VERSION_ECMASCRIPT` |
 | 1.65 | `decodeURI` noncharacters, `Math.log2`, final sigma, `Proxy.revocable` | `VERSION_ECMASCRIPT` |
+| 1.66 | Functions have no `arity` property | `VERSION_ECMASCRIPT` |
+| 1.67 | A yield expression in arrow parameters is an early error | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1106,6 +1108,27 @@ Proxy.revocable({}, {}).revoke.hasOwnProperty("prototype"); // before: true   no
 - **Why:** ECMA-262 2026, §19.2.6.5 (Decode), §21.3.2.23 (Math.log2, an implementation-approximated value that
   test262 requires exact for powers of two), §22.1.3.30 (toLowerCase, with SpecialCasing.txt), §28.2.2.1
   (Proxy.revocable, a built-in function that is not a constructor).
+
+### 1.66 Functions have no `arity` property
+
+```js
+(function (a, b) {}).arity;                 // before: 2   now: undefined
+Object.getOwnPropertyNames(function () {}); // before: length,name,arity,prototype   now: length,name,prototype
+```
+
+- The `arity` property of JavaScript 1.2, which repeated `length`, is not created on functions (strict functions
+  already had none). Use `length` instead.
+- **Why:** ECMA-262 2026, §10.2.9 and §20.2.4 (the own properties of function instances: `length`, `name`,
+  `prototype`); test262 compares the own property names of classes. Decision 2026-10-14.
+
+### 1.67 A yield expression in arrow parameters is an early error
+
+```js
+function* g() { (x = yield) => x; }   // before: compiles   now: SyntaxError
+```
+
+- In a generator, the parameters of an arrow function cannot contain a `yield` expression.
+- **Why:** ECMA-262 2026, §15.3.1 (ArrowFunction early errors: ArrowParameters Contains YieldExpression).
 
 ---
 

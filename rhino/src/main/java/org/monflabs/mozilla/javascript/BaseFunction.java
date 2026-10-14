@@ -305,6 +305,9 @@ public class BaseFunction extends ScriptableObject implements Function {
         if (cx == null || !cx.isStrictMode()) {
             if (cx == null || cx.getLanguageVersion() < Context.VERSION_ES6) {
                 desc = ARGUMENTS_MAP;
+            } else if (cx.isLatestEcmaScript()) {
+                // the arity of JavaScript 1.2 is not a property of ECMAScript functions
+                desc = BASIC_MAP;
             } else {
                 desc = ARITY_MAP;
             }
@@ -903,7 +906,11 @@ public class BaseFunction extends ScriptableObject implements Function {
     public void setStandardPropertyAttributes(int attributes) {
         setAttributes("name", attributes);
         setAttributes("length", attributes);
-        setAttributes("arity", attributes);
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            // which creates arity for a strict function, before VERSION_ECMASCRIPT
+            setAttributes("arity", attributes);
+        }
     }
 
     public void setPrototypePropertyAttributes(int attributes) {

@@ -54,4 +54,21 @@ class ConformanceResidualsTest {
                         + ".map(src => { try { eval(src); return 'ok'; } catch (e) { return e.name; } })"
                         + ".join()");
     }
+
+    @Test
+    void noArity() {
+        Utils.assertGatedBehavior(
+                "2|length,name,arity,prototype",
+                "undefined|length,name,prototype",
+                "var f = function (a, b) {};\n"
+                        + "f.arity + '|' + Object.getOwnPropertyNames(f).join()");
+    }
+
+    @Test
+    void yieldInArrowParameters() {
+        Utils.assertGatedBehavior(
+                "ok",
+                "SyntaxError",
+                "try { eval('function *g() { (x = yield) => {}; }'); 'ok' } catch (e) { e.name }");
+    }
 }

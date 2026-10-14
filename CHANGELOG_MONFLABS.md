@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Functions without arity, yield in arrow parameters (2026-10-14, plan M13)
+
+- Changed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.66, decision 2026-10-14): functions have no `arity`
+  property (JavaScript 1.2, a copy of `length`), as in ECMAScript; `VERSION_ES6` keeps it.
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.67): a `yield` expression in the parameters of an arrow
+  function is an early error.
+- Tests: `ConformanceResidualsTest.noArity`, `yieldInArrowParameters`.
+- test262: 42,112 → 42,118 of 42,616.
+
 ### Long tail: class early errors, decodeURI, Math.log2, final sigma, Proxy.revocable (2026-10-14, plan M13)
 
 - Fixed (classes, a `VERSION_ECMASCRIPT` feature): a generator or async generator `constructor` and a static
