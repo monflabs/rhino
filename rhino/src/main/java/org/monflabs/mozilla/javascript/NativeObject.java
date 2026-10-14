@@ -521,7 +521,11 @@ public class NativeObject extends ScriptableObject implements Map {
     private static Object js_entries(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Object arg = args.length < 1 ? Undefined.instance : args[0];
-        Scriptable obj = getCompatibleObject(cx, s, arg);
+        return entries(cx, s, getCompatibleObject(cx, s, arg));
+    }
+
+    /** EnumerableOwnProperties ( obj, key+value ) (7.3.23), as an array of [key, value]. */
+    static Scriptable entries(Context cx, VarScope s, Scriptable obj) {
         if (obj instanceof NativeProxy && cx.isLatestEcmaScript()) {
             return cx.newArray(s, proxyEnumerableOwnProperties(cx, s, (NativeProxy) obj, true));
         }

@@ -23,8 +23,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.ServiceLoader;
@@ -6160,6 +6162,7 @@ public class ScriptRuntime {
         NativePromise.Capability capability = NativePromise.newCapability(cx, scope);
         TopLevel realm = ScriptableObject.getTopLevelScope(scope);
         String spec;
+        Map<String, String> attributes = new LinkedHashMap<>();
         try {
             spec = toString(specifier);
             if (!Undefined.isUndefined(options)) {
@@ -6167,10 +6170,25 @@ public class ScriptRuntime {
                     throw typeErrorById("msg.arg.not.object", typeof(options));
                 }
                 Object with = ScriptableObject.getProperty((Scriptable) options, "with");
-                if (with != Scriptable.NOT_FOUND
-                        && !Undefined.isUndefined(with)
-                        && !isObject(with)) {
-                    throw typeErrorById("msg.arg.not.object", typeof(with));
+                if (with != Scriptable.NOT_FOUND && !Undefined.isUndefined(with)) {
+                    if (!isObject(with)) {
+                        throw typeErrorById("msg.arg.not.object", typeof(with));
+                    }
+                    // EnumerableOwnProperties(with, key+value): the string keys
+                    Scriptable entries = NativeObject.entries(cx, scope, (Scriptable) with);
+                    for (Object entry : getArrayElements(cx, entries)) {
+                        Object key = ScriptableObject.getProperty((Scriptable) entry, 0);
+                        Object value = ScriptableObject.getProperty((Scriptable) entry, 1);
+                        if (!(value instanceof CharSequence)) {
+                            throw typeErrorById("msg.import.attribute.not.string", key);
+                        }
+                        attributes.put(key.toString(), value.toString());
+                    }
+                    for (String key : attributes.keySet()) {
+                        if (!"type".equals(key)) {
+                            throw typeErrorById("msg.import.attribute.unsupported", key);
+                        }
+                    }
                 }
             }
         } catch (RhinoException re) {
@@ -6184,7 +6202,8 @@ public class ScriptRuntime {
                     cx.suspendMicrotaskProcessing();
                     try {
                         ModuleRecord record =
-                                ModuleRecord.importDynamic(cx, realm, referrerName, spec);
+                                ModuleRecord.importDynamic(
+                                        cx, realm, referrerName, spec, attributes);
                         // ContinueDynamicImport: settles once the module graph is evaluated
                         NativePromise.await(
                                 cx,

@@ -87,7 +87,8 @@ public final class NativeJSON extends ScriptableObject {
         return stringify(cx, s, value, replacer, space);
     }
 
-    private static Object parse(Context cx, VarScope scope, String jtext) {
+    /** JSON.parse without a reviver; a SyntaxError for invalid JSON. */
+    static Object parse(Context cx, VarScope scope, String jtext) {
         try {
             return new JsonParser(cx, scope).parseValue(jtext);
         } catch (JsonParser.ParseException ex) {

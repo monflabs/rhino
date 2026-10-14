@@ -1238,13 +1238,53 @@ public class Parser {
         if (hasClause) {
             expectContextualKeyword("from");
         }
+        ModuleInfo.ModuleRequest request = moduleRequest();
+        for (String[] b : bindings) {
+            moduleInfo.importEntries.add(new ModuleInfo.ImportEntry(request, b[0], b[1]));
+        }
+        return blankModuleItem(start, requestEnd);
+    }
+
+    /** The end of the last module request parsed by #moduleRequest. */
+    private int requestEnd;
+
+    /** A ModuleSpecifier and its optional WithClause (16.2.2). */
+    private ModuleInfo.ModuleRequest moduleRequest() throws IOException {
         mustMatchToken(Token.STRING, "msg.syntax", true);
         String specifier = ts.getString();
-        moduleInfo.addRequest(specifier);
-        for (String[] b : bindings) {
-            moduleInfo.importEntries.add(new ModuleInfo.ImportEntry(specifier, b[0], b[1]));
+        // the end of the request, before a lookahead past it
+        requestEnd = ts.tokenEnd;
+        Map<String, String> attributes = new LinkedHashMap<>();
+        if (matchToken(Token.WITH, true)) {
+            mustMatchToken(Token.LC, "msg.syntax", true);
+            while (!matchToken(Token.RC, true)) {
+                int tt = peekToken();
+                consumeToken();
+                String key;
+                if (tt == Token.STRING || tt == Token.NAME || tt == Token.RESERVED) {
+                    key = ts.getString();
+                } else {
+                    key = Token.keywordToName(tt);
+                    if (key == null) {
+                        reportError("msg.syntax");
+                        return null;
+                    }
+                }
+                mustMatchToken(Token.COLON, "msg.syntax", true);
+                mustMatchToken(Token.STRING, "msg.syntax", true);
+                if (attributes.put(key, ts.getString()) != null) {
+                    reportError("msg.import.dup.attribute", key);
+                }
+                if (!matchToken(Token.COMMA, true)) {
+                    mustMatchToken(Token.RC, "msg.syntax", true);
+                    break;
+                }
+            }
+            requestEnd = ts.tokenEnd;
         }
-        return blankModuleItem(start, ts.tokenEnd);
+        ModuleInfo.ModuleRequest request = new ModuleInfo.ModuleRequest(specifier, attributes);
+        moduleInfo.addRequest(request);
+        return request;
     }
 
     /** The binding of an import (the current token): a const in the module scope. */
@@ -1316,7 +1356,11 @@ public class Parser {
         return empty;
     }
 
-    private void addExport(String exportName, String moduleRequest, String importName, String local)
+    private void addExport(
+            String exportName,
+            ModuleInfo.ModuleRequest moduleRequest,
+            String importName,
+            String local)
             throws IOException {
         if (exportName != null) {
             for (ModuleInfo.ExportEntry ee : moduleInfo.exportEntries) {
@@ -1338,15 +1382,13 @@ public class Parser {
                 exportName = moduleExportName();
             }
             expectContextualKeyword("from");
-            mustMatchToken(Token.STRING, "msg.syntax", true);
-            String specifier = ts.getString();
-            moduleInfo.addRequest(specifier);
+            ModuleInfo.ModuleRequest request = moduleRequest();
             addExport(
                     exportName,
-                    specifier,
+                    request,
                     exportName == null ? ModuleInfo.ALL_BUT_DEFAULT : ModuleInfo.NAMESPACE,
                     null);
-            return blankModuleItem(start, ts.tokenEnd);
+            return blankModuleItem(start, requestEnd);
         }
         if (tt == Token.LC) {
             consumeToken();
@@ -1365,12 +1407,11 @@ public class Parser {
             }
             int rcEnd = ts.tokenEnd;
             if (matchContextualKeyword("from")) {
-                mustMatchToken(Token.STRING, "msg.syntax", true);
-                String specifier = ts.getString();
-                moduleInfo.addRequest(specifier);
+                ModuleInfo.ModuleRequest request = moduleRequest();
                 for (String[] spec : specs) {
-                    addExport(spec[1], specifier, spec[0], null);
+                    addExport(spec[1], request, spec[0], null);
                 }
+                return blankModuleItem(start, requestEnd);
             } else {
                 for (int i = 0; i < specs.size(); i++) {
                     if (!localIsReference.get(i)) {
@@ -1381,7 +1422,6 @@ public class Parser {
                 }
                 return blankModuleItem(start, rcEnd);
             }
-            return blankModuleItem(start, ts.tokenEnd);
         }
         if (tt == Token.DEFAULT) {
             consumeToken();

@@ -332,4 +332,56 @@ class ModuleTest {
                             () -> cx.evaluateModule(scope, "function f() { await 1; }", "m1"));
                 });
     }
+
+    @Test
+    void jsonModules() throws IOException {
+        write("data.json", "{\"list\": [1, 2], \"none\": null}");
+        write("bad.json", "{oops}");
+        write(
+                "main.js",
+                "import data from './data.json' with { type: 'json' };\n"
+                        + "import { default as again } from './data.json' with { type: \"json\", };\n"
+                        + "export const r = [JSON.stringify(data), data === again,"
+                        + " Object.isExtensible(data)].join('|');\n"
+                        + "export { data };\n");
+        inAllModes(
+                new PathModuleLoader(dir),
+                (cx, scope) -> {
+                    Path main = dir.resolve("main.js");
+                    Scriptable ns =
+                            cx.evaluateModule(
+                                    scope,
+                                    Module.source(main.toString(), Files.readString(main), main));
+                    assertEquals("{\"list\":[1,2],\"none\":null}|true|true", get(ns, "r"));
+                    // the same module from import(), and the errors of the attributes
+                    ScriptableObject.putProperty(scope, "data", get(ns, "data"));
+                    cx.evaluateString(
+                            scope,
+                            "var r = [];\n"
+                                    + "import('./data.json', { with: { type: 'json' } })"
+                                    + ".then(m => r.push(m.default === data));\n"
+                                    + "import('./data.json', { with: { kind: 'json' } })"
+                                    + ".catch(e => r.push(e.name));\n"
+                                    + "import('./data.json', { with: { type: 'css' } })"
+                                    + ".catch(e => r.push(e.name));\n"
+                                    + "import('./bad.json', { with: { type: 'json' } })"
+                                    + ".catch(e => r.push(e.name));\n",
+                            main.toString(),
+                            1,
+                            null);
+                    cx.processMicrotasks();
+                    assertEquals(
+                            "SyntaxError,TypeError,TypeError,true",
+                            cx.evaluateString(scope, "r.sort().join()", "check", 1, null));
+                    // a key repeated in a with clause is an early error
+                    assertThrows(
+                            EvaluatorException.class,
+                            () ->
+                                    cx.evaluateModule(
+                                            scope,
+                                            "import d from './data.json' with { type: 'json',"
+                                                    + " type: 'json' };",
+                                            "m2"));
+                });
+    }
 }

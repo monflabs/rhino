@@ -6,6 +6,23 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Import attributes and JSON modules (2026-10-14, plan 11.6)
+
+- New (modules and `import()`, which are `VERSION_ECMASCRIPT` features): the `with { key: "value", ... }` clause
+  of `import` and `export ... from` (a key repeated is an early SyntaxError), and the `with` option of `import()`
+  (its own enumerable string keys, string values, else a rejected TypeError). A module request is the specifier
+  with its attributes, so the same specifier imported as JavaScript and as JSON gives two modules.
+- `type: "json"` loads a JSON module (decision 2026-10-14, as in Nashorn the engine builds it): the loaders return
+  the text as before, the engine parses it as JSON into a module whose only export, `default`, is the value, shared
+  by every JSON import of that module in the realm; invalid JSON is a SyntaxError. A loader that returns a module of
+  Java values gives it as is. The `ModuleLoader` API is unchanged.
+- Another attribute key is a SyntaxError when the module is loaded (a TypeError for `import()`), another `type` a
+  TypeError.
+- The test262 runner no longer skips `import-attributes` and `json-modules`; it skips the `import-text` and
+  `import-bytes` proposals (after ES2026), whose tests it skipped before through `import-attributes`.
+- Tests: `ModuleTest.jsonModules`.
+- test262: 41,721 → 41,810 of 42,616 (97.9% → 98.1%); `import-attributes` and `json-modules` 100%.
+
 ### RegExp pattern modifiers (2026-10-14, plan 11.4)
 
 - New (`VERSION_ECMASCRIPT`): modifiers groups `(?ims-ims:...)`, which set or clear the `i`, `m` and `s` flags for

@@ -170,8 +170,8 @@ public class Test262SuiteTest {
                             "IsHTMLDDA",
                             "CanBlockIsFalse",
                             "tail-call-optimization",
-                            "import-attributes",
-                            "json-modules",
+                            "import-text",
+                            "import-bytes",
                             "Temporal",
                             "upsert",
                             "u180e"));

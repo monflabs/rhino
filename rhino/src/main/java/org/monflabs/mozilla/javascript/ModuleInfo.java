@@ -29,18 +29,24 @@ final class ModuleInfo {
     /** ImportName of {@code export * from "m"} (all names, not a binding). */
     static final String ALL_BUT_DEFAULT = "*all-but-default*";
 
-    record ImportEntry(String moduleRequest, String importName, String localName) {}
+    /**
+     * A ModuleRequest Record (16.2.1.3.1): a specifier and the import attributes of its {@code
+     * with} clause; the same specifier with other attributes is another module.
+     */
+    record ModuleRequest(String specifier, Map<String, String> attributes) {}
+
+    record ImportEntry(ModuleRequest moduleRequest, String importName, String localName) {}
 
     /**
      * An export: local ({@code moduleRequest} null), indirect ({@code export {a} from "m"}), or
      * star ({@code export * from "m"}: {@code exportName} null).
      */
     record ExportEntry(
-            String exportName, String moduleRequest, String importName, String localName) {}
+            String exportName, ModuleRequest moduleRequest, String importName, String localName) {}
 
     private record Edit(int start, int end, String text) {}
 
-    final Set<String> requestedModules = new LinkedHashSet<>();
+    final Set<ModuleRequest> requestedModules = new LinkedHashSet<>();
     final List<ImportEntry> importEntries = new ArrayList<>();
     final List<ExportEntry> localExportEntries = new ArrayList<>();
     final List<ExportEntry> indirectExportEntries = new ArrayList<>();
@@ -70,8 +76,8 @@ final class ModuleInfo {
         }
     }
 
-    void addRequest(String specifier) {
-        requestedModules.add(specifier);
+    void addRequest(ModuleRequest request) {
+        requestedModules.add(request);
     }
 
     /** Replaces source[start, end) by blanks, keeping the line terminators. */

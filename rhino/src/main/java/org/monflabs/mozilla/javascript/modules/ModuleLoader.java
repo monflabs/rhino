@@ -7,6 +7,10 @@ package org.monflabs.mozilla.javascript.modules;
 /**
  * Resolves and loads the module an {@code import} names. The engine asks each loader of its chain
  * in order; the first non-null answer wins.
+ *
+ * <p>For an import with the attribute {@code type: "json"}, the engine parses the text of the
+ * module the loader returns as JSON, into a module whose default export is the value (a module of
+ * Java values is used as is).
  */
 @FunctionalInterface
 public interface ModuleLoader {

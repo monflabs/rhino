@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -50,7 +51,7 @@ public final class ModuleRecord {
     private final Module module;
     private final TopLevel realm;
     private final ModuleInfo info;
-    private final Map<String, ModuleRecord> requested = new LinkedHashMap<>();
+    private final Map<ModuleInfo.ModuleRequest, ModuleRecord> requested = new LinkedHashMap<>();
     private final Map<String, Callable> getters = new HashMap<>();
     private Status status = Status.NEW;
     private RuntimeException evaluationError;
@@ -81,7 +82,11 @@ public final class ModuleRecord {
      * linked; its evaluation follows (see {@link #evaluateToPromise}).
      */
     static ModuleRecord importDynamic(
-            Context cx, TopLevel realm, String referrerName, String specifier) {
+            Context cx,
+            TopLevel realm,
+            String referrerName,
+            String specifier,
+            Map<String, String> attributes) {
         ModuleRecord referrerRecord = registry(realm).get(referrerName);
         int generated = referrerName.indexOf('#');
         if (referrerRecord == null && generated > 0) {
@@ -104,7 +109,7 @@ public final class ModuleRecord {
             }
             referrer = origin == null ? null : Module.referrer(referrerName, origin);
         }
-        ModuleRecord record = load(cx, realm, resolve(cx, specifier, referrer));
+        ModuleRecord record = load(cx, realm, specifier, attributes, referrer);
         record.link(cx);
         return record;
     }
@@ -143,8 +148,10 @@ public final class ModuleRecord {
                             cx.evaluateString(
                                     scope, info.generatorSource(), module.name(), 1, null);
             record.scope = scope;
-            for (String specifier : info.requestedModules) {
-                record.requested.put(specifier, load(cx, realm, resolve(cx, specifier, module)));
+            for (ModuleInfo.ModuleRequest request : info.requestedModules) {
+                record.requested.put(
+                        request,
+                        load(cx, realm, request.specifier(), request.attributes(), module));
             }
         } catch (RuntimeException e) {
             // a module that could not be loaded is not kept: a later import tries again
@@ -155,6 +162,48 @@ public final class ModuleRecord {
     }
 
     private ModuleScope scope;
+
+    /**
+     * HostLoadImportedModule for an import with attributes: {@code type: "json"} makes a JSON
+     * module of the text the loaders return (16.2.1.8 CreateDefaultExportSyntheticModule), kept
+     * apart from the same module imported as JavaScript; other keys are a SyntaxError
+     * (AllImportAttributesSupported), other types a TypeError.
+     */
+    private static ModuleRecord load(
+            Context cx,
+            TopLevel realm,
+            String specifier,
+            Map<String, String> attributes,
+            Module referrer) {
+        for (String key : attributes.keySet()) {
+            if (!"type".equals(key)) {
+                throw ScriptRuntime.constructError(
+                        "SyntaxError",
+                        ScriptRuntime.getMessageById("msg.import.attribute.unsupported", key));
+            }
+        }
+        String type = attributes.get("type");
+        if (type != null && !"json".equals(type)) {
+            throw ScriptRuntime.typeErrorById("msg.import.type.unsupported", type);
+        }
+        Module module = resolve(cx, specifier, referrer);
+        if (type == null || module.text() == null) {
+            return load(cx, realm, module);
+        }
+        String name = "[json] " + module.name();
+        Map<String, ModuleRecord> registry = registry(realm);
+        ModuleRecord record = registry.get(name);
+        if (record == null) {
+            Object value = NativeJSON.parse(cx, realm, module.text());
+            record =
+                    new ModuleRecord(
+                            Module.values(name, Collections.singletonMap("default", value)),
+                            realm,
+                            null);
+            registry.put(name, record);
+        }
+        return record;
+    }
 
     private static Module resolve(Context cx, String specifier, Module referrer) {
         List<ModuleLoader> loaders = cx.getModuleLoaders();
