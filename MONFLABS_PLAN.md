@@ -656,6 +656,11 @@ Steps:
 - *10.3 (done)* `Atomics.waitAsync`: a waiter whose notify posts a job through the Context's `HostJobScheduler`
   (decision 2026-10-13), and a scheduled job for a finite timeout; `EventLoop` is the default scheduler (the
   test262 runner and its agents run one). Without a scheduler, only the synchronous results are available.
+- *10.4 (done earlier)* `Promise.withResolvers`, `Object.groupBy`/`Map.groupBy` and `isWellFormed`/`toWellFormed`
+  pass, but for one test each of the last two: the primitive `this` residual (1.8c, left for M13).
+
+Status (2026-10-13, done): every ES2024 feature passes but for the properties of strings of the `v` flag (no
+emoji sequence data in the JDK, decision 4.3) and the primitive `this` residual.
 
 ### M11 — ES2025
 
@@ -738,7 +743,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
 | G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | done        | 96.4% (unchanged)            | 387bb2191 |
 | 9.x  | ES2023 residuals                                | done        | 100% (no change needed)      | (this) |
-| 10.x | ES2024 (resizable buffers, v flag)              | in progress | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
+| 10.x | ES2024 (resizable buffers, v flag)              | done        | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |
 | 12.x | ES2026                                          | todo        |                              |        |
 | 13   | Long tail to zero                               | todo        |                              |        |
