@@ -174,9 +174,9 @@ public class Context implements Closeable {
      *       stripped as format characters.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
-     *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} flag, {@code
-     *       SharedArrayBuffer}, {@code Atomics} and {@code Symbol.asyncIterator}; {@code await} is
-     *       a reserved word in the other versions.
+     *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}
+     *       flags, {@code SharedArrayBuffer}, {@code Atomics} and {@code Symbol.asyncIterator};
+     *       {@code await} is a reserved word in the other versions.
      *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
      *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
      *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each
@@ -227,6 +227,8 @@ public class Context implements Closeable {
      *       calls; strict generators stay strict when resumed; a {@code finally} run by {@code
      *       return()} can yield; array-likes too long for Java are a RangeError;
      *       GetPrototypeFromConstructor uses the intrinsic of the right type and realm.
+     *   <li>RegExp: the alternatives of a lookbehind match, and so does a class with supplementary
+     *       characters in an alternative of a {@code u} pattern.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

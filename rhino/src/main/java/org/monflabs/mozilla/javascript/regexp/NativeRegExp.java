@@ -14,9 +14,11 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.IntPredicate;
 import org.monflabs.mozilla.javascript.AbstractEcmaObjectOperations;
 import org.monflabs.mozilla.javascript.AbstractEcmaStringOperations;
@@ -64,6 +66,8 @@ public class NativeRegExp extends ScriptableObject {
     public static final int JSREG_STICKY = 0x10; // 'y' flag: sticky
     public static final int JSREG_UNICODE = 0x20; // 'u' flag: unicode mode
     public static final int JSREG_HASINDICES = 0x40; // 'd' flag: match indices
+    public static final int JSREG_UNICODESETS = 0x80; // 'v' flag: unicode sets mode
+    private static final int JSREG_UNICODE_MODE = JSREG_UNICODE | JSREG_UNICODESETS;
 
     // type of match to perform
     public static final int TEST = 0;
@@ -241,6 +245,12 @@ public class NativeRegExp extends ScriptableObject {
                                 (c) -> flagGetter(c, JSREG_UNICODE, "unicode"),
                                 null,
                                 DONTENUM | READONLY)
+                        .withProp(
+                                PROTO,
+                                "unicodeSets",
+                                (c) -> flagGetter(c, JSREG_UNICODESETS, "unicodeSets"),
+                                null,
+                                DONTENUM | READONLY)
                         .build();
         EXEC_DESCRIPTOR = DESCRIPTOR.findProtoDesc("exec");
     }
@@ -279,6 +289,7 @@ public class NativeRegExp extends ScriptableObject {
     private static void removeLatestFlags(Context cx, ScriptableObject prototype) {
         if (!cx.isLatestEcmaScript()) {
             prototype.delete("hasIndices");
+            prototype.delete("unicodeSets");
         }
     }
 
@@ -289,7 +300,8 @@ public class NativeRegExp extends ScriptableObject {
         {"multiline", JSREG_MULTILINE},
         {"dotAll", JSREG_DOTALL},
         {"sticky", JSREG_STICKY},
-        {"unicode", JSREG_UNICODE}
+        {"unicode", JSREG_UNICODE},
+        {"unicodeSets", JSREG_UNICODESETS}
     };
 
     /**
@@ -564,6 +576,7 @@ public class NativeRegExp extends ScriptableObject {
         if ((flags & JSREG_MULTILINE) != 0) buf.append('m');
         if ((flags & JSREG_DOTALL) != 0) buf.append('s');
         if ((flags & JSREG_UNICODE) != 0) buf.append('u');
+        if ((flags & JSREG_UNICODESETS) != 0) buf.append('v');
         if ((flags & JSREG_STICKY) != 0) buf.append('y');
         return buf.toString();
     }
@@ -1144,6 +1157,8 @@ public class NativeRegExp extends ScriptableObject {
                     f = JSREG_UNICODE;
                 } else if (c == 'd' && cx.isLatestEcmaScript()) {
                     f = JSREG_HASINDICES;
+                } else if (c == 'v' && cx.isLatestEcmaScript()) {
+                    f = JSREG_UNICODESETS;
                 } else {
                     reportError("msg.invalid.re.flag", String.valueOf(c));
                 }
@@ -1152,6 +1167,10 @@ public class NativeRegExp extends ScriptableObject {
                 }
                 flags |= f;
             }
+        }
+
+        if ((flags & JSREG_UNICODE_MODE) == JSREG_UNICODE_MODE) {
+            reportError("msg.invalid.re.flag", "v");
         }
 
         // We support unicode mode in ES6 and later.
@@ -1172,7 +1191,7 @@ public class NativeRegExp extends ScriptableObject {
             state.result.flatIndex = 0;
             state.progLength += 5;
         } else {
-            boolean unicodeMode = (flags & JSREG_UNICODE) != 0;
+            boolean unicodeMode = (flags & JSREG_UNICODE_MODE) != 0;
             // if unicode mode is on, named capture groups are always on
             ParserParameters params = new ParserParameters(unicodeMode, unicodeMode);
 
@@ -1541,7 +1560,8 @@ public class NativeRegExp extends ScriptableObject {
                     && result.kid.index < 256
                     && result.kid2.op == REOP_FLAT
                     && result.kid2.lowSurrogate == 0
-                    && (state.flags & JSREG_FOLD) == 0) {
+                    && (state.flags & JSREG_FOLD) == 0
+                    && !classPrereqUnsafe(state)) {
                 result.op = REOP_ALTPREREQ2;
                 result.chr = result.kid2.chr;
                 result.index = result.kid.index;
@@ -1552,7 +1572,8 @@ public class NativeRegExp extends ScriptableObject {
                     && result.kid2.op == REOP_CLASS
                     && result.kid2.index < 256
                     && result.kid.lowSurrogate == 0
-                    && (state.flags & JSREG_FOLD) == 0) {
+                    && (state.flags & JSREG_FOLD) == 0
+                    && !classPrereqUnsafe(state)) {
                 result.op = REOP_ALTPREREQ2;
                 result.chr = result.kid.chr;
                 result.index = result.kid2.index;
@@ -1565,6 +1586,11 @@ public class NativeRegExp extends ScriptableObject {
             }
         }
         return true;
+    }
+
+    /** The ALTPREREQ2 class test reads one code unit: wrong for a class in unicode mode. */
+    private static boolean classPrereqUnsafe(CompilerState state) {
+        return (state.flags & JSREG_UNICODE_MODE) != 0 && state.cx.isLatestEcmaScript();
     }
 
     /*
@@ -1775,7 +1801,7 @@ public class NativeRegExp extends ScriptableObject {
         return value;
     }
 
-    private static RENode reverseNodeList(RENode head) {
+    private static RENode reverseNodeList(RENode head, boolean latest) {
         RENode prev = null;
         RENode node = head;
         while (node != null) {
@@ -1785,7 +1811,12 @@ public class NativeRegExp extends ScriptableObject {
                     && node.op != REOP_ASSERT_NOT
                     && node.op != REOP_ASSERTBACK
                     && node.op != REOP_ASSERTBACK_NOT) {
-                node.kid = reverseNodeList(node.kid);
+                node.kid = reverseNodeList(node.kid, latest);
+            }
+            if (latest && node.kid2 != null) {
+                // the prerequisites are the first characters of the alternatives, not the last
+                node.op = REOP_ALT;
+                node.kid2 = reverseNodeList(node.kid2, true);
             }
             RENode next = node.next;
             node.next = prev;
@@ -2277,6 +2308,7 @@ public class NativeRegExp extends ScriptableObject {
         ArrayList<Integer> nonBMPRanges =
                 new ArrayList<Integer>(); // ranges stored as (start1, end1, start2, end2, ...)
         ArrayList<Integer> nonBMPCodepoints = new ArrayList<Integer>();
+        ClassSetNode setExpression; // in UnicodeSets mode, instead of the above
     }
 
     private static ClassContents parseClassContents(CompilerState state, ParserParameters params) {
@@ -2357,7 +2389,7 @@ public class NativeRegExp extends ScriptableObject {
                     }
                 }
             } else {
-                if ((state.flags & JSREG_UNICODE) != 0) {
+                if ((state.flags & JSREG_UNICODE_MODE) != 0) {
                     thisCodePoint = Character.codePointAt(src, state.cp, state.cpend);
                     state.cp += Character.charCount(thisCodePoint);
                 } else {
@@ -2410,6 +2442,468 @@ public class NativeRegExp extends ScriptableObject {
         }
 
         return contents;
+    }
+
+    /** A class in UnicodeSets mode (22.2.2.9): set operations over code points. */
+    static final class ClassSetNode implements Serializable {
+        @Serial private static final long serialVersionUID = 1L;
+
+        static final byte RANGE = 0;
+        static final byte ESCAPE = 1;
+        static final byte UNION = 2;
+        static final byte INTERSECTION = 3;
+        static final byte DIFFERENCE = 4;
+        static final byte COMPLEMENT = 5;
+
+        final byte kind;
+        int from;
+        int to;
+        byte escapeOp; // REOP_DIGIT, REOP_SPACE, REOP_ALNUM or REOP_UPROP
+        int unicodeProperty;
+        ClassSetNode[] operands;
+
+        ClassSetNode(byte kind) {
+            this.kind = kind;
+        }
+
+        static ClassSetNode range(int from, int to) {
+            ClassSetNode node = new ClassSetNode(RANGE);
+            node.from = from;
+            node.to = to;
+            return node;
+        }
+
+        static ClassSetNode of(byte kind, ClassSetNode... operands) {
+            ClassSetNode node = new ClassSetNode(kind);
+            node.operands = operands;
+            return node;
+        }
+
+        /**
+         * With ignoreCase, every operand is case folded (MaybeSimpleCaseFolding) before the set
+         * operations, and the complement is taken among the folded characters.
+         */
+        boolean contains(int codePoint, boolean ignoreCase) {
+            switch (kind) {
+                case UNION:
+                    for (ClassSetNode operand : operands) {
+                        if (operand.contains(codePoint, ignoreCase)) return true;
+                    }
+                    return false;
+                case INTERSECTION:
+                    for (ClassSetNode operand : operands) {
+                        if (!operand.contains(codePoint, ignoreCase)) return false;
+                    }
+                    return true;
+                case DIFFERENCE:
+                    if (!operands[0].contains(codePoint, ignoreCase)) return false;
+                    for (int i = 1; i < operands.length; i++) {
+                        if (operands[i].contains(codePoint, ignoreCase)) return false;
+                    }
+                    return true;
+                case COMPLEMENT:
+                    return !operands[0].contains(codePoint, ignoreCase);
+                default:
+                    return ignoreCase
+                            ? anyCaseVariantMatches(codePoint, cp -> containsRaw(cp, true))
+                            : containsRaw(codePoint, false);
+            }
+        }
+
+        private boolean containsRaw(int codePoint, boolean ignoreCase) {
+            if (kind == RANGE) {
+                return codePoint >= from && codePoint <= to;
+            }
+            switch (escapeOp) {
+                case REOP_DIGIT:
+                    return codePoint >= '0' && codePoint <= '9';
+                case REOP_SPACE:
+                    return isREWhiteSpace(codePoint);
+                case REOP_ALNUM:
+                    return isWord(codePoint, ignoreCase);
+                default:
+                    return UnicodeProperties.hasProperty(unicodeProperty, codePoint);
+            }
+        }
+    }
+
+    /** A ClassSetOperand: its code points, its strings of other lengths, MayContainStrings. */
+    private static final class ClassSetOperand {
+        final ClassSetNode codePoints;
+        final Set<String> strings;
+        final boolean mayContainStrings;
+        boolean isRange;
+
+        ClassSetOperand(ClassSetNode codePoints, Set<String> strings, boolean mayContainStrings) {
+            this.codePoints = codePoints;
+            this.strings = strings;
+            this.mayContainStrings = mayContainStrings;
+        }
+
+        ClassSetOperand(ClassSetNode codePoints) {
+            this(codePoints, new LinkedHashSet<>(), false);
+        }
+    }
+
+    private static boolean lookingAt(CompilerState state, char c1, char c2) {
+        return state.cp + 1 < state.cpend
+                && state.cpbegin[state.cp] == c1
+                && state.cpbegin[state.cp + 1] == c2;
+    }
+
+    /**
+     * ClassContents[+UnicodeMode, +UnicodeSetsMode] and the closing ']' (22.2.1): a union, an
+     * intersection or a difference, without mixing them.
+     */
+    private static ClassSetOperand parseClassSetExpression(
+            CompilerState state, ParserParameters params, boolean negated) {
+        char[] src = state.cpbegin;
+        ArrayList<ClassSetOperand> operands = new ArrayList<>();
+        byte kind = ClassSetNode.UNION;
+        if (state.cp < state.cpend && src[state.cp] != ']') {
+            operands.add(parseClassSetOperand(state, params, true));
+            if (lookingAt(state, '&', '&')) {
+                kind = ClassSetNode.INTERSECTION;
+            } else if (lookingAt(state, '-', '-')) {
+                kind = ClassSetNode.DIFFERENCE;
+            }
+            if (kind == ClassSetNode.UNION) {
+                while (state.cp < state.cpend && src[state.cp] != ']') {
+                    if (lookingAt(state, '&', '&') || lookingAt(state, '-', '-')) {
+                        reportError("msg.invalid.class", "");
+                    }
+                    operands.add(parseClassSetOperand(state, params, true));
+                }
+            } else {
+                if (operands.get(0).isRange) {
+                    reportError("msg.invalid.class", "");
+                }
+                char op = src[state.cp];
+                while (lookingAt(state, op, op)) {
+                    state.cp += 2;
+                    if (op == '&' && state.cp < state.cpend && src[state.cp] == '&') {
+                        reportError("msg.invalid.class", "");
+                    }
+                    operands.add(parseClassSetOperand(state, params, false));
+                }
+            }
+        }
+        if (state.cp >= state.cpend) {
+            reportError("msg.unterm.class", "");
+        }
+        if (src[state.cp] != ']') {
+            reportError("msg.invalid.class", "");
+        }
+        state.cp++;
+
+        ClassSetOperand result;
+        if (kind == ClassSetNode.UNION && operands.size() == 1) {
+            ClassSetOperand single = operands.get(0);
+            result =
+                    new ClassSetOperand(
+                            single.codePoints, single.strings, single.mayContainStrings);
+        } else {
+            ClassSetNode[] nodes = new ClassSetNode[operands.size()];
+            Set<String> strings = new LinkedHashSet<>();
+            boolean mayContainStrings = kind != ClassSetNode.UNION;
+            for (int i = 0; i < nodes.length; i++) {
+                ClassSetOperand operand = operands.get(i);
+                nodes[i] = operand.codePoints;
+                if (kind == ClassSetNode.UNION) {
+                    strings.addAll(operand.strings);
+                    mayContainStrings |= operand.mayContainStrings;
+                } else if (i == 0) {
+                    strings.addAll(operand.strings);
+                    mayContainStrings = operand.mayContainStrings;
+                } else if (kind == ClassSetNode.INTERSECTION) {
+                    strings.retainAll(operand.strings);
+                    mayContainStrings &= operand.mayContainStrings;
+                } else {
+                    strings.removeAll(operand.strings);
+                }
+            }
+            result = new ClassSetOperand(ClassSetNode.of(kind, nodes), strings, mayContainStrings);
+        }
+        if (negated) {
+            if (result.mayContainStrings) {
+                reportError("msg.invalid.class", "");
+            }
+            result =
+                    new ClassSetOperand(
+                            ClassSetNode.of(ClassSetNode.COMPLEMENT, result.codePoints));
+        }
+        return result;
+    }
+
+    /** ClassSetOperand, or ClassSetRange when allowed. */
+    private static ClassSetOperand parseClassSetOperand(
+            CompilerState state, ParserParameters params, boolean allowRange) {
+        char[] src = state.cpbegin;
+        char c = src[state.cp];
+        if (c == '[') {
+            state.cp++;
+            boolean negated = state.cp < state.cpend && src[state.cp] == '^';
+            if (negated) state.cp++;
+            return parseClassSetExpression(state, params, negated);
+        }
+        if (c == '\\' && state.cp + 1 < state.cpend) {
+            char e = src[state.cp + 1];
+            if (e == 'q') {
+                state.cp += 2;
+                return parseClassStringDisjunction(state, params);
+            }
+            if (isClassEscapeLetter(e)) {
+                state.cp++;
+                parseCharacterAndCharacterClassEscape(state, params);
+                return new ClassSetOperand(classEscapeSet(state.result));
+            }
+        }
+        int from = parseClassSetCharacter(state, params);
+        if (allowRange
+                && state.cp < state.cpend
+                && src[state.cp] == '-'
+                && !lookingAt(state, '-', '-')) {
+            state.cp++;
+            int to = parseClassSetCharacter(state, params);
+            if (from > to) {
+                reportError("msg.bad.range", "");
+            }
+            ClassSetOperand range = new ClassSetOperand(ClassSetNode.range(from, to));
+            range.isRange = true;
+            return range;
+        }
+        return new ClassSetOperand(ClassSetNode.range(from, from));
+    }
+
+    private static ClassSetNode classEscapeSet(RENode escape) {
+        ClassSetNode node = new ClassSetNode(ClassSetNode.ESCAPE);
+        switch (escape.op) {
+            case REOP_DIGIT:
+            case REOP_NONDIGIT:
+                node.escapeOp = REOP_DIGIT;
+                break;
+            case REOP_SPACE:
+            case REOP_NONSPACE:
+                node.escapeOp = REOP_SPACE;
+                break;
+            case REOP_ALNUM:
+            case REOP_NONALNUM:
+                node.escapeOp = REOP_ALNUM;
+                break;
+            default:
+                node.escapeOp = REOP_UPROP;
+                node.unicodeProperty = escape.unicodeProperty;
+                break;
+        }
+        boolean negated =
+                escape.op == REOP_NONDIGIT
+                        || escape.op == REOP_NONSPACE
+                        || escape.op == REOP_NONALNUM
+                        || escape.op == REOP_UPROP_NOT;
+        return negated ? ClassSetNode.of(ClassSetNode.COMPLEMENT, node) : node;
+    }
+
+    /** ClassStringDisjunction, after '\q': strings of one code point are code points. */
+    private static ClassSetOperand parseClassStringDisjunction(
+            CompilerState state, ParserParameters params) {
+        char[] src = state.cpbegin;
+        if (state.cp >= state.cpend || src[state.cp] != '{') {
+            reportError("msg.invalid.escape", "");
+        }
+        state.cp++;
+        boolean ignoreCase = (state.flags & JSREG_FOLD) != 0;
+        ArrayList<ClassSetNode> codePoints = new ArrayList<>();
+        Set<String> strings = new LinkedHashSet<>();
+        while (true) {
+            StringBuilder string = new StringBuilder();
+            int length = 0;
+            int codePoint = 0;
+            while (state.cp < state.cpend && src[state.cp] != '|' && src[state.cp] != '}') {
+                codePoint = parseClassSetCharacter(state, params);
+                string.appendCodePoint(ignoreCase ? unicodeCaseFold(codePoint) : codePoint);
+                length++;
+            }
+            if (state.cp >= state.cpend) {
+                reportError("msg.unterm.class", "");
+            }
+            if (length == 1) {
+                codePoints.add(ClassSetNode.range(codePoint, codePoint));
+            } else {
+                strings.add(string.toString());
+            }
+            if (src[state.cp++] == '}') break;
+        }
+        return new ClassSetOperand(
+                ClassSetNode.of(ClassSetNode.UNION, codePoints.toArray(new ClassSetNode[0])),
+                strings,
+                !strings.isEmpty());
+    }
+
+    /** ClassSetCharacter: its code point. */
+    private static int parseClassSetCharacter(CompilerState state, ParserParameters params) {
+        char[] src = state.cpbegin;
+        if (state.cp >= state.cpend) {
+            reportError("msg.unterm.class", "");
+        }
+        char c = src[state.cp];
+        if (c == '\\') {
+            state.cp++;
+            if (state.cp >= state.cpend) {
+                reportError("msg.trail.backslash", "");
+            }
+            char e = src[state.cp];
+            if (e == 'b') {
+                state.cp++;
+                return 0x08;
+            }
+            if (isClassSetReservedPunctuator(e)) {
+                state.cp++;
+                return e;
+            }
+            if (!parseCharacterAndCharacterClassEscape(state, params)
+                    || state.result.op != REOP_FLAT) {
+                reportError("msg.invalid.escape", "");
+            }
+            return state.result.lowSurrogate == 0
+                    ? state.result.chr
+                    : Character.toCodePoint(state.result.chr, state.result.lowSurrogate);
+        }
+        if (isClassSetSyntaxCharacter(c)
+                || (state.cp + 1 < state.cpend
+                        && src[state.cp + 1] == c
+                        && isClassSetReservedDoublePunctuator(c))) {
+            reportError("msg.invalid.class", "");
+        }
+        int codePoint = Character.codePointAt(src, state.cp, state.cpend);
+        state.cp += Character.charCount(codePoint);
+        return codePoint;
+    }
+
+    private static boolean isClassEscapeLetter(char c) {
+        switch (c) {
+            case 'd':
+            case 'D':
+            case 's':
+            case 'S':
+            case 'w':
+            case 'W':
+            case 'p':
+            case 'P':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isClassSetSyntaxCharacter(char c) {
+        switch (c) {
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+            case '{':
+            case '}':
+            case '/':
+            case '-':
+            case '\\':
+            case '|':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isClassSetReservedPunctuator(char c) {
+        switch (c) {
+            case '&':
+            case '-':
+            case '!':
+            case '#':
+            case '%':
+            case ',':
+            case ':':
+            case ';':
+            case '<':
+            case '=':
+            case '>':
+            case '@':
+            case '`':
+            case '~':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** The characters doubled in a ClassSetReservedDoublePunctuator. */
+    private static boolean isClassSetReservedDoublePunctuator(char c) {
+        switch (c) {
+            case '&':
+            case '!':
+            case '#':
+            case '$':
+            case '%':
+            case '*':
+            case '+':
+            case ',':
+            case '.':
+            case ':':
+            case ';':
+            case '<':
+            case '=':
+            case '>':
+            case '?':
+            case '@':
+            case '^':
+            case '`':
+            case '~':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** A class with strings: the strings, longest first, then the code points (22.2.2.7.3). */
+    private static RENode classWithStrings(
+            CompilerState state, Set<String> strings, RENode classNode) {
+        ArrayList<String> sorted = new ArrayList<>(strings);
+        sorted.sort(
+                (a, b) ->
+                        Integer.compare(
+                                b.codePointCount(0, b.length()), a.codePointCount(0, a.length())));
+        RENode result = classNode;
+        for (int i = sorted.size() - 1; i >= 0; i--) {
+            RENode alt = new RENode(REOP_ALT);
+            alt.kid = stringNodes(state, sorted.get(i));
+            alt.kid2 = result;
+            state.progLength += 9;
+            result = alt;
+        }
+        return result;
+    }
+
+    private static RENode stringNodes(CompilerState state, String string) {
+        RENode head = null;
+        RENode tail = null;
+        for (int i = 0; i < string.length(); ) {
+            int codePoint = string.codePointAt(i);
+            if (Character.isBmpCodePoint(codePoint)) {
+                doFlat(state, (char) codePoint);
+            } else {
+                doFlatSurrogatePair(
+                        state,
+                        Character.highSurrogate(codePoint),
+                        Character.lowSurrogate(codePoint));
+            }
+            if (head == null) {
+                head = state.result;
+            } else {
+                tail.next = state.result;
+            }
+            tail = state.result;
+            i += Character.charCount(codePoint);
+        }
+        return head == null ? new RENode(REOP_EMPTY) : head;
     }
 
     private static boolean parseTerm(CompilerState state, ParserParameters params) {
@@ -2524,6 +3018,15 @@ public class NativeRegExp extends ScriptableObject {
                                     reportError("msg.invalid.escape", "");
                                     return false;
                                 }
+                            } else if (state.result.op == REOP_UPROP_NOT
+                                    && (state.flags & JSREG_UNICODESETS) != 0) {
+                                // the complement of the case folded property (22.2.2.9)
+                                RENode classNode = new RENode(REOP_CLASS);
+                                classNode.classContents = new ClassContents();
+                                classNode.classContents.setExpression =
+                                        classEscapeSet(state.result);
+                                classNode.index = state.classCount++;
+                                state.result = classNode;
                             }
                     }
                     break;
@@ -2594,7 +3097,8 @@ public class NativeRegExp extends ScriptableObject {
                     if (result != null) {
                         /* if we have a lookbehind then we reverse state.result linked list */
                         if (result.op == REOP_ASSERTBACK || result.op == REOP_ASSERTBACK_NOT) {
-                            state.result = reverseNodeList(state.result);
+                            state.result =
+                                    reverseNodeList(state.result, state.cx.isLatestEcmaScript());
                         }
                         result.kid = state.result;
                         state.result = result;
@@ -2605,6 +3109,21 @@ public class NativeRegExp extends ScriptableObject {
                 reportError("msg.re.unmatched.right.paren", "");
                 return false;
             case '[':
+                if ((state.flags & JSREG_UNICODESETS) != 0) {
+                    boolean negated = state.cp < state.cpend && src[state.cp] == '^';
+                    if (negated) state.cp++;
+                    ClassSetOperand set = parseClassSetExpression(state, params, negated);
+                    RENode classNode = new RENode(REOP_CLASS);
+                    classNode.classContents = new ClassContents();
+                    classNode.classContents.setExpression = set.codePoints;
+                    classNode.index = state.classCount++;
+                    state.progLength += 3; /* CLASS, <index> */
+                    state.result =
+                            set.strings.isEmpty()
+                                    ? classNode
+                                    : classWithStrings(state, set.strings, classNode);
+                    break;
+                }
                 ClassContents classContents = parseClassContents(state, params);
                 if (classContents == null) {
                     reportError("msg.unterm.class", "");
@@ -3068,7 +3587,8 @@ public class NativeRegExp extends ScriptableObject {
             REGlobalData gData, int matchChars, int length, String input, int end) {
         if ((gData.cp + length) > end) return false;
         char[] source = gData.regexp.source;
-        if ((gData.regexp.flags & JSREG_FOLD) != 0 && (gData.regexp.flags & JSREG_UNICODE) != 0) {
+        if ((gData.regexp.flags & JSREG_FOLD) != 0
+                && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
             int inputPointer = gData.cp;
             for (int i = 0; i < length && inputPointer < end; i++) {
                 int codepoint1 = input.codePointAt(inputPointer);
@@ -3097,7 +3617,8 @@ public class NativeRegExp extends ScriptableObject {
         if ((gData.cp - length) < 0) return false;
 
         char[] source = gData.regexp.source;
-        if ((gData.regexp.flags & JSREG_FOLD) != 0 && (gData.regexp.flags & JSREG_UNICODE) != 0) {
+        if ((gData.regexp.flags & JSREG_FOLD) != 0
+                && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
             int inputPointer = gData.cp;
             for (int i = 1; i <= length && inputPointer > 0; i++) {
                 int codepoint1 = input.codePointBefore(inputPointer);
@@ -3161,7 +3682,7 @@ public class NativeRegExp extends ScriptableObject {
 
             if ((gData.regexp.flags & JSREG_FOLD) != 0) {
                 // start from (cp - len) on the left and go to cp - 1 on the right
-                if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                     int currentInputPointer = gData.cp - len;
                     for (i = 0; i < len && currentInputPointer < input.length(); ) {
                         int c1 = input.codePointAt(parenContent + i);
@@ -3186,7 +3707,7 @@ public class NativeRegExp extends ScriptableObject {
             if ((gData.cp + len) > end) return false;
 
             if ((gData.regexp.flags & JSREG_FOLD) != 0) {
-                if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                     int currentInputPointer = gData.cp;
                     for (i = 0; i < len && currentInputPointer < input.length(); ) {
                         int c1 = input.codePointAt(parenContent + i);
@@ -3258,7 +3779,8 @@ public class NativeRegExp extends ScriptableObject {
         int i;
         ClassContents classContents = charSet.classContents;
         boolean isCaseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_FOLD) != 0 && (gData.regexp.flags & JSREG_UNICODE) != 0;
+                (gData.regexp.flags & JSREG_FOLD) != 0
+                        && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
         byteLength = (charSet.length + 7) / 8;
         charSet.bits = new byte[byteLength];
 
@@ -3374,12 +3896,17 @@ public class NativeRegExp extends ScriptableObject {
      *   Test the bit - if the ^ flag was specified, non-inclusion is a success
      */
     private static boolean classMatcher(REGlobalData gData, RECharSet charSet, int codePoint) {
-        if (!charSet.converted) {
+        if (!charSet.converted && charSet.classContents.setExpression == null) {
             processCharSet(gData, charSet);
         }
 
+        ClassSetNode setExpression = charSet.classContents.setExpression;
+        if (setExpression != null) {
+            return setExpression.contains(codePoint, (gData.regexp.flags & JSREG_FOLD) != 0);
+        }
         boolean caseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_UNICODE) != 0 && (gData.regexp.flags & JSREG_FOLD) != 0;
+                (gData.regexp.flags & JSREG_UNICODE_MODE) != 0
+                        && (gData.regexp.flags & JSREG_FOLD) != 0;
         boolean sense = charSet.classContents.sense;
 
         if (caseInsensitiveUnicode) {
@@ -3420,10 +3947,11 @@ public class NativeRegExp extends ScriptableObject {
         final int cpToMatch;
         final boolean cpInBounds;
         final boolean isCaseInsensitiveUnicode =
-                (gData.regexp.flags & JSREG_FOLD) != 0 && (gData.regexp.flags & JSREG_UNICODE) != 0;
+                (gData.regexp.flags & JSREG_FOLD) != 0
+                        && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
         boolean prevIsWord, currIsWord;
 
-        if ((gData.regexp.flags & JSREG_UNICODE) != 0 && gData.cp < end) {
+        if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0 && gData.cp < end) {
             if (matchBackward) {
                 if (gData.cp - 2 >= 0
                         && Character.isSurrogatePair(
@@ -3590,7 +4118,7 @@ public class NativeRegExp extends ScriptableObject {
                 if (cpInBounds) {
                     int inputCodePoint;
 
-                    if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                    if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                         inputCodePoint = input.codePointAt(cpToMatch);
                     } else {
                         inputCodePoint = input.charAt(cpToMatch);
@@ -3616,7 +4144,7 @@ public class NativeRegExp extends ScriptableObject {
                 {
                     matchCodePoint = (program[pc++] & 0xFF);
                     if (cpInBounds) {
-                        if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                        if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                             int inputCodePoint = input.codePointAt(cpToMatch);
                             if (unicodeCaseInsensitiveEquals(matchCodePoint, inputCodePoint)) {
                                 result = true;
@@ -3639,7 +4167,7 @@ public class NativeRegExp extends ScriptableObject {
                 if (cpInBounds) {
                     int inputCodePoint;
 
-                    if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                    if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                         inputCodePoint = input.codePointAt(cpToMatch);
                     } else {
                         inputCodePoint = input.charAt(cpToMatch);
@@ -3656,7 +4184,7 @@ public class NativeRegExp extends ScriptableObject {
                     pc += INDEX_LEN;
                     if (cpInBounds) {
                         int inputCodePoint;
-                        if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                        if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                             inputCodePoint = input.codePointAt(cpToMatch);
                             if (unicodeCaseInsensitiveEquals(matchCodePoint, inputCodePoint)) {
                                 result = true;
@@ -3680,7 +4208,7 @@ public class NativeRegExp extends ScriptableObject {
                     pc += INDEX_LEN;
                     if (cpInBounds) {
                         int inputCodePoint =
-                                (gData.regexp.flags & JSREG_UNICODE) != 0
+                                (gData.regexp.flags & JSREG_UNICODE_MODE) != 0
                                         ? input.codePointAt(cpToMatch)
                                         : input.charAt(cpToMatch);
                         if (classMatcher(gData, gData.regexp.classList[index], inputCodePoint)) {
@@ -3797,7 +4325,7 @@ public class NativeRegExp extends ScriptableObject {
                     break;
                 }
 
-                if ((gData.regexp.flags & JSREG_UNICODE) != 0 && gData.cp < end) {
+                if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0 && gData.cp < end) {
                     int toSkip = Character.charCount(input.codePointAt(gData.cp));
                     gData.cp += toSkip;
                     gData.skipped += toSkip;
@@ -4400,7 +4928,7 @@ public class NativeRegExp extends ScriptableObject {
                     }
 
                     int charCount;
-                    if ((gData.regexp.flags & JSREG_UNICODE) != 0) {
+                    if ((gData.regexp.flags & JSREG_UNICODE_MODE) != 0) {
                         int matchCodePoint = input.codePointAt(i);
                         if (matchCodePoint == anchorCodePoint) {
                             break;

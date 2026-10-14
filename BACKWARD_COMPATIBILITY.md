@@ -75,6 +75,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.60 | RegExp flag getters and another realm's RegExp.prototype | `VERSION_ECMASCRIPT` |
 | 1.61 | Array-likes longer than 2^31 - 1 | `VERSION_ECMASCRIPT` |
 | 1.62 | The prototype of objects constructed for a newTarget whose `prototype` is not an object | `VERSION_ECMASCRIPT` |
+| 1.63 | RegExp alternatives in a lookbehind, supplementary characters in an alternative class | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1047,6 +1048,21 @@ Object.getPrototypeOf(Reflect.construct(F, [], nt));           // before: F.prot
   `Error.prototype`), an ordinary object gets `Object.prototype` (before, the constructor's `prototype`), and
   `WeakRef` and `FinalizationRegistry` honor newTarget; each takes the intrinsic of newTarget's realm.
 - **Why:** ECMA-262 2026, §10.1.14 (GetPrototypeFromConstructor).
+
+### 1.63 RegExp alternatives in a lookbehind, supplementary characters in an alternative class
+
+```js
+/(?<=x\d|y\d)z/.exec("y1z");      // before: null   now: ["z"]
+/[\u{1F600}]|a/u.exec("\u{1F600}"); // before: null   now: ["\u{1F600}"]
+```
+
+- In a lookbehind, every alternative is matched backwards (before, the alternatives after the first were matched
+  forwards, and the alternatives starting with a literal were preselected by their first character instead of
+  their last one).
+- With the `u` flag, an alternative that is a class matches a supplementary character (before, the alternation
+  preselected on the first UTF-16 code unit, which the class does not contain).
+- **Why:** ECMA-262 2026, §22.2.2.3 (Disjunction, with direction backward), §22.2.2.7.3 (CharacterSetMatcher,
+  on code points with the `u` flag).
 
 ---
 

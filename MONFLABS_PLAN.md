@@ -41,6 +41,7 @@ existing code and without slowing the engine down.
 | 2026-10-12 | **3.1: async functions reuse the generator machinery**: an async body is compiled like a generator in both backends, `await` is an internal suspension, and a Java driver resumes it from promise reactions on the `Context` microtask queue (no threads; spec tick order). Nashorn's `AsyncSupport` drives the same kind of suspension, but on virtual threads. |
 | 2026-10-12 | 3.4: every agent can block in `Atomics.wait`, the main thread included (as in Nashorn, and as fits a server); the two `CanBlockIsFalse` tests are skipped as written for another host. `Atomics.waitAsync` is deferred to its edition (10.3). |
 | 2026-10-12 | **4.3: Unicode property escapes use the JDK's data only** (as Nashorn): no bundled UCD; `Script_Extensions`, the binary properties the JDK does not carry and the Unicode-version gap of the generated tests are documented limits. |
+| 2026-10-13 | **10.3: host jobs through a pluggable `HostJobScheduler`** on the `Context` (jobs posted from another thread, jobs after a delay): `Atomics.waitAsync` settles its promise through it, and throws a TypeError without one when it would have to wait (as Nashorn with its event loop off). A server plugs its own executor or loop; `EventLoop` is the default implementation (a thread-safe queue and deadlines, run by the Context's thread, no timer thread), used by the test262 runner. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -643,6 +644,16 @@ path). **10.2 RegExp `v` flag** (27%): class set operations, `\q{}`, properties 
 **10.3** `Atomics.waitAsync`. **10.4** Residuals: `Promise.withResolvers`, `Object.groupBy`/`Map.groupBy`,
 `isWellFormed`/`toWellFormed`.
 
+Steps:
+- *10.1 (done earlier)* resizable `ArrayBuffer` and growable `SharedArrayBuffer` already pass (the 45% above
+  predates M5); the remaining failures are immutable-ArrayBuffer tests (out of scope).
+- *10.2 (done)* RegExp `v` flag: the class-set grammar (nested classes, `&&`, `--`, `\q{}` strings, reserved
+  punctuators), parsed into a set expression evaluated per code point (with case folding of each operand under
+  `i`); classes with strings compile to an alternation, longest strings first. Properties of strings
+  (`\p{RGI_Emoji}` and kin) are a SyntaxError: the JDK has no emoji sequence data (decision 4.3), 46 tests.
+  Also fixed (gated): alternatives in a lookbehind, a `u` class in an alternative matching a supplementary
+  character.
+
 ### M11 — ES2025
 
 **11.1 Iterator helpers** (9%): `Iterator` global, `Iterator.from`, lazy `map`/`filter`/`take`/`drop`/`flatMap`,
@@ -724,7 +735,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
 | G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | done        | 96.4% (unchanged)            | 387bb2191 |
 | 9.x  | ES2023 residuals                                | done        | 100% (no change needed)      | (this) |
-| 10.x | ES2024 (resizable buffers, v flag)              | todo        |                              |        |
+| 10.x | ES2024 (resizable buffers, v flag)              | in progress | 96.4% → 96.6% (10.2)         |        |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |
 | 12.x | ES2026                                          | todo        |                              |        |
 | 13   | Long tail to zero                               | todo        |                              |        |

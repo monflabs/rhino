@@ -6,6 +6,26 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### RegExp v flag (2026-10-13, plan 10.2)
+
+- New (`VERSION_ECMASCRIPT`): the RegExp `v` flag (`unicodeSets`), in literals and for the constructor, with
+  `RegExp.prototype.unicodeSets` and `v` in `flags`. Classes take the ES2024 class-set grammar: nested classes,
+  intersection `&&`, difference `--`, string disjunctions `\q{a|bc}`, and the `v`-mode syntax restrictions
+  (reserved double punctuators, syntax characters to escape). A class is a set expression evaluated per code point;
+  under `i` each operand is case folded before the set operations, so a complement differs from `u` mode
+  (`/[^\P{Lowercase}]/vi` matches `"A"`). A class with strings matches them longest first, then its code points.
+  `u` and `v` together are a SyntaxError.
+- Limit: the properties of strings (`\p{RGI_Emoji}`, `Basic_Emoji`, `Emoji_Keycap_Sequence`, ...) are a
+  SyntaxError, as in Nashorn: the JDK carries no emoji sequence data and Unicode data comes from the JDK only
+  (decision 4.3).
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.63): in a lookbehind, every alternative is matched
+  backwards, and alternatives starting with a literal are no longer preselected on their first character; with
+  `u`, a class in an alternative matches a supplementary character (the alternation no longer preselects on one
+  UTF-16 code unit).
+- Tests: `RegExpUnicodeSetsTest`.
+- test262: 41,080 → 41,182 of 42,616 (96.4% → 96.6%); `regexp-v-flag` 27% → 75% (the rest needs emoji sequence
+  data), `built-ins/RegExp/CharacterClassEscapes` passes (the `u` alternation fix).
+
 ### Language residuals, Annex B, generators and realms only under VERSION_ECMASCRIPT (2026-10-13, plan G7)
 
 - `BACKWARD_COMPATIBILITY.md` 2.35-2.46 are gated, with the undocumented changes of the same commits. Under
