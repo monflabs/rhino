@@ -208,10 +208,16 @@ public class ClassDescriptor {
 
     public ScriptableObject populateGlobal(
             Context cx, VarScope scope, ScriptableObject global, boolean sealed) {
-        var objProto = ScriptableObject.getObjectPrototype(scope);
-        global.setPrototype(objProto);
         ScriptableObject.defineProperty(
                 scope, ctorDesc.name.toString(), global, ctorDesc.attributes);
+        return populate(cx, scope, global, sealed);
+    }
+
+    /** Adds the methods and properties of this descriptor to an object, without a global. */
+    public ScriptableObject populate(
+            Context cx, VarScope scope, ScriptableObject global, boolean sealed) {
+        var objProto = ScriptableObject.getObjectPrototype(scope);
+        global.setPrototype(objProto);
         for (var e : ctorDescs) {
             var f = new JSFunction(scope, e.funcDesc, null, Undefined.instance, null);
             f.setStandardPropertyAttributes(e.stdAttrs);
@@ -370,6 +376,7 @@ public class ClassDescriptor {
         private final Props ctorProps;
         private final Props protoProps;
         private final Object name;
+        private boolean primitiveThis;
 
         public Builder(String name) {
             this.name = name;
@@ -736,6 +743,15 @@ public class ClassDescriptor {
             return value(value, DONTENUM | READONLY | PERMANENT);
         }
 
+        /**
+         * The methods added after this call receive a primitive this unchanged from call and apply,
+         * as in the specification, instead of its wrapper object.
+         */
+        Builder withPrimitiveThis() {
+            primitiveThis = true;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         private JSCode<JSFunction> buildOptJSCode(BuiltInJSCodeExec<JSFunction> code) {
             return new BuiltInJSCode(code, (JSCodeResume<JSFunction>) JSCodeResume.NULL_RESUMABLE);
@@ -765,7 +781,10 @@ public class ClassDescriptor {
             builder.paramIsConst = new boolean[length];
             builder.paramIsLexical = new boolean[length];
             builder.paramAndVarCount = length;
-            builder.sourceCodeProvider = BuiltInSourceCodeProvider.INSTANCE;
+            builder.sourceCodeProvider =
+                    primitiveThis
+                            ? BuiltInSourceCodeProvider.PRIMITIVE_THIS
+                            : BuiltInSourceCodeProvider.INSTANCE;
             builder.sourceStart = 0;
             builder.sourceEnd = 0;
 
@@ -816,6 +835,24 @@ public class ClassDescriptor {
                 Object value) {
             return resume.resume(cx, executableObject, state, scope, operation, value);
         }
+    }
+
+    /**
+     * A built-in function that is not a property of a class, such as the function of an accessor;
+     * it receives a primitive this unchanged.
+     */
+    static JSFunction builtInFunction(
+            VarScope scope, String name, int length, BuiltInJSCodeExec<JSFunction> code) {
+        var builder = new Builder(name).withPrimitiveThis();
+        var f =
+                new JSFunction(
+                        scope,
+                        builder.buildDescriptor(name, length, builder.buildOptJSCode(code)),
+                        null,
+                        Undefined.instance,
+                        null);
+        f.setStandardPropertyAttributes(DONTENUM | READONLY);
+        return f;
     }
 
     public static BuiltInJSCodeExec<JSFunction> typeError() {

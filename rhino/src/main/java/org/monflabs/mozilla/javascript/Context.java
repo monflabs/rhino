@@ -175,8 +175,8 @@ public class Context implements Closeable {
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}
-     *       flags, {@code SharedArrayBuffer}, {@code Atomics} and {@code Symbol.asyncIterator};
-     *       {@code await} is a reserved word in the other versions.
+     *       flags, {@code SharedArrayBuffer}, {@code Atomics}, {@code Symbol.asyncIterator} and the
+     *       iterator helpers; {@code await} is a reserved word in the other versions.
      *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
      *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
      *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each
@@ -229,6 +229,9 @@ public class Context implements Closeable {
      *       GetPrototypeFromConstructor uses the intrinsic of the right type and realm.
      *   <li>RegExp: the alternatives of a lookbehind match, and so does a class with supplementary
      *       characters in an alternative of a {@code u} pattern.
+     *   <li>{@code Iterator} is the ES2025 abstract constructor with {@code Iterator.from} and the
+     *       iterator helpers, instead of the {@code Iterator} function of JavaScript 1.7; the
+     *       built-in iterators and generators inherit {@code Iterator.prototype}.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

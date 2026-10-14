@@ -43,10 +43,18 @@ public final class ES6Generator extends ScriptableObject {
     static ScriptableObject init(Context cx, TopLevel scope, boolean sealed) {
 
         NativeObject prototype = new NativeObject();
-        DESCRIPTOR.populateGlobal(cx, scope, prototype, sealed);
+        boolean latest = cx.isLatestEcmaScript();
+        DESCRIPTOR.populateGlobal(cx, scope, prototype, sealed && !latest);
 
         var iterCtor = (JSFunction) scope.get("Iterator", scope);
         prototype.setPrototype((Scriptable) iterCtor.getPrototypeProperty());
+        if (latest) {
+            // @@iterator is inherited from %Iterator.prototype% (27.1.4.13)
+            prototype.delete(SymbolKey.ITERATOR);
+            if (sealed) {
+                prototype.sealObject();
+            }
+        }
 
         // Need to access Generator prototype when constructing
         // Generator instances, but don't have a generator constructor

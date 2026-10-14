@@ -76,6 +76,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.61 | Array-likes longer than 2^31 - 1 | `VERSION_ECMASCRIPT` |
 | 1.62 | The prototype of objects constructed for a newTarget whose `prototype` is not an object | `VERSION_ECMASCRIPT` |
 | 1.63 | RegExp alternatives in a lookbehind, supplementary characters in an alternative class | `VERSION_ECMASCRIPT` |
+| 1.64 | `Iterator` is the ES2025 Iterator, built-in iterators inherit `Iterator.prototype` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1063,6 +1064,29 @@ Object.getPrototypeOf(Reflect.construct(F, [], nt));           // before: F.prot
   preselected on the first UTF-16 code unit, which the class does not contain).
 - **Why:** ECMA-262 2026, §22.2.2.3 (Disjunction, with direction backward), §22.2.2.7.3 (CharacterSetMatcher,
   on code points with the `u` flag).
+
+### 1.64 `Iterator` is the ES2025 Iterator, built-in iterators inherit `Iterator.prototype`
+
+```js
+Iterator(javaList).next();                     // before: the first element   now: TypeError
+new Iterator();                                // before: TypeError           now: TypeError (abstract)
+var p = Object.getPrototypeOf;
+p(p([].values())) === Object.prototype;        // before: true                now: false
+p(p([].values())) === Iterator.prototype;      // before: false               now: true
+[].values().hasOwnProperty(Symbol.iterator);   // unchanged: false
+p([].values()).hasOwnProperty(Symbol.iterator); // before: true               now: false (inherited)
+```
+
+- The global `Iterator` is the abstract constructor of ECMA-262 (`Iterator.from`, the iterator helpers on
+  `Iterator.prototype`), instead of the `Iterator(obj [, keysOnly])` function of JavaScript 1.7, which iterated over
+  the properties of an object or a Java `Iterator`/`Iterable`. `StopIteration` stays. To iterate over a Java
+  collection, use `for-of` or `Iterator.from(javaIterable)`, which also gives it the helpers.
+- The prototypes of the built-in iterators (Array, String, Map, Set, RegExp String, Java iterable and map
+  iterators) and of generators inherit `%Iterator.prototype%` and its `@@iterator`, instead of `Object.prototype`
+  (generators: the `Iterator.prototype` of JavaScript 1.7, with `next` and `__iterator__`); they no longer have an
+  own `@@iterator`.
+- **Why:** ECMA-262 2026, §27.1.3 (the Iterator constructor), §27.1.4 (%Iterator.prototype%), §23.1.5.2,
+  §22.1.5.1, §24.1.5.1, §24.2.6.1, §22.2.9.1, §27.5.1 (the iterator prototypes inherit it).
 
 ---
 

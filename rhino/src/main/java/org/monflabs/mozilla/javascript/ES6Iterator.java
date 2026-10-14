@@ -39,7 +39,18 @@ public abstract class ES6Iterator extends ScriptableObject {
             ScriptableObject obj,
             boolean sealed,
             String name) {
-        var global = desc.populateGlobal(cx, scope, obj, sealed);
+        Scriptable iteratorPrototype = NativeIteratorPrototype.iteratorPrototype(scope);
+        if (iteratorPrototype == null) {
+            scope.associateValue(name, desc.populateGlobal(cx, scope, obj, sealed));
+            return;
+        }
+        // VERSION_ECMASCRIPT: @@iterator is inherited from %Iterator.prototype% (27.1.4.13)
+        var global = desc.populateGlobal(cx, scope, obj, false);
+        global.delete(SymbolKey.ITERATOR);
+        global.setPrototype(iteratorPrototype);
+        if (sealed) {
+            global.sealObject();
+        }
         scope.associateValue(name, global);
     }
 

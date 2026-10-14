@@ -6,6 +6,27 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Iterator helpers (2026-10-14, plan 11.1)
+
+- New (`VERSION_ECMASCRIPT`): the ES2025 `Iterator` global, an abstract constructor (a subclass constructs, `new
+  Iterator()` and `Iterator()` throw), `Iterator.from` (with `%WrapForValidIteratorPrototype%`), and the helpers of
+  `Iterator.prototype`: lazy `map`, `filter`, `take`, `drop`, `flatMap` (Iterator Helper objects, with the generator
+  states: a helper resumed from its own callback is a TypeError, `return()` closes the underlying iterators) and
+  eager `reduce`, `toArray`, `forEach`, `some`, `every`, `find`, with the `constructor` and `@@toStringTag`
+  accessors (SetterThatIgnoresPrototypeProperties). Iterators are closed as the spec says (invalid callback or
+  limit, a callback that throws, `some`/`every`/`find` stopping early, `take` reaching its limit).
+- Changed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.64): the `Iterator` function of JavaScript 1.7 is
+  replaced; the prototypes of the built-in iterators (including the Java iterable and map iterators) and of
+  generators inherit `%Iterator.prototype%` and its `@@iterator` instead of having their own, so every iterator
+  gets the helpers (`Iterator.from(javaList).map(...)` works).
+- Built-ins can opt in to a primitive `this` from `call`/`apply` (`ClassDescriptor.Builder.withPrimitiveThis`);
+  the iterator built-ins do, the other built-ins still get the wrapper object (M13).
+- `ClassDescriptor.populate` fills an intrinsic prototype without defining a global property.
+- Tests: `IteratorHelpersTest` (the gated global, the prototype chains, lazy and eager helpers, iterator closing,
+  `Iterator.from`, subclassing, reentrancy, the accessors, primitive `this`).
+- test262: 41,283 → 41,631 of 42,616 (96.9% → 97.7%); `iterator-helpers` 12.5% → 99.7% (`from/iterable-primitives`
+  needs a getter to see a primitive receiver, M13).
+
 ### Atomics.waitAsync and host job schedulers (2026-10-13, plan 10.3)
 
 - New (`VERSION_ECMASCRIPT`, like `Atomics`): `Atomics.waitAsync`. The result is `{async: false, value:

@@ -114,6 +114,11 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         return descriptor.getSourceProvider() instanceof BuiltInSourceCodeProvider;
     }
 
+    /** Whether this is a built-in that call and apply give a primitive this unchanged. */
+    boolean acceptsPrimitiveThis() {
+        return descriptor.getSourceProvider() == BuiltInSourceCodeProvider.PRIMITIVE_THIS;
+    }
+
     @Override
     public int getArity() {
         return descriptor.getArity();

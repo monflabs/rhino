@@ -3976,7 +3976,8 @@ public class ScriptRuntime {
                 && cx.isLatestEcmaScript()
                 && target instanceof JSFunction
                 && ((JSFunction) target).isStrict()
-                && !((JSFunction) target).isBuiltIn()
+                && (!((JSFunction) target).isBuiltIn()
+                        || ((JSFunction) target).acceptsPrimitiveThis())
                 && !cx.hasFeature(Context.FEATURE_OLD_UNDEF_NULL_THIS)) {
             return arg0;
         }

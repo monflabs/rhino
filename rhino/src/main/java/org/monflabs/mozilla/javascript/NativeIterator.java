@@ -46,8 +46,12 @@ public final class NativeIterator extends ScriptableObject {
     }
 
     static void init(Context cx, TopLevel scope, boolean sealed) {
-        NativeObject proto = new NativeObject();
-        var ctor = DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+        if (cx.isLatestEcmaScript()) {
+            NativeIteratorPrototype.init(cx, scope, sealed);
+        } else {
+            NativeObject proto = new NativeObject();
+            DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+        }
 
         // Generator
         if (cx.getLanguageVersion() >= Context.VERSION_ES6) {

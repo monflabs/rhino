@@ -7,6 +7,9 @@ public class BuiltInSourceCodeProvider implements SourceCodeProvider, Serializab
     private static final long serialVersionUID = 1L;
     public static final BuiltInSourceCodeProvider INSTANCE = new BuiltInSourceCodeProvider();
 
+    /** The provider of the built-ins that call and apply give a primitive this unchanged. */
+    static final BuiltInSourceCodeProvider PRIMITIVE_THIS = new BuiltInSourceCodeProvider();
+
     private BuiltInSourceCodeProvider() {}
 
     @Override
