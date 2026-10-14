@@ -81,7 +81,9 @@ public class NativeObject extends ScriptableObject implements Map {
         builder.withMethod(CTOR, "is", 2, NativeObject::js_is);
         builder.withMethod(CTOR, "groupBy", 2, NativeObject::js_groupBy);
         builder.withMethod(PROTO, "toString", 0, NativeObject::js_toString);
+        builder.withPrimitiveThis(true);
         builder.withMethod(PROTO, "toLocaleString", 0, NativeObject::js_toLocaleString);
+        builder.withPrimitiveThis(false);
         builder.withMethod(PROTO, "__lookupGetter__", 1, NativeObject::js_lookupGetter);
         builder.withMethod(PROTO, "__lookupSetter__", 1, NativeObject::js_lookupSetter);
         builder.withMethod(PROTO, "__defineGetter__", 2, NativeObject::js_defineGetter);
@@ -156,6 +158,15 @@ public class NativeObject extends ScriptableObject implements Map {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         if (thisObj == null) {
             throw ScriptRuntime.notFunctionError(null);
+        }
+        if (cx.isLatestEcmaScript() && !(thisObj instanceof Scriptable)) {
+            // Invoke ( this, "toString" ) on a primitive: it is the receiver
+            Object toString = ScriptRuntime.getV(cx, s, thisObj, "toString");
+            if (!(toString instanceof Callable)) {
+                throw ScriptRuntime.notFunctionError(toString);
+            }
+            return ((Callable) toString)
+                    .call(cx, f.getDeclarationScope(), thisObj, ScriptRuntime.emptyArgs);
         }
         var so = ScriptRuntime.toObject(s, thisObj);
         Object toString = ScriptableObject.getProperty(so, "toString");

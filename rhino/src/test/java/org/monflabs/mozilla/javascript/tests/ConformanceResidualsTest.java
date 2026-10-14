@@ -88,4 +88,22 @@ class ConformanceResidualsTest {
                         + " var { x: z } = { x: 'dz' }; return [o.x, z]; }\n"
                         + "[probeParams(), probeBody(), g(), h()].join('|')");
     }
+
+    @Test
+    void primitiveThis() {
+        Utils.assertGatedBehavior(
+                "object|object|object|object|object|TestString",
+                "boolean|boolean|string|bigint|string|TestString",
+                "'use strict';\n"
+                        + "Boolean.prototype.f = function () { return typeof this; };\n"
+                        + "Boolean.prototype.toString = function () { return typeof this; };\n"
+                        + "var matcher = { [Symbol.match](s) { return typeof s; } };\n"
+                        + "Object.defineProperty(BigInt.prototype, 'toJSON',"
+                        + " { get() { var t = typeof this; return () => t; }, configurable: true });\n"
+                        + "var flat = [1].flatMap(function () { return [typeof this]; }, 's');\n"
+                        + "var r = [true.f(), true.toLocaleString(), ''.match(matcher),"
+                        + " JSON.parse(JSON.stringify(1n)), flat[0],"
+                        + " [1].flatMap(function () { return [this]; }, 'TestString')[0]];\n"
+                        + "r.join('|')");
+    }
 }

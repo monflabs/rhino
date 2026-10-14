@@ -444,7 +444,20 @@ final class NativeIteratorPrototype {
         if (!ScriptRuntime.isObject(obj) && !(iterateStrings && obj instanceof CharSequence)) {
             throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(obj));
         }
-        Callable method = ScriptRuntime.getMethod(cx, s, obj, SymbolKey.ITERATOR);
+        Callable method;
+        if (obj instanceof CharSequence) {
+            // GetMethod ( obj, @@iterator ): a getter receives the string itself
+            Object m = ScriptRuntime.getV(cx, s, obj, SymbolKey.ITERATOR);
+            if (m == null || Undefined.isUndefined(m)) {
+                method = null;
+            } else if (m instanceof Callable) {
+                method = (Callable) m;
+            } else {
+                throw ScriptRuntime.notFunctionError(m);
+            }
+        } else {
+            method = ScriptRuntime.getMethod(cx, s, obj, SymbolKey.ITERATOR);
+        }
         Object iterator = method == null ? obj : method.call(cx, s, obj, ScriptRuntime.emptyArgs);
         if (!ScriptRuntime.isObject(iterator)) {
             throw ScriptRuntime.typeErrorById("msg.iterator.not.object", "[Symbol.iterator]");

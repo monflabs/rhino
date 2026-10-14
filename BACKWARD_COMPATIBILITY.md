@@ -81,6 +81,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.66 | Functions have no `arity` property | `VERSION_ECMASCRIPT` |
 | 1.67 | A yield expression in arrow parameters is an early error | `VERSION_ECMASCRIPT` |
 | 1.68 | Closures in parameter expressions do not see the `var` declarations of the body | `VERSION_ECMASCRIPT` |
+| 1.69 | Strict methods called on a primitive receive the primitive as `this` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1144,6 +1145,26 @@ f();   // before: "inside"   now: "outside"
   the function. Not applied when the body uses a direct `eval` or `with`, which keep the former behavior.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, step 28: a separate var environment when
   hasParameterExpressions is true).
+
+### 1.69 Strict methods called on a primitive receive the primitive as `this`
+
+```js
+"use strict";
+Boolean.prototype.f = function () { return typeof this; };
+true.f();                                   // before: "object"   now: "boolean"
+[1].flatMap(function () { return this; }, "s"); // before: [String object]   now: ["s"]
+```
+
+- A strict function called as a method of a primitive (`p.m()`, `p[k]()`) gets the primitive as `this`, as do
+  the built-ins that take a primitive this: `Object.prototype.toLocaleString` (which calls `toString` on the
+  primitive), the String methods that hand the string to a custom matcher (`match`, `matchAll`, `search`,
+  `replace`, `replaceAll`, `split`), `isWellFormed`, `toWellFormed`, the RegExp `@@matchAll` and `@@split` methods
+  and `Date.prototype[@@toPrimitive]` (also through `call`/`apply`, which now reject a non-object `this` where the
+  spec requires one). `flatMap` passes its `thisArg` unchanged; `JSON.stringify` calls the `toJSON` of a BigInt with
+  the bigint as `this`, and `Iterator.from` reads `@@iterator` of a string with the string as the receiver.
+- A sloppy function still gets a wrapper object. Getters read on a primitive still get the wrapper.
+- **Why:** ECMA-262 2026, §10.2.1.2 (OrdinaryCallBindThis: the this of a strict function is not converted),
+  §7.3.3 (GetV), §7.3.22 (Invoke).
 
 ---
 

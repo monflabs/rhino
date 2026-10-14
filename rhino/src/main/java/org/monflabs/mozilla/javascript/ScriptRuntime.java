@@ -3621,7 +3621,7 @@ public class ScriptRuntime {
             }
         }
 
-        return new LookupResult(value, thisObj, elem.toString());
+        return new LookupResult(primitiveThisMethod(cx, obj, value), thisObj, elem.toString());
     }
 
     /**
@@ -3758,7 +3758,44 @@ public class ScriptRuntime {
                         || Undefined.isUndefined(value))) {
             return null;
         }
-        return new LookupResult(value, thisObj, property);
+        return new LookupResult(primitiveThisMethod(cx, obj, value), thisObj, property);
+    }
+
+    /**
+     * The method of a call on a primitive (p.m()), wrapped to receive the primitive as this when it
+     * is a strict function or a built-in that accepts a primitive this (OrdinaryCallBindThis).
+     */
+    private static Object primitiveThisMethod(Context cx, Object obj, Object value) {
+        if (obj instanceof Scriptable
+                || obj == null
+                || Undefined.isUndefined(obj)
+                || !(value instanceof JSFunction)
+                || !cx.isLatestEcmaScript()) {
+            return value;
+        }
+        JSFunction f = (JSFunction) value;
+        if (!f.isStrict() || (f.isBuiltIn() && !f.acceptsPrimitiveThis())) {
+            return value;
+        }
+        return new PrimitiveThisCall(f, obj);
+    }
+
+    /** A call with a primitive this, whatever this the caller passes. */
+    private static final class PrimitiveThisCall implements Callable, Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final Callable target;
+        private final Object thisValue;
+
+        PrimitiveThisCall(Callable target, Object thisValue) {
+            this.target = target;
+            this.thisValue = thisValue;
+        }
+
+        @Override
+        public Object call(Context cx, VarScope scope, Object thisObj, Object[] args) {
+            return target.call(cx, scope, thisValue, args);
+        }
     }
 
     /**
@@ -6103,6 +6140,34 @@ public class ScriptRuntime {
             catchScope.associateValue(t, obj);
         }
         return catchScope;
+    }
+
+    /**
+     * GetV ( V, P ) (ECMA-262 7.3.3) for a primitive V: the property of its wrapper object, with V
+     * itself as the receiver of a getter. A proxy on the prototype chain gets the wrapper.
+     */
+    static Object getV(Context cx, VarScope scope, Object value, Object key) {
+        Scriptable wrapper = toObject(cx, scope, value);
+        for (Scriptable o = wrapper; o != null; o = o.getPrototype()) {
+            if (!(o instanceof ScriptableObject) || o instanceof NativeProxy) {
+                Object v =
+                        key instanceof Symbol
+                                ? ScriptableObject.getProperty(o, (Symbol) key)
+                                : ScriptableObject.getProperty(o, (String) key);
+                return v == Scriptable.NOT_FOUND ? Undefined.instance : v;
+            }
+            ScriptableObject.DescriptorInfo desc =
+                    ((ScriptableObject) o).getOwnPropertyDescriptor(cx, key);
+            if (desc != null) {
+                if (desc.isAccessorDescriptor()) {
+                    return desc.getter instanceof Callable
+                            ? ((Callable) desc.getter).call(cx, scope, value, emptyArgs)
+                            : Undefined.instance;
+                }
+                return desc.value == Scriptable.NOT_FOUND ? Undefined.instance : desc.value;
+            }
+        }
+        return Undefined.instance;
     }
 
     /**

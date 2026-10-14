@@ -434,6 +434,20 @@ public final class NativeJSON extends ScriptableObject {
                                     keyString == null ? Integer.toString(keyInt) : keyString
                                 });
             }
+        } else if (value instanceof BigInteger && es6) {
+            // GetV ( value, "toJSON" ) and Invoke: the receiver is the bigint
+            Object toJSON = ScriptRuntime.getV(state.cx, state.scope, value, "toJSON");
+            if (toJSON instanceof Callable) {
+                value =
+                        ((Callable) toJSON)
+                                .call(
+                                        state.cx,
+                                        state.scope,
+                                        value,
+                                        new Object[] {
+                                            keyString == null ? Integer.toString(keyInt) : keyString
+                                        });
+            }
         } else if (value instanceof BigInteger) {
             Scriptable bigInt = ScriptRuntime.toObject(state.cx, state.scope, value);
             if (hasProperty(bigInt, "toJSON")) {

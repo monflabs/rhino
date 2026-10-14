@@ -104,7 +104,9 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "charCodeAt", 1, NativeString::js_charCodeAt)
                         .withMethod(PROTO, "indexOf", 1, NativeString::js_indexOf)
                         .withMethod(PROTO, "lastIndexOf", 1, NativeString::js_lastIndexOf)
+                        .withPrimitiveThis(true)
                         .withMethod(PROTO, "split", 2, NativeString::js_split)
+                        .withPrimitiveThis(false)
                         .withMethod(PROTO, "substring", 2, NativeString::js_substring)
                         .withMethod(PROTO, "toLowerCase", 0, NativeString::js_toLowerCase)
                         .withMethod(PROTO, "toUpperCase", 0, NativeString::js_toUpperCase)
@@ -126,11 +128,14 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "anchor", htmlLength, NativeString::js_anchor)
                         .withMethod(PROTO, "equals", 1, NativeString::js_equals)
                         .withMethod(PROTO, "equalsIgnoreCase", 1, NativeString::js_equalsIgnoreCase)
+                        // the custom matchers of the Symbol methods get the string itself
+                        .withPrimitiveThis(true)
                         .withMethod(PROTO, "match", 1, NativeString::js_match)
                         .withMethod(PROTO, "matchAll", 1, NativeString::js_matchAll)
                         .withMethod(PROTO, "search", 1, NativeString::js_search)
                         .withMethod(PROTO, "replace", 2, NativeString::js_replace)
                         .withMethod(PROTO, "replaceAll", 2, NativeString::js_replaceAll)
+                        .withPrimitiveThis(false)
                         .withMethod(PROTO, "at", 1, NativeString::js_at)
                         .withMethod(PROTO, "localeCompare", 1, NativeString::js_localeCompare)
                         .withMethod(
@@ -157,8 +162,10 @@ final class NativeString extends ScriptableObject {
                 .withMethod(PROTO, "codePointAt", 1, NativeString::js_codePointAt)
                 .withMethod(PROTO, "padStart", 1, NativeString::js_padStart)
                 .withMethod(PROTO, "padEnd", 1, NativeString::js_padEnd)
+                .withPrimitiveThis(true)
                 .withMethod(PROTO, "isWellFormed", 0, NativeString::js_isWellFormed)
                 .withMethod(PROTO, "toWellFormed", 0, NativeString::js_toWellFormed)
+                .withPrimitiveThis(false)
                 .build();
     }
 

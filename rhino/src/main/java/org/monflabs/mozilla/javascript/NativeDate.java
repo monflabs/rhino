@@ -100,6 +100,7 @@ final class NativeDate extends ScriptableObject {
                         .withMethod(PROTO, "setYear", 1, NativeDate::js_setYear)
                         .withMethod(PROTO, "toISOString", 0, NativeDate::js_toISOString)
                         .withMethod(PROTO, "toJSON", 1, NativeDate::js_toJSON)
+                        .withPrimitiveThis(true)
                         .withMethod(
                                 PROTO,
                                 SymbolKey.TO_PRIMITIVE,

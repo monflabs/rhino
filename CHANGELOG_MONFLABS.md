@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Primitive this of strict methods and built-ins (2026-10-14, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.69): a method call on a primitive hands the
+  primitive as `this` to a strict function, or to a built-in that takes it (the lookup wraps the method in a call
+  that binds the primitive; no backend change): `Object.prototype.toLocaleString`, the String matcher methods,
+  `isWellFormed`/`toWellFormed`, RegExp `@@matchAll`/`@@split`, `Date.prototype[@@toPrimitive]`. `flatMap` passes
+  its `thisArg` unchanged, and `ScriptRuntime.getV` (GetV with a primitive receiver) serves `JSON.stringify` (the
+  `toJSON` of a BigInt) and `Iterator.from` (`@@iterator` of a string).
+- `ClassDescriptor.Builder.withPrimitiveThis(boolean)` opts methods in and out.
+- Tests: `ConformanceResidualsTest.primitiveThis`.
+- test262: 42,138 → 42,154 of 42,616.
+
 ### Parameter closures and the body's var declarations (2026-10-14, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.68): with parameter expressions, the `var` bindings of a

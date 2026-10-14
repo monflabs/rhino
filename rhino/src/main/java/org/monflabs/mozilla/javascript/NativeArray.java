@@ -2560,7 +2560,7 @@ public class NativeArray extends ScriptableObject implements List {
             long start,
             double depth,
             Function mapper,
-            Scriptable thisArg) {
+            Object thisArg) {
         long targetIndex = start;
         for (long i = 0; i < sourceLen; i++) {
             Object element = getElemIfPresent(cx, source, i);
@@ -2604,12 +2604,11 @@ public class NativeArray extends ScriptableObject implements List {
 
         Function cbf = ArrayLikeAbstractOperations.getCallbackArg(cx, callbackArg);
         VarScope parent = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
-        Scriptable thisArg;
-        if (args.length < 2 || args[1] == null || args[1] == Undefined.instance) {
-            thisArg = Undefined.SCRIPTABLE_UNDEFINED;
-        } else {
-            thisArg = ScriptRuntime.toObject(cx, s, args[1]);
-        }
+        // the callback gets thisArg as is: a sloppy one converts it
+        Object thisArg =
+                args.length < 2 || Undefined.isUndefined(args[1])
+                        ? Undefined.SCRIPTABLE_UNDEFINED
+                        : args[1];
 
         Scriptable result = ArrayLikeAbstractOperations.arraySpeciesCreate(cx, s, o, 0);
         flattenIntoArray(cx, parent, result, o, length, 0, 1, cbf, thisArg);

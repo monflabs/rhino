@@ -747,8 +747,13 @@ public class ClassDescriptor {
          * The methods added after this call receive a primitive this unchanged from call and apply,
          * as in the specification, instead of its wrapper object.
          */
-        Builder withPrimitiveThis() {
-            primitiveThis = true;
+        public Builder withPrimitiveThis() {
+            return withPrimitiveThis(true);
+        }
+
+        /** Whether the methods added after this call receive a primitive this unchanged. */
+        public Builder withPrimitiveThis(boolean on) {
+            primitiveThis = on;
             return this;
         }
 
