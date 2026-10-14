@@ -177,7 +177,9 @@ public class Context implements Closeable {
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}
      *       flags, RegExp modifiers and {@code RegExp.escape}, {@code SharedArrayBuffer}, {@code
      *       Atomics}, {@code Symbol.asyncIterator}, the iterator helpers, import attributes and
-     *       JSON modules; {@code await} is a reserved word in the other versions.
+     *       JSON modules, {@code Math.sumPrecise}, the {@code Map}/{@code WeakMap} {@code
+     *       getOrInsert} methods and the {@code Uint8Array} base64 and hex methods; {@code await}
+     *       is a reserved word in the other versions.
      *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
      *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
      *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each

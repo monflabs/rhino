@@ -44,6 +44,7 @@ existing code and without slowing the engine down.
 | 2026-10-13 | **10.3: host jobs through a pluggable `HostJobScheduler`** on the `Context` (jobs posted from another thread, jobs after a delay): `Atomics.waitAsync` settles its promise through it, and throws a TypeError without one when it would have to wait (as Nashorn with its event loop off). A server plugs its own executor or loop; `EventLoop` is the default implementation (a thread-safe queue and deadlines, run by the Context's thread, no timer thread), used by the test262 runner. |
 | 2026-10-14 | **11.1: under `VERSION_ECMASCRIPT` the global `Iterator` is the ES2025 constructor** (as in Nashorn): the `Iterator` function of JavaScript 1.7 cannot coexist with it (calling the ES2025 one throws), so it stays for the other versions only; Java collections iterate with `for-of` or `Iterator.from`. Built-ins can opt in to a primitive `this` from `call`/`apply` (`ClassDescriptor.Builder.withPrimitiveThis`), used by the iterator built-ins, whose `this-non-object` tests passed before by accident; making it the default for every built-in is left to M13. |
 | 2026-10-14 | **11.6: JSON modules are built by the engine** (as in Nashorn): the `ModuleLoader` API is unchanged and loaders return the text as before; an import with `type: "json"` parses that text as JSON into a module whose `default` export is the value, registered apart from the same module imported as JavaScript; another `type` is a TypeError. Unlike Nashorn, this works with every loader of the chain. |
+| 2026-10-14 | **12.2: `Math.sumPrecise` uses Shewchuk's algorithm** (the proposal polyfill's, with its overflow handling), not Nashorn's `BigDecimal`: measured equal on 300,000 random and edge cases and 18 times faster on usual values (2.7 times on the whole exponent range). |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -751,7 +752,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 9.x  | ES2023 residuals                                | done        | 100% (no change needed)      | (this) |
 | 10.x | ES2024 (resizable buffers, v flag)              | done        | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
-| 12.x | ES2026                                          | todo        |                              |        |
+| 12.x | ES2026                                          | in progress | 98.1% → 98.5% (12.1–12.5)    |        |
 | 13   | Long tail to zero                               | todo        |                              |        |
 | 14   | Performance pass                                | continuous  |                              |        |
 | 15   | Single language version                         | todo        |                              |        |

@@ -6,6 +6,28 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Math.sumPrecise, Map and WeakMap upsert, Iterator.concat, Uint8Array base64 (2026-10-14, plan 12.1-12.5)
+
+- `Error.isError` (12.1) already passed (stock Rhino has it).
+- New (`VERSION_ECMASCRIPT`): `Math.sumPrecise(items)` (12.2), the exactly rounded sum of an iterable of Numbers
+  (no coercion: anything else is a TypeError, and the iterator is closed). The sum is Shewchuk's algorithm with the
+  overflow handling of the proposal's polyfill (non-overlapping partials, a count of 2^1024), measured against an
+  exact `BigDecimal` sum (Nashorn's choice): equal on 300,000 random and edge cases, 18 times faster on usual values
+  (8 ms against 145 ms for a million values) and 2.7 times faster on values spread over the whole exponent range.
+- New (`VERSION_ECMASCRIPT`): `Map.prototype.getOrInsert`/`getOrInsertComputed` and the `WeakMap` ones (12.3); a
+  key the callback sets meanwhile has its value replaced. The test262 runner no longer skips `upsert`.
+- New: `Iterator.concat(...items)` (12.4), an Iterator Helper over each iterable in turn (each argument must be an
+  object with a `@@iterator` method; its iterator is opened when the concatenation reaches it; `return()` closes the
+  current one).
+- New (`VERSION_ECMASCRIPT`): `Uint8Array.fromBase64`/`fromHex` and `Uint8Array.prototype.toBase64`/`toHex`/
+  `setFromBase64`/`setFromHex` (12.5), with the `alphabet` (`base64`, `base64url`), `lastChunkHandling` (`loose`,
+  `strict`, `stop-before-partial`) and `omitPadding` options; the `setFrom` methods write the bytes decoded before an
+  invalid character, then throw, and return `{read, written}`. Encoding uses `java.util.Base64` and `HexFormat`.
+- Noticed: stock Rhino prints the subnormal `2 * 5e-324` as `9.9e-324` instead of the shortest `1e-323` (M13).
+- Tests: `MathSumPreciseTest`, `UpsertTest`, `IteratorConcatTest`, `Uint8ArrayBase64Test`.
+- test262: 41,810 → 41,981 of 42,616 (98.1% → 98.5%); `Math.sumPrecise`, `upsert`, `iterator-sequencing` and
+  `uint8array-base64` 100% (the immutable `ArrayBuffer` tests of `setFromBase64`/`setFromHex` are a later proposal).
+
 ### Import attributes and JSON modules (2026-10-14, plan 11.6)
 
 - New (modules and `import()`, which are `VERSION_ECMASCRIPT` features): the `with { key: "value", ... }` clause

@@ -41,6 +41,12 @@ public class NativeWeakMap extends ScriptableObject {
                         .withMethod(PROTO, "delete", 1, NativeWeakMap::js_delete)
                         .withMethod(PROTO, "get", 1, NativeWeakMap::js_get)
                         .withMethod(PROTO, "has", 1, NativeWeakMap::js_has)
+                        .withMethod(PROTO, "getOrInsert", 2, NativeWeakMap::js_getOrInsert)
+                        .withMethod(
+                                PROTO,
+                                "getOrInsertComputed",
+                                2,
+                                NativeWeakMap::js_getOrInsertComputed)
                         .withProp(
                                 PROTO,
                                 SymbolKey.TO_STRING_TAG,
@@ -56,7 +62,18 @@ public class NativeWeakMap extends ScriptableObject {
     private static final Object NULL_VALUE = new Object();
 
     static Object init(Context cx, VarScope scope, boolean sealed) {
-        return DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), sealed);
+        NativeObject proto = new NativeObject();
+        return DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                proto,
+                sealed,
+                (c, ctor) -> {
+                    if (!c.isLatestEcmaScript()) {
+                        proto.delete("getOrInsert");
+                        proto.delete("getOrInsertComputed");
+                    }
+                });
     }
 
     @Override
@@ -115,6 +132,44 @@ public class NativeWeakMap extends ScriptableObject {
             return Boolean.FALSE;
         }
         return map.containsKey(key);
+    }
+
+    /** WeakMap.prototype.getOrInsert ( key, value ) (24.3.3.4). */
+    private static Object js_getOrInsert(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeWeakMap weakMap = realThis(thisObj, "getOrInsert");
+        Object key = NativeMap.key(args);
+        if (!isValidKey(key)) {
+            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(key));
+        }
+        if (weakMap.map.containsKey(key)) {
+            return weakMap.js_get(key);
+        }
+        Object value = args.length > 1 ? args[1] : Undefined.instance;
+        weakMap.js_set(key, value);
+        return value;
+    }
+
+    /** WeakMap.prototype.getOrInsertComputed ( key, callbackfn ) (24.3.3.5). */
+    private static Object js_getOrInsertComputed(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeWeakMap weakMap = realThis(thisObj, "getOrInsertComputed");
+        Object callback = args.length > 1 ? args[1] : Undefined.instance;
+        if (!(callback instanceof Callable)) {
+            throw ScriptRuntime.notFunctionError(callback);
+        }
+        Object key = NativeMap.key(args);
+        if (!isValidKey(key)) {
+            throw ScriptRuntime.typeErrorById("msg.arg.not.object", ScriptRuntime.typeof(key));
+        }
+        if (weakMap.map.containsKey(key)) {
+            return weakMap.js_get(key);
+        }
+        Object value =
+                ((Callable) callback)
+                        .call(cx, s, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {key});
+        weakMap.js_set(key, value);
+        return value;
     }
 
     private static Object js_set(

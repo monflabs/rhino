@@ -36,6 +36,9 @@ public class NativeMap extends ScriptableObject {
                         .withMethod(PROTO, "delete", 1, NativeMap::js_delete)
                         .withMethod(PROTO, "get", 1, NativeMap::js_get)
                         .withMethod(PROTO, "has", 1, NativeMap::js_has)
+                        .withMethod(PROTO, "getOrInsert", 2, NativeMap::js_getOrInsert)
+                        .withMethod(
+                                PROTO, "getOrInsertComputed", 2, NativeMap::js_getOrInsertComputed)
                         .withMethod(PROTO, "clear", 0, NativeMap::js_clear)
                         .withMethod(PROTO, "keys", 0, NativeMap::js_keys)
                         .withMethod(PROTO, "values", 0, NativeMap::js_values)
@@ -76,6 +79,8 @@ public class NativeMap extends ScriptableObject {
                 sealed,
                 (c, ctor) -> {
                     if (!c.isLatestEcmaScript()) {
+                        proto.delete("getOrInsert");
+                        proto.delete("getOrInsertComputed");
                         // the internal accessor of stock Rhino, before VERSION_ECMASCRIPT
                         proto.defineProperty(
                                 c,
@@ -170,6 +175,51 @@ public class NativeMap extends ScriptableObject {
     private static Object js_has(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         return realThis(thisObj, "has").js_has(key(args));
+    }
+
+    /** Map.prototype.getOrInsert ( key, value ) (24.1.3.8). */
+    private static Object js_getOrInsert(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeMap map = realThis(thisObj, "getOrInsert");
+        Object key = canonicalKey(key(args));
+        Hashtable.Entry entry = map.entries.getEntry(key);
+        if (entry != null) {
+            return entry.value;
+        }
+        Object value = args.length > 1 ? args[1] : Undefined.instance;
+        map.entries.put(key, value);
+        return value;
+    }
+
+    /**
+     * Map.prototype.getOrInsertComputed ( key, callbackfn ) (24.1.3.9): the callback may have set
+     * the key, whose value is then replaced.
+     */
+    private static Object js_getOrInsertComputed(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        NativeMap map = realThis(thisObj, "getOrInsertComputed");
+        Object callback = args.length > 1 ? args[1] : Undefined.instance;
+        if (!(callback instanceof Callable)) {
+            throw ScriptRuntime.notFunctionError(callback);
+        }
+        Object key = canonicalKey(key(args));
+        Hashtable.Entry entry = map.entries.getEntry(key);
+        if (entry != null) {
+            return entry.value;
+        }
+        Object value =
+                ((Callable) callback)
+                        .call(cx, s, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {key});
+        map.entries.put(key, value);
+        return value;
+    }
+
+    /** CanonicalizeKeyedCollectionKey ( key ) (24.5.1): -0 is +0. */
+    private static Object canonicalKey(Object key) {
+        if ((key instanceof Number) && ((Number) key).doubleValue() == ScriptRuntime.negativeZero) {
+            return ScriptRuntime.zeroObj;
+        }
+        return key;
     }
 
     private Object js_has(Object arg) {

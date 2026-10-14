@@ -32,6 +32,7 @@ final class NativeIteratorPrototype {
                             NativeIteratorPrototype::js_constructor)
                     .withPrimitiveThis()
                     .withMethod(CTOR, "from", 1, NativeIteratorPrototype::js_from)
+                    .withMethod(CTOR, "concat", 0, NativeIteratorPrototype::js_concat)
                     .withMethod(PROTO, "map", 1, NativeIteratorPrototype::js_map)
                     .withMethod(PROTO, "filter", 1, NativeIteratorPrototype::js_filter)
                     .withMethod(PROTO, "take", 1, NativeIteratorPrototype::js_take)
@@ -164,6 +165,27 @@ final class NativeIteratorPrototype {
             }
         }
         return new WrapForValidIterator(record, s);
+    }
+
+    /**
+     * Iterator.concat ( ...items ) (27.1.3.2.1): the items are checked now, each iterator is opened
+     * when the concatenation reaches it.
+     */
+    private static Object js_concat(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        Callable[] methods = new Callable[args.length];
+        for (int i = 0; i < args.length; i++) {
+            if (!ScriptRuntime.isObject(args[i])) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.arg.not.object", ScriptRuntime.typeof(args[i]));
+            }
+            methods[i] = ScriptRuntime.getMethod(cx, s, args[i], SymbolKey.ITERATOR);
+            if (methods[i] == null) {
+                throw ScriptRuntime.typeErrorById(
+                        "msg.not.iterable", ScriptRuntime.toString(args[i]));
+            }
+        }
+        return NativeIteratorHelper.concat(s, args.clone(), methods);
     }
 
     /** A Wrap for Valid Iterator object, which Iterator.from returns (27.1.3.2.1.1). */

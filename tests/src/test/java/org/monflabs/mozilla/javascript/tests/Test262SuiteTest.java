@@ -173,7 +173,6 @@ public class Test262SuiteTest {
                             "import-text",
                             "import-bytes",
                             "Temporal",
-                            "upsert",
                             "u180e"));
 
     static {

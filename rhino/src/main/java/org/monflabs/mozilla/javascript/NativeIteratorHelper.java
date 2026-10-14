@@ -40,7 +40,8 @@ final class NativeIteratorHelper extends ScriptableObject {
         FILTER,
         TAKE,
         DROP,
-        FLAT_MAP
+        FLAT_MAP,
+        CONCAT
     }
 
     private enum State {
@@ -64,6 +65,12 @@ final class NativeIteratorHelper extends ScriptableObject {
 
     private State state = State.SUSPENDED_START;
 
+    /** The iterables of Iterator.concat, their @@iterator methods, and the next one to open. */
+    private Object[] concatItems;
+
+    private Callable[] concatMethods;
+    private int concatIndex;
+
     NativeIteratorHelper(
             VarScope scope,
             Kind kind,
@@ -77,6 +84,16 @@ final class NativeIteratorHelper extends ScriptableObject {
         TopLevel top = ScriptableObject.getTopLevelScope(scope);
         setParentScope(top);
         setPrototype((Scriptable) ScriptableObject.getTopScopeValue(top, TAG));
+    }
+
+    /**
+     * The Iterator Helper of Iterator.concat, which has no underlying iterator before it starts.
+     */
+    static NativeIteratorHelper concat(VarScope scope, Object[] items, Callable[] methods) {
+        NativeIteratorHelper helper = new NativeIteratorHelper(scope, Kind.CONCAT, null, null, 0);
+        helper.concatItems = items;
+        helper.concatMethods = methods;
+        return helper;
     }
 
     /** Creates %IteratorHelperPrototype% (27.1.2.1), after %Iterator.prototype%. */
@@ -136,11 +153,15 @@ final class NativeIteratorHelper extends ScriptableObject {
                     try {
                         NativeIteratorPrototype.close(cx, s, helper.inner.iterator);
                     } catch (RhinoException e) {
-                        NativeIteratorPrototype.closeOnThrow(cx, s, helper.iterated.iterator);
+                        if (helper.iterated != null) {
+                            NativeIteratorPrototype.closeOnThrow(cx, s, helper.iterated.iterator);
+                        }
                         throw e;
                     }
                 }
-                NativeIteratorPrototype.close(cx, s, helper.iterated.iterator);
+                if (helper.iterated != null) {
+                    NativeIteratorPrototype.close(cx, s, helper.iterated.iterator);
+                }
             } finally {
                 helper.state = State.COMPLETED;
             }
@@ -207,8 +228,34 @@ final class NativeIteratorHelper extends ScriptableObject {
                 }
             case FLAT_MAP:
                 return resumeFlatMap(cx, s);
+            case CONCAT:
+                return resumeConcat(cx, s);
             default:
                 throw new IllegalStateException(kind.toString());
+        }
+    }
+
+    /** The closure of Iterator.concat (27.1.3.2.1): the values of each iterable in turn. */
+    private Object resumeConcat(Context cx, VarScope s) {
+        for (; ; ) {
+            if (inner == null) {
+                if (concatIndex == concatItems.length) {
+                    return DONE;
+                }
+                Object item = concatItems[concatIndex];
+                Object iterator =
+                        concatMethods[concatIndex++].call(cx, s, item, ScriptRuntime.emptyArgs);
+                if (!ScriptRuntime.isObject(iterator)) {
+                    throw ScriptRuntime.typeErrorById(
+                            "msg.iterator.not.object", "[Symbol.iterator]");
+                }
+                inner = NativeIteratorPrototype.getIteratorDirect((Scriptable) iterator);
+            }
+            Scriptable r = NativeIteratorPrototype.step(cx, s, inner);
+            if (r != null) {
+                return NativeIteratorPrototype.value(r);
+            }
+            inner = null;
         }
     }
 
