@@ -241,6 +241,7 @@ public class Context implements Closeable {
      *       {@code Proxy.revocable} is not a constructor.
      *   <li>Functions have no {@code arity} property (JavaScript 1.2); use {@code length}.
      *   <li>A {@code yield} expression in the parameters of an arrow function is an early error.
+     *   <li>Closures in parameter expressions do not see the {@code var} declarations of the body.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

@@ -71,4 +71,21 @@ class ConformanceResidualsTest {
                 "SyntaxError",
                 "try { eval('function *g() { (x = yield) => {}; }'); 'ok' } catch (e) { e.name }");
     }
+
+    @Test
+    void parameterClosuresDoNotSeeBodyVars() {
+        Utils.assertGatedBehavior(
+                "inside|inside|1,1,1|inside,dz",
+                "outside|inside|1,1,1|inside,dz",
+                "var x = 'outside', probeParams, probeBody;\n"
+                        + "function f(_ = probeParams = function () { return x; }) {\n"
+                        + "  var x = 'inside'; probeBody = function () { return x; };\n"
+                        + "}\n"
+                        + "f();\n"
+                        + "function g(a = () => x) { var x = 1;"
+                        + " return [x, (function () { return x; })(), (() => x)()]; }\n"
+                        + "function h(a = () => x) { var x = 'inside', o = { x: x };"
+                        + " var { x: z } = { x: 'dz' }; return [o.x, z]; }\n"
+                        + "[probeParams(), probeBody(), g(), h()].join('|')");
+    }
 }

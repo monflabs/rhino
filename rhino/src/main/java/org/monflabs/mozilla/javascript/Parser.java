@@ -648,6 +648,118 @@ public class Parser {
                 });
     }
 
+    /**
+     * With parameter expressions, the body of a function has its own var environment, which the
+     * closures created by the parameters do not see (FunctionDeclarationInstantiation, step 28):
+     * the var bindings of the body that such a closure names are renamed, so that the closure
+     * resolves the name outside the function. Not done when the body may look names up dynamically
+     * (eval, with).
+     */
+    private void separateBodyVars(FunctionNode fnNode) {
+        if (!compilerEnv.isLatestEcmaScript() || fnNode.getSymbolTable() == null) {
+            return;
+        }
+        List<AstNode> paramExpressions = new ArrayList<>();
+        if (fnNode.getDefaultParams() != null) {
+            for (Object o : fnNode.getDefaultParams()) {
+                if (o instanceof AstNode) {
+                    paramExpressions.add((AstNode) o);
+                }
+            }
+        }
+        for (AstNode param : fnNode.getParams()) {
+            if (!(param instanceof Name)) {
+                paramExpressions.add(param);
+            }
+        }
+        Set<String> closureNames = new HashSet<>();
+        for (AstNode expression : paramExpressions) {
+            expression.visit(
+                    node -> {
+                        if (node instanceof FunctionNode) {
+                            node.visit(
+                                    inner -> {
+                                        if (inner instanceof Name) {
+                                            closureNames.add(((Name) inner).getIdentifier());
+                                        }
+                                        return true;
+                                    });
+                            return false;
+                        }
+                        return true;
+                    });
+        }
+        Set<String> renamed = new HashSet<>();
+        for (Symbol symbol : fnNode.getSymbolTable().values()) {
+            if (symbol.getDeclType() == Symbol.Type.VAR
+                    && closureNames.contains(symbol.getName())
+                    && !"arguments".equals(symbol.getName())) {
+                renamed.add(symbol.getName());
+            }
+        }
+        if (renamed.isEmpty() || mayLookUpNamesDynamically(fnNode.getBody())) {
+            return;
+        }
+        List<Name> uses = new ArrayList<>();
+        fnNode.getBody()
+                .visit(
+                        node -> {
+                            if (node instanceof Name
+                                    && renamed.contains(((Name) node).getIdentifier())
+                                    && !isPropertyName((Name) node)
+                                    && definingScope((Name) node) == fnNode) {
+                                uses.add((Name) node);
+                            }
+                            return true;
+                        });
+        for (String name : renamed) {
+            Symbol symbol = fnNode.getSymbolTable().remove(name);
+            symbol.setName(name + "$body");
+            fnNode.getSymbolTable().put(symbol.getName(), symbol);
+        }
+        for (Name use : uses) {
+            use.setIdentifier(use.getIdentifier() + "$body");
+        }
+    }
+
+    /** The innermost scope around a name that declares it, by the parents of the AST. */
+    private static Scope definingScope(Name name) {
+        for (AstNode node = name.getParent(); node != null; node = node.getParent()) {
+            if (node instanceof Scope && ((Scope) node).getSymbol(name.getIdentifier()) != null) {
+                return (Scope) node;
+            }
+        }
+        return null;
+    }
+
+    private static boolean mayLookUpNamesDynamically(AstNode body) {
+        boolean[] dynamic = {false};
+        body.visit(
+                node -> {
+                    if (node instanceof WithStatement
+                            || (node instanceof FunctionCall
+                                    && ((FunctionCall) node).getTarget() instanceof Name
+                                    && "eval"
+                                            .equals(
+                                                    ((Name) ((FunctionCall) node).getTarget())
+                                                            .getIdentifier()))) {
+                        dynamic[0] = true;
+                    }
+                    return !dynamic[0];
+                });
+        return dynamic[0];
+    }
+
+    /** A Name that is a property name or a label, not a reference to a binding. */
+    private static boolean isPropertyName(Name name) {
+        AstNode parent = name.getParent();
+        return (parent instanceof PropertyGet && ((PropertyGet) parent).getProperty() == name)
+                || (parent instanceof ObjectProperty && ((ObjectProperty) parent).getKey() == name)
+                || parent instanceof BreakStatement
+                || parent instanceof ContinueStatement
+                || parent instanceof Label;
+    }
+
     /** ArrowParameters may not contain a YieldExpression (15.3.1, early errors). */
     private void checkYieldInArrowParams(AstNode params) {
         params.visit(
@@ -1896,6 +2008,7 @@ public class Parser {
             AstNode body = parseFunctionBody(type, fnNode);
             fnNode.setBody(body);
             checkParamsAfterBody(fnNode, isMethodDefiniton);
+            separateBodyVars(fnNode);
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);
@@ -2038,6 +2151,7 @@ public class Parser {
             AstNode body = parseFunctionBody(FunctionNode.ARROW_FUNCTION, fnNode);
             fnNode.setBody(body);
             checkParamsAfterBody(fnNode, false);
+            separateBodyVars(fnNode);
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);

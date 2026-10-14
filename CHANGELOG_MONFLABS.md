@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Parameter closures and the body's var declarations (2026-10-14, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.68): with parameter expressions, the `var` bindings of a
+  function body that a closure of the parameters names are renamed by the parser (a separate var environment,
+  FunctionDeclarationInstantiation step 28), so the closure resolves the name outside the function; nothing changes
+  at run time or in the backends. Skipped when the body uses a direct `eval` or `with`.
+- Tests: `ConformanceResidualsTest.parameterClosuresDoNotSeeBodyVars`.
+- test262: 42,118 → 42,138 of 42,616 (98.9%).
+
 ### Functions without arity, yield in arrow parameters (2026-10-14, plan M13)
 
 - Changed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.66, decision 2026-10-14): functions have no `arity`

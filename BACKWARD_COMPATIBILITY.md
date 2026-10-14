@@ -80,6 +80,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.65 | `decodeURI` noncharacters, `Math.log2`, final sigma, `Proxy.revocable` | `VERSION_ECMASCRIPT` |
 | 1.66 | Functions have no `arity` property | `VERSION_ECMASCRIPT` |
 | 1.67 | A yield expression in arrow parameters is an early error | `VERSION_ECMASCRIPT` |
+| 1.68 | Closures in parameter expressions do not see the `var` declarations of the body | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1129,6 +1130,20 @@ function* g() { (x = yield) => x; }   // before: compiles   now: SyntaxError
 
 - In a generator, the parameters of an arrow function cannot contain a `yield` expression.
 - **Why:** ECMA-262 2026, §15.3.1 (ArrowFunction early errors: ArrowParameters Contains YieldExpression).
+
+### 1.68 Closures in parameter expressions do not see the `var` declarations of the body
+
+```js
+var x = "outside";
+function f(g = () => x) { var x = "inside"; return g(); }
+f();   // before: "inside"   now: "outside"
+```
+
+- A function with parameter expressions (defaults, destructuring) has a separate environment for the `var`
+  declarations of its body: a closure created in the parameters resolves a name the body declares with `var` outside
+  the function. Not applied when the body uses a direct `eval` or `with`, which keep the former behavior.
+- **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, step 28: a separate var environment when
+  hasParameterExpressions is true).
 
 ---
 
