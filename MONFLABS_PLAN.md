@@ -735,7 +735,7 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 8.x  | ES2022 (class fields, private names, TLA)       | done        | 84.6% → 96.4% (8.1–8.6)      | 42c918e88 |
 | G    | Gate the section-2 changes (VERSION_ECMASCRIPT) | done        | 96.4% (unchanged)            | 387bb2191 |
 | 9.x  | ES2023 residuals                                | done        | 100% (no change needed)      | (this) |
-| 10.x | ES2024 (resizable buffers, v flag)              | in progress | 96.4% → 96.6% (10.2)         |        |
+| 10.x | ES2024 (resizable buffers, v flag)              | in progress | 96.4% → 96.6% (10.2)         | 1df9910c6 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | todo        |                              |        |
 | 12.x | ES2026                                          | todo        |                              |        |
 | 13   | Long tail to zero                               | todo        |                              |        |
