@@ -99,6 +99,7 @@ public class NativeArray extends ScriptableObject implements List {
                                 NativeArray::jsConstructor)
                         .withMethod(CTOR, "of", 0, NativeArray::js_of)
                         .withMethod(CTOR, "from", 1, NativeArray::js_from)
+                        .withMethod(CTOR, "fromAsync", 1, ArrayFromAsync::js_fromAsync)
                         .withMethod(CTOR, "isArray", 1, NativeArray::js_isArrayMethod)
 
                         // The following need to appear on the constructor for
@@ -189,7 +190,16 @@ public class NativeArray extends ScriptableObject implements List {
     }
 
     static void init(Context cx, VarScope scope, boolean sealed) {
-        DESCRIPTOR.buildConstructor(cx, scope, new NativeArray(0), sealed);
+        DESCRIPTOR.buildConstructor(
+                cx,
+                scope,
+                new NativeArray(0),
+                sealed,
+                (c, ctor) -> {
+                    if (!c.isLatestEcmaScript()) {
+                        ctor.delete("fromAsync");
+                    }
+                });
     }
 
     static int getMaximumInitialCapacity() {
@@ -689,7 +699,7 @@ public class NativeArray extends ScriptableObject implements List {
         return false;
     }
 
-    private static Scriptable callConstructorOrCreateArray(
+    static Scriptable callConstructorOrCreateArray(
             Context cx, JSFunction f, VarScope s, Object arg, long length, boolean lengthAlways) {
         Scriptable result = null;
 
@@ -968,7 +978,7 @@ public class NativeArray extends ScriptableObject implements List {
         return (long) doubleLen;
     }
 
-    private static Object setLengthProperty(Context cx, Scriptable target, long length) {
+    static Object setLengthProperty(Context cx, Scriptable target, long length) {
         Object len = ScriptRuntime.wrapNumber((double) length);
         boolean wasStrict = cx.isStrictMode();
         cx.setIsStrictMode(wasStrict || cx.isLatestEcmaScript());

@@ -178,8 +178,9 @@ public class Context implements Closeable {
      *       flags, RegExp modifiers and {@code RegExp.escape}, {@code SharedArrayBuffer}, {@code
      *       Atomics}, {@code Symbol.asyncIterator}, the iterator helpers, import attributes and
      *       JSON modules, {@code Math.sumPrecise}, the {@code Map}/{@code WeakMap} {@code
-     *       getOrInsert} methods and the {@code Uint8Array} base64 and hex methods; {@code await}
-     *       is a reserved word in the other versions.
+     *       getOrInsert} methods, the {@code Uint8Array} base64 and hex methods, {@code
+     *       JSON.rawJSON}, the source text a {@code JSON.parse} reviver receives and {@code
+     *       Array.fromAsync}; {@code await} is a reserved word in the other versions.
      *   <li>Lexical declarations: a {@code const} in a loop body takes each iteration's value, a
      *       {@code for (const x of/in ...)} head initializes {@code x}, {@code let}/{@code const}
      *       loop heads create a binding per iteration, {@code let x;} is {@code undefined} on each

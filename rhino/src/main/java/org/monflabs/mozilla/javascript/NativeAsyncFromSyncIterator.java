@@ -67,15 +67,19 @@ final class NativeAsyncFromSyncIterator extends ScriptableObject {
             if (syncMethod == null) {
                 throw ScriptRuntime.typeErrorById("msg.not.iterable", ScriptRuntime.toString(obj));
             }
-            IteratorRecord sync = iteratorFromMethod(cx, scope, obj, syncMethod);
-            NativeAsyncFromSyncIterator async = new NativeAsyncFromSyncIterator(sync);
-            TopLevel top = ScriptableObject.getTopLevelScope(scope);
-            async.setParentScope(top);
-            async.setPrototype((Scriptable) ScriptableObject.getTopScopeValue(top, TAG));
-            return new IteratorRecord(
-                    async, ScriptableObject.getProperty(async, ES6Iterator.NEXT_METHOD));
+            return asyncFromSync(scope, iteratorFromMethod(cx, scope, obj, syncMethod));
         }
         return iteratorFromMethod(cx, scope, obj, method);
+    }
+
+    /** CreateAsyncFromSyncIterator ( syncIteratorRecord ) (27.1.6.1). */
+    static IteratorRecord asyncFromSync(VarScope scope, IteratorRecord sync) {
+        NativeAsyncFromSyncIterator async = new NativeAsyncFromSyncIterator(sync);
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        async.setParentScope(top);
+        async.setPrototype((Scriptable) ScriptableObject.getTopScopeValue(top, TAG));
+        return new IteratorRecord(
+                async, ScriptableObject.getProperty(async, ES6Iterator.NEXT_METHOD));
     }
 
     /** GetIteratorFromMethod ( obj, method ) (7.4.2). */
@@ -111,7 +115,7 @@ final class NativeAsyncFromSyncIterator extends ScriptableObject {
         return args.length > 0 ? new Object[] {args[0]} : ScriptRuntime.emptyArgs;
     }
 
-    private static Object errorValue(Context cx, VarScope scope, RhinoException re) {
+    static Object errorValue(Context cx, VarScope scope, RhinoException re) {
         return re instanceof JavaScriptException
                 ? ((JavaScriptException) re).getValue()
                 : ScriptRuntime.wrapException(re, scope, cx);

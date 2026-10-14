@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### JSON source text access, Array.fromAsync (2026-10-14, plan 12.6-12.8)
+
+- New (`VERSION_ECMASCRIPT`): a `JSON.parse` reviver gets a third argument, a context object whose `source` is the
+  source text of a primitive value still holding the value parsed from it (12.6); `JSON.rawJSON(text)` (a frozen,
+  null-prototype object for the text of a JSON primitive, emitted verbatim by `JSON.stringify`) and
+  `JSON.isRawJSON`. The JSON parser records the source of the values only when a reviver is given.
+- New (`VERSION_ECMASCRIPT`): `Array.fromAsync(items, mapfn, thisArg)` (12.7), over an async iterable, a sync
+  iterable (through an Async-from-Sync iterator) or an array-like, awaiting each value and each result of `mapfn`;
+  each step runs in the reaction of the awaited promise. An error of `mapfn` or of a definition closes an iterator
+  (its `return` result is awaited first). An array-like longer than 2^32 - 1 with a `this` that is not a
+  constructor is a RangeError.
+- `Date.parse` (12.8) already passed test262.
+- Tests: `JsonSourceTextTest`, `ArrayFromAsyncTest`.
+- test262: 41,981 → 42,097 of 42,616 (98.5% → 98.8%); `json-parse-with-source` and `Array.fromAsync` 100%.
+
 ### Math.sumPrecise, Map and WeakMap upsert, Iterator.concat, Uint8Array base64 (2026-10-14, plan 12.1-12.5)
 
 - `Error.isError` (12.1) already passed (stock Rhino has it).

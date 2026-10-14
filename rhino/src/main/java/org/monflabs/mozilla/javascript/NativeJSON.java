@@ -41,6 +41,8 @@ public final class NativeJSON extends ScriptableObject {
                 new ClassDescriptor.Builder(JSON_TAG)
                         .withMethod(CTOR, "parse", 2, NativeJSON::parse)
                         .withMethod(CTOR, "stringify", 3, NativeJSON::stringify)
+                        .withMethod(CTOR, "rawJSON", 1, NativeJSON::rawJSON)
+                        .withMethod(CTOR, "isRawJSON", 1, NativeJSON::isRawJSON)
                         .withProp(CTOR, "toSource", value("JSON"))
                         .withProp(
                                 CTOR, SymbolKey.TO_STRING_TAG, value(JSON_TAG, DONTENUM | READONLY))
@@ -48,7 +50,59 @@ public final class NativeJSON extends ScriptableObject {
     }
 
     static Object init(Context cx, VarScope scope, boolean sealed) {
-        return DESCRIPTION.populateGlobal(cx, scope, new NativeJSON(), sealed);
+        ScriptableObject json = DESCRIPTION.populateGlobal(cx, scope, new NativeJSON(), false);
+        if (!cx.isLatestEcmaScript()) {
+            json.delete("rawJSON");
+            json.delete("isRawJSON");
+        }
+        if (sealed) {
+            json.sealObject();
+        }
+        return json;
+    }
+
+    /** An object of JSON.rawJSON: its [[IsRawJSON]] slot, and the text stringify emits. */
+    static final class RawJSON extends NativeObject {
+        @Serial private static final long serialVersionUID = 1L;
+
+        final String text;
+
+        RawJSON(String text) {
+            this.text = text;
+        }
+    }
+
+    /** JSON.rawJSON ( text ) (25.5.3): a frozen object stringify emits as the JSON primitive. */
+    private static Object rawJSON(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        String text = ScriptRuntime.toString(args.length > 0 ? args[0] : Undefined.instance);
+        if (text.isEmpty()
+                || isJsonWhitespace(text.charAt(0))
+                || isJsonWhitespace(text.charAt(text.length() - 1))) {
+            throw ScriptRuntime.constructError(
+                    "SyntaxError", ScriptRuntime.getMessageById("msg.json.raw.invalid"));
+        }
+        if (parse(cx, s, text) instanceof Scriptable) {
+            throw ScriptRuntime.constructError(
+                    "SyntaxError", ScriptRuntime.getMessageById("msg.json.raw.invalid"));
+        }
+        RawJSON raw = new RawJSON(text);
+        raw.setParentScope(ScriptableObject.getTopLevelScope(s));
+        raw.setPrototype(null);
+        ScriptableObject.putProperty(raw, "rawJSON", text);
+        AbstractEcmaObjectOperations.setIntegrityLevel(
+                cx, raw, AbstractEcmaObjectOperations.INTEGRITY_LEVEL.FROZEN);
+        return raw;
+    }
+
+    /** JSON.isRawJSON ( O ) (25.5.2). */
+    private static Object isRawJSON(
+            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        return args.length > 0 && args[0] instanceof RawJSON;
+    }
+
+    private static boolean isJsonWhitespace(char c) {
+        return c == '\t' || c == '\n' || c == '\r' || c == ' ';
     }
 
     private NativeJSON() {}
@@ -97,38 +151,69 @@ public final class NativeJSON extends ScriptableObject {
     }
 
     public static Object parse(Context cx, VarScope scope, String jtext, Callable reviver) {
+        if (cx.isLatestEcmaScript()) {
+            // the reviver gets the source text of the primitives (25.5.1)
+            JsonParser parser = new JsonParser(cx, scope);
+            Object unfiltered;
+            try {
+                unfiltered = parser.parseValueWithSource(jtext);
+            } catch (JsonParser.ParseException ex) {
+                throw ScriptRuntime.constructError("SyntaxError", ex.getMessage());
+            }
+            Scriptable root = cx.newObject(scope);
+            root.put("", root, unfiltered);
+            return internalize(cx, scope, reviver, root, "", parser.getRootNode());
+        }
         Object unfiltered = parse(cx, scope, jtext);
         Scriptable root = cx.newObject(scope);
         root.put("", root, unfiltered);
-        if (cx.isLatestEcmaScript()) {
-            return internalize(cx, scope, reviver, root, "");
-        }
         return walk(cx, scope, reviver, root, "");
     }
 
     /** InternalizeJSONProperty (ECMA-262 25.5.1.1). */
     private static Object internalize(
-            Context cx, VarScope scope, Callable reviver, Scriptable holder, String name) {
+            Context cx,
+            VarScope scope,
+            Callable reviver,
+            Scriptable holder,
+            String name,
+            JsonParser.SourceNode node) {
         Object val = getKey(holder, name);
         if (val instanceof Scriptable) {
             Scriptable obj = (Scriptable) val;
             if (NativeArray.isArray(obj)) {
                 long len = AbstractEcmaObjectOperations.lengthOfArrayLike(cx, obj);
                 for (long i = 0; i < len; i++) {
-                    reviveKey(cx, scope, reviver, obj, Long.toString(i));
+                    JsonParser.SourceNode element =
+                            node != null && node.elements != null && i < node.elements.size()
+                                    ? node.elements.get((int) i)
+                                    : null;
+                    reviveKey(cx, scope, reviver, obj, Long.toString(i), element);
                 }
             } else {
                 for (String key : AbstractEcmaObjectOperations.enumerableOwnKeys(cx, obj)) {
-                    reviveKey(cx, scope, reviver, obj, key);
+                    JsonParser.SourceNode member =
+                            node != null && node.members != null ? node.members.get(key) : null;
+                    reviveKey(cx, scope, reviver, obj, key, member);
                 }
             }
         }
-        return reviver.call(cx, scope, holder, new Object[] {name, val});
+        // the source of a primitive that still has its parsed value
+        Scriptable context = cx.newObject(scope);
+        if (node != null && node.source != null && ScriptRuntime.same(node.value, val)) {
+            ScriptableObject.putProperty(context, "source", node.source);
+        }
+        return reviver.call(cx, scope, holder, new Object[] {name, val, context});
     }
 
     private static void reviveKey(
-            Context cx, VarScope scope, Callable reviver, Scriptable obj, String key) {
-        Object newElement = internalize(cx, scope, reviver, obj, key);
+            Context cx,
+            VarScope scope,
+            Callable reviver,
+            Scriptable obj,
+            String key,
+            JsonParser.SourceNode node) {
+        Object newElement = internalize(cx, scope, reviver, obj, key, node);
         if (obj instanceof ScriptableObject) {
             ScriptableObject so = (ScriptableObject) obj;
             if (newElement == Undefined.instance) {
@@ -375,6 +460,9 @@ public final class NativeJSON extends ScriptableObject {
 
         if (ScriptRuntime.isSymbol(value)) return Undefined.instance;
 
+        if (value instanceof RawJSON && es6) {
+            return ((RawJSON) value).text;
+        }
         if (value instanceof NativeNumber) {
             value = Double.valueOf(ScriptRuntime.toNumber(value));
         } else if (value instanceof NativeString) {

@@ -7,7 +7,9 @@
 package org.monflabs.mozilla.javascript.json;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.ScriptRuntime.StringIdOrIndex;
@@ -31,9 +33,46 @@ public class JsonParser {
     private int length;
     private String src;
 
+    /**
+     * The source of a parsed value (JSON.parse source text access): the text of a primitive, and
+     * the nodes of the members of an object or of the elements of an array.
+     */
+    public static final class SourceNode {
+        /** The source text of a primitive, or null. */
+        public String source;
+
+        /** The value parsed from the source text of a primitive. */
+        public Object value;
+
+        public Map<String, SourceNode> members;
+        public List<SourceNode> elements;
+    }
+
+    private boolean recordSource;
+    private SourceNode current;
+    private SourceNode lastNode;
+
     public JsonParser(Context cx, VarScope scope) {
         this.cx = cx;
         this.scope = scope;
+    }
+
+    /**
+     * Parses a JSON text, recording the source of its values: {@link #getRootNode()} is then the
+     * node of the value parsed.
+     */
+    public synchronized Object parseValueWithSource(String json) throws ParseException {
+        recordSource = true;
+        try {
+            return parseValue(json);
+        } finally {
+            recordSource = false;
+        }
+    }
+
+    /** The source node of the last value parsed by {@link #parseValueWithSource}. */
+    public SourceNode getRootNode() {
+        return lastNode;
     }
 
     public synchronized Object parseValue(String json) throws ParseException {
@@ -52,6 +91,29 @@ public class JsonParser {
     }
 
     private Object readValue() throws ParseException {
+        if (!recordSource) {
+            return readValueNoSource();
+        }
+        consumeWhitespace();
+        int start = pos;
+        SourceNode node = new SourceNode();
+        SourceNode parent = current;
+        current = node;
+        Object value;
+        try {
+            value = readValueNoSource();
+        } finally {
+            current = parent;
+        }
+        if (!(value instanceof Scriptable)) {
+            node.source = src.substring(start, pos);
+            node.value = value;
+        }
+        lastNode = node;
+        return value;
+    }
+
+    private Object readValueNoSource() throws ParseException {
         consumeWhitespace();
         while (pos < length) {
             char c = src.charAt(pos++);
@@ -119,6 +181,12 @@ public class JsonParser {
                     id = readString();
                     consume(':');
                     value = readValue();
+                    if (recordSource) {
+                        if (current.members == null) {
+                            current.members = new HashMap<>();
+                        }
+                        current.members.put(id, lastNode);
+                    }
 
                     StringIdOrIndex indexObj = ScriptRuntime.toStringIdOrIndex(id);
                     if (indexObj.getStringId() == null) {
@@ -166,6 +234,12 @@ public class JsonParser {
                         throw new ParseException("Missing comma in array literal");
                     }
                     list.add(readValue());
+                    if (recordSource) {
+                        if (current.elements == null) {
+                            current.elements = new ArrayList<>();
+                        }
+                        current.elements.add(lastNode);
+                    }
                     needsComma = true;
             }
             consumeWhitespace();
