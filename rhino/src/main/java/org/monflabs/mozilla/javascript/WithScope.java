@@ -75,19 +75,23 @@ public class WithScope implements VarScope {
             if (!hasBinding(name)) {
                 return NOT_FOUND;
             }
-            if (!ScriptableObject.hasProperty(obj, name)) {
-                // the binding was deleted after HasBinding (Symbol.unscopables getter, ...)
-                if (Context.isCurrentContextStrict()) {
-                    throw ScriptRuntime.constructError(
-                            "ReferenceError",
-                            ScriptRuntime.getMessageById("msg.is.not.defined", name));
-                }
-                return Undefined.instance;
-            }
-            Object value = ScriptableObject.getProperty(obj, name);
-            return value == NOT_FOUND ? Undefined.instance : value;
+            return getBindingValue(name);
         }
         return ScriptableObject.getProperty(obj, name);
+    }
+
+    /** GetBindingValue (9.1.1.2.6) of a binding that HasBinding found. */
+    Object getBindingValue(String name) {
+        if (!ScriptableObject.hasProperty(obj, name)) {
+            // the binding was deleted after HasBinding (Symbol.unscopables getter, ...)
+            if (Context.isCurrentContextStrict()) {
+                throw ScriptRuntime.constructError(
+                        "ReferenceError", ScriptRuntime.getMessageById("msg.is.not.defined", name));
+            }
+            return Undefined.instance;
+        }
+        Object value = ScriptableObject.getProperty(obj, name);
+        return value == NOT_FOUND ? Undefined.instance : value;
     }
 
     private static boolean isLatest() {

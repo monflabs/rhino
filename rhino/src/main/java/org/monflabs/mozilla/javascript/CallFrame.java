@@ -128,7 +128,7 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
         // creation
         // Ref: Ecma 2026, 10.2.11, FunctionDeclarationInstantiation
 
-        if (desc.getFunctionCount() != 0 && !desc.isES6Generator()) {
+        if (desc.getFunctionCount() != 0 && !desc.isES6Generator() && !functionsAfterParams(desc)) {
             if (desc.getFunctionType() != 0 && !desc.requiresActivationFrame()) Kit.codeBug();
             for (int i = 0; i < desc.getFunctionCount(); i++) {
                 JSDescriptor<?> fdesc = desc.getFunction(i);
@@ -347,5 +347,13 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
     @Override
     public ScriptOrFn<?> getFnOrScript() {
         return fnOrScript;
+    }
+
+    /** See FunctionNode#isFunctionsAfterParams: instantiated by the code of the function. */
+    private static boolean functionsAfterParams(JSDescriptor<?> desc) {
+        return desc.getLanguageVersion() >= Context.VERSION_ECMASCRIPT
+                && desc.getFunctionType() != 0
+                && desc.hasDefaultParameters()
+                && !desc.isAsync();
     }
 }

@@ -339,11 +339,21 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 break;
 
+            case Token.EMPTY:
+                if (node.getIntProp(Node.FUNCTION_DECLS_PROP, 0) == 1) {
+                    for (int i = 0; i < scriptOrFn.getFunctionCount(); i++) {
+                        if (scriptOrFn.getFunctionNode(i).getFunctionType()
+                                == FunctionNode.FUNCTION_STATEMENT) {
+                            addIndexOp(Icode.CLOSURE_STMT, i);
+                            addUint8(0);
+                        }
+                    }
+                }
+            // fall through
             case Token.LABEL:
             case Token.LOOP:
             case Token.BLOCK:
             case Token.SCOPE_BLOCK:
-            case Token.EMPTY:
             case Token.WITH:
                 updateLineNumber(node);
             // fall through
@@ -1181,6 +1191,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.BINDNAME:
             case Token.NAME:
+                if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
+                    // stack: [scope] -> [scope, value]
+                    addIcode(Icode.DUP);
+                    stackChange(1);
+                    addStringOp(Icode.BOUND_NAME, node.getString());
+                    break;
+                }
+            // fall through
             case Token.STRING:
                 addStringOp(type, node.getString());
                 stackChange(1);

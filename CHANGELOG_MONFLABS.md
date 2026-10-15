@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Last M13 residuals (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.83): with parameter expressions, the function
+  declarations of the body are instantiated after the parameters (an EMPTY node with `Node.FUNCTION_DECLS_PROP`
+  after the parameter initialization; `CallFrame` and the compiled prologue skip them). In an arrow function, a body
+  function declaration that a parameter names becomes an assignment to a renamed body binding
+  (`Parser.separateBodyVars`), and `arguments` is renamed like the other names.
+- Fixed (`VERSION_ECMASCRIPT`): a `break` or `continue` that leaves a `finally` block completes with the value of
+  the finally statements before it (a temp of the block, `IRFactory.jumpOutOfFinally`).
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.84): a compound assignment inside `with` reads the value
+  from the scope its `BINDNAME` found (`Node.BOUND_NAME_PROP`, `Icode.BOUND_NAME`, `ScriptRuntime.boundName`).
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.85): built-in getters declared after
+  `withPrimitiveThis` receive a primitive `this` through `call` and `apply`; the `flags` getter of RegExp then
+  throws a TypeError.
+- Tests: `ConformanceResidualsTest.functionDeclarationsAfterParameters`, `breakInFinallyCompletionValue`,
+  `compoundAssignmentInWithResolvesOnce`, `regExpFlagsGetterRejectsPrimitives`.
+- test262: 42,215 → 42,223 of 42,616.
+
 ### Primitive receivers and super increment (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.81): a strict getter read on a primitive receives the

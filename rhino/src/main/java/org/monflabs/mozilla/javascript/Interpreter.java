@@ -793,6 +793,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.FN_NAME_ASSIGN] = new DoFnNameAssign();
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
+        instructionObjs[base + Icode.BOUND_NAME] = new DoBoundName();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
         instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
         instructionObjs[base + Icode.FIELD_KEY] = new DoIterator(Icode.FIELD_KEY);
@@ -3633,6 +3634,16 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             frame.stack[frame.stackTop] = ScriptRuntime.derivedThis(frame.stack[frame.stackTop]);
+            return null;
+        }
+    }
+
+    private static class DoBoundName extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.boundName(
+                            frame.stack[frame.stackTop], state.stringReg, cx, frame.scope);
             return null;
         }
     }

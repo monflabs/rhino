@@ -695,12 +695,22 @@ public class Parser {
                         return true;
                     });
         }
+        // an arrow function has no arguments object: its body's arguments is a plain binding
+        boolean arrow = fnNode.getFunctionType() == FunctionNode.ARROW_FUNCTION;
         Set<String> renamed = new HashSet<>();
+        Set<String> functionDecls = new HashSet<>();
         for (Symbol symbol : fnNode.getSymbolTable().values()) {
             if (symbol.getDeclType() == Symbol.Type.VAR
                     && closureNames.contains(symbol.getName())
-                    && !"arguments".equals(symbol.getName())) {
+                    && (arrow || !"arguments".equals(symbol.getName()))) {
                 renamed.add(symbol.getName());
+            } else if (symbol.getDeclType() == Symbol.Type.FUNCTION_VAR
+                    && arrow
+                    && (paramNames.contains(symbol.getName())
+                            || closureNames.contains(symbol.getName()))) {
+                // a function declaration of the body, bound in its var environment
+                renamed.add(symbol.getName());
+                functionDecls.add(symbol.getName());
             } else if ((symbol.getDeclType() == Symbol.Type.LET
                             || symbol.getDeclType() == Symbol.Type.CONST)
                     && (paramNames.contains(symbol.getName())
@@ -719,6 +729,8 @@ public class Parser {
                             if (node instanceof Name
                                     && renamed.contains(((Name) node).getIdentifier())
                                     && !isPropertyName((Name) node)
+                                    && !isFunctionName((Name) node)
+                                    && !inOwnArgumentsScope((Name) node, fnNode)
                                     && definingScope((Name) node) == fnNode) {
                                 uses.add((Name) node);
                             }
@@ -731,6 +743,57 @@ public class Parser {
         }
         for (Name use : uses) {
             use.setIdentifier(use.getIdentifier() + "$body");
+        }
+        if (!functionDecls.isEmpty()) {
+            hoistFunctionDeclarations(fnNode, functionDecls);
+        }
+    }
+
+    /** The name of a function, rather than a reference to a binding. */
+    private static boolean isFunctionName(Name name) {
+        return name.getParent() instanceof FunctionNode
+                && ((FunctionNode) name.getParent()).getFunctionName() == name;
+    }
+
+    /** An arguments inside a non-arrow function nested in fnNode, its own arguments object. */
+    private static boolean inOwnArgumentsScope(Name name, FunctionNode fnNode) {
+        if (!"arguments".equals(name.getIdentifier())) {
+            return false;
+        }
+        for (AstNode node = name.getParent(); node != fnNode; node = node.getParent()) {
+            if (node instanceof FunctionNode
+                    && ((FunctionNode) node).getFunctionType() != FunctionNode.ARROW_FUNCTION) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The function declarations of the body that separateBodyVars renamed become assignments of
+     * function expressions to the renamed bindings, at the start of the body: the function keeps
+     * its name, and is bound in the var environment of the body only.
+     */
+    private static void hoistFunctionDeclarations(FunctionNode fnNode, Set<String> names) {
+        AstNode body = fnNode.getBody();
+        List<AstNode> declarations = new ArrayList<>();
+        for (Node n = body.getFirstChild(); n != null; n = n.getNext()) {
+            if (n instanceof FunctionNode
+                    && ((FunctionNode) n).getFunctionType() == FunctionNode.FUNCTION_STATEMENT
+                    && names.contains(((FunctionNode) n).getName())) {
+                declarations.add((AstNode) n);
+            }
+        }
+        for (int i = declarations.size() - 1; i >= 0; i--) {
+            FunctionNode fn = (FunctionNode) declarations.get(i);
+            body.removeChild(fn);
+            fn.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
+            Name target = new Name(fn.getPosition(), fn.getName() + "$body");
+            Assignment assignment = new Assignment(Token.ASSIGN, target, fn, fn.getPosition());
+            ExpressionStatement statement = new ExpressionStatement(assignment, false);
+            statement.setLineColumnNumber(fn.getLineno(), fn.getColumn());
+            body.addChildToFront(statement);
+            statement.setParent(body);
         }
     }
 

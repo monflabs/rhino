@@ -93,15 +93,18 @@ public class ClassDescriptor {
     private static class LambdaGetSetPropDesc extends PropDesc {
         private final ScriptableObject.LambdaGetterFunction getter;
         private final ScriptableObject.LambdaSetterFunction setter;
+        private final boolean primitiveThis;
 
         LambdaGetSetPropDesc(
                 Object name,
                 ScriptableObject.LambdaGetterFunction getter,
                 ScriptableObject.LambdaSetterFunction setter,
-                int attributes) {
+                int attributes,
+                boolean primitiveThis) {
             super(name, attributes);
             this.getter = getter;
             this.setter = setter;
+            this.primitiveThis = primitiveThis;
         }
 
         @Override
@@ -110,6 +113,13 @@ public class ClassDescriptor {
                 obj.defineProperty(cx, scope, (String) name, getter, setter, attributes);
             } else {
                 obj.defineProperty(cx, scope, (SymbolKey) name, getter, setter, attributes);
+            }
+            if (primitiveThis) {
+                // the getter receives a primitive this unchanged (null to the lambda)
+                var desc = obj.getOwnPropertyDescriptor(cx, name);
+                if (desc != null && desc.getter instanceof LambdaFunction) {
+                    ((LambdaFunction) desc.getter).setPrimitiveThis();
+                }
             }
         }
     }
@@ -654,7 +664,9 @@ public class ClassDescriptor {
                 LambdaGetterFunction getter,
                 LambdaSetterFunction setter,
                 int attributes) {
-            dest.get(this).props.add(new LambdaGetSetPropDesc(name, getter, setter, attributes));
+            dest.get(this)
+                    .props
+                    .add(new LambdaGetSetPropDesc(name, getter, setter, attributes, primitiveThis));
             return this;
         }
 
@@ -668,7 +680,9 @@ public class ClassDescriptor {
                 LambdaGetterFunction getter,
                 LambdaSetterFunction setter,
                 int attributes) {
-            dest.get(this).props.add(new LambdaGetSetPropDesc(name, getter, setter, attributes));
+            dest.get(this)
+                    .props
+                    .add(new LambdaGetSetPropDesc(name, getter, setter, attributes, primitiveThis));
             return this;
         }
 

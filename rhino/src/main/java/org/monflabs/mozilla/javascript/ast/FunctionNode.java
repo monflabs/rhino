@@ -140,6 +140,7 @@ public class FunctionNode extends ScriptNode {
     private boolean annexBHoisted;
     private List<Node> generatorResumePoints;
     private Map<Node, int[]> liveLocals;
+    private boolean functionsAfterParams;
     private Node generatorParamInitBlock; // IR block for default parameters init in generators
     private AstNode memberExprNode;
 
@@ -485,6 +486,18 @@ public class FunctionNode extends ScriptNode {
     public void addLiveLocals(Node node, int[] locals) {
         if (liveLocals == null) liveLocals = new HashMap<>();
         liveLocals.put(node, locals);
+    }
+
+    /**
+     * Whether the function declarations of the body are instantiated after the parameters are
+     * initialized (at an EMPTY node with FUNCTION_DECLS_PROP), rather than on entry.
+     */
+    public boolean isFunctionsAfterParams() {
+        return functionsAfterParams;
+    }
+
+    public void setFunctionsAfterParams() {
+        functionsAfterParams = true;
     }
 
     public Node getGeneratorParamInitBlock() {

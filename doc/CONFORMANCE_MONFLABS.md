@@ -35,8 +35,4 @@ different realms, so tracking the realm through every error and function is left
 
 ## Residuals still to fix (M13)
 
-- Function declarations of a body are instantiated before the parameters are evaluated: with parameter
-  expressions, a `function arguments` of the body, or a `var arguments` declared by a direct eval in the
-  parameters of an arrow function, is seen in the wrong environment (5 tests).
-- Smaller items: completion values of `break` and `continue` in `finally`, a compound assignment in `with` over a
-  proxy resolving the name twice, the `flags` getter of RegExp called on a primitive.
+None: every in-scope test outside the documented limits above passes.

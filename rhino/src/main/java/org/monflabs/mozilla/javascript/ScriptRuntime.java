@@ -2945,6 +2945,17 @@ public class ScriptRuntime {
      *
      * <p>See ECMA 10.1.4
      */
+    /**
+     * The value of a name in the scope that bind found (GetBindingValue): in a with, the object is
+     * not searched again; elsewhere, the name is looked up.
+     */
+    public static Object boundName(Object bound, String name, Context cx, VarScope scope) {
+        if (bound instanceof WithScope) {
+            return ((WithScope) bound).getBindingValue(name);
+        }
+        return name(cx, scope, name);
+    }
+
     public static VarScope bind(Context cx, VarScope scope, String id) {
         VarScope firstXMLScope = null;
         VarScope parent = scope.getParentScope();
@@ -4107,6 +4118,11 @@ public class ScriptRuntime {
      */
     public static Object getApplyOrCallThisValue(
             Context cx, VarScope scope, Object arg0, int l, Function target) {
+        if (target instanceof LambdaFunction
+                && ((LambdaFunction) target).acceptsPrimitiveThis()
+                && cx.isLatestEcmaScript()) {
+            return l == 0 ? Undefined.instance : arg0;
+        }
         if (l != 0
                 && arg0 != Undefined.instance
                 && cx.isLatestEcmaScript()

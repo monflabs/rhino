@@ -147,7 +147,11 @@ public class LambdaAccessorSlot extends StandardSlot<Scriptable> {
                             scope,
                             "get " + functionName(),
                             0,
-                            (cx1, scope1, thisObj, args) -> getter.apply((Scriptable) thisObj),
+                            (cx1, scope1, thisObj, args) ->
+                                    getter.apply(
+                                            thisObj instanceof Scriptable
+                                                    ? (Scriptable) thisObj
+                                                    : null),
                             false);
         }
     }

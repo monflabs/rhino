@@ -22,6 +22,16 @@ public class LambdaFunction extends BaseFunction {
     protected final SerializableCallable target;
     private final String name;
     private final int length;
+    private boolean primitiveThis;
+
+    /** Whether call and apply pass a primitive this unchanged (a built-in getter). */
+    boolean acceptsPrimitiveThis() {
+        return primitiveThis;
+    }
+
+    void setPrimitiveThis() {
+        primitiveThis = true;
+    }
 
     /**
      * Create a new function. The new object will have the Function prototype and no parent. The

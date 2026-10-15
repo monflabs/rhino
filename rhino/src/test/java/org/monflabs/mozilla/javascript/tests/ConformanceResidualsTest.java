@@ -357,4 +357,54 @@ class ConformanceResidualsTest {
                         + " m() { return [super[k()]++, ++super.q, super.b++]; } };\n"
                         + "obj.m().concat([calls]).join()");
     }
+
+    @Test
+    void functionDeclarationsAfterParameters() {
+        Utils.assertGatedBehavior(
+                "function,inner,inner,f",
+                "object,outer,inner,f",
+                "var args, f = function () { return 'outer'; };\n"
+                        + "function g(x = args = arguments) { function arguments() {} }\n"
+                        + "g();\n"
+                        + "var h = (a = () => f()) => { function f() { return 'inner'; }"
+                        + " return [a(), f(), f.name]; };\n"
+                        + "[typeof args].concat(h()).join()");
+    }
+
+    @Test
+    void breakInFinallyCompletionValue() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "42|undefined|2|11",
+                "[eval('99; do { -99; try { 39 } finally { 42; break; -2 }; } while (false);'),\n"
+                        + " eval('99; do { -99; try { 39 } finally { break; -2 }; } while (false);'),\n"
+                        + " eval('1; try { 2 } finally { 3 }'),\n"
+                        + " eval('for (var i = 0; i < 2; i++) { try { i } finally { 10 + i; continue; } }')]"
+                        + ".map(String).join('|')");
+    }
+
+    @Test
+    void compoundAssignmentInWithResolvesOnce() {
+        Utils.assertGatedBehavior(
+                "has:p,get:p,has:p,set:p|1|ReferenceError",
+                "has:p,get:Symbol(Symbol.unscopables),has:p,get:p,has:p,set:p|1|ReferenceError",
+                "var log = [], env = { p: 0 }, r;\n"
+                        + "var proxy = new Proxy(env, {"
+                        + " has(t, k) { log.push('has:' + String(k)); return k in t; },"
+                        + " get(t, k) { log.push('get:' + String(k)); return t[k]; },"
+                        + " set(t, k, v) { log.push('set:' + String(k)); t[k] = v; return true; } });\n"
+                        + "with (proxy) { p += 1; }\n"
+                        + "with ({}) { try { undeclaredU += 1; } catch (e) { r = e.name; } }\n"
+                        + "log.join() + '|' + env.p + '|' + r");
+    }
+
+    @Test
+    void regExpFlagsGetterRejectsPrimitives() {
+        Utils.assertGatedBehavior(
+                "TypeError,ok,ok,gi",
+                "TypeError,TypeError,TypeError,gi",
+                "var g = Object.getOwnPropertyDescriptor(RegExp.prototype, 'flags').get, r = [];\n"
+                        + "[null, 4, 's'].forEach(function (v) {"
+                        + " try { g.call(v); r.push('ok'); } catch (e) { r.push(e.name); } });\n"
+                        + "r.push(g.call(/a/gi)); r.join()");
+    }
 }

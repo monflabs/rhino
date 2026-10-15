@@ -157,6 +157,17 @@ public final class IRFactory {
     /** Depth of finally blocks being transformed: their normal completion keeps the value. */
     private int finallyDepth;
 
+    /**
+     * The finally block being transformed, when a break or continue leaves it in code whose
+     * completion value is observable, and the temp that holds the value of its statements.
+     */
+    private AstNode finallyBlockWithJump;
+
+    private String finallyValueTemp;
+
+    /** Depth of with statements around the code being transformed. */
+    private int withDepth;
+
     private Node transform(AstNode node) {
         Node result = transformStatement(node);
         if (resetsCompletionValue(node)) {
@@ -690,7 +701,52 @@ public final class IRFactory {
     }
 
     private Node transformBreak(BreakStatement node) {
-        return node;
+        return jumpOutOfFinally(node, node.getBreakTarget());
+    }
+
+    /**
+     * A break or continue that leaves a finally block completes with the value of the finally
+     * statements before it (UpdateEmpty(C, V), 14.15.3), kept in a temp.
+     */
+    private Node jumpOutOfFinally(Node jump, AstNode target) {
+        if (finallyValueTemp == null || isWithin(target, finallyBlockWithJump)) {
+            return jump;
+        }
+        Node block = new Node(Token.BLOCK);
+        block.addChildToBack(new Node(Token.EXPR_RESULT, parser.createName(finallyValueTemp)));
+        block.addChildToBack(jump);
+        return block;
+    }
+
+    private static boolean isWithin(AstNode node, AstNode ancestor) {
+        for (AstNode n = node; n != null; n = n.getParent()) {
+            if (n == ancestor) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a break or continue in the block jumps to a statement outside of it. */
+    private static boolean hasJumpOut(AstNode block) {
+        boolean[] found = {false};
+        block.visit(
+                n -> {
+                    if (n instanceof FunctionNode) {
+                        return false;
+                    }
+                    AstNode target =
+                            n instanceof BreakStatement
+                                    ? ((BreakStatement) n).getBreakTarget()
+                                    : n instanceof ContinueStatement
+                                            ? ((ContinueStatement) n).getTarget()
+                                            : null;
+                    if (target != null && !isWithin(target, block)) {
+                        found[0] = true;
+                    }
+                    return !found[0];
+                });
+        return found[0];
     }
 
     private Node transformCondExpr(ConditionalExpression node) {
@@ -701,7 +757,7 @@ public final class IRFactory {
     }
 
     private Node transformContinue(ContinueStatement node) {
-        return node;
+        return jumpOutOfFinally(node, node.getTarget());
     }
 
     private Node transformDoLoop(DoLoop loop) {
@@ -739,6 +795,9 @@ public final class IRFactory {
                 && parser.compilerEnv.isLatestEcmaScript()) {
             // a finally block that completes normally does not change the completion value
             type = Token.EXPR_VOID;
+            if (finallyValueTemp != null) {
+                expr = createAssignment(Token.ASSIGN, parser.createName(finallyValueTemp), expr);
+            }
         }
         return new Node(type, expr, node.getLineno(), node.getColumn());
     }
@@ -811,8 +870,22 @@ public final class IRFactory {
             ++parser.nestingOfFunction; // only for body, not params
             Node body = transform(fn.getBody());
 
-            /* Process simple default parameters */
             List<Object> defaultParams = fn.getDefaultParams();
+            if (parser.compilerEnv.isLatestEcmaScript()
+                    && (defaultParams != null || destructuring != null)
+                    && !fn.isGenerator()
+                    && !fn.isES6Generator()
+                    && !fn.isAsync()
+                    && fn.getFunctionCount() > 0) {
+                // with parameter expressions, the parameters are initialized before the function
+                // declarations of the body (FunctionDeclarationInstantiation steps 25-36)
+                Node functionDecls = new Node(Token.EMPTY);
+                functionDecls.putIntProp(Node.FUNCTION_DECLS_PROP, 1);
+                body.addChildToFront(functionDecls);
+                fn.setFunctionsAfterParams();
+            }
+
+            /* Process simple default parameters */
             if (defaultParams != null) {
                 Node paramInitBlock = null;
                 for (int i = defaultParams.size() - 1; i > 0; ) {
@@ -1833,11 +1906,37 @@ public final class IRFactory {
         }
         Node finallyBlock = null;
         if (node.getFinallyBlock() != null) {
+            AstNode savedBlock = finallyBlockWithJump;
+            String savedTemp = finallyValueTemp;
+            AstNode block = node.getFinallyBlock();
+            finallyValueTemp = null;
+            if (parser.compilerEnv.isLatestEcmaScript()
+                    && node.getEnclosingFunction() == null
+                    && block instanceof Scope
+                    && hasJumpOut(block)) {
+                // let $temp = undefined, at the start of the finally block
+                String temp = parser.currentScriptOrFn.getNextTempName();
+                VariableDeclaration decl = new VariableDeclaration(block.getPosition());
+                decl.setType(Token.LET);
+                decl.setIsStatement(true);
+                VariableInitializer init = new VariableInitializer(block.getPosition());
+                init.setTarget(new Name(block.getPosition(), temp));
+                init.setInitializer(new KeywordLiteral(block.getPosition(), 0, Token.UNDEFINED));
+                decl.addVariable(init);
+                decl.setLineColumnNumber(block.getLineno(), block.getColumn());
+                block.addChildToFront(decl);
+                decl.setParent(block);
+                ((Scope) block).putSymbol(new Symbol(Symbol.Type.LET, temp));
+                finallyBlockWithJump = block;
+                finallyValueTemp = temp;
+            }
             finallyDepth++;
             try {
-                finallyBlock = transform(node.getFinallyBlock());
+                finallyBlock = transform(block);
             } finally {
                 finallyDepth--;
+                finallyBlockWithJump = savedBlock;
+                finallyValueTemp = savedTemp;
             }
         }
         return createTryCatchFinally(
@@ -1922,7 +2021,13 @@ public final class IRFactory {
 
     private Node transformWith(WithStatement node) {
         Node expr = transform(node.getExpression());
-        Node stmt = transform(node.getStatement());
+        withDepth++;
+        Node stmt;
+        try {
+            stmt = transform(node.getStatement());
+        } finally {
+            withDepth--;
+        }
         return createWith(expr, stmt, node.getLineno(), node.getColumn());
     }
 
@@ -3132,6 +3237,11 @@ public final class IRFactory {
         switch (nodeType) {
             case Token.NAME:
                 {
+                    if (withDepth > 0 && parser.compilerEnv.isLatestEcmaScript()) {
+                        // GetBindingValue on the environment the reference resolved to, without
+                        // resolving the name again (13.15.2 step 2)
+                        left.putIntProp(Node.BOUND_NAME_PROP, 1);
+                    }
                     Node op = new Node(assignOp, left, right);
                     Node lvalueLeft = Node.newString(Token.BINDNAME, left.getString());
                     return propagateSuperFromLhs(new Node(Token.SETNAME, lvalueLeft, op), left);

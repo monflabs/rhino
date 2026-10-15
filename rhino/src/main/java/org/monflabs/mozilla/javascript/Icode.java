@@ -231,9 +231,11 @@ abstract class Icode {
             STATIC_BLOCK_KEY = NEW_PRIVATE_NAME - 1,
             // a computed key of a class element evaluated in source order (Token#FIELD_KEY kind 5)
             ELEMENT_KEY = STATIC_BLOCK_KEY - 1,
+            // the value of a name in the scope that a BINDNAME found (Node#BOUND_NAME_PROP)
+            BOUND_NAME = ELEMENT_KEY - 1,
 
             // Last icode
-            MIN_ICODE = ELEMENT_KEY;
+            MIN_ICODE = BOUND_NAME;
 
     /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
     static final int[] AWAIT_ICODES = {
@@ -511,6 +513,8 @@ abstract class Icode {
                 return "STATIC_BLOCK_KEY";
             case ELEMENT_KEY:
                 return "ELEMENT_KEY";
+            case BOUND_NAME:
+                return "BOUND_NAME";
         }
 
         // icode without name

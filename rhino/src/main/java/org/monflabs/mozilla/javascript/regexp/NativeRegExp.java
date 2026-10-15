@@ -200,6 +200,7 @@ public class NativeRegExp extends ScriptableObject {
                         .withProp(CTOR, SymbolKey.SPECIES, ScriptRuntimeES6::symbolSpecies)
                         .withProp(
                                 PROTO, "source", (c) -> sourceGetter(c), null, DONTENUM | READONLY)
+                        .withPrimitiveThis(true)
                         .withProp(
                                 PROTO,
                                 "flags",
@@ -214,6 +215,7 @@ public class NativeRegExp extends ScriptableObject {
                                 },
                                 null,
                                 DONTENUM | READONLY)
+                        .withPrimitiveThis(false)
                         .withProp(
                                 PROTO,
                                 "hasIndices",

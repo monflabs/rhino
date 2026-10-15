@@ -85,7 +85,12 @@ public class Node implements Iterable<Node> {
             PROTO_SETTER_PROP = 42,
             // the kind of a Token#AWAIT: one of the AWAIT_* below
             AWAIT_KIND_PROP = 43,
-            LAST_PROP = AWAIT_KIND_PROP,
+            // EMPTY where the function declarations of a body are instantiated, after the
+            // parameters (FunctionDeclarationInstantiation step 36)
+            FUNCTION_DECLS_PROP = 44,
+            // NAME read by a compound assignment in a with: from the scope its BINDNAME found
+            BOUND_NAME_PROP = 45,
+            LAST_PROP = BOUND_NAME_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -513,6 +518,10 @@ public class Node implements Iterable<Node> {
                 return "proto_setter_prop";
             case AWAIT_KIND_PROP:
                 return "await_kind_prop";
+            case FUNCTION_DECLS_PROP:
+                return "function_decls_prop";
+            case BOUND_NAME_PROP:
+                return "bound_name_prop";
 
             default:
                 Kit.codeBug();

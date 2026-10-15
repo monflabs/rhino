@@ -95,6 +95,9 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.80 | `"NaN"` is a numeric key of a TypedArray | `VERSION_ECMASCRIPT` |
 | 1.81 | Accessors read or written on a primitive receive the primitive | `VERSION_ECMASCRIPT` |
 | 1.82 | `super[key]++` evaluates the key once and converts the value with ToNumeric | `VERSION_ECMASCRIPT` |
+| 1.83 | With parameter expressions, function declarations are instantiated after the parameters | `VERSION_ECMASCRIPT` |
+| 1.84 | A compound assignment in `with` resolves the name once | `VERSION_ECMASCRIPT` |
+| 1.85 | The `flags` getter of `RegExp.prototype` rejects a primitive `this` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1356,6 +1359,42 @@ obj.m();    // before: k() called twice, ++super.q is "51" (interpreted mode)   
 - The key of `super[key]++` (and `--`, prefix or postfix) is evaluated and converted once; the old value is
   converted with ToNumeric, so a string is a number and a BigInt stays a BigInt, in both modes.
 - **Why:** ECMA-262 2026, §13.4.2.1 (Postfix Increment), §13.4.4.1 (Prefix Increment).
+
+### 1.83 With parameter expressions, function declarations are instantiated after the parameters
+
+```js
+function f(x = arguments) { function arguments() {} return typeof x; }
+f();        // before: "function"   now: "object"
+var g = (a = () => h()) => { function h() { return "inner"; } return a(); };
+g();        // before: "inner"      now: the h of the enclosing scope (a ReferenceError if none)
+```
+
+- In a function with default values or destructuring patterns in its parameters, the function declarations of the
+  body are created once the parameters are initialized, so the parameters see the `arguments` object rather than
+  a `function arguments` of the body. In an arrow function, a function declaration of the body that a parameter
+  names is bound in the body only, like its `var` declarations.
+- **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, steps 27-36).
+
+### 1.84 A compound assignment in `with` resolves the name once
+
+```js
+with (proxy) { p += 1; }
+// before: has, get @@unscopables, has, get @@unscopables, has, get p, has, set p
+// now:    has, get @@unscopables, has, get p, has, set p
+```
+
+- `x op= v` inside `with` reads the value from the object the reference resolved to, without checking
+  `Symbol.unscopables` again; visible through the traps of a proxy.
+- **Why:** ECMA-262 2026, §13.15.2 (AssignmentExpression evaluation), §9.1.1.2.6 (GetBindingValue).
+
+### 1.85 The `flags` getter of `RegExp.prototype` rejects a primitive `this`
+
+```js
+Object.getOwnPropertyDescriptor(RegExp.prototype, "flags").get.call(4);
+// before: ""   now: TypeError
+```
+
+- **Why:** ECMA-262 2026, §22.2.6.4 (get RegExp.prototype.flags, step 2).
 
 ---
 

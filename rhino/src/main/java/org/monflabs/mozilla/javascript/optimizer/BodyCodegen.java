@@ -513,7 +513,10 @@ class BodyCodegen {
         epilogueLabel = cfw.acquireLabel();
         cfw.markLabel(enterAreaStartLabel);
 
-        generateNestedFunctionInits();
+        if (!(scriptOrFn instanceof FunctionNode)
+                || !((FunctionNode) scriptOrFn).isFunctionsAfterParams()) {
+            generateNestedFunctionInits();
+        }
 
         // default is to generate debug info
         if (compilerEnv.isGenerateDebugInfo()) {
@@ -717,6 +720,9 @@ class BodyCodegen {
             case Token.BLOCK:
             case Token.SCOPE_BLOCK:
             case Token.EMPTY:
+                if (node.getIntProp(Node.FUNCTION_DECLS_PROP, 0) == 1) {
+                    generateNestedFunctionInits();
+                }
                 // no-ops.
                 if (compilerEnv.isGenerateObserverCount()) {
                     // Need to add instruction count even for no-ops to catch
@@ -1114,7 +1120,20 @@ class BodyCodegen {
                 break;
 
             case Token.NAME:
-                {
+                if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
+                    // stack: [scope] -> [scope, value]
+                    cfw.add(ByteCode.DUP);
+                    cfw.addPush(node.getString());
+                    cfw.addALoad(contextLocal);
+                    cfw.addALoad(variableObjectLocal);
+                    addScriptRuntimeInvoke(
+                            "boundName",
+                            "(Ljava/lang/Object;"
+                                    + "Ljava/lang/String;"
+                                    + "Lorg/monflabs/mozilla/javascript/Context;"
+                                    + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                    + ")Ljava/lang/Object;");
+                } else {
                     cfw.addALoad(variableObjectLocal);
                     cfw.addALoad(contextLocal);
                     addDynamicInvoke("NAME:GET:" + node.getString(), Signatures.NAME_GET);

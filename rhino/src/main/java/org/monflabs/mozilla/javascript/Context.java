@@ -259,6 +259,10 @@ public class Context implements Closeable {
      *   <li>{@code "NaN"} is a numeric key of a TypedArray.
      *   <li>Accessors read or written on a primitive receive the primitive.
      *   <li>{@code super[key]++} evaluates the key once and converts the value with ToNumeric.
+     *   <li>With parameter expressions, function declarations are instantiated after the
+     *       parameters.
+     *   <li>A compound assignment in {@code with} resolves the name once.
+     *   <li>The {@code flags} getter of {@code RegExp.prototype} rejects a primitive {@code this}.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
