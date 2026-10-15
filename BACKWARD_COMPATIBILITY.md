@@ -89,6 +89,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.74 | The discriminant of a `switch` and the parameter of a `catch` do not see the block's `let`/`const` | `VERSION_ECMASCRIPT` |
 | 1.75 | Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ | `VERSION_ECMASCRIPT` |
 | 1.76 | `push` and `unshift` go through index properties of the prototypes | `VERSION_ECMASCRIPT` |
+| 1.77 | An object pattern evaluates a property target before reading the source property | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1264,6 +1265,18 @@ Object.defineProperty(Array.prototype, "0", { set(v) { log.push(v); } });
   property at the indexes written; otherwise each element is set as the spec says (a setter of a prototype is
   called, a read-only one fails), and a length that cannot be set then is a TypeError.
 - **Why:** ECMA-262 2026, §23.1.3.23 and §23.1.3.37 (Set(O, Pk, E, true)).
+
+### 1.77 An object pattern evaluates a property target before reading the source property
+
+```js
+({ [key()]: target()[targetKey()] } = source());
+// before: source, key, get, target, targetKey, set   now: source, key, target, targetKey, get, set
+```
+
+- In a destructuring assignment, the object and the key expression of a property or element target (`o.p`,
+  `o[k]`, `this.#f`) are evaluated before the property of the source is read; a computed key of the pattern is
+  converted to a property key right after it is evaluated.
+- **Why:** ECMA-262 2026, §13.15.5.6 (KeyedDestructuringAssignmentEvaluation).
 
 ---
 

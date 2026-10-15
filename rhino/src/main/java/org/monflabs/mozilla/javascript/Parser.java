@@ -8376,6 +8376,11 @@ public class Parser {
                             transformer != null
                                     ? transformer.transform(computedExpr)
                                     : computedExpr;
+                    if (transformer != null) {
+                        // ToPropertyKey before the target of the property is evaluated
+                        keyExpr = new Node(Token.FIELD_KEY, keyExpr);
+                        keyExpr.putIntProp(Node.AWAIT_KIND_PROP, 5);
+                    }
                     Node setKey =
                             new Node(
                                     Token.SETNAME,
@@ -8429,6 +8434,50 @@ public class Parser {
                     defineSymbol(variableType, name, true);
                     destructuringNames.add(name);
                 }
+            } else if (isEvaluatedMemberTarget(value, transformer)) {
+                // KeyedDestructuringAssignmentEvaluation: the reference of the target (its object
+                // and key expression) is evaluated before the property of the source is read
+                AstNode targetObject =
+                        value instanceof PropertyGet
+                                ? ((PropertyGet) value).getTarget()
+                                : ((ElementGet) value).getTarget();
+                String objectTemp = defineTemp();
+                parent.addChildToBack(
+                        new Node(
+                                Token.SETNAME,
+                                createName(Token.BINDNAME, objectTemp, null),
+                                transformer.transform(targetObject)));
+                Node set;
+                if (value instanceof PropertyGet
+                        && isPrivateName(((PropertyGet) value).getProperty())) {
+                    // a private field: assigned through the object in the temp
+                    PropertyGet member = new PropertyGet(value.getPosition(), value.getLength());
+                    member.setTarget(new Name(value.getPosition(), objectTemp));
+                    member.setProperty(((PropertyGet) value).getProperty());
+                    set = simpleAssignment(member, rightElem, transformer);
+                } else if (value instanceof PropertyGet) {
+                    set =
+                            new Node(
+                                    Token.SETPROP,
+                                    createName(objectTemp),
+                                    Node.newString(
+                                            ((PropertyGet) value).getProperty().getIdentifier()),
+                                    rightElem);
+                } else {
+                    String keyTemp = defineTemp();
+                    parent.addChildToBack(
+                            new Node(
+                                    Token.SETNAME,
+                                    createName(Token.BINDNAME, keyTemp, null),
+                                    transformer.transform(((ElementGet) value).getElement())));
+                    set =
+                            new Node(
+                                    Token.SETELEM,
+                                    createName(objectTemp),
+                                    createName(keyTemp),
+                                    rightElem);
+                }
+                parent.addChildToBack(set);
             } else if (value.getType() == Token.ASSIGN) {
                 processDestructuringDefaults(
                         variableType,
@@ -8455,6 +8504,22 @@ public class Parser {
             elementIndex++;
         }
         return empty;
+    }
+
+    /** A property or element target of an object pattern whose reference is evaluated first. */
+    private boolean isEvaluatedMemberTarget(AstNode value, Transformer transformer) {
+        if (transformer == null || !compilerEnv.isLatestEcmaScript()) {
+            return false;
+        }
+        AstNode target;
+        if (value instanceof PropertyGet) {
+            target = ((PropertyGet) value).getTarget();
+        } else if (value instanceof ElementGet) {
+            target = ((ElementGet) value).getTarget();
+        } else {
+            return false;
+        }
+        return !(target instanceof KeywordLiteral) || target.getType() != Token.SUPER;
     }
 
     protected Node createName(String name) {

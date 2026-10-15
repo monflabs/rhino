@@ -31,6 +31,6 @@ cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wai
   receiver (4 tests); method calls on primitives already pass the primitive.
 - Cross-realm behavior (about 10 tests): errors created in the realm of the function rather than the caller's,
   `%ThrowTypeError%` per realm, `Function.prototype.bind` and `apply` across realms.
-- Smaller items: completion values of `break` in `finally`, evaluation order of keyed destructuring targets and of
-  `super[expr]++`, private field set order, anonymous classes named by computed keys, proxy edge cases, `arguments`
-  in direct eval inside arrow functions.
+- Smaller items: completion values of `break` in `finally`, evaluation order of `super[expr]++` (the super base
+  is read after the key is converted), anonymous classes named by computed keys, proxy edge cases, `arguments` in
+  direct eval inside arrow functions.

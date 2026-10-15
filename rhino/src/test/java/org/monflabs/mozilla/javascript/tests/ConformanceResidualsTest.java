@@ -226,4 +226,20 @@ class ConformanceResidualsTest {
                         + "}\n"
                         + "run('push') + '|' + run('unshift')");
     }
+
+    @Test
+    void destructuringTargetReferenceBeforeGet() {
+        Utils.assertGatedBehavior(
+                "source,key,get,target,target-key,set",
+                "source,key,target,target-key,get,set",
+                "var log = [];\n"
+                        + "function source() { log.push('source');"
+                        + " return { get p() { log.push('get'); return 1; } }; }\n"
+                        + "function target() { log.push('target');"
+                        + " return { set q(v) { log.push('set'); } }; }\n"
+                        + "function key() { log.push('key'); return 'p'; }\n"
+                        + "function targetKey() { log.push('target-key'); return 'q'; }\n"
+                        + "({ [key()]: target()[targetKey()] } = source());\n"
+                        + "log.join()");
+    }
 }

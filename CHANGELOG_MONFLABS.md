@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Destructuring target order (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.77): an object pattern evaluates the reference of a
+  property, element or private field target (object and key expression, in temps) before reading the source
+  property, and converts a computed key of the pattern right away.
+- Tests: `ConformanceResidualsTest.destructuringTargetReferenceBeforeGet`.
+- test262: 42,198 → 42,202 of 42,616.
+
 ### push and unshift with prototype indexes (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.76): the dense fast path of `push` and `unshift` is taken
