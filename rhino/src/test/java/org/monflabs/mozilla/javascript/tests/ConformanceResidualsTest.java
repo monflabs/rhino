@@ -59,7 +59,7 @@ class ConformanceResidualsTest {
     void noArity() {
         Utils.assertGatedBehavior(
                 "2|length,name,arity,prototype",
-                "undefined|length,name,prototype",
+                "undefined|length,name,arguments,caller,prototype",
                 "var f = function (a, b) {};\n"
                         + "f.arity + '|' + Object.getOwnPropertyNames(f).join()");
     }
@@ -124,5 +124,22 @@ class ConformanceResidualsTest {
                         + "var F = class extends function () { return this; } {};\n"
                         + "var r; try { new D(); r = 'none'; } catch (e) { r = e.name; }\n"
                         + "r + '|' + typeof Object.getPrototypeOf(F).call(undefined)");
+    }
+
+    @Test
+    void restrictedFunctionProperties() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "true|true|2|undefined|length,name,arguments,caller,prototype|TypeError|length,name",
+                "var d = Object.getOwnPropertyDescriptor(Function.prototype, 'caller');\n"
+                        + "var tte = (function () { 'use strict';"
+                        + " return Object.getOwnPropertyDescriptor(arguments, 'callee').get; })();\n"
+                        + "function sloppy() { return sloppy.arguments.length; }\n"
+                        + "function strict() { 'use strict'; }\n"
+                        + "var r = [d.get === d.set && d.get === tte,"
+                        + " Object.getOwnPropertyDescriptor(Function.prototype, 'arguments').get === tte,"
+                        + " sloppy(1, 2), String(sloppy.caller), Object.getOwnPropertyNames(sloppy).join()];\n"
+                        + "try { strict.caller; r.push('none'); } catch (e) { r.push(e.name); }\n"
+                        + "r.push(Object.getOwnPropertyNames(() => 1).join());\n"
+                        + "r.join('|')");
     }
 }

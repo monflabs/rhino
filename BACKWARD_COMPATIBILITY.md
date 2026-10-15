@@ -83,6 +83,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.68 | Closures in parameter expressions do not see the `var` declarations of the body | `VERSION_ECMASCRIPT` |
 | 1.69 | Strict methods called on a primitive receive the primitive as `this` | `VERSION_ECMASCRIPT` |
 | 1.70 | A data property of an object literal replaces an accessor of the same name | `VERSION_ECMASCRIPT` |
+| 1.71 | `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1177,6 +1178,24 @@ true.f();                                   // before: "object"   now: "boolean"
 - In an object literal, a data property defines the property (CreateDataPropertyOrThrow) instead of assigning it,
   so it replaces a getter or setter defined before it in the same literal.
 - **Why:** ECMA-262 2026, §13.2.5.5 (PropertyDefinitionEvaluation: CreateDataPropertyOrThrow).
+
+### 1.71 `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions
+
+```js
+function f() { return f.arguments.length; }
+f(1, 2);                                    // unchanged: 2
+Object.getOwnPropertyNames(f);              // before: length,name,prototype   now: length,name,arguments,caller,prototype
+Object.getOwnPropertyDescriptor(Function.prototype, "caller").get; // now %ThrowTypeError%
+```
+
+- `Function.prototype.caller` and `Function.prototype.arguments` are accessors whose getter and setter are the realm's
+  %ThrowTypeError% (the same function as the `callee` accessor of a strict `arguments` object).
+- A sloppy function (not a method, arrow, generator, async function or class) has own non-writable `arguments` (the
+  arguments of the running call, as before) and `caller` (undefined: the caller is not tracked) properties; the
+  others have neither, and reading
+  them throws a TypeError.
+- **Why:** ECMA-262 2026, §10.2.4 (AddRestrictedFunctionProperties), §17.1 (the own `caller` and `arguments` of a
+  sloppy function are an allowed extension). Decision 2026-10-14.
 
 ---
 

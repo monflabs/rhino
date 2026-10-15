@@ -252,6 +252,9 @@ public class ScriptRuntime {
         functionPrototype.setPrototype(objectPrototype);
         function.setPrototype(functionPrototype);
         obj.setPrototype(functionPrototype);
+        if (cx.isLatestEcmaScript()) {
+            BaseFunction.addRestrictedFunctionProperties(cx, scope, functionPrototype);
+        }
 
         // must precede NativeGlobal since it's needed therein
         NativeError.init(cx, scope, sealed);

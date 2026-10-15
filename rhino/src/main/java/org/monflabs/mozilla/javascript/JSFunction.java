@@ -31,6 +31,16 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
             return;
         }
         ScriptRuntime.setFunctionProtoAndParent(this, cx, scope, descriptor.isES6Generator());
+        if (cx != null
+                && cx.isLatestEcmaScript()
+                && !descriptor.isStrict()
+                && !descriptor.isShorthand()
+                && !descriptor.isES6Generator()
+                && !descriptor.hasLexicalThis()
+                && !descriptor.isClassConstructor()
+                && !isBuiltIn()) {
+            installSloppyFunctionProperties();
+        }
         if (!descriptor.isShorthand()
                 || (descriptor.isES6Generator() && cx != null && cx.isLatestEcmaScript())) {
             setupDefaultPrototype(scope);

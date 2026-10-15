@@ -40,7 +40,6 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static final ClassDescriptor DESCRIPTOR;
     private static final ClassDescriptor ES6_DESCRIPTOR;
-    private static final ClassDescriptor LATEST_DESCRIPTOR;
     private static final ClassDescriptor GENERATOR_DESCRIPTOR;
     private static final ClassDescriptor ASYNC_DESCRIPTOR;
     private static final ClassDescriptor ASYNC_GENERATOR_DESCRIPTOR;
@@ -73,6 +72,20 @@ public class BaseFunction extends ScriptableObject implements Function {
     private static final SlotMapDescriptor<BaseFunction> ARGUMENTS_MAP =
             SlotMapDescriptor.Builder.extending(ARITY_MAP)
                     .withSlot(ARGUMENTS_DESCRIPTOR, PERMANENT | DONTENUM)
+                    .build();
+
+    private static final BuiltInSlot.Descriptor<BaseFunction> CALLER_DESCRIPTOR =
+            new BuiltInSlot.Descriptor<>("caller", (function, start) -> Undefined.instance);
+
+    /**
+     * The properties of a sloppy function under VERSION_ECMASCRIPT: its own arguments (of the call
+     * running) and caller (undefined: the caller is not tracked), as Function.prototype has
+     * %ThrowTypeError% for them.
+     */
+    private static final SlotMapDescriptor<BaseFunction> SLOPPY_MAP =
+            SlotMapDescriptor.Builder.extending(BASIC_MAP)
+                    .withSlot(ARGUMENTS_DESCRIPTOR, PERMANENT | DONTENUM | READONLY)
+                    .withSlot(CALLER_DESCRIPTOR, PERMANENT | DONTENUM | READONLY)
                     .build();
 
     private static final BuiltInSlot.Descriptor<BaseFunction> PROTOTYPE_DESCRIPTOR =
@@ -110,15 +123,6 @@ public class BaseFunction extends ScriptableObject implements Function {
                                 "arguments",
                                 BaseFunction::js_protoArgumentsGetter,
                                 BaseFunction::js_protoArgumentsSetter,
-                                DONTENUM | READONLY)
-                        .build();
-        // the builder is cumulative: the methods keep their descriptors (see APPLY_DESCRIPTOR)
-        LATEST_DESCRIPTOR =
-                builder.withProp(
-                                PROTO,
-                                "caller",
-                                BaseFunction::js_protoCallerGetter,
-                                BaseFunction::js_protoCallerSetter,
                                 DONTENUM | READONLY)
                         .build();
 
@@ -176,8 +180,26 @@ public class BaseFunction extends ScriptableObject implements Function {
         } else if (!cx.isLatestEcmaScript()) {
             return ES6_DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
         } else {
-            return LATEST_DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
+            // caller and arguments are %ThrowTypeError%, defined with the Object prototype
+            return DESCRIPTOR.buildConstructor(cx, scope, proto, sealed);
         }
+    }
+
+    /** Gives a sloppy function its own arguments and caller properties (VERSION_ECMASCRIPT). */
+    void installSloppyFunctionProperties() {
+        SLOPPY_MAP.installMap(this);
+    }
+
+    /**
+     * AddRestrictedFunctionProperties ( F, realm ) (10.2.4): caller and arguments of
+     * Function.prototype are accessors whose get and set are %ThrowTypeError%.
+     */
+    static void addRestrictedFunctionProperties(
+            Context cx, VarScope scope, ScriptableObject functionPrototype) {
+        functionPrototype.defineOwnProperty(
+                cx, "caller", createThrowingProp(cx, scope, functionPrototype));
+        functionPrototype.defineOwnProperty(
+                cx, "arguments", createThrowingProp(cx, scope, functionPrototype));
     }
 
     /**
@@ -883,16 +905,6 @@ public class BaseFunction extends ScriptableObject implements Function {
             checkSloppyFunction(thisObj);
         }
         LambdaConstructor.convertThisObject(thisObj, BaseFunction.class).setArguments(value);
-    }
-
-    /** The caller of a sloppy function is not tracked: undefined. */
-    private static Object js_protoCallerGetter(Scriptable thisObj) {
-        checkSloppyFunction(thisObj);
-        return Undefined.instance;
-    }
-
-    private static void js_protoCallerSetter(Scriptable thisObj, Object value) {
-        checkSloppyFunction(thisObj);
     }
 
     public String getFunctionName() {

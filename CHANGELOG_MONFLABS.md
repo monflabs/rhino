@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### %ThrowTypeError% on Function.prototype (2026-10-14, plan M13)
+
+- Changed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.71, decision 2026-10-14): `Function.prototype.caller`
+  and `arguments` are accessors of %ThrowTypeError% (AddRestrictedFunctionProperties); sloppy functions get own
+  `arguments` (the legacy arguments of the running call) and `caller` (undefined, as the caller is not tracked)
+  properties.
+- Tests: `ConformanceResidualsTest.restrictedFunctionProperties`.
+- test262: 42,157 → 42,164 of 42,616.
+
 ### Object literal accessors, class heritage strictness, AsyncIterator this (2026-10-14, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.70): a data property of an object literal with
