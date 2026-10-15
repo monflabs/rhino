@@ -211,4 +211,19 @@ class ConformanceResidualsTest {
                         + " out.push(e.message.indexOf('$') < 0 ? 'clean' : e.message); }\n"
                         + "out.push(r.concat([h(5)]).join()); out.join('|')");
     }
+
+    @Test
+    void pushAndUnshiftHonorPrototypeIndexes() {
+        Utils.assertGatedBehavior(
+                "1:0|1:0",
+                "TypeError:1|TypeError:1",
+                "function run(method) {\n"
+                        + "  var array = [], calls = 0;\n"
+                        + "  Object.defineProperty(Array.prototype, '0', { configurable: true,"
+                        + " set(v) { Object.freeze(array); calls++; } });\n"
+                        + "  var r; try { array[method](1); r = array.length; } catch (e) { r = e.name; }\n"
+                        + "  delete Array.prototype[0]; return r + ':' + calls;\n"
+                        + "}\n"
+                        + "run('push') + '|' + run('unshift')");
+    }
 }

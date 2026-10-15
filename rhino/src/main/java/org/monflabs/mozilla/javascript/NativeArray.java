@@ -1348,7 +1348,9 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
+                    && (!cx.isLatestEcmaScript()
+                            || (na.isWritableDense()
+                                    && !prototypeHasIndex(na, na.length, args.length)))
                     && na.ensureCapacity((int) na.length + args.length)) {
                 for (Object arg : args) {
                     na.dense[(int) na.length++] = arg;
@@ -1460,6 +1462,43 @@ public class NativeArray extends ScriptableObject implements List {
         return result;
     }
 
+    /**
+     * Whether a prototype of the array has a property at one of the indexes from start, which
+     * writing them must go through (a setter, a read-only property): no fast path then.
+     */
+    private static boolean prototypeHasIndex(NativeArray na, long start, int count) {
+        Scriptable proto = na.getPrototype();
+        if (proto == null) {
+            return false;
+        }
+        for (int i = 0; i < count; i++) {
+            if (ScriptableObject.hasProperty(proto, (int) (start + i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a prototype of the array may have a property at an index below end. */
+    private static boolean prototypeHasIndexBelow(NativeArray na, long end) {
+        for (Scriptable p = na.getPrototype(); p != null; p = p.getPrototype()) {
+            if (p instanceof NativeArray) {
+                if (((NativeArray) p).length > 0) {
+                    return true;
+                }
+            } else if (p instanceof ScriptableObject) {
+                for (Object id : ((ScriptableObject) p).getAllIds()) {
+                    if (id instanceof Integer && (Integer) id < end) {
+                        return true;
+                    }
+                }
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Object js_unshift(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
@@ -1467,7 +1506,9 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
+                    && (!cx.isLatestEcmaScript()
+                            || (na.isWritableDense()
+                                    && !prototypeHasIndexBelow(na, na.length + args.length)))
                     && na.ensureCapacity((int) na.length + args.length)) {
                 System.arraycopy(na.dense, 0, na.dense, args.length, (int) na.length);
                 System.arraycopy(args, 0, na.dense, 0, args.length);

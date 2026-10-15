@@ -759,6 +759,6 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 10.x | ES2024 (resizable buffers, v flag)              | done        | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
-| 13   | Long tail to zero                               | in progress | 99.0% (42,194)               | 40075a55a |
+| 13   | Long tail to zero                               | in progress | 99.0% (42,198)               | 40075a55a |
 | 14   | Performance pass                                | continuous  |                              |        |
 | 15   | Single language version                         | todo        |                              |        |

@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### push and unshift with prototype indexes (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.76): the dense fast path of `push` and `unshift` is taken
+  only when no prototype has a property at the indexes written (a lookup per pushed element; for `unshift`, the
+  integer keys of the prototypes that are not empty arrays).
+- Tests: `ConformanceResidualsTest.pushAndUnshiftHonorPrototypeIndexes`.
+- test262: 42,194 → 42,198 of 42,616.
+
 ### Loop head temporal dead zone (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.75): a closure in the head expression of

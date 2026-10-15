@@ -27,8 +27,6 @@ cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wai
 
 ## Residuals still to fix (M13)
 
-- `Array.prototype.push`/`unshift` on an array whose prototype has index setters (4 tests): the dense fast path
-  writes the elements without looking at the prototype chain.
 - Getters read on a primitive (`(5).x`) and assignments to a property of a primitive receive a wrapper object as
   receiver (4 tests); method calls on primitives already pass the primitive.
 - Cross-realm behavior (about 10 tests): errors created in the realm of the function rather than the caller's,

@@ -88,6 +88,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.73 | A generator's `return()` inside a destructuring pattern closes its iterator as a return | `VERSION_ECMASCRIPT` |
 | 1.74 | The discriminant of a `switch` and the parameter of a `catch` do not see the block's `let`/`const` | `VERSION_ECMASCRIPT` |
 | 1.75 | Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ | `VERSION_ECMASCRIPT` |
+| 1.76 | `push` and `unshift` go through index properties of the prototypes | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1251,6 +1252,18 @@ f();   // before: "outside"   now: ReferenceError (x is in its temporal dead zon
   initialized: a closure created there that reads them throws a ReferenceError (the parser points it to bindings of
   a block around the loop that are never initialized).
 - **Why:** ECMA-262 2026, §14.7.5.6 (ForIn/OfHeadEvaluation, TDZnames).
+
+### 1.76 `push` and `unshift` go through index properties of the prototypes
+
+```js
+Object.defineProperty(Array.prototype, "0", { set(v) { log.push(v); } });
+[].push(1);   // before: the element is stored in the array   now: the setter is called, nothing is stored
+```
+
+- The fast path of `push` and `unshift` on a dense array writes the elements directly only when no prototype has a
+  property at the indexes written; otherwise each element is set as the spec says (a setter of a prototype is
+  called, a read-only one fails), and a length that cannot be set then is a TypeError.
+- **Why:** ECMA-262 2026, §23.1.3.23 and §23.1.3.37 (Set(O, Pk, E, true)).
 
 ---
 
