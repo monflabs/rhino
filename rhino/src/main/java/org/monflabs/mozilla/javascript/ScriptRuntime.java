@@ -1277,6 +1277,10 @@ public class ScriptRuntime {
         if (obj == null) return "[object Null]";
         if (Undefined.isUndefined(obj)) return "[object Undefined]";
 
+        Context current = Context.getCurrentContext();
+        // IsArray comes before the Get of @@toStringTag, which may revoke a proxy (20.1.3.6)
+        boolean isArray =
+                current != null && current.isLatestEcmaScript() && NativeArray.isArray(obj);
         Object tagValue = ScriptableObject.getProperty((Scriptable) obj, SymbolKey.TO_STRING_TAG);
         // Note: Scriptable.NOT_FOUND is not a CharSequence, so we don't need to explicitly check
         // for it
@@ -1284,21 +1288,22 @@ public class ScriptRuntime {
             return "[object " + tagValue + "]";
         }
 
-        String className = ((Scriptable) obj).getClassName();
         Context cx = Context.getCurrentContext();
         if (cx != null && cx.isLatestEcmaScript()) {
             // builtinTag (20.1.3.6): the standard objects that have a @@toStringTag otherwise
-            if (NativeArray.isArray(obj)) {
+            if (isArray) {
                 return "[object Array]";
             }
             if (obj instanceof NativeProxy) {
                 return obj instanceof Callable ? "[object Function]" : "[object Object]";
             }
+            String className = ((Scriptable) obj).getClassName();
             if (TAGGED_BUILTIN_CLASSES.contains(className)) {
                 return "[object Object]";
             }
+            return "[object " + className + "]";
         }
-        return "[object " + className + "]";
+        return "[object " + ((Scriptable) obj).getClassName() + "]";
     }
 
     /** Class names of the standard objects whose tag is their @@toStringTag property. */

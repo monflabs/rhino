@@ -242,4 +242,48 @@ class ConformanceResidualsTest {
                         + "({ [key()]: target()[targetKey()] } = source());\n"
                         + "log.join()");
     }
+
+    @Test
+    void toStringReadsIsArrayBeforeTheTag() {
+        Utils.assertGatedBehavior(
+                "TypeError",
+                "[object Array]",
+                "var h = Proxy.revocable([], { get: function() { h.revoke(); } });\n"
+                        + "try { Object.prototype.toString.call(h.proxy); } catch (e) { e.name }");
+    }
+
+    @Test
+    void definePropertiesUsesOwnPropertyKeys() {
+        Utils.assertGatedBehavior(
+                "TypeError",
+                "0,foo,Symbol()",
+                "var t = {}; t[Symbol()] = 1; t.foo = 2; t[0] = 3; var keys = [];\n"
+                        + "var p = new Proxy(t, { getOwnPropertyDescriptor: function(_, k) {"
+                        + " keys.push(String(k)); } });\n"
+                        + "try { Object.defineProperties({}, p); keys.join(); } catch (e) { e.name }");
+    }
+
+    @Test
+    void reflectOwnKeysKeepsProxyOrder() {
+        Utils.assertGatedBehavior(
+                "length,foo,0,Symbol()",
+                "Symbol(),length,foo,0",
+                "var keys = [Symbol(), 'length', 'foo', '0'];\n"
+                        + "var p = new Proxy(new Proxy([], { ownKeys: function() { return keys; } }),"
+                        + " {});\n"
+                        + "Reflect.ownKeys(p).map(String).join()");
+    }
+
+    @Test
+    void stringIndexesCannotBeRedefined() {
+        Utils.assertGatedBehavior(
+                "ok,true,false,s",
+                "TypeError,false,true,s",
+                "var s = new String('str'), r = [];\n"
+                        + "try { Object.defineProperty(s, '0', { value: 'x' }); r.push('ok'); }"
+                        + " catch (e) { r.push(e.name); }\n"
+                        + "r.push(Reflect.defineProperty(s, '0', { value: 'x' }),"
+                        + " Reflect.defineProperty(s, '0', { value: 's' }), s[0]);\n"
+                        + "r.join()");
+    }
 }

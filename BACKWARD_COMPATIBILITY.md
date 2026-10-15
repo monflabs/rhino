@@ -90,6 +90,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.75 | Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ | `VERSION_ECMASCRIPT` |
 | 1.76 | `push` and `unshift` go through index properties of the prototypes | `VERSION_ECMASCRIPT` |
 | 1.77 | An object pattern evaluates a property target before reading the source property | `VERSION_ECMASCRIPT` |
+| 1.78 | Proxy and String object internal methods in `toString`, `defineProperties`, `ownKeys` and index definition | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1277,6 +1278,25 @@ Object.defineProperty(Array.prototype, "0", { set(v) { log.push(v); } });
   `o[k]`, `this.#f`) are evaluated before the property of the source is read; a computed key of the pattern is
   converted to a property key right after it is evaluated.
 - **Why:** ECMA-262 2026, §13.15.5.6 (KeyedDestructuringAssignmentEvaluation).
+
+### 1.78 Proxy and String object internal methods in `toString`, `defineProperties`, `ownKeys` and index definition
+
+```js
+var h = Proxy.revocable([], { get() { h.revoke(); } });
+Object.prototype.toString.call(h.proxy);    // before: TypeError (revoked)   now: "[object Array]"
+Object.defineProperty(new String("str"), "0", { value: "x" });
+                                            // before: no error              now: TypeError
+Reflect.ownKeys(new Proxy(new Proxy([], { ownKeys: () => ["b", "a"] }), {}));
+                                            // before: integer keys first    now: the trap's order
+```
+
+- `Object.prototype.toString` checks IsArray before reading `@@toStringTag`.
+- `Object.defineProperties` lists the keys of the properties object through [[OwnPropertyKeys]] (symbols
+  included) and keeps the enumerable ones through [[GetOwnProperty]], so the proxy traps are called in order.
+- `Reflect.ownKeys` of a proxy returns the keys in the order of its [[OwnPropertyKeys]].
+- Defining an index of a String object (below its length) with an incompatible descriptor fails: a TypeError for
+  `Object.defineProperty`, `false` for `Reflect.defineProperty`.
+- **Why:** ECMA-262 2026, §20.1.3.6, §20.1.2.3.1, §28.1.11, §10.4.3.2.
 
 ---
 

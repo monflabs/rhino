@@ -1460,6 +1460,10 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
      * @param props a map of property ids to property descriptors
      */
     public void defineOwnProperties(Context cx, ScriptableObject props) {
+        if (cx.isLatestEcmaScript()) {
+            defineOwnPropertiesLatest(cx, props);
+            return;
+        }
         Object[] ids;
         try (var map = props.startCompoundOp(false)) {
             ids = props.getIds(map, false, true);
@@ -1473,6 +1477,33 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
         }
         for (int i = 0, len = ids.length; i < len; ++i) {
             defineOwnProperty(cx, ids[i], descs[i]);
+        }
+    }
+
+    /**
+     * ObjectDefineProperties ( O, Properties ) (20.1.2.3.1): the own keys of the properties,
+     * through [[OwnPropertyKeys]] and [[GetOwnProperty]] (proxy traps), the enumerable ones only.
+     */
+    private void defineOwnPropertiesLatest(Context cx, ScriptableObject props) {
+        Object[] keys;
+        try (var map = props.startCompoundOp(false)) {
+            keys = props.getIds(map, true, true);
+        }
+        List<Object> ids = new ArrayList<>();
+        List<DescriptorInfo> descs = new ArrayList<>();
+        for (Object key : keys) {
+            DescriptorInfo own = props.getOwnPropertyDescriptor(cx, key);
+            if (own == null || !Boolean.TRUE.equals(own.enumerable)) {
+                continue;
+            }
+            Object descObj = ScriptRuntime.getObjectElem(props, key, cx);
+            var desc = new DescriptorInfo(ensureScriptableObject(descObj));
+            checkPropertyDefinition(desc);
+            ids.add(key);
+            descs.add(desc);
+        }
+        for (int i = 0; i < ids.size(); i++) {
+            defineOwnProperty(cx, ids.get(i), descs.get(i));
         }
     }
 

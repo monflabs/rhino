@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Proxy and String object internal methods (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.78): `Object.prototype.toString` checks IsArray before
+  reading `@@toStringTag`; `Object.defineProperties` goes through [[OwnPropertyKeys]] and [[GetOwnProperty]];
+  `Reflect.ownKeys` keeps the key order of a proxy; a String object rejects an incompatible definition of one of its
+  indexes.
+- Javadoc of `Context.VERSION_ECMASCRIPT`: added the missing entries for 1.74–1.77.
+- Tests: `ConformanceResidualsTest.toStringReadsIsArrayBeforeTheTag`, `definePropertiesUsesOwnPropertyKeys`,
+  `reflectOwnKeysKeepsProxyOrder`, `stringIndexesCannotBeRedefined`.
+- test262: 42,202 → 42,206 of 42,616.
+
 ### Destructuring target order (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.77): an object pattern evaluates the reference of a

@@ -618,6 +618,35 @@ final class NativeString extends ScriptableObject {
         return super.getOwnPropertyDescriptor(cx, id);
     }
 
+    /**
+     * [[DefineOwnProperty]] of a String exotic object (10.4.3.2): an index of the string is a
+     * non-writable, non-configurable property, which only a compatible descriptor can define.
+     */
+    @Override
+    protected boolean defineOwnProperty(
+            Context cx, Object id, ScriptableObject.DescriptorInfo desc, boolean checkValid) {
+        if (!(id instanceof Symbol) && cx != null && cx.isLatestEcmaScript()) {
+            StringIdOrIndex s = ScriptRuntime.toStringIdOrIndex(id);
+            if (s.stringId == null && 0 <= s.index && s.index < string.length()) {
+                String value = String.valueOf(string.charAt(s.index));
+                boolean compatible =
+                        !Boolean.TRUE.equals(desc.configurable)
+                                && (desc.enumerable == NOT_FOUND
+                                        || ScriptRuntime.toBoolean(desc.enumerable))
+                                && !desc.isAccessorDescriptor()
+                                && !Boolean.TRUE.equals(desc.writable)
+                                && (desc.value == NOT_FOUND
+                                        || ScriptRuntime.same(desc.value, value));
+                if (!compatible && checkValid) {
+                    throw ScriptRuntime.typeErrorById(
+                            "msg.modify.readonly", String.valueOf(s.index));
+                }
+                return compatible;
+            }
+        }
+        return super.defineOwnProperty(cx, id, desc, checkValid);
+    }
+
     private ScriptableObject.DescriptorInfo defaultIndexPropertyDescriptor(Object value) {
         return new ScriptableObject.DescriptorInfo(true, false, false, NOT_FOUND, NOT_FOUND, value);
     }

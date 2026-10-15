@@ -349,6 +349,14 @@ final class NativeReflect extends ScriptableObject {
         try (var map = target.startCompoundOp(false)) {
             ids = target.getIds(map, true, true);
         }
+        if (target instanceof NativeProxy && cx.isLatestEcmaScript()) {
+            // the keys of a proxy are in the order its [[OwnPropertyKeys]] gives them
+            Object[] keys = new Object[ids.length];
+            for (int i = 0; i < ids.length; i++) {
+                keys[i] = ids[i] instanceof Symbol ? ids[i] : ScriptRuntime.toString(ids[i]);
+            }
+            return cx.newArray(s, keys);
+        }
         for (Object o : ids) {
             if (o instanceof Symbol) {
                 symbols.add(o);

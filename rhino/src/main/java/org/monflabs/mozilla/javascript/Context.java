@@ -246,6 +246,15 @@ public class Context implements Closeable {
      *       primitive as {@code this}.
      *   <li>{@code Function.prototype.caller}/{@code arguments} are %ThrowTypeError%; sloppy
      *       functions have their own {@code arguments} and {@code caller} (undefined).
+     *   <li>The discriminant of a {@code switch} and the parameter of a {@code catch} do not see
+     *       the block's {@code let}/{@code const}.
+     *   <li>Closures in the head of {@code for (let/const ... in/of ...)} see the loop bindings in
+     *       their TDZ.
+     *   <li>{@code push} and {@code unshift} go through index properties of the prototypes.
+     *   <li>An object pattern evaluates a property target before reading the source property.
+     *   <li>Proxies and String objects follow the spec's internal methods in {@code
+     *       Object.prototype.toString}, {@code Object.defineProperties}, {@code Reflect.ownKeys}
+     *       and {@code [[DefineOwnProperty]]} of a string index.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
