@@ -2,9 +2,9 @@
 
 Under `Context.VERSION_ECMASCRIPT`, this fork passes the test262 suite in its scope, ES2026 without the exclusions of
 [MONFLABS_PLAN.md](../MONFLABS_PLAN.md) (proper tail calls, `staging/`, `intl402/` and the proposals after ES2026),
-except for the tests listed here. Each group has its reason: a documented decision, or a residual still to fix (plan
-milestone M13). `tests/testsrc/test262.properties` lists every failing test; `python3 tests/test262-status.py` gives
-the current numbers (99.1% of 42,616 tests on 2026-10-15).
+except for the tests listed here, each group with its documented reason. `tests/testsrc/test262.properties` lists
+every failing test; `python3 tests/test262-status.py` gives the current numbers (99.1% of 42,616 tests on
+2026-10-15).
 
 ## Documented limits
 
@@ -32,7 +32,3 @@ of one realm to be an instance of that realm's constructor, `%ThrowTypeError%` t
 `Function.prototype.bind` and `apply` to pick the realm of their target. This fork creates errors in the realm of
 the code that catches them, and supports several realms only as separate scopes; embedders rarely mix objects of
 different realms, so tracking the realm through every error and function is left out.
-
-## Residuals still to fix (M13)
-
-None: every in-scope test outside the documented limits above passes.
