@@ -255,6 +255,8 @@ public class Context implements Closeable {
      *   <li>Proxies and String objects follow the spec's internal methods in {@code
      *       Object.prototype.toString}, {@code Object.defineProperties}, {@code Reflect.ownKeys}
      *       and {@code [[DefineOwnProperty]]} of a string index.
+     *   <li>Generator declarations in blocks are not hoisted to the function in sloppy mode.
+     *   <li>{@code "NaN"} is a numeric key of a TypedArray.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

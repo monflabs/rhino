@@ -10,6 +10,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
@@ -1294,7 +1295,15 @@ public final class IRFactory {
         Scope outer = parser.currentScope;
         parser.currentScope = scope;
         try {
-            Node def = Node.newString(Token.CLASS, (cls.getHeritage() != null ? "E" : "N") + name);
+            String kind = cls.getHeritage() != null ? "E" : "N";
+            if (cls.isNamedByLiteral()) {
+                // lower case: the class is named after the key of its property at runtime
+                kind = kind.toLowerCase(Locale.ROOT);
+                if (cls.getConstructor() != null) {
+                    cls.getConstructor().setNamedByLiteral();
+                }
+            }
+            Node def = Node.newString(Token.CLASS, kind + name);
             // the computed keys, evaluated in source order once the heritage is
             List<String> temps = new ArrayList<>();
             Node keys = hoistComputedKeys(cls, temps);
@@ -1479,6 +1488,10 @@ public final class IRFactory {
                         // an anonymous function definition named after its (computed) key at
                         // runtime
                         ((FunctionNode) valueNode).setNamedByLiteral();
+                    } else if (valueNode instanceof ClassNode
+                            && ((ClassNode) valueNode).getClassName() == null
+                            && parser.compilerEnv.isLatestEcmaScript()) {
+                        ((ClassNode) valueNode).setNamedByLiteral();
                     }
                     Node right = transform(prop.getValue());
                     if (inferrableName != null) {

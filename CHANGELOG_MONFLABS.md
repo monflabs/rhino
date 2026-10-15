@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Parser and TypedArray residuals (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`): `await` stays an identifier after a `"use strict"` directive of a script, so
+  `await: 1;` is a label.
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.79): a generator declared in a block or a `switch` case is
+  not hoisted to the function in sloppy mode.
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.80): `"NaN"` is a canonical numeric key of a TypedArray.
+- Fixed (`VERSION_ECMASCRIPT`): an anonymous class that is the value of a property is named after its key, computed
+  keys and symbols included.
+- Docs: cross-realm behavior is a documented limit in `doc/CONFORMANCE_MONFLABS.md`.
+- Tests: `ConformanceResidualsTest.awaitLabelInStrictScript`, `blockGeneratorsAreNotHoisted`, `typedArrayNaNKey`,
+  `anonymousClassNamedByComputedKey`.
+- test262: 42,206 → 42,210 of 42,616.
+
 ### Proxy and String object internal methods (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.78): `Object.prototype.toString` checks IsArray before

@@ -23,6 +23,7 @@ public class ClassNode extends AstNode {
     private int sourceStart;
     private int sourceEnd;
     private boolean hasStaticElements;
+    private boolean namedByLiteral;
     private final java.util.List<String> privateNames = new java.util.ArrayList<>();
 
     {
@@ -49,6 +50,15 @@ public class ClassNode extends AstNode {
 
     public void setHasStaticElements() {
         hasStaticElements = true;
+    }
+
+    /** An anonymous class that is the value of a property, named after its key at runtime. */
+    public boolean isNamedByLiteral() {
+        return namedByLiteral;
+    }
+
+    public void setNamedByLiteral() {
+        namedByLiteral = true;
     }
 
     public Name getClassName() {

@@ -25,12 +25,19 @@ bundles no Unicode Character Database. On Java 25 (Unicode 16), this leaves:
 `built-ins/Atomics/wait/cannot-suspend-throws.js` and its BigInt variant are written for a host whose main agent
 cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wait`, as fits a server.
 
+### Single realm per error (cross-realm tests)
+
+About 10 tests create a second realm (`$262.createRealm()`) and expect an error thrown by a built-in or a function
+of one realm to be an instance of that realm's constructor, `%ThrowTypeError%` to differ per realm, and
+`Function.prototype.bind` and `apply` to pick the realm of their target. This fork creates errors in the realm of
+the code that catches them, and supports several realms only as separate scopes; embedders rarely mix objects of
+different realms, so tracking the realm through every error and function is left out.
+
 ## Residuals still to fix (M13)
 
 - Getters read on a primitive (`(5).x`) and assignments to a property of a primitive receive a wrapper object as
   receiver (4 tests); method calls on primitives already pass the primitive.
-- Cross-realm behavior (about 10 tests): errors created in the realm of the function rather than the caller's,
-  `%ThrowTypeError%` per realm, `Function.prototype.bind` and `apply` across realms.
 - Smaller items: completion values of `break` in `finally`, evaluation order of `super[expr]++` (the super base
-  is read after the key is converted), anonymous classes named by computed keys, proxy edge cases, `arguments` in
+  is read after the key is converted), proxy edge cases, the `flags` getter of RegExp
+  called on a primitive, a `function arguments` in a body with parameter expressions, `arguments` in
   direct eval inside arrow functions.

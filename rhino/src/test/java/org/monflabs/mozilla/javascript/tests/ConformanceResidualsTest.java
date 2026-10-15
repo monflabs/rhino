@@ -286,4 +286,45 @@ class ConformanceResidualsTest {
                         + " Reflect.defineProperty(s, '0', { value: 's' }), s[0]);\n"
                         + "r.join()");
     }
+
+    @Test
+    void awaitLabelInStrictScript() {
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "ok",
+                "try { eval('\"use strict\"; await: 1;'); 'ok'; } catch (e) { e.name }");
+    }
+
+    @Test
+    void blockGeneratorsAreNotHoisted() {
+        Utils.assertGatedBehavior(
+                "function,function,function",
+                "ReferenceError,undefined,function",
+                "var r = [];\n"
+                        + "eval('switch (0) { default: function* x() {} }');\n"
+                        + "try { r.push(typeof eval('x')); } catch (e) { r.push(e.name); }\n"
+                        + "eval('{ function* y() {} } { function z() {} }');\n"
+                        + "r.push(typeof y, typeof z); r.join()");
+    }
+
+    @Test
+    void typedArrayNaNKey() {
+        Utils.assertGatedBehavior(
+                "true,3,true,0/1",
+                "false,,false,0/1",
+                "var ta = new Int32Array(2); ta.NaN = 3;\n"
+                        + "['NaN' in ta, ta.NaN, Reflect.defineProperty(ta, 'NaN', { value: 1 }),"
+                        + " Object.keys(ta).join('/')].join()");
+    }
+
+    @Test
+    void anonymousClassNamedByComputedKey() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "[t]|kk||e",
+                "var s = Symbol('t'), k = 'kk';\n"
+                        + "var o = { [s]: class {}, [k]: class { constructor() {} },"
+                        + " [Symbol()]: class {}, e: class extends Object {} };\n"
+                        + "[o[s].name, o[k].name, o[Object.getOwnPropertySymbols(o)[1]].name,"
+                        + " o.e.name].join('|')");
+    }
 }

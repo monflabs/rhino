@@ -91,6 +91,8 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.76 | `push` and `unshift` go through index properties of the prototypes | `VERSION_ECMASCRIPT` |
 | 1.77 | An object pattern evaluates a property target before reading the source property | `VERSION_ECMASCRIPT` |
 | 1.78 | Proxy and String object internal methods in `toString`, `defineProperties`, `ownKeys` and index definition | `VERSION_ECMASCRIPT` |
+| 1.79 | Generator declarations in blocks are not hoisted to the function (sloppy mode) | `VERSION_ECMASCRIPT` |
+| 1.80 | `"NaN"` is a numeric key of a TypedArray | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1297,6 +1299,29 @@ Reflect.ownKeys(new Proxy(new Proxy([], { ownKeys: () => ["b", "a"] }), {}));
 - Defining an index of a String object (below its length) with an incompatible descriptor fails: a TypeError for
   `Object.defineProperty`, `false` for `Reflect.defineProperty`.
 - **Why:** ECMA-262 2026, §20.1.3.6, §20.1.2.3.1, §28.1.11, §10.4.3.2.
+
+### 1.79 Generator declarations in blocks are not hoisted to the function (sloppy mode)
+
+```js
+{ function* g() {} }
+typeof g;   // before: "function"   now: "undefined"
+```
+
+- The web-compatibility hoisting of a function declared in a block (or a `switch` case) to the enclosing function
+  applies to plain functions only; a generator declaration stays scoped to its block, like an async function.
+- **Why:** ECMA-262 2026, §B.3.2.1 (only a FunctionDeclaration is a candidate).
+
+### 1.80 `"NaN"` is a numeric key of a TypedArray
+
+```js
+var ta = new Int32Array(2);
+ta.NaN = 3;
+ta.NaN;     // before: 3   now: undefined
+```
+
+- `"NaN"` is a canonical numeric string, as `"Infinity"` or `"1.5"` already were: a TypedArray has no such
+  property, setting it does nothing and defining it fails.
+- **Why:** ECMA-262 2026, §7.1.21 (CanonicalNumericIndexString), §10.4.5.
 
 ---
 

@@ -4312,7 +4312,8 @@ public class ScriptRuntime {
         return ClassDefinition.define(
                 constructor,
                 heritage,
-                kind.charAt(0) == 'E',
+                Character.toUpperCase(kind.charAt(0)) == 'E',
+                Character.isLowerCase(kind.charAt(0)),
                 prototypeMembers,
                 staticMembers,
                 kind.substring(1),

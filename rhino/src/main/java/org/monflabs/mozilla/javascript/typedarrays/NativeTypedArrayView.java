@@ -175,6 +175,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     /** CanonicalNumericIndexString(name), or null when the key is not numeric. */
     private static Double numericIndex(String name) {
         Optional<Double> num = ScriptRuntime.canonicalNumericIndexString(name);
+        if (num.isEmpty() && "NaN".equals(name) && latest()) {
+            // ToString(NaN) is "NaN": a canonical numeric string, never a valid index
+            return Double.NaN;
+        }
         return num.isPresent() ? num.get() : null;
     }
 

@@ -964,7 +964,9 @@ public class Parser {
             int strictToken =
                     TokenStream.keywordToken(
                             ts.getString(), compilerEnv.getLanguageVersion(), true);
-            if (strictToken != Token.EOF && strictToken != Token.NAME) {
+            if (strictToken != Token.EOF
+                    && strictToken != Token.NAME
+                    && !(strictToken == Token.AWAIT && isAwaitAnIdentifier())) {
                 currentFlaggedToken = strictToken | (currentFlaggedToken & ~CLEAR_TI_MASK);
                 currentToken = strictToken;
             }
@@ -2134,6 +2136,7 @@ public class Parser {
         if (type == FunctionNode.FUNCTION_BLOCK_SCOPED
                 && !inUseStrictDirective
                 && !isAsync
+                && !(isGenerator && compilerEnv.isLatestEcmaScript())
                 && name != null
                 && name.length() > 0) {
             Symbol letSym = currentScope.getSymbol(name.getIdentifier());

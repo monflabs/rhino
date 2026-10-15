@@ -211,6 +211,7 @@ final class ClassDefinition {
             Object constructor,
             Object heritage,
             boolean hasHeritage,
+            boolean namedByLiteral,
             Object prototypeMembers,
             Object staticMembers,
             String name,
@@ -243,7 +244,7 @@ final class ClassDefinition {
         if (constructor instanceof BaseFunction) {
             f = (BaseFunction) constructor;
         } else {
-            f = new DefaultConstructor(scope, name, hasHeritage);
+            f = new DefaultConstructor(scope, name, hasHeritage, namedByLiteral);
             ScriptRuntime.setFunctionProtoAndParent(f, cx, scope);
         }
         f.setPrototype(constructorParent);
@@ -420,11 +421,13 @@ final class ClassDefinition {
 
         private final String name;
         private final boolean derived;
+        final boolean namedByLiteral;
 
-        DefaultConstructor(VarScope scope, String name, boolean derived) {
+        DefaultConstructor(VarScope scope, String name, boolean derived, boolean namedByLiteral) {
             super(scope);
             this.name = name;
             this.derived = derived;
+            this.namedByLiteral = namedByLiteral;
         }
 
         @Override

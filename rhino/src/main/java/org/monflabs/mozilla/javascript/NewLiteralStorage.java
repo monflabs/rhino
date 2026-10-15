@@ -250,8 +250,14 @@ public abstract class NewLiteralStorage {
         @Override
         protected void attemptToInferFunctionName(Object value) {
             // Try to infer the name if the value is a normal JS function
-            if (this.keys == null
-                    || !(value instanceof JSFunction)
+            if (this.keys == null) {
+                return;
+            }
+            if (value instanceof ClassDefinition.DefaultConstructor) {
+                if (!((ClassDefinition.DefaultConstructor) value).namedByLiteral) {
+                    return;
+                }
+            } else if (!(value instanceof JSFunction)
                     || (literalOnly && !((JSFunction) value).getDescriptor().isNamedByLiteral())) {
                 return;
             }
