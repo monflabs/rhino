@@ -87,6 +87,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.72 | `new ArrayBuffer` reads the prototype of newTarget before allocating | `VERSION_ECMASCRIPT` |
 | 1.73 | A generator's `return()` inside a destructuring pattern closes its iterator as a return | `VERSION_ECMASCRIPT` |
 | 1.74 | The discriminant of a `switch` and the parameter of a `catch` do not see the block's `let`/`const` | `VERSION_ECMASCRIPT` |
+| 1.75 | Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1237,6 +1238,19 @@ try { throw []; } catch ([a = () => x]) { let x = "inside"; }  // a() before: "i
   its defaults) outside the block: neither sees the `let`/`const` declarations of the block. Not applied when the
   block uses a direct `eval` or `with`.
 - **Why:** ECMA-262 2026, §14.12.4 (SwitchStatement evaluation), §14.15.2 (CatchClauseEvaluation).
+
+### 1.75 Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ
+
+```js
+let x = "outside", f;
+for (let x of (f = () => x, [1])) ;
+f();   // before: "outside"   now: ReferenceError (x is in its temporal dead zone)
+```
+
+- The expression after `in`/`of` is evaluated where the loop's `let`/`const` bindings exist but are not
+  initialized: a closure created there that reads them throws a ReferenceError (the parser points it to bindings of
+  a block around the loop that are never initialized).
+- **Why:** ECMA-262 2026, §14.7.5.6 (ForIn/OfHeadEvaluation, TDZnames).
 
 ---
 

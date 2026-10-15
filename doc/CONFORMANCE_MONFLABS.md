@@ -27,8 +27,6 @@ cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wai
 
 ## Residuals still to fix (M13)
 
-- The temporal dead zone of the head of `for-in`/`for-of` with `let`/`const` seen by closures created in it (6
-  tests, `scope-head-lex-*`, `scope-body-lex-open`).
 - `Array.prototype.push`/`unshift` on an array whose prototype has index setters (4 tests): the dense fast path
   writes the elements without looking at the prototype chain.
 - Getters read on a primitive (`(5).x`) and assignments to a property of a primitive receive a wrapper object as

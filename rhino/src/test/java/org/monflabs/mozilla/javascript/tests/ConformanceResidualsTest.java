@@ -196,4 +196,19 @@ class ConformanceResidualsTest {
                         + " r.push(e.message.indexOf('$') < 0 ? 'clean' : e.message); }\n"
                         + "[pd(), ps(), pp(), pb()].concat(r).join('|')");
     }
+
+    @Test
+    void loopHeadClosuresSeeTheTemporalDeadZone() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError|ReferenceError|clean|1,2,10",
+                "let x = 'outside'; var f, g, h, r = [];\n"
+                        + "for (let x of (f = function () { typeof x; }, [])) ;\n"
+                        + "for (let [x] in (g = () => x, { a: 1 })) ;\n"
+                        + "for (let x of (h = (x) => x * 2, [1, 2])) r.push(x);\n"
+                        + "var out = [];\n"
+                        + "try { f(); } catch (e) { out.push(e.name); }\n"
+                        + "try { g(); } catch (e) { out.push(e.name);"
+                        + " out.push(e.message.indexOf('$') < 0 ? 'clean' : e.message); }\n"
+                        + "out.push(r.concat([h(5)]).join()); out.join('|')");
+    }
 }

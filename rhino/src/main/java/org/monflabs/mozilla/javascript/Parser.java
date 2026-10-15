@@ -796,6 +796,78 @@ public class Parser {
         }
     }
 
+    /**
+     * The expression of a for-in/of head with let or const is evaluated where the bindings of the
+     * loop exist but are not initialized (ForIn/OfHeadEvaluation, TDZnames): a closure created
+     * there sees them in their temporal dead zone. Its references to them are renamed to bindings
+     * of a block around the loop that are never initialized.
+     */
+    private AstNode hideLoopHeadBindings(Loop loop) {
+        if (!(loop instanceof ForInLoop)
+                || !compilerEnv.isLatestEcmaScript()
+                || !(((ForInLoop) loop).getIterator() instanceof VariableDeclaration)) {
+            return loop;
+        }
+        ForInLoop forIn = (ForInLoop) loop;
+        VariableDeclaration decl = (VariableDeclaration) forIn.getIterator();
+        if (decl.getType() != Token.LET && decl.getType() != Token.CONST) {
+            return loop;
+        }
+        List<String> names = new ArrayList<>();
+        for (VariableInitializer vi : decl.getVariables()) {
+            collectBoundNames(vi.getTarget(), names);
+        }
+        List<Name> uses = new ArrayList<>();
+        forIn.getIteratedObject()
+                .visit(
+                        node -> {
+                            if (node instanceof FunctionNode) {
+                                node.visit(
+                                        inner -> {
+                                            if (inner instanceof Name
+                                                    && names.contains(
+                                                            ((Name) inner).getIdentifier())
+                                                    && !isPropertyName((Name) inner)
+                                                    && !isWithin(
+                                                            definingScope((Name) inner), node)) {
+                                                // not shadowed in the closure
+                                                uses.add((Name) inner);
+                                            }
+                                            return true;
+                                        });
+                                return false;
+                            }
+                            return true;
+                        });
+        if (uses.isEmpty()) {
+            return loop;
+        }
+        Scope block = new Scope(loop.getPosition(), loop.getLength());
+        block.setLineColumnNumber(loop.getLineno(), loop.getColumn());
+        block.setParentScope(loop.getParentScope());
+        loop.setParentScope(block);
+        block.addChild(loop);
+        for (Name use : uses) {
+            String tdzName = use.getIdentifier() + "$tdz";
+            if (block.getSymbol(tdzName) == null) {
+                Symbol symbol = new Symbol(Symbol.Type.LET, tdzName);
+                symbol.setNode(use);
+                block.putSymbol(symbol);
+            }
+            use.setIdentifier(tdzName);
+        }
+        return block;
+    }
+
+    private static boolean isWithin(AstNode node, AstNode ancestor) {
+        for (AstNode n = node; n != null; n = n.getParent()) {
+            if (n == ancestor) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The innermost scope around a name that declares it, by the parents of the AST. */
     private static Scope definingScope(Name name) {
         for (AstNode node = name.getParent(); node != null; node = node.getParent()) {
@@ -2622,7 +2694,7 @@ public class Parser {
                 return doLoop();
 
             case Token.FOR:
-                return forLoop();
+                return hideLoopHeadBindings(forLoop());
 
             case Token.TRY:
                 return tryStatement();

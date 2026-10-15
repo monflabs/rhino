@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Loop head temporal dead zone (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.75): a closure in the head expression of
+  `for (let/const ... in/of ...)` that reads a loop binding sees it in its temporal dead zone: the parser renames
+  those references to bindings of a block around the loop that are never initialized (only for that shape).
+- Tests: `ConformanceResidualsTest.loopHeadClosuresSeeTheTemporalDeadZone`.
+- test262: 42,188 → 42,194 of 42,616.
+
 ### Switch discriminant and catch parameter scopes (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.74): the discriminant of a `switch` and the parameter of
