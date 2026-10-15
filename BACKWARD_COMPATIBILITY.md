@@ -86,6 +86,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.71 | `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions | `VERSION_ECMASCRIPT` |
 | 1.72 | `new ArrayBuffer` reads the prototype of newTarget before allocating | `VERSION_ECMASCRIPT` |
 | 1.73 | A generator's `return()` inside a destructuring pattern closes its iterator as a return | `VERSION_ECMASCRIPT` |
+| 1.74 | The discriminant of a `switch` and the parameter of a `catch` do not see the block's `let`/`const` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1223,6 +1224,19 @@ it.return();   // before: { value: undefined, done: true }   now: TypeError (ret
   (before, `VERSION_ES6` does not close it at all).
 - **Why:** ECMA-262 2026, §7.4.11 (IteratorClose), §14.3.3.6 and §13.15.5.5 (the iterator is closed with the
   completion of the pattern).
+
+### 1.74 The discriminant of a `switch` and the parameter of a `catch` do not see the block's `let`/`const`
+
+```js
+let x = "outside";
+switch (x) { case "outside": let x = 1; }        // before: ReferenceError (TDZ)   now: matches the case
+try { throw []; } catch ([a = () => x]) { let x = "inside"; }  // a() before: "inside"   now: "outside"
+```
+
+- The discriminant of a `switch` is evaluated before the block of its cases, and the parameter of a `catch` (with
+  its defaults) outside the block: neither sees the `let`/`const` declarations of the block. Not applied when the
+  block uses a direct `eval` or `with`.
+- **Why:** ECMA-262 2026, §14.12.4 (SwitchStatement evaluation), §14.15.2 (CatchClauseEvaluation).
 
 ---
 

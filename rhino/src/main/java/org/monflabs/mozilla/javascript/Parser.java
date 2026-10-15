@@ -9,6 +9,8 @@ package org.monflabs.mozilla.javascript;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -729,6 +731,68 @@ public class Parser {
         }
         for (Name use : uses) {
             use.setIdentifier(use.getIdentifier() + "$body");
+        }
+    }
+
+    /**
+     * Renames the let and const bindings of a block scope that code evaluated outside of the block
+     * names (the discriminant of a switch, the parameter of a catch): the uses inside the block
+     * follow the new name, and the outside code resolves the name in the enclosing scopes.
+     */
+    private void hideBlockBindings(Scope scope, AstNode outside, Collection<String> keep) {
+        if (!compilerEnv.isLatestEcmaScript()
+                || outside == null
+                || scope.getSymbolTable() == null
+                || mayLookUpNamesDynamically(scope)) {
+            return;
+        }
+        Set<String> outsideNames = new HashSet<>();
+        outside.visit(
+                node -> {
+                    if (node instanceof Name) {
+                        outsideNames.add(((Name) node).getIdentifier());
+                    }
+                    return true;
+                });
+        Set<String> renamed = new HashSet<>();
+        for (Symbol symbol : scope.getSymbolTable().values()) {
+            if ((symbol.getDeclType() == Symbol.Type.LET
+                            || symbol.getDeclType() == Symbol.Type.CONST)
+                    && outsideNames.contains(symbol.getName())
+                    && !keep.contains(symbol.getName())) {
+                renamed.add(symbol.getName());
+            }
+        }
+        if (renamed.isEmpty()) {
+            return;
+        }
+        Set<AstNode> outsideNodes = new HashSet<>();
+        outside.visit(
+                node -> {
+                    outsideNodes.add(node);
+                    return true;
+                });
+        List<Name> uses = new ArrayList<>();
+        scope.visit(
+                node -> {
+                    if (outsideNodes.contains(node)) {
+                        return false;
+                    }
+                    if (node instanceof Name
+                            && renamed.contains(((Name) node).getIdentifier())
+                            && !isPropertyName((Name) node)
+                            && definingScope((Name) node) == scope) {
+                        uses.add((Name) node);
+                    }
+                    return true;
+                });
+        for (String name : renamed) {
+            Symbol symbol = scope.getSymbolTable().remove(name);
+            symbol.setName(name + "$block");
+            scope.getSymbolTable().put(symbol.getName(), symbol);
+        }
+        for (Name use : uses) {
+            use.setIdentifier(use.getIdentifier() + "$block");
         }
     }
 
@@ -2872,6 +2936,8 @@ public class Parser {
             } finally {
                 exitSwitch();
             }
+            // the discriminant is evaluated before the block of the cases (14.12.4)
+            hideBlockBindings(pn, pn.getExpression(), Collections.emptySet());
             return pn;
         } finally {
             popScope();
@@ -3331,6 +3397,10 @@ public class Parser {
                 }
                 if (varName != null && compilerEnv.isLatestEcmaScript()) {
                     checkCatchParameterRedeclaration(varName, catchScope);
+                    // the parameter is bound outside the block (14.15.2 CatchClauseEvaluation)
+                    List<String> paramNames = new ArrayList<>();
+                    collectBoundNames(varName, paramNames);
+                    hideBlockBindings(catchScope, varName, paramNames);
                 }
 
                 tryEnd = getNodeEnd(catchScope);

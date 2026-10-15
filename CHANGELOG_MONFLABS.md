@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Switch discriminant and catch parameter scopes (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.74): the discriminant of a `switch` and the parameter of
+  a `catch` do not see the `let`/`const` declarations of the block (the parser renames those they name, as for the
+  parameters of functions).
+- Tests: `ConformanceResidualsTest.switchDiscriminantAndCatchParameterSeeOutside`.
+- The ReferenceError and TypeError messages name a renamed binding as written.
+- test262: 42,185 → 42,188 of 42,616.
+
 ### Generator return inside a destructuring pattern (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.73): the `finally` that closes the iterators of a

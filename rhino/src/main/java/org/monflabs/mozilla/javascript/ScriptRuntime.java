@@ -6508,9 +6508,21 @@ public class ScriptRuntime {
      */
     public static Object checkInitialized(Object value, String name) {
         if (value == UniqueTag.UNINITIALIZED) {
-            throw constructError("ReferenceError", getMessageById("msg.uninitialized", name));
+            throw constructError(
+                    "ReferenceError", getMessageById("msg.uninitialized", bindingName(name)));
         }
         return value;
+    }
+
+    /** The name of a binding as written: without the suffix of a binding the parser renamed. */
+    static String bindingName(String name) {
+        if (name.endsWith("$body")) {
+            return name.substring(0, name.length() - "$body".length());
+        }
+        if (name.endsWith("$block")) {
+            return name.substring(0, name.length() - "$block".length());
+        }
+        return name;
     }
 
     /**
@@ -6519,7 +6531,7 @@ public class ScriptRuntime {
      */
     public static void constAssignment(Context cx, String name) {
         if (cx.isLatestEcmaScript()) {
-            throw typeErrorById("msg.const.assign", name);
+            throw typeErrorById("msg.const.assign", bindingName(name));
         }
     }
 

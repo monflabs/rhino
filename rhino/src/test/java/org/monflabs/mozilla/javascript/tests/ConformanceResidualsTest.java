@@ -181,4 +181,19 @@ class ConformanceResidualsTest {
                         + "var r; try { it.return(); r = 'none'; } catch (e) { r = e.name; }\n"
                         + "closed + '|' + (r === 'none' ? 1 : r)");
     }
+
+    @Test
+    void switchDiscriminantAndCatchParameterSeeOutside() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside|inside|outside|inside|1|clean",
+                "let x = 'outside'; var r = [], pd, ps, pp, pb;\n"
+                        + "switch (pd = function () { return x; }, null) {"
+                        + " case ps = function () { return x; }, null: let x = 'inside'; }\n"
+                        + "try { throw []; } catch ([_ = pp = function () { return x; }]) {"
+                        + " pb = function () { return x; }; let x = 'inside'; }\n"
+                        + "let y = 1; switch (y) { case 1: r.push(1); let y = 2; }\n"
+                        + "try { switch (y) { case 1: y; let y; } } catch (e) {"
+                        + " r.push(e.message.indexOf('$') < 0 ? 'clean' : e.message); }\n"
+                        + "[pd(), ps(), pp(), pb()].concat(r).join('|')");
+    }
 }
