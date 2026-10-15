@@ -4,7 +4,7 @@ Under `Context.VERSION_ECMASCRIPT`, this fork passes the test262 suite in its sc
 [MONFLABS_PLAN.md](../MONFLABS_PLAN.md) (proper tail calls, `staging/`, `intl402/` and the proposals after ES2026),
 except for the tests listed here. Each group has its reason: a documented decision, or a residual still to fix (plan
 milestone M13). `tests/testsrc/test262.properties` lists every failing test; `python3 tests/test262-status.py` gives
-the current numbers (99.0% of 42,616 tests on 2026-10-15).
+the current numbers (99.1% of 42,616 tests on 2026-10-15).
 
 ## Documented limits
 
@@ -35,9 +35,8 @@ different realms, so tracking the realm through every error and function is left
 
 ## Residuals still to fix (M13)
 
-- Getters read on a primitive (`(5).x`) and assignments to a property of a primitive receive a wrapper object as
-  receiver (4 tests); method calls on primitives already pass the primitive.
-- Smaller items: completion values of `break` in `finally`, evaluation order of `super[expr]++` (the super base
-  is read after the key is converted), proxy edge cases, the `flags` getter of RegExp
-  called on a primitive, a `function arguments` in a body with parameter expressions, `arguments` in
-  direct eval inside arrow functions.
+- Function declarations of a body are instantiated before the parameters are evaluated: with parameter
+  expressions, a `function arguments` of the body, or a `var arguments` declared by a direct eval in the
+  parameters of an arrow function, is seen in the wrong environment (5 tests).
+- Smaller items: completion values of `break` and `continue` in `finally`, a compound assignment in `with` over a
+  proxy resolving the name twice, the `flags` getter of RegExp called on a primitive.

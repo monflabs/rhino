@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Primitive receivers and super increment (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.81): a strict getter read on a primitive receives the
+  primitive (the context records the temporary wrapper during the read, `AccessorSlot.FunctionGetter` swaps it);
+  an assignment to a property of a primitive is the wrapper's [[Set]] with the primitive as receiver, failing in
+  strict code only when [[Set]] fails.
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.82): `super[key]++` and `super.x++` go through
+  `ScriptRuntime.superElemIncrDecr` in both modes: the key is evaluated once, the value converted with ToNumeric.
+- Tests: `ConformanceResidualsTest.accessorsReceiveThePrimitive`, `superIncrementEvaluatesKeyOnce`.
+- test262: 42,210 → 42,215 of 42,616.
+
 ### Parser and TypedArray residuals (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`): `await` stays an identifier after a `"use strict"` directive of a script, so

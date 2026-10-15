@@ -113,7 +113,9 @@ public class Node implements Iterable<Node> {
             SPECIALCALL_EVAL_IN_PARAMS = 2;
     public static final int // flags for INCRDECR_PROP
             DECR_FLAG = 0x1,
-            POST_FLAG = 0x2;
+            POST_FLAG = 0x2,
+            // ELEM_INC_DEC on super[key] (interpreter)
+            SUPER_FLAG = 0x4;
     public static final int // flags for MEMBER_TYPE_PROP
             PROPERTY_FLAG = 0x1, // property access: element is valid name
             ATTRIBUTE_FLAG = 0x2, // x.@y or x..@y

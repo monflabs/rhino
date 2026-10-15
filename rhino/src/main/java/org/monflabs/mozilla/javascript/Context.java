@@ -257,6 +257,8 @@ public class Context implements Closeable {
      *       and {@code [[DefineOwnProperty]]} of a string index.
      *   <li>Generator declarations in blocks are not hoisted to the function in sloppy mode.
      *   <li>{@code "NaN"} is a numeric key of a TypedArray.
+     *   <li>Accessors read or written on a primitive receive the primitive.
+     *   <li>{@code super[key]++} evaluates the key once and converts the value with ToNumeric.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language
@@ -876,6 +878,14 @@ public class Context implements Closeable {
      * gated on the version of the context that runs the code; syntax and early errors are gated at
      * compile time with {@link CompilerEnvirons#isLatestEcmaScript()}.
      */
+    /**
+     * While a property of a primitive is read through its wrapper object: the wrapper, and the
+     * primitive that an accessor's getter receives as this (GetValue step 3.b).
+     */
+    Scriptable primitiveWrapper;
+
+    Object primitiveReceiver;
+
     public final boolean isLatestEcmaScript() {
         return version >= VERSION_ECMASCRIPT;
     }

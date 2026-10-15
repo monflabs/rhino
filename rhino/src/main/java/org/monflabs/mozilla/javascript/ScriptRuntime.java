@@ -2040,6 +2040,18 @@ public class ScriptRuntime {
             return PrivateName.get(obj, (PrivateName) elem, cx, scope);
         }
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, elem);
+        if (sobj != obj && cx.isLatestEcmaScript()) {
+            Scriptable savedWrapper = cx.primitiveWrapper;
+            Object savedReceiver = cx.primitiveReceiver;
+            cx.primitiveWrapper = sobj;
+            cx.primitiveReceiver = obj;
+            try {
+                return getObjectElem(sobj, elem, cx);
+            } finally {
+                cx.primitiveWrapper = savedWrapper;
+                cx.primitiveReceiver = savedReceiver;
+            }
+        }
         return getObjectElem(sobj, elem, cx);
     }
 
@@ -2121,6 +2133,18 @@ public class ScriptRuntime {
             return ((VarScope) obj).get(property, (VarScope) obj);
         }
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, property);
+        if (sobj != obj && cx.isLatestEcmaScript()) {
+            Scriptable savedWrapper = cx.primitiveWrapper;
+            Object savedReceiver = cx.primitiveReceiver;
+            cx.primitiveWrapper = sobj;
+            cx.primitiveReceiver = obj;
+            try {
+                return getObjectProp(sobj, property, cx);
+            } finally {
+                cx.primitiveWrapper = savedWrapper;
+                cx.primitiveReceiver = savedReceiver;
+            }
+        }
         return getObjectProp(sobj, property, cx);
     }
 
@@ -2148,7 +2172,21 @@ public class ScriptRuntime {
     public static Object getObjectPropNoWarn(
             Object obj, String property, Context cx, VarScope scope) {
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, property);
-        Object result = ScriptableObject.getProperty(sobj, property);
+        Object result;
+        if (sobj != obj && cx.isLatestEcmaScript()) {
+            Scriptable savedWrapper = cx.primitiveWrapper;
+            Object savedReceiver = cx.primitiveReceiver;
+            cx.primitiveWrapper = sobj;
+            cx.primitiveReceiver = obj;
+            try {
+                result = ScriptableObject.getProperty(sobj, property);
+            } finally {
+                cx.primitiveWrapper = savedWrapper;
+                cx.primitiveReceiver = savedReceiver;
+            }
+        } else {
+            result = ScriptableObject.getProperty(sobj, property);
+        }
         if (result == Scriptable.NOT_FOUND) {
             return Undefined.instance;
         }
@@ -2205,7 +2243,22 @@ public class ScriptRuntime {
     /** A cheaper and less general version of the above for well-known argument types. */
     public static Object getObjectIndex(Object obj, double dblIndex, Context cx, VarScope scope) {
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, dblIndex);
+        if (sobj != obj && cx.isLatestEcmaScript()) {
+            Scriptable savedWrapper = cx.primitiveWrapper;
+            Object savedReceiver = cx.primitiveReceiver;
+            cx.primitiveWrapper = sobj;
+            cx.primitiveReceiver = obj;
+            try {
+                return getObjectIndex(sobj, dblIndex, cx);
+            } finally {
+                cx.primitiveWrapper = savedWrapper;
+                cx.primitiveReceiver = savedReceiver;
+            }
+        }
+        return getObjectIndex(sobj, dblIndex, cx);
+    }
 
+    private static Object getObjectIndex(Scriptable sobj, double dblIndex, Context cx) {
         int index = (int) dblIndex;
         if (index == dblIndex && index >= 0) {
             return getObjectIndex(sobj, index, cx);
@@ -2264,6 +2317,9 @@ public class ScriptRuntime {
         if (elem instanceof PrivateName) {
             PrivateName.set(obj, (PrivateName) elem, value, cx, scope);
             return value;
+        }
+        if (isPrimitiveBase(obj) && cx.isLatestEcmaScript()) {
+            return setOnPrimitive(cx, scope, obj, elem, value);
         }
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(obj, elem, value, cx);
         Scriptable sobj = asScriptableOrThrowUndefWriteError(cx, scope, obj, elem, value);
@@ -2341,9 +2397,39 @@ public class ScriptRuntime {
     /** Version of setObjectElem when elem is a valid JS identifier name. */
     public static Object setObjectProp(
             Object obj, String property, Object value, Context cx, VarScope scope) {
+        if (isPrimitiveBase(obj) && cx.isLatestEcmaScript()) {
+            return setOnPrimitive(cx, scope, obj, property, value);
+        }
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(obj, property, value, cx);
         Scriptable sobj = asScriptableOrThrowUndefWriteError(cx, scope, obj, property, value);
         return setObjectProp(sobj, property, value, cx);
+    }
+
+    /** A primitive other than undefined and null, whose properties are those of a wrapper. */
+    private static boolean isPrimitiveBase(Object obj) {
+        return !(obj instanceof Scriptable) && obj != null && !Undefined.isUndefined(obj);
+    }
+
+    /**
+     * PutValue on a primitive base (6.2.5.6): the wrapper's [[Set]] with the primitive as receiver,
+     * which calls a setter or a proxy trap of the prototypes; a TypeError in strict code when it
+     * fails.
+     */
+    private static Object setOnPrimitive(
+            Context cx, VarScope scope, Object obj, Object key, Object value) {
+        Scriptable wrapper = toObject(cx, scope, obj);
+        Object k = isSymbol(key) ? key : toString(key);
+        boolean done;
+        if (wrapper instanceof ScriptableObject) {
+            done = ((ScriptableObject) wrapper).set(cx, k, value, obj);
+        } else {
+            setObjectElem(wrapper, k, value, cx);
+            done = true;
+        }
+        if (!done && cx.isStrictMode()) {
+            throw undefWriteError(obj, key, value);
+        }
+        return value;
     }
 
     public static Object setObjectProp(Scriptable obj, String property, Object value, Context cx) {
@@ -2413,6 +2499,9 @@ public class ScriptRuntime {
     /** A cheaper and less general version of the above for well-known argument types. */
     public static Object setObjectIndex(
             Object obj, double dblIndex, Object value, Context cx, VarScope scope) {
+        if (isPrimitiveBase(obj) && cx.isLatestEcmaScript()) {
+            return setOnPrimitive(cx, scope, obj, dblIndex, value);
+        }
         verifyIsScriptableOrComplainWriteErrorInEs5Strict(obj, dblIndex, value, cx);
         Scriptable sobj = asScriptableOrThrowUndefWriteError(cx, scope, obj, dblIndex, value);
         int index = (int) dblIndex;
@@ -4991,7 +5080,30 @@ public class ScriptRuntime {
         } else {
             number = toNumeric(value);
         }
+        Number result = incrDecrNumber(number, incrDecrMask);
+        setObjectElem(obj, index, result, cx, scope);
+        return post ? number : result;
+    }
 
+    /**
+     * super[key]++ and its variants (13.4.2.1): the key is evaluated and converted once, the value
+     * read and written through the home object's prototype with this as the receiver.
+     */
+    public static Object superElemIncrDecr(
+            Object superObject,
+            Object index,
+            Context cx,
+            VarScope scope,
+            Object thisObject,
+            int incrDecrMask) {
+        index = elementKey(superObject, index);
+        Number number = toNumeric(getSuperElem(superObject, index, cx, scope, thisObject));
+        Number result = incrDecrNumber(number, incrDecrMask);
+        setSuperElem(superObject, index, result, cx, scope, thisObject);
+        return (incrDecrMask & Node.POST_FLAG) != 0 ? number : result;
+    }
+
+    private static Number incrDecrNumber(Number number, int incrDecrMask) {
         Number result;
         if (number instanceof BigInteger) {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {
@@ -5013,10 +5125,6 @@ public class ScriptRuntime {
             }
         }
 
-        setObjectElem(obj, index, result, cx, scope);
-        if (post) {
-            return number;
-        }
         return result;
     }
 

@@ -327,4 +327,34 @@ class ConformanceResidualsTest {
                         + "[o[s].name, o[k].name, o[Object.getOwnPropertySymbols(o)[1]].name,"
                         + " o.e.name].join('|')");
     }
+
+    @Test
+    void accessorsReceiveThePrimitive() {
+        Utils.assertGatedBehavior(
+                "object,object,object,TypeError,TypeError,undefined",
+                "number,number,object,set number,TypeError,undefined",
+                "var r = [];\n"
+                        + "Object.defineProperty(Number.prototype, 'sx', { configurable: true,"
+                        + " get: function() { 'use strict'; return typeof this; },"
+                        + " set: function(v) { 'use strict'; r.push('set ' + typeof this); } });\n"
+                        + "Object.defineProperty(Number.prototype, 'lx', { configurable: true,"
+                        + " get: function() { return typeof this; } });\n"
+                        + "r.push((5).sx, typeof (5).sx === 'string' ? (5)['sx'] : '', (5).lx);\n"
+                        + "(function() { 'use strict';"
+                        + " try { (5).sx = 1; } catch (e) { r.push(e.name); }"
+                        + " try { (5).nope = 1; r.push('ok'); } catch (e) { r.push(e.name); } })();\n"
+                        + "(5).nope = 1; r.push(String((5).nope));\n"
+                        + "delete Number.prototype.sx; delete Number.prototype.lx; r.join()");
+    }
+
+    @Test
+    void superIncrementEvaluatesKeyOnce() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1,6,1,1",
+                "var calls = 0; function k() { calls++; return 'p'; }\n"
+                        + "var proto = { p: 1, q: '5', b: 1n };\n"
+                        + "var obj = { __proto__: proto,"
+                        + " m() { return [super[k()]++, ++super.q, super.b++]; } };\n"
+                        + "obj.m().concat([calls]).join()");
+    }
 }

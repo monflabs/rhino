@@ -93,6 +93,8 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.78 | Proxy and String object internal methods in `toString`, `defineProperties`, `ownKeys` and index definition | `VERSION_ECMASCRIPT` |
 | 1.79 | Generator declarations in blocks are not hoisted to the function (sloppy mode) | `VERSION_ECMASCRIPT` |
 | 1.80 | `"NaN"` is a numeric key of a TypedArray | `VERSION_ECMASCRIPT` |
+| 1.81 | Accessors read or written on a primitive receive the primitive | `VERSION_ECMASCRIPT` |
+| 1.82 | `super[key]++` evaluates the key once and converts the value with ToNumeric | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1322,6 +1324,38 @@ ta.NaN;     // before: 3   now: undefined
 - `"NaN"` is a canonical numeric string, as `"Infinity"` or `"1.5"` already were: a TypedArray has no such
   property, setting it does nothing and defining it fails.
 - **Why:** ECMA-262 2026, §7.1.21 (CanonicalNumericIndexString), §10.4.5.
+
+### 1.81 Accessors read or written on a primitive receive the primitive
+
+```js
+Object.defineProperty(Number.prototype, "x", {
+  get() { "use strict"; return typeof this; },
+  set(v) { "use strict"; log.push(typeof this); }
+});
+(5).x;                                // before: "object"      now: "number"
+(function () { "use strict"; (5).x = 1; })();
+                                      // before: TypeError     now: the setter runs, logs "number"
+(function () { "use strict"; (5).y = 1; })();
+                                      // TypeError, as before (no setter)
+```
+
+- Reading a property of a primitive passes the primitive as `this` to a strict getter (a sloppy one still gets
+  the wrapper object). Assigning to a property of a primitive goes through the prototypes' [[Set]] with the
+  primitive as receiver: a setter or a proxy `set` trap is called, and strict code gets a TypeError only when the
+  assignment fails.
+- **Why:** ECMA-262 2026, §6.2.5.5 (GetValue), §6.2.5.6 (PutValue), §10.1.9.2 (OrdinarySet).
+
+### 1.82 `super[key]++` evaluates the key once and converts the value with ToNumeric
+
+```js
+var proto = { p: 1, q: "5" };
+var obj = { __proto__: proto, m() { return [super[k()]++, ++super.q]; } };
+obj.m();    // before: k() called twice, ++super.q is "51" (interpreted mode)   now: k() once, 6
+```
+
+- The key of `super[key]++` (and `--`, prefix or postfix) is evaluated and converted once; the old value is
+  converted with ToNumeric, so a string is a number and a BigInt stays a BigInt, in both modes.
+- **Why:** ECMA-262 2026, §13.4.2.1 (Postfix Increment), §13.4.4.1 (Prefix Increment).
 
 ---
 

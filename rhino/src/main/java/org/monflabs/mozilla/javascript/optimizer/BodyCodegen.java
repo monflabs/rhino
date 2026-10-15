@@ -4327,6 +4327,33 @@ class BodyCodegen {
     // for this edge case, so we will transform this into something like super.x = super.x + 1
     private void visitSuperIncDec(Node node, Node child, int incrDecrMask) {
         Node object = child.getFirstChild();
+        if (compilerEnv.isLatestEcmaScript()) {
+            // the key is evaluated once, the value converted with ToNumeric (13.4.2.1)
+            generateExpression(object, node);
+            Node index = object.getNext();
+            if (child.getType() == Token.GETPROP) {
+                cfw.addPush(index.getString());
+            } else {
+                generateExpression(index, node);
+                if (index.getIntProp(Node.ISNUMBER_PROP, -1) != -1) {
+                    addDoubleWrap();
+                }
+            }
+            cfw.addALoad(contextLocal);
+            cfw.addALoad(variableObjectLocal);
+            cfw.addALoad(thisObjLocal);
+            cfw.addPush(incrDecrMask);
+            addScriptRuntimeInvoke(
+                    "superElemIncrDecr",
+                    "(Ljava/lang/Object;"
+                            + "Ljava/lang/Object;"
+                            + "Lorg/monflabs/mozilla/javascript/Context;"
+                            + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                            + "Ljava/lang/Object;"
+                            + "I"
+                            + ")Ljava/lang/Object;");
+            return;
+        }
 
         // Push the old value on the stack
         generateExpression(object, node); // [super]

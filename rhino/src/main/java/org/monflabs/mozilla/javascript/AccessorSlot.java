@@ -201,7 +201,18 @@ public class AccessorSlot extends StandardSlot<Scriptable> {
             if (target instanceof Function) {
                 Function t = (Function) target;
                 Context cx = Context.getContext();
-                return t.call(cx, t.getDeclarationScope(), start, ScriptRuntime.emptyArgs);
+                Object thisObj = start;
+                if (start != null && start == cx.primitiveWrapper) {
+                    // a getter read on a primitive: strict code receives the primitive
+                    cx.primitiveWrapper = null;
+                    if (t instanceof JSFunction
+                            && ((JSFunction) t).isStrict()
+                            && (!((JSFunction) t).isBuiltIn()
+                                    || ((JSFunction) t).acceptsPrimitiveThis())) {
+                        thisObj = cx.primitiveReceiver;
+                    }
+                }
+                return t.call(cx, t.getDeclarationScope(), thisObj, ScriptRuntime.emptyArgs);
             }
             return Undefined.instance;
         }

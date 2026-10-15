@@ -1595,6 +1595,20 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
     // for this edge case, so we will transform this into something like super.x = super.x + 1
     private void visitSuperIncDec(Node node, Node child, int childType, int incrDecrMask) {
         Node object = child.getFirstChild();
+        if (compilerEnv.isLatestEcmaScript()) {
+            // the key is evaluated once, the value converted with ToNumeric (13.4.2.1)
+            visitExpression(object, 0);
+            if (childType == Token.GETPROP) {
+                addStringOp(Token.STRING, object.getNext().getString());
+                stackChange(+1);
+            } else {
+                visitExpression(object.getNext(), 0);
+            }
+            addIcode(Icode.ELEM_INC_DEC);
+            addUint8(incrDecrMask | Node.SUPER_FLAG);
+            stackChange(-1);
+            return;
+        }
 
         // Push the old value on the stack
         visitExpression(object, 0); // stack: [super]

@@ -2424,8 +2424,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             --frame.stackTop;
             Object lhs = stack[frame.stackTop];
             if (lhs == DOUBLE_MARK) lhs = ScriptRuntime.wrapNumber(sDbl[frame.stackTop]);
+            int incrDecrMask = iCode[frame.pc];
             stack[frame.stackTop] =
-                    ScriptRuntime.elemIncrDecr(lhs, rhs, cx, frame.scope, iCode[frame.pc]);
+                    (incrDecrMask & Node.SUPER_FLAG) != 0
+                            ? ScriptRuntime.superElemIncrDecr(
+                                    lhs, rhs, cx, frame.scope, frame.thisObj, incrDecrMask)
+                            : ScriptRuntime.elemIncrDecr(lhs, rhs, cx, frame.scope, incrDecrMask);
             ++frame.pc;
             return null;
         }
