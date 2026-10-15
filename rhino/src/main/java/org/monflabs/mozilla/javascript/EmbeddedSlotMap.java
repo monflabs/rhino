@@ -208,7 +208,9 @@ public class EmbeddedSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
             if (newSlot == null) {
                 // Need to delete this slot actually
                 removeSlot(slot, prev, slotIndex, key);
+                slot.stale = true;
             } else if (!Objects.equals(slot, newSlot)) {
+                slot.stale = true;
                 // Replace slot in hash table
                 if (prev == slot) {
                     slots[slotIndex] = newSlot;

@@ -51,6 +51,10 @@ final class InterpreterData<T extends ScriptOrFn<T>> extends ACompilerData<T, In
     }
 
     final String[] itsStringTable;
+
+    /** The caches of the top-level names, by index in {@link #itsStringTable}; created on use. */
+    transient GlobalNameCache[] nameCaches;
+
     final double[] itsDoubleTable;
     final BigInteger[] itsBigIntTable;
     final Object[] itsRegExpLiterals;

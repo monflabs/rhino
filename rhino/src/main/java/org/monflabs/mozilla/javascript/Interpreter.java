@@ -584,6 +584,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         int indexReg;
         BigInteger bigIntReg;
         String stringReg;
+
+        /** The index of stringReg in the string table. */
+        int stringIndex;
+
         final boolean instructionCounting;
         GeneratorState generatorState;
         Object throwable;
@@ -2131,11 +2135,30 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
+    /** The cache of the name in stringReg, for this code, when it runs in the top scope. */
+    private static GlobalNameCache nameCache(CallFrame frame, InterpreterState state) {
+        InterpreterData<?> data = frame.compilerData;
+        GlobalNameCache[] caches = data.nameCaches;
+        if (caches == null) {
+            caches = new GlobalNameCache[data.itsStringTable.length];
+            data.nameCaches = caches;
+        }
+        GlobalNameCache cache = caches[state.stringIndex];
+        if (cache == null) {
+            cache = new GlobalNameCache(state.stringReg);
+            caches[state.stringIndex] = cache;
+        }
+        return cache;
+    }
+
     private static class DoBindName extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             final Object[] stack = frame.stack;
-            stack[++frame.stackTop] = ScriptRuntime.bind(cx, frame.scope, state.stringReg);
+            stack[++frame.stackTop] =
+                    frame.scope instanceof TopLevel
+                            ? nameCache(frame, state).bind(cx, frame.scope)
+                            : ScriptRuntime.bind(cx, frame.scope, state.stringReg);
             return null;
         }
     }
@@ -2149,10 +2172,13 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if (rhs == DOUBLE_MARK) rhs = ScriptRuntime.wrapNumber(sDbl[frame.stackTop]);
             VarScope lhs = (VarScope) stack[frame.stackTop - 1];
             stack[frame.stackTop - 1] =
-                    op == Token.SETNAME
-                            ? ScriptRuntime.setName(lhs, rhs, cx, frame.scope, state.stringReg)
-                            : ScriptRuntime.strictSetName(
-                                    lhs, rhs, cx, frame.scope, state.stringReg);
+                    op != Token.SETNAME
+                            ? ScriptRuntime.strictSetName(
+                                    lhs, rhs, cx, frame.scope, state.stringReg)
+                            : lhs instanceof TopLevel
+                                    ? nameCache(frame, state).setName(lhs, rhs, cx, frame.scope)
+                                    : ScriptRuntime.setName(
+                                            lhs, rhs, cx, frame.scope, state.stringReg);
             --frame.stackTop;
             return null;
         }
@@ -2526,7 +2552,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             final Object[] stack = frame.stack;
             // stringReg: name
             stack[++frame.stackTop] =
-                    ScriptRuntime.getNameAndThis(state.stringReg, cx, frame.scope);
+                    frame.scope instanceof TopLevel
+                            ? nameCache(frame, state).getNameAndThis(cx, frame.scope)
+                            : ScriptRuntime.getNameAndThis(state.stringReg, cx, frame.scope);
             return null;
         }
     }
@@ -3121,7 +3149,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoName extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            frame.stack[++frame.stackTop] = ScriptRuntime.name(cx, frame.scope, state.stringReg);
+            frame.stack[++frame.stackTop] =
+                    frame.scope instanceof TopLevel
+                            ? nameCache(frame, state).name(cx, frame.scope)
+                            : ScriptRuntime.name(cx, frame.scope, state.stringReg);
             return null;
         }
     }
@@ -3129,12 +3160,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoNameIncDec extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            int incrDecrMask = frame.compilerData.itsICode[frame.pc];
             frame.stack[++frame.stackTop] =
-                    ScriptRuntime.nameIncrDecr(
-                            frame.scope,
-                            state.stringReg,
-                            cx,
-                            frame.compilerData.itsICode[frame.pc]);
+                    frame.scope instanceof TopLevel
+                            ? nameCache(frame, state).nameIncrDecr(frame.scope, cx, incrDecrMask)
+                            : ScriptRuntime.nameIncrDecr(
+                                    frame.scope, state.stringReg, cx, incrDecrMask);
             ++frame.pc;
             return null;
         }
@@ -4384,7 +4415,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoStringCn extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            state.stringReg = frame.compilerData.itsStringTable[Icode.REG_STR_C0 - op];
+            state.stringIndex = Icode.REG_STR_C0 - op;
+            state.stringReg = frame.compilerData.itsStringTable[state.stringIndex];
             return null;
         }
 
@@ -4398,8 +4430,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoRegString1 extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            state.stringReg =
-                    frame.compilerData.itsStringTable[0xFF & frame.compilerData.itsICode[frame.pc]];
+            state.stringIndex = 0xFF & frame.compilerData.itsICode[frame.pc];
+            state.stringReg = frame.compilerData.itsStringTable[state.stringIndex];
             ++frame.pc;
             return null;
         }
@@ -4415,9 +4447,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoRegString2 extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            state.stringReg =
-                    frame.compilerData
-                            .itsStringTable[getIndex(frame.compilerData.itsICode, frame.pc)];
+            state.stringIndex = getIndex(frame.compilerData.itsICode, frame.pc);
+            state.stringReg = frame.compilerData.itsStringTable[state.stringIndex];
             frame.pc += 2;
             return null;
         }
@@ -4433,9 +4464,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoRegString4 extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            state.stringReg =
-                    frame.compilerData
-                            .itsStringTable[getInt(frame.compilerData.itsICode, frame.pc)];
+            state.stringIndex = getInt(frame.compilerData.itsICode, frame.pc);
+            state.stringReg = frame.compilerData.itsStringTable[state.stringIndex];
             frame.pc += 4;
             return null;
         }

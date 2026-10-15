@@ -23,6 +23,9 @@ public class SlotMapDescriptor<O extends ScriptableObject> {
     }
 
     public void installMap(O owner) {
+        for (var slot : owner.getMap()) {
+            slot.stale = true;
+        }
         owner.setMap(buildMap(owner));
     }
 

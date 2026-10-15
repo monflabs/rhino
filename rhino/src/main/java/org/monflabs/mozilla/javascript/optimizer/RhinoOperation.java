@@ -18,6 +18,7 @@ public enum RhinoOperation implements Operation {
     GETINDEX,
     SETSTRICT,
     SETCONST,
+    INCRDECR,
     SETSUPER,
     SETELEMENT,
     SETELEMENTSUPER,

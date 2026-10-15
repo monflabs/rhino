@@ -10,6 +10,7 @@ import jdk.dynalink.linker.GuardingDynamicLinker;
 import jdk.dynalink.linker.LinkRequest;
 import jdk.dynalink.linker.LinkerServices;
 import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.GlobalNameCache;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.Token;
 import org.monflabs.mozilla.javascript.VarScope;
@@ -51,6 +52,8 @@ class DefaultLinker implements GuardingDynamicLinker {
             throws NoSuchMethodException, IllegalAccessException {
         if (op.isNamespace(StandardNamespace.PROPERTY)) {
             return getPropertyInvocation(lookup, mType, op);
+        } else if (op.isNamespace(RhinoNamespace.GNAME)) {
+            return getCachedNameInvocation(lookup, mType, op);
         } else if (op.isNamespace(RhinoNamespace.NAME)) {
             return getNameInvocation(lookup, mType, op);
         } else if (op.isNamespace(RhinoNamespace.MATH)) {
@@ -128,6 +131,49 @@ class DefaultLinker implements GuardingDynamicLinker {
         throw new UnsupportedOperationException(op.toString());
     }
 
+    /**
+     * The names of code whose scope can be the top scope: each call site gets a cache of the
+     * binding the name has in the top scope (this linker links a site once, with no guard).
+     */
+    private GuardedInvocation getCachedNameInvocation(
+            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op)
+            throws NoSuchMethodException, IllegalAccessException {
+        GlobalNameCache cache = new GlobalNameCache(op.getName());
+        MethodHandle mh = null;
+        if (op.isOperation(RhinoOperation.BIND)) {
+            mh =
+                    lookup.findVirtual(
+                            GlobalNameCache.class,
+                            "bind",
+                            MethodType.methodType(VarScope.class, Context.class, VarScope.class));
+        } else if (op.isOperation(StandardOperation.GET)) {
+            mh =
+                    lookup.findVirtual(
+                            GlobalNameCache.class,
+                            "name",
+                            MethodType.methodType(Object.class, Context.class, VarScope.class));
+        } else if (op.isOperation(RhinoOperation.GETWITHTHIS)) {
+            mh =
+                    lookup.findVirtual(
+                            GlobalNameCache.class,
+                            "getNameAndThis",
+                            MethodType.methodType(
+                                    ScriptRuntime.LookupResult.class,
+                                    Context.class,
+                                    VarScope.class));
+        } else if (op.isOperation(StandardOperation.SET)) {
+            return new GuardedInvocation(
+                    lookup.findVirtual(GlobalNameCache.class, "setName", mType).bindTo(cache));
+        } else if (op.isOperation(RhinoOperation.INCRDECR)) {
+            return new GuardedInvocation(
+                    lookup.findVirtual(GlobalNameCache.class, "nameIncrDecr", mType).bindTo(cache));
+        } else {
+            return getNameInvocation(lookup, mType, op);
+        }
+        mh = MethodHandles.permuteArguments(mh.bindTo(cache), mType, 1, 0);
+        return new GuardedInvocation(mh);
+    }
+
     private GuardedInvocation getNameInvocation(
             MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op)
             throws NoSuchMethodException, IllegalAccessException {
@@ -169,6 +215,8 @@ class DefaultLinker implements GuardingDynamicLinker {
             mh = MethodHandles.permuteArguments(mh, mType, 1, 0);
         } else if (op.isOperation(StandardOperation.SET)) {
             mh = bindStringParameter(lookup, mType, ScriptRuntime.class, "setName", 4, name);
+        } else if (op.isOperation(RhinoOperation.INCRDECR)) {
+            mh = bindStringParameter(lookup, mType, ScriptRuntime.class, "nameIncrDecr", 1, name);
         } else if (op.isOperation(RhinoOperation.SETSTRICT)) {
             mh = bindStringParameter(lookup, mType, ScriptRuntime.class, "strictSetName", 4, name);
         } else if (op.isOperation(RhinoOperation.SETCONST)) {

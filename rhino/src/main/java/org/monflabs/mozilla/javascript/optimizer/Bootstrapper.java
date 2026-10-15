@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 import jdk.dynalink.CallSiteDescriptor;
 import jdk.dynalink.DynamicLinker;
 import jdk.dynalink.DynamicLinkerFactory;
+import jdk.dynalink.NamedOperation;
 import jdk.dynalink.NamespaceOperation;
 import jdk.dynalink.Operation;
 import jdk.dynalink.StandardNamespace;
@@ -164,6 +165,8 @@ public class Bootstrapper {
             StandardOperation.SET.withNamespace(RhinoNamespace.NAME);
     private static NamespaceOperation SETSTRICT_NAME =
             RhinoOperation.SETSTRICT.withNamespace(RhinoNamespace.NAME);
+    private static NamespaceOperation INCRDECR_NAME =
+            RhinoOperation.INCRDECR.withNamespace(RhinoNamespace.NAME);
     private static NamespaceOperation SETCONST_NAME =
             RhinoOperation.SETCONST.withNamespace(RhinoNamespace.NAME);
 
@@ -203,6 +206,12 @@ public class Bootstrapper {
         String namespaceName = getNameSegment(tokens, name, 0);
         String opName = getNameSegment(tokens, name, 1);
 
+        if ("GNAME".equals(namespaceName)) {
+            // the operations of NAME, in the namespace of the names cached by GlobalNameCache
+            NamedOperation named = (NamedOperation) parseOperation(name.substring(1));
+            NamespaceOperation op = (NamespaceOperation) named.getBaseOperation();
+            return op.getBaseOperation().withNamespace(RhinoNamespace.GNAME).named(named.getName());
+        }
         if ("PROP".equals(namespaceName)) {
             switch (opName) {
                 case "GET":
@@ -270,6 +279,9 @@ public class Bootstrapper {
                 case "SETCONST":
                     // Same but try to set a constant
                     return SETCONST_NAME.named(getNameSegment(tokens, name, 2));
+                case "INCRDECR":
+                    // ++ or -- on a variable, with the flags of Node.INCRDECR_PROP
+                    return INCRDECR_NAME.named(getNameSegment(tokens, name, 2));
             }
 
         } else if ("MATH".equals(namespaceName)) {

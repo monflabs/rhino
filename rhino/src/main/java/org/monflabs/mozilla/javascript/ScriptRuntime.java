@@ -5119,7 +5119,7 @@ public class ScriptRuntime {
         return (incrDecrMask & Node.POST_FLAG) != 0 ? number : result;
     }
 
-    private static Number incrDecrNumber(Number number, int incrDecrMask) {
+    static Number incrDecrNumber(Number number, int incrDecrMask) {
         Number result;
         if (number instanceof BigInteger) {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {

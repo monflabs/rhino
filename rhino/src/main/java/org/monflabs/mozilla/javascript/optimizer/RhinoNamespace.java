@@ -9,5 +9,7 @@ import jdk.dynalink.Namespace;
 @SuppressWarnings("AndroidJdkLibsChecker")
 public enum RhinoNamespace implements Namespace {
     NAME,
+    /** Names of code whose scope can be the top scope, linked through a GlobalNameCache. */
+    GNAME,
     MATH,
 }

@@ -47,6 +47,7 @@ existing code and without slowing the engine down.
 | 2026-10-14 | **12.2: `Math.sumPrecise` uses Shewchuk's algorithm** (the proposal polyfill's, with its overflow handling), not Nashorn's `BigDecimal`: measured equal on 300,000 random and edge cases and 18 times faster on usual values (2.7 times on the whole exponent range). |
 | 2026-10-14 | **M13: functions have no `arity` under `VERSION_ECMASCRIPT`** (user decision): the JavaScript 1.2 property is not ECMAScript (as in Nashorn); `VERSION_ES6` keeps it. |
 | 2026-10-14 | **M13: `Function.prototype.caller`/`arguments` are %ThrowTypeError% under `VERSION_ECMASCRIPT`** (user decision): sloppy functions get own `arguments` (the legacy arguments of a running call) and `caller` (undefined: not tracked) properties, as V8 has; strict functions, classes, arrows, methods and generators have none. |
+| 2026-10-15 | **M14: top-level names are cached per access site** (user decision, option 1 of 3, rather than hunting the JIT trigger of the `VERSION_ECMASCRIPT`-only slowdown of top-level code or starting with the candidate list): `GlobalNameCache`, invalidated by `Slot.stale` and the size of the top scope, in both backends. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -730,6 +731,14 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 - `run.wideobject.cmp` is bimodal across JVMs (19 ms or 60 ms): the JIT settles in one of two states.
 - `run.properties.cmp` depends on what ran before it in the same JVM (profile pollution): 25 ms alone, 50 ms in the
   full run.
+
+Status (2026-10-15): **14.1 (done)** top-level names are cached per access site (`GlobalNameCache`). Against
+`perf-baseline`, the gate showed the ES2026 work costing 10–25% on top-level scripts under `VERSION_ECMASCRIPT` only:
+the per-operation cost was equal in both versions (identical inside a function), the difference was in the global
+variable lookups, slowed by the JIT profile of the `VERSION_ECMASCRIPT` initialization. With the cache, both versions
+run these scripts at the same speed, 30–65% faster than before. `v8-richards.cmp` is bimodal like `properties.cmp`.
+Next: the candidate list above, `split` (+6% against `perf-baseline` in both versions) and `startup.50scopes.ecma`
+(+28%, the larger `VERSION_ECMASCRIPT` initialization).
 ---
 
 ## Status tracker
@@ -765,5 +774,5 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | continuous  |                              |        |
+| 14   | Performance pass                                | in progress | 99.1% (14.1)                 | (this) |
 | 15   | Single language version                         | todo        |                              |        |

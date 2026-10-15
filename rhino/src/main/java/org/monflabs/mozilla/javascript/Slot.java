@@ -14,6 +14,12 @@ public abstract class Slot<T extends PropHolder<T>> implements Serializable {
     transient Slot<T> next; // next in hash table bucket
     transient Slot<T> orderedNext; // next in linked list
 
+    /**
+     * Set when the slot leaves its map (removed, replaced, or copied into a new map), for the
+     * caches that hold on to a slot ({@link GlobalNameCache}).
+     */
+    transient boolean stale;
+
     Slot() {}
 
     abstract Slot<T> copySlot();

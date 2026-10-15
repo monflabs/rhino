@@ -31,6 +31,7 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
         map = new LinkedHashMap<>(oldMap.size());
         for (var n : oldMap) {
             add(null, n.copySlot());
+            n.stale = true;
         }
     }
 
@@ -38,6 +39,7 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
         map = new LinkedHashMap<>(oldMap.dirtySize() + 1);
         for (var n : oldMap) {
             add(null, n.copySlot());
+            n.stale = true;
         }
         add(null, newSlot);
     }
@@ -75,14 +77,24 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
         Object name = makeKey(key, index);
         var ret =
                 map.compute(
-                        name, (n, existing) -> c.compute(key, index, existing, compoundOp, owner));
+                        name,
+                        (n, existing) -> {
+                            var slot = c.compute(key, index, existing, compoundOp, owner);
+                            if (existing != null && slot != existing) {
+                                existing.stale = true;
+                            }
+                            return slot;
+                        });
         return (S) ret;
     }
 
     @Override
     public void add(SlotMapOwner<T> owner, Slot<T> newSlot) {
         Object name = makeKey(newSlot);
-        map.put(name, newSlot);
+        var old = map.put(name, newSlot);
+        if (old != null && old != newSlot) {
+            old.stale = true;
+        }
     }
 
     @Override

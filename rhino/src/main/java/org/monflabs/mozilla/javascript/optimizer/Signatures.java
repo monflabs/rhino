@@ -196,6 +196,16 @@ interface Signatures {
                     + ")Ljava/lang/Object;";
 
     /**
+     * NAME:INCRDECR:{name}: Increments or decrements the named value, with the flags of
+     * Node.INCRDECR_PROP. Falls back to ScriptRuntime.nameIncrDecr.
+     */
+    String NAME_INCR_DECR =
+            "(Lorg/monflabs/mozilla/javascript/VarScope;"
+                    + "Lorg/monflabs/mozilla/javascript/Context;"
+                    + "I"
+                    + ")Ljava/lang/Object;";
+
+    /**
      * NAME:SETCONST:{name}: Sets the named constant in the scope. Falls back to
      * ScriptRuntime.setConst.
      */

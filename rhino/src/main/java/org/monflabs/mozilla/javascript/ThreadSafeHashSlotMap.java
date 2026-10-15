@@ -25,6 +25,7 @@ class ThreadSafeHashSlotMap<T extends PropHolder<T>> extends HashSlotMap<T>
         this.lock = lock;
         for (var n : oldMap) {
             addWithLock(null, n.copySlot());
+            n.stale = true;
         }
     }
 
@@ -33,6 +34,7 @@ class ThreadSafeHashSlotMap<T extends PropHolder<T>> extends HashSlotMap<T>
         this.lock = lock;
         for (var n : oldMap) {
             addWithLock(null, n.copySlot());
+            n.stale = true;
         }
         addWithLock(null, newSlot);
     }

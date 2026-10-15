@@ -6,6 +6,24 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Cache of top-level names (2026-10-15, plan M14)
+
+- Performance (all versions, no behavior change): the names of top-level code, and of the script's functions that
+  keep their variables in registers, are resolved through a per-site `GlobalNameCache`: the slot of the global object
+  (or of a global let/const) the name was found in, used again while the lookup would find the same slot. Compiled
+  code links them in a new `GNAME` namespace (`GNAME:GET`, `BIND`, `SET`, `GETWITHTHIS`, and `NAME:INCRDECR`, which
+  replaces the static call to `ScriptRuntime.nameIncrDecr`); the interpreter keeps one cache per name of each
+  `InterpreterData`, used when the scope is the top scope. A slot that leaves its map (removed, replaced, or copied
+  into a promoted map) is marked `Slot.stale`; a global let/const shadowing a property is seen through the size of
+  the top scope, which only grows. The cache holds the scope and the slot weakly.
+- Found with the perf gate against `perf-baseline`: the scripts of `testsrc/perf` spend most of their time looking up
+  global variables, and under `VERSION_ECMASCRIPT` those lookups were 10–25% slower in compiled mode (the JIT
+  profile left by the larger `VERSION_ECMASCRIPT` initialization; `run.strbuild.cmp.ecma` failed the gate at
+  +18.7%). Perf gate against the previous commit: `typedarray` −42% to −66%, `toprimitive` −31% to −50%,
+  `strbuild` −34% to −49%, `instanceof` −31% to −44%, `protochain` −28% to −53%, `megamorphic` −21% to −52%,
+  `arith` −30% to −35%, `concat`, `regexp`, `stringmethods`, `wideobject` −10% to −28%, `v8-earley-boyer` −3% to
+  −16%; the other V8 benchmarks unchanged (`v8-richards.cmp`, bimodal, measured −49% over 7 rounds).
+
 ### Last M13 residuals (2026-10-15, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.83): with parameter expressions, the function

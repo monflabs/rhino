@@ -206,6 +206,9 @@ class BodyCodegen {
         }
     }
 
+    /** The namespace of the dynamic name operations: GNAME where they can be cached. */
+    private String nameNamespace = "NAME";
+
     private void initBodyGeneration() {
         varRegisters = null;
         if (scriptOrFn.getType() == Token.FUNCTION) {
@@ -224,6 +227,13 @@ class BodyCodegen {
             hasVarsInRegs = false;
             inDirectCallFunction = false;
         }
+        // the scope of script code, and of a function of the script with no activation, can be
+        // the top scope, whose names a GlobalNameCache resolves
+        nameNamespace =
+                fnCurrent == null
+                                || (hasVarsInRegs && fnCurrent.fnode.getEnclosingFunction() == null)
+                        ? "GNAME"
+                        : "NAME";
 
         locals = new int[MAX_LOCALS];
 
@@ -1136,7 +1146,8 @@ class BodyCodegen {
                 } else {
                     cfw.addALoad(variableObjectLocal);
                     cfw.addALoad(contextLocal);
-                    addDynamicInvoke("NAME:GET:" + node.getString(), Signatures.NAME_GET);
+                    addDynamicInvoke(
+                            nameNamespace + ":GET:" + node.getString(), Signatures.NAME_GET);
                 }
                 break;
 
@@ -1888,7 +1899,8 @@ class BodyCodegen {
                     // Generate code for "ScriptRuntime.bind(varObj, "s")"
                     cfw.addALoad(variableObjectLocal);
                     cfw.addALoad(contextLocal);
-                    addDynamicInvoke("NAME:BIND:" + node.getString(), Signatures.NAME_BIND);
+                    addDynamicInvoke(
+                            nameNamespace + ":BIND:" + node.getString(), Signatures.NAME_BIND);
                 }
                 break;
 
@@ -2137,7 +2149,7 @@ class BodyCodegen {
                 String name = unnestedYields.get(node);
                 cfw.addALoad(variableObjectLocal);
                 cfw.addALoad(contextLocal);
-                addDynamicInvoke("NAME:GET:" + name, Signatures.NAME_GET);
+                addDynamicInvoke(nameNamespace + ":GET:" + name, Signatures.NAME_GET);
             }
             return;
         }
@@ -2157,7 +2169,7 @@ class BodyCodegen {
             cfw.add(ByteCode.SWAP);
             cfw.addALoad(contextLocal);
             cfw.addALoad(variableObjectLocal);
-            addDynamicInvoke("NAME:SET:" + nn, Signatures.NAME_SET);
+            addDynamicInvoke(nameNamespace + ":SET:" + nn, Signatures.NAME_SET);
             cfw.add(ByteCode.POP);
 
             unnestedYields.put(nestedYield, nn);
@@ -2355,7 +2367,7 @@ class BodyCodegen {
             cfw.add(ByteCode.SWAP);
             cfw.addALoad(contextLocal);
             cfw.add(ByteCode.SWAP);
-            addDynamicInvoke("NAME:SET:" + id, Signatures.NAME_SET);
+            addDynamicInvoke(nameNamespace + ":SET:" + id, Signatures.NAME_SET);
             cfw.add(ByteCode.POP);
             child = child.getNext();
             i++;
@@ -3464,7 +3476,8 @@ class BodyCodegen {
                     String propAccessType =
                             isOptionalChainingCall ? "GETWITHTHISOPTIONAL" : "GETWITHTHIS";
                     addDynamicInvoke(
-                            "NAME:" + propAccessType + ":" + name, Signatures.NAME_GET_THIS);
+                            nameNamespace + ":" + propAccessType + ":" + name,
+                            Signatures.NAME_GET_THIS);
                     break;
                 }
 
@@ -4264,15 +4277,11 @@ class BodyCodegen {
                 break;
             case Token.NAME:
                 cfw.addALoad(variableObjectLocal);
-                cfw.addPush(child.getString()); // push name
                 cfw.addALoad(contextLocal);
                 cfw.addPush(incrDecrMask);
-                addScriptRuntimeInvoke(
-                        "nameIncrDecr",
-                        "(Lorg/monflabs/mozilla/javascript/VarScope;"
-                                + "Ljava/lang/String;"
-                                + "Lorg/monflabs/mozilla/javascript/Context;"
-                                + "I)Ljava/lang/Object;");
+                addDynamicInvoke(
+                        nameNamespace + ":INCRDECR:" + child.getString(),
+                        Signatures.NAME_INCR_DECR);
                 break;
             case Token.GETPROPNOWARN:
                 throw Kit.codeBug();
@@ -4871,7 +4880,7 @@ class BodyCodegen {
         }
         cfw.addALoad(contextLocal);
         cfw.addALoad(variableObjectLocal);
-        addDynamicInvoke("NAME:SET:" + name, Signatures.NAME_SET);
+        addDynamicInvoke(nameNamespace + ":SET:" + name, Signatures.NAME_SET);
     }
 
     private void visitStrictSetName(Node node, Node child) {
@@ -4882,7 +4891,7 @@ class BodyCodegen {
         }
         cfw.addALoad(contextLocal);
         cfw.addALoad(variableObjectLocal);
-        addDynamicInvoke("NAME:SETSTRICT:" + name, Signatures.NAME_SET_STRICT);
+        addDynamicInvoke(nameNamespace + ":SETSTRICT:" + name, Signatures.NAME_SET_STRICT);
     }
 
     private void visitSetConst(Node node, Node child) {
@@ -4892,7 +4901,7 @@ class BodyCodegen {
             child = child.getNext();
         }
         cfw.addALoad(contextLocal);
-        addDynamicInvoke("NAME:SETCONST:" + name, Signatures.NAME_SET_CONST);
+        addDynamicInvoke(nameNamespace + ":SETCONST:" + name, Signatures.NAME_SET_CONST);
     }
 
     private void visitGetVar(Node node) {
