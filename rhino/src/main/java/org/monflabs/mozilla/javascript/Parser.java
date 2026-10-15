@@ -673,9 +673,13 @@ public class Parser {
             }
         }
         Set<String> closureNames = new HashSet<>();
+        Set<String> paramNames = new HashSet<>();
         for (AstNode expression : paramExpressions) {
             expression.visit(
                     node -> {
+                        if (node instanceof Name) {
+                            paramNames.add(((Name) node).getIdentifier());
+                        }
                         if (node instanceof FunctionNode) {
                             node.visit(
                                     inner -> {
@@ -694,6 +698,12 @@ public class Parser {
             if (symbol.getDeclType() == Symbol.Type.VAR
                     && closureNames.contains(symbol.getName())
                     && !"arguments".equals(symbol.getName())) {
+                renamed.add(symbol.getName());
+            } else if ((symbol.getDeclType() == Symbol.Type.LET
+                            || symbol.getDeclType() == Symbol.Type.CONST)
+                    && (paramNames.contains(symbol.getName())
+                            || closureNames.contains(symbol.getName()))) {
+                // the lexical declarations of the body are not visible to the parameters either
                 renamed.add(symbol.getName());
             }
         }

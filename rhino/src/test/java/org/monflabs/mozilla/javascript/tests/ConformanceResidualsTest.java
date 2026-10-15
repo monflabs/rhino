@@ -142,4 +142,28 @@ class ConformanceResidualsTest {
                         + "r.push(Object.getOwnPropertyNames(() => 1).join());\n"
                         + "r.join('|')");
     }
+
+    @Test
+    void parametersDoNotSeeBodyLexicals() {
+        Utils.assertGatedBehavior(
+                "NaN|undefined",
+                "out1|object",
+                "var x = 'out', r = [], args;\n"
+                        + "function f(a = x) { let x = 1; return a + x; }\n"
+                        + "function g(y = args = arguments) { let arguments; }\n"
+                        + "try { r.push(f()); } catch (e) { r.push(e.name); }\n"
+                        + "try { g(); r.push(typeof args); } catch (e) { r.push(e.name); }\n"
+                        + "r.join('|')");
+    }
+
+    @Test
+    void arrayBufferPrototypeBeforeAllocation() {
+        Utils.assertGatedBehavior(
+                "RangeError",
+                "Dummy",
+                "var nt = function () {}.bind(null);\n"
+                        + "Object.defineProperty(nt, 'prototype', { get() { throw 'Dummy'; } });\n"
+                        + "try { Reflect.construct(ArrayBuffer, [7 * Math.pow(1024, 5)], nt); 'none' }"
+                        + " catch (e) { typeof e === 'string' ? e : e.name }");
+    }
 }

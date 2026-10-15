@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Parameters and the body's lexical declarations, ArrayBuffer allocation order (2026-10-14, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.68): the parameters do not see the `let`/`const`
+  declarations of the body (the parser renames those the parameters name, as for the `var` declarations).
+- Fixed (`VERSION_ECMASCRIPT`, 1.72): `new ArrayBuffer(length)` reads the prototype of newTarget before allocating.
+- Tests: `ConformanceResidualsTest.parametersDoNotSeeBodyLexicals`, `arrayBufferPrototypeBeforeAllocation`.
+- test262: 42,164 → 42,168 of 42,616.
+
 ### %ThrowTypeError% on Function.prototype (2026-10-14, plan M13)
 
 - Changed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.71, decision 2026-10-14): `Function.prototype.caller`

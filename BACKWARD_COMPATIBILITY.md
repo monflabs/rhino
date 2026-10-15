@@ -84,6 +84,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.69 | Strict methods called on a primitive receive the primitive as `this` | `VERSION_ECMASCRIPT` |
 | 1.70 | A data property of an object literal replaces an accessor of the same name | `VERSION_ECMASCRIPT` |
 | 1.71 | `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions | `VERSION_ECMASCRIPT` |
+| 1.72 | `new ArrayBuffer` reads the prototype of newTarget before allocating | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1144,7 +1145,9 @@ f();   // before: "inside"   now: "outside"
 
 - A function with parameter expressions (defaults, destructuring) has a separate environment for the `var`
   declarations of its body: a closure created in the parameters resolves a name the body declares with `var` outside
-  the function. Not applied when the body uses a direct `eval` or `with`, which keep the former behavior.
+  the function. The parameters do not see the `let`/`const` declarations of the body either: `function f(a = x)
+  { let x; }` reads the outer `x` (before, the body's `x`, undefined), and `function g(a = arguments) { let
+  arguments; }` gets the arguments object. Not applied when the body uses a direct `eval` or `with`, which keep the former behavior.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, step 28: a separate var environment when
   hasParameterExpressions is true).
 
@@ -1196,6 +1199,15 @@ Object.getOwnPropertyDescriptor(Function.prototype, "caller").get; // now %Throw
   them throws a TypeError.
 - **Why:** ECMA-262 2026, §10.2.4 (AddRestrictedFunctionProperties), §17.1 (the own `caller` and `arguments` of a
   sloppy function are an allowed extension). Decision 2026-10-14.
+
+### 1.72 `new ArrayBuffer` reads the prototype of newTarget before allocating
+
+```js
+Reflect.construct(ArrayBuffer, [7 * 2 ** 50], newTargetWithThrowingPrototypeGetter);
+// before: RangeError   now: the error of the prototype getter
+```
+
+- **Why:** ECMA-262 2026, §25.1.3.1 (AllocateArrayBuffer: OrdinaryCreateFromConstructor before CreateByteDataBlock).
 
 ---
 

@@ -209,6 +209,16 @@ public class NativeArrayBuffer extends ScriptableObject {
             }
         }
 
+        if (cx.isLatestEcmaScript()) {
+            // AllocateArrayBuffer: the prototype is read before the data block is allocated
+            Scriptable prototype =
+                    ScriptRuntime.findPrototype(f, nt, TopLevel.Builtins.ArrayBuffer);
+            NativeArrayBuffer buffer = new NativeArrayBuffer(length);
+            buffer.maxByteLength = maxByteLength;
+            buffer.setPrototype(prototype);
+            buffer.setParentScope(s);
+            return buffer;
+        }
         NativeArrayBuffer buffer = new NativeArrayBuffer(length);
         buffer.maxByteLength = maxByteLength;
         ScriptRuntime.setBuiltinProtoAndParent(buffer, f, nt, s, TopLevel.Builtins.ArrayBuffer);
