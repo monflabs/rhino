@@ -159,6 +159,41 @@ final class IteratorRecord {
         }
     }
 
+    /**
+     * IteratorClose for the return completion of a generator: the first error of a return method is
+     * thrown, the iterators opened before it are then closed as for a throw.
+     */
+    static void closeAllForReturn(Object guard, Context cx, VarScope scope) {
+        RhinoException error = null;
+        for (IteratorRecord r = (IteratorRecord) guard; r != null; r = r.previous) {
+            if (r.done || r.iterator == null) {
+                continue;
+            }
+            if (error == null) {
+                try {
+                    r.close(cx, scope);
+                } catch (RhinoException e) {
+                    error = e;
+                }
+            } else {
+                r.done = true;
+                try {
+                    Object returnMethod =
+                            ScriptableObject.getProperty(r.iterator, ES6Iterator.RETURN_METHOD);
+                    if (returnMethod instanceof Callable) {
+                        ((Callable) returnMethod)
+                                .call(cx, scope, r.iterator, ScriptRuntime.emptyArgs);
+                    }
+                } catch (RhinoException ignored) {
+                    // the error being thrown takes precedence
+                }
+            }
+        }
+        if (error != null) {
+            throw error;
+        }
+    }
+
     /** IteratorClose after a normal completion, when the iterator is not done. */
     void close(Context cx, VarScope scope) {
         if (done || iterator == null) {

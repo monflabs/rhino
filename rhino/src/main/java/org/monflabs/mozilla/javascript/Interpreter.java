@@ -3577,9 +3577,11 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 }
                 case Icode.ITER_GUARD_INIT -> frame.stack[local] = null;
                 default -> {
+                    Object completion = frame.stack[frame.stackTop];
+                    frame.stack[frame.stackTop--] = null;
                     Object guard = frame.stack[local];
                     frame.stack[local] = null;
-                    ScriptRuntime.iteratorGuardClose(guard, cx, frame.scope);
+                    ScriptRuntime.iteratorGuardClose(guard, completion, cx, frame.scope);
                 }
             }
             return null;

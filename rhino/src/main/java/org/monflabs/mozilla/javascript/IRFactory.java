@@ -233,6 +233,11 @@ public final class IRFactory {
                         new Node(Token.BLOCK, close),
                         lineno,
                         column);
+        // the finally reads the completion of the statement in the local of the try: a
+        // generator's return closes the iterators as a return does, not as a throw
+        Node completion = new Node(Token.LOCAL_LOAD);
+        completion.putProp(Node.LOCAL_BLOCK_PROP, guarded);
+        close.addChildToBack(completion);
         guard.addChildToBack(init);
         guard.addChildToBack(guarded);
         return guard;

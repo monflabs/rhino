@@ -598,7 +598,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 break;
 
             case Token.ITER_GUARD_CLOSE:
+                // the completion in the local of the try: a throwable, or a return address
+                visitExpression(child, 0);
                 addIndexOp(Icode.ITER_GUARD_CLOSE, getLocalBlockRef(node));
+                stackChange(-1);
                 break;
 
             case Icode.GENERATOR:

@@ -4408,6 +4408,21 @@ public class ScriptRuntime {
         IteratorRecord.closeAll(guard, cx, scope);
     }
 
+    /**
+     * The end of a guarded statement, with its completion: the throwable that ends it, if any. A
+     * generator's return (a GeneratorClosedException) closes the iterators as a return completion
+     * does: the errors of their return methods are thrown (IteratorClose).
+     */
+    public static void iteratorGuardClose(
+            Object guard, Object completion, Context cx, VarScope scope) {
+        if (completion instanceof NativeGenerator.GeneratorClosedException
+                && cx.isLatestEcmaScript()) {
+            IteratorRecord.closeAllForReturn(guard, cx, scope);
+        } else {
+            IteratorRecord.closeAll(guard, cx, scope);
+        }
+    }
+
     /** Array destructuring: the next value, or undefined once done (Token#ITER_STEP). */
     public static Object iteratorStep(Object record, Context cx, VarScope scope) {
         return ((IteratorRecord) record).step(cx, scope);

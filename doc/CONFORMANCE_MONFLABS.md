@@ -4,7 +4,7 @@ Under `Context.VERSION_ECMASCRIPT`, this fork passes the test262 suite in its sc
 [MONFLABS_PLAN.md](../MONFLABS_PLAN.md) (proper tail calls, `staging/`, `intl402/` and the proposals after ES2026),
 except for the tests listed here. Each group has its reason: a documented decision, or a residual still to fix (plan
 milestone M13). `tests/testsrc/test262.properties` lists every failing test; `python3 tests/test262-status.py` gives
-the current numbers (98.9% of 42,616 tests on 2026-10-14).
+the current numbers (99.0% of 42,616 tests on 2026-10-15).
 
 ## Documented limits
 
@@ -27,9 +27,6 @@ cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wai
 
 ## Residuals still to fix (M13)
 
-- Generator `return()` while paused inside a destructuring pattern (16 tests, `dstr/*-iter-rtrn-close-*`): the
-  pattern's iterator is closed as for a throw (errors of `return` are ignored) instead of as for a return. The fix
-  needs the completion kind in the `finally` blocks of both backends.
 - The temporal dead zone of the head of `for-in`/`for-of` with `let`/`const`, and of `switch`/`catch` blocks seen by
   closures created in them (10 tests, `scope-*-lex-*`).
 - `Array.prototype.push`/`unshift` on an array whose prototype has index setters (4 tests): the dense fast path

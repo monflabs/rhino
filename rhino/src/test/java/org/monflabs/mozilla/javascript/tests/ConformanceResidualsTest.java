@@ -166,4 +166,19 @@ class ConformanceResidualsTest {
                         + "try { Reflect.construct(ArrayBuffer, [7 * Math.pow(1024, 5)], nt); 'none' }"
                         + " catch (e) { typeof e === 'string' ? e : e.name }");
     }
+
+    @Test
+    void generatorReturnClosesDestructuringIterators() {
+        Utils.assertGatedBehavior(
+                "0|1",
+                "1|TypeError",
+                "var closed = 0;\n"
+                        + "var iterable = { [Symbol.iterator]() { return {"
+                        + " next() { return { value: undefined, done: false }; },"
+                        + " return() { closed++; return null; } }; } };\n"
+                        + "function* g() { var a; [a = yield] = iterable; }\n"
+                        + "var it = g(); it.next();\n"
+                        + "var r; try { it.return(); r = 'none'; } catch (e) { r = e.name; }\n"
+                        + "closed + '|' + (r === 'none' ? 1 : r)");
+    }
 }

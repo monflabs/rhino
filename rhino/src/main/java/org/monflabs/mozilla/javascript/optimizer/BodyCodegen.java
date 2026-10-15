@@ -948,11 +948,18 @@ class BodyCodegen {
                 {
                     int guard = getLocalBlockRegister(node);
                     cfw.addALoad(guard);
+                    if (isGenerator) {
+                        // the completion in the local of the try (only a generator can return
+                        // while a pattern is evaluated)
+                        generateExpression(child, node);
+                    } else {
+                        cfw.add(ByteCode.ACONST_NULL);
+                    }
                     cfw.addALoad(contextLocal);
                     cfw.addALoad(variableObjectLocal);
                     addScriptRuntimeInvoke(
                             "iteratorGuardClose",
-                            "(Ljava/lang/Object;"
+                            "(Ljava/lang/Object;Ljava/lang/Object;"
                                     + "Lorg/monflabs/mozilla/javascript/Context;"
                                     + "Lorg/monflabs/mozilla/javascript/VarScope;"
                                     + ")V");

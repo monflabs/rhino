@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Generator return inside a destructuring pattern (2026-10-15, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.73): the `finally` that closes the iterators of a
+  destructuring statement reads the completion in the local of its `try` (the throwable, in both backends; only
+  generators can return there, so compiled non-generator code passes null): a generator's return closes them as a
+  return completion, whose errors are thrown.
+- Tests: `ConformanceResidualsTest.generatorReturnClosesDestructuringIterators`.
+- test262: 42,168 → 42,185 of 42,616 (99.0%).
+
 ### Parameters and the body's lexical declarations, ArrayBuffer allocation order (2026-10-14, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.68): the parameters do not see the `let`/`const`

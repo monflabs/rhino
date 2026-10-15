@@ -85,6 +85,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.70 | A data property of an object literal replaces an accessor of the same name | `VERSION_ECMASCRIPT` |
 | 1.71 | `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions | `VERSION_ECMASCRIPT` |
 | 1.72 | `new ArrayBuffer` reads the prototype of newTarget before allocating | `VERSION_ECMASCRIPT` |
+| 1.73 | A generator's `return()` inside a destructuring pattern closes its iterator as a return | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1208,6 +1209,20 @@ Reflect.construct(ArrayBuffer, [7 * 2 ** 50], newTargetWithThrowingPrototypeGett
 ```
 
 - **Why:** ECMA-262 2026, §25.1.3.1 (AllocateArrayBuffer: OrdinaryCreateFromConstructor before CreateByteDataBlock).
+
+### 1.73 A generator's `return()` inside a destructuring pattern closes its iterator as a return
+
+```js
+function* g() { var a; [a = yield] = iterableWhoseReturnGivesNull; }
+var it = g(); it.next();
+it.return();   // before: { value: undefined, done: true }   now: TypeError (return() gave no object)
+```
+
+- When `return()` resumes a generator suspended inside an array destructuring pattern, the pattern's iterator is
+  closed with a return completion: an error of its `return` method, or a result that is not an object, is thrown
+  (before, `VERSION_ES6` does not close it at all).
+- **Why:** ECMA-262 2026, §7.4.11 (IteratorClose), §14.3.3.6 and §13.15.5.5 (the iterator is closed with the
+  completion of the pattern).
 
 ---
 
