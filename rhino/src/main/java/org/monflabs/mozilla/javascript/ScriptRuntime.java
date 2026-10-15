@@ -6838,6 +6838,22 @@ public class ScriptRuntime {
                 } else if (value instanceof Scriptable) {
                     NativeObject.js_protoSetter(object, value);
                 }
+            } else if (getterSetter == 0
+                    && getterSetters != null
+                    && cx.isLatestEcmaScript()
+                    && object instanceof ScriptableObject
+                    && !NativeObject.PROTO_PROPERTY.equals(id)) {
+                // CreateDataPropertyOrThrow: a data property replaces an accessor of the literal
+                Object key = id;
+                if (!(id instanceof Symbol)) {
+                    StringIdOrIndex s = toStringIdOrIndex(id);
+                    key = s.stringId == null ? Integer.valueOf(s.index) : s.stringId;
+                }
+                ((ScriptableObject) object)
+                        .defineOwnProperty(
+                                cx,
+                                key,
+                                new ScriptableObject.DescriptorInfo(true, true, true, value));
             } else if (getterSetter == 0) {
                 if (id instanceof Symbol) {
                     Symbol sym = (Symbol) id;

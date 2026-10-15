@@ -33,6 +33,7 @@ final class NativeAsyncGenerator extends ScriptableObject {
     static {
         ASYNC_ITERATOR_DESCRIPTOR =
                 new ClassDescriptor.Builder(ASYNC_ITERATOR_TAG)
+                        .withPrimitiveThis()
                         .withMethod(
                                 CTOR,
                                 SymbolKey.ASYNC_ITERATOR,

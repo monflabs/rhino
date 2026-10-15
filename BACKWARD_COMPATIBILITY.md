@@ -82,6 +82,7 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.67 | A yield expression in arrow parameters is an early error | `VERSION_ECMASCRIPT` |
 | 1.68 | Closures in parameter expressions do not see the `var` declarations of the body | `VERSION_ECMASCRIPT` |
 | 1.69 | Strict methods called on a primitive receive the primitive as `this` | `VERSION_ECMASCRIPT` |
+| 1.70 | A data property of an object literal replaces an accessor of the same name | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 
@@ -1165,6 +1166,17 @@ true.f();                                   // before: "object"   now: "boolean"
 - A sloppy function still gets a wrapper object. Getters read on a primitive still get the wrapper.
 - **Why:** ECMA-262 2026, §10.2.1.2 (OrdinaryCallBindThis: the this of a strict function is not converted),
   §7.3.3 (GetV), §7.3.22 (Invoke).
+
+### 1.70 A data property of an object literal replaces an accessor of the same name
+
+```js
+"use strict";
+({ get foo() { return 0; }, foo: 1 }).foo;   // before: TypeError (no setter)   now: 1
+```
+
+- In an object literal, a data property defines the property (CreateDataPropertyOrThrow) instead of assigning it,
+  so it replaces a getter or setter defined before it in the same literal.
+- **Why:** ECMA-262 2026, §13.2.5.5 (PropertyDefinitionEvaluation: CreateDataPropertyOrThrow).
 
 ---
 

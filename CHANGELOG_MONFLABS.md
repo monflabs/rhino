@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Object literal accessors, class heritage strictness, AsyncIterator this (2026-10-14, plan M13)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.70): a data property of an object literal with
+  accessors is defined, so it replaces an accessor of the same name.
+- Fixed: a function in the heritage of a class is strict code even when the script is sloppy (a function parsed in
+  strict code is marked strict); `%AsyncIteratorPrototype%[@@asyncIterator]` returns a primitive `this` unchanged.
+- Tests: `ConformanceResidualsTest.dataPropertyAfterAccessorInLiteral`, `classHeritageIsStrict`.
+- test262: 42,154 → 42,157 of 42,616.
+
 ### Primitive this of strict methods and built-ins (2026-10-14, plan M13)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.69): a method call on a primitive hands the

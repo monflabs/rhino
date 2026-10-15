@@ -106,4 +106,23 @@ class ConformanceResidualsTest {
                         + " [1].flatMap(function () { return [this]; }, 'TestString')[0]];\n"
                         + "r.join('|')");
     }
+
+    @Test
+    void dataPropertyAfterAccessorInLiteral() {
+        Utils.assertGatedBehavior(
+                "TypeError",
+                "1",
+                "'use strict'; try { String(({ get foo() { return 0; }, foo: 1 }).foo) }"
+                        + " catch (e) { e.name }");
+    }
+
+    @Test
+    void classHeritageIsStrict() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "TypeError|undefined",
+                "var D = class extends function () { arguments.callee; } {};\n"
+                        + "var F = class extends function () { return this; } {};\n"
+                        + "var r; try { new D(); r = 'none'; } catch (e) { r = e.name; }\n"
+                        + "r + '|' + typeof Object.getPrototypeOf(F).call(undefined)");
+    }
 }

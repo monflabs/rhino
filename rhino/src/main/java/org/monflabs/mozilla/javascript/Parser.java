@@ -1979,6 +1979,10 @@ public class Parser {
         FunctionNode fnNode = new FunctionNode(functionSourceStart, name);
         fnNode.setMethodDefinition(isMethodDefiniton);
         fnNode.setFunctionType(type);
+        if (inUseStrictDirective && compilerEnv.isLatestEcmaScript()) {
+            // strict code around a function that its parent script is not (a class heritage)
+            fnNode.setInStrictMode(true);
+        }
 
         // ES2024, B.3.2.1: register annexB candidate after FunctionNode is created.
         if (type == FunctionNode.FUNCTION_BLOCK_SCOPED
@@ -2090,6 +2094,9 @@ public class Parser {
 
         FunctionNode fnNode = new FunctionNode(functionSourceStart);
         fnNode.setFunctionType(FunctionNode.ARROW_FUNCTION);
+        if (inUseStrictDirective && compilerEnv.isLatestEcmaScript()) {
+            fnNode.setInStrictMode(true);
+        }
         if (isAsync) {
             fnNode.setIsAsync();
         } else if (params != null && inAsyncFunction()) {
