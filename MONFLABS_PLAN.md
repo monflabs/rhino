@@ -737,8 +737,11 @@ Status (2026-10-15): **14.1 (done)** top-level names are cached per access site 
 the per-operation cost was equal in both versions (identical inside a function), the difference was in the global
 variable lookups, slowed by the JIT profile of the `VERSION_ECMASCRIPT` initialization. With the cache, both versions
 run these scripts at the same speed, 30–65% faster than before. `v8-richards.cmp` is bimodal like `properties.cmp`.
-Next: the candidate list above, `split` (+6% against `perf-baseline` in both versions) and `startup.50scopes.ecma`
-(+28%, the larger `VERSION_ECMASCRIPT` initialization).
+**14.2 (done)** lazily loaded built-ins stay lazy: `TopLevel.cacheBuiltins` built every lazily loaded constructor
+when a scope was initialized (about 45% of the initialization); `startup.50scopes` is now 20–40% below
+`perf-baseline` in both versions. Next: the candidate list above, `split` (+6% against `perf-baseline` in both
+versions), and `NativeTypedArrayView.makeArrayBuffer`, which creates the buffer from the global `ArrayBuffer`
+property rather than the intrinsic (a spec deviation, to gate).
 ---
 
 ## Status tracker
@@ -774,5 +777,5 @@ Next: the candidate list above, `split` (+6% against `perf-baseline` in both ver
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | in progress | 99.1% (14.1)                 | (this) |
+| 14   | Performance pass                                | in progress | 99.1% (14.1–14.2)            | (this) |
 | 15   | Single language version                         | todo        |                              |        |

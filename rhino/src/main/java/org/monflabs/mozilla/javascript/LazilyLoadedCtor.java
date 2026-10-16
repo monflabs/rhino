@@ -117,6 +117,10 @@ public final class LazilyLoadedCtor<T extends PropHolder<T>> implements Serializ
         }
     }
 
+    synchronized boolean isInitialized() {
+        return state == STATE_WITH_VALUE;
+    }
+
     Object getValue() {
         if (state != STATE_WITH_VALUE) throw new IllegalStateException(propertyName);
         return initializedValue;

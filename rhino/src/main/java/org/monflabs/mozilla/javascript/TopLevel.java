@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serial;
+import java.io.Serializable;
 import java.util.EnumMap;
 
 /**
@@ -125,7 +126,66 @@ public class TopLevel extends ScopeObject {
     }
 
     private EnumMap<Builtins, BaseFunction> ctors;
+    private EnumMap<Builtins, LazyCtor> lazyCtors;
     private EnumMap<NativeErrors, BaseFunction> errors;
+
+    /**
+     * A built-in constructor that is still lazily loaded, built on first use rather than when the
+     * scope is initialized.
+     */
+    private static final class LazyCtor implements Serializable {
+        @Serial private static final long serialVersionUID = 1L;
+
+        private final ScriptableObject global;
+        private final String name;
+        private final LazilyLoadedCtor<?> init;
+        private volatile boolean built;
+        private BaseFunction value;
+
+        LazyCtor(ScriptableObject global, String name, LazilyLoadedCtor<?> init) {
+            this.global = global;
+            this.name = name;
+            this.init = init;
+        }
+
+        BaseFunction get() {
+            if (!built) {
+                build();
+            }
+            return value;
+        }
+
+        private synchronized void build() {
+            if (built) {
+                return;
+            }
+            Slot<Scriptable> current = global.getMap().query(name, 0);
+            if ((current == null || current.value != init) && !init.isInitialized()) {
+                // the script replaced or deleted the property: the constructor defines itself in a
+                // slot of its own, then the property is put back as the script left it
+                SlotMap.SlotComputer<Slot<Scriptable>, Scriptable> own =
+                        (k, i, e, m, o) -> {
+                            LazyLoadSlot<Scriptable> slot = new LazyLoadSlot<>(k, i);
+                            slot.value = init;
+                            return slot;
+                        };
+                SlotMap.SlotComputer<Slot<Scriptable>, Scriptable> restore =
+                        (k, i, e, m, o) -> current == null ? null : current.copySlot();
+                global.getMap().compute(global, name, 0, own);
+                try {
+                    init.init();
+                } finally {
+                    global.getMap().compute(global, name, 0, restore);
+                }
+            } else {
+                init.init();
+            }
+            Object ctor = init.getValue();
+            value = ctor instanceof BaseFunction ? (BaseFunction) ctor : null;
+            built = true;
+        }
+    }
+
     private transient ScriptableObject globalThis;
 
     @Serial
@@ -203,7 +263,16 @@ public class TopLevel extends ScopeObject {
 
     public void cacheBuiltins(boolean sealed) {
         ctors = new EnumMap<>(Builtins.class);
+        lazyCtors = new EnumMap<>(Builtins.class);
+        ScriptableObject global = getGlobalThis();
         for (Builtins builtin : Builtins.values()) {
+            Slot<?> slot = global.getMap().query(builtin.name(), 0);
+            if (slot != null && slot.value instanceof LazilyLoadedCtor) {
+                lazyCtors.put(
+                        builtin,
+                        new LazyCtor(global, builtin.name(), (LazilyLoadedCtor<?>) slot.value));
+                continue;
+            }
             Object value = ScriptableObject.getProperty(this, builtin.name());
             if (value instanceof BaseFunction) {
                 ctors.put(builtin, (BaseFunction) value);
@@ -240,12 +309,14 @@ public class TopLevel extends ScopeObject {
 
     public void copyBuiltins(TopLevel other, boolean sealed) {
         ctors = other.ctors;
+        lazyCtors = other.lazyCtors;
         errors = other.errors;
     }
 
     /** Clears the cache; this is necessary, when standard objects are reinitialized. */
     void clearCache() {
         ctors = null;
+        lazyCtors = null;
         errors = null;
     }
 
@@ -381,7 +452,17 @@ public class TopLevel extends ScopeObject {
      * @return the built-in constructor
      */
     public BaseFunction getBuiltinCtor(Builtins type) {
-        return ctors != null ? ctors.get(type) : null;
+        if (ctors == null) {
+            return null;
+        }
+        BaseFunction ctor = ctors.get(type);
+        if (ctor == null && lazyCtors != null) {
+            LazyCtor lazy = lazyCtors.get(type);
+            if (lazy != null) {
+                ctor = lazy.get();
+            }
+        }
+        return ctor;
     }
 
     /**

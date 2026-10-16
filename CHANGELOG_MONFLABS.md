@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Lazily loaded built-ins stay lazy (2026-10-16, plan M14)
+
+- Performance (all versions, no behavior change): `TopLevel.cacheBuiltins` no longer builds every lazily loaded
+  constructor (`Map`, `Set`, `Promise`, `BigInt`, `Proxy`, the typed arrays, `ArrayBuffer`, `DataView`, ...) when a
+  scope is initialized; the cache keeps their `LazilyLoadedCtor` and builds the constructor on first use. If the
+  script has replaced or deleted the global property by then, the constructor is built in a slot of its own and the
+  property is put back as the script left it (no setter called, attributes kept). Isolates share the lazy entries
+  of their parent.
+- Perf gate against the previous commit: `startup.50scopes` −33% (`VERSION_ECMASCRIPT`) and −42% (`VERSION_ES6`),
+  now below `perf-baseline` (the cache built about 45% of the initialization); the other metrics unchanged.
+
 ### Cache of top-level names (2026-10-15, plan M14)
 
 - Performance (all versions, no behavior change): the names of top-level code, and of the script's functions that
