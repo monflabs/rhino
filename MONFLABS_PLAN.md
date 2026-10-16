@@ -739,9 +739,10 @@ variable lookups, slowed by the JIT profile of the `VERSION_ECMASCRIPT` initiali
 run these scripts at the same speed, 30–65% faster than before. `v8-richards.cmp` is bimodal like `properties.cmp`.
 **14.2 (done)** lazily loaded built-ins stay lazy: `TopLevel.cacheBuiltins` built every lazily loaded constructor
 when a scope was initialized (about 45% of the initialization); `startup.50scopes` is now 20–40% below
-`perf-baseline` in both versions. Next: the candidate list above, `split` (+6% against `perf-baseline` in both
-versions), and `NativeTypedArrayView.makeArrayBuffer`, which creates the buffer from the global `ArrayBuffer`
-property rather than the intrinsic (a spec deviation, to gate).
+`perf-baseline` in both versions. `split` needed no change: it is level with `perf-baseline` since 14.1 (compiled
+mode runs 2.5 times the rounds of the interpreter, so the two are equal per round). Typed arrays now create their
+buffers and copies with the intrinsic constructors (`VERSION_ECMASCRIPT`, a spec deviation found during 14.2).
+Next: the candidate list above.
 ---
 
 ## Status tracker

@@ -1396,6 +1396,20 @@ Object.getOwnPropertyDescriptor(RegExp.prototype, "flags").get.call(4);
 
 - **Why:** ECMA-262 2026, §22.2.6.4 (get RegExp.prototype.flags, step 2).
 
+### 1.86 Typed arrays use the intrinsic constructors, not the global properties
+
+```js
+var I = Int16Array, a = new I([3, 1, 2]);
+ArrayBuffer = null; Int16Array = null;
+new I(2);        // before: InternalError ("ArrayBuffer" is not a constructor)   now: Int16Array [0, 0]
+a.toReversed();  // before: InternalError ("Int16Array" is not a constructor)    now: Int16Array [2, 1, 3]
+```
+
+- The buffer of a new typed array, and the result of `toReversed`, `toSorted` and `with`, were created through the
+  global property of that name.
+- **Why:** ECMA-262 2026, §23.2.5.1.6 (AllocateTypedArrayBuffer: %ArrayBuffer%), §23.2.4.3
+  (TypedArrayCreateSameType: the intrinsic constructor of the same type).
+
 ---
 
 ## 2. Platform and embedding

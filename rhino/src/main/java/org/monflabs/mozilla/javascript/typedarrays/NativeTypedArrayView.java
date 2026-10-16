@@ -643,10 +643,22 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     private static NativeArrayBuffer makeArrayBuffer(
             Context cx, VarScope scope, int len, int bytesPerElement) {
         return (NativeArrayBuffer)
-                cx.newObject(
+                newIntrinsic(
+                        cx,
                         scope,
                         NativeArrayBuffer.CLASS_NAME,
                         new Object[] {(double) len * bytesPerElement});
+    }
+
+    /** A new object of a built-in class: the intrinsic constructor, not the global property. */
+    private static Scriptable newIntrinsic(
+            Context cx, VarScope scope, String className, Object[] args) {
+        if (cx.isLatestEcmaScript()) {
+            TopLevel top = ScriptableObject.getTopLevelScope(scope);
+            return TopLevel.getBuiltinCtor(cx, top, TopLevel.Builtins.valueOf(className))
+                    .construct(cx, top, args);
+        }
+        return cx.newObject(scope, className, args);
     }
 
     protected interface TypedArrayConstructable {
@@ -1619,7 +1631,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
-                cx.newObject(
+                newIntrinsic(
+                        cx,
                         s,
                         self.getClassName(),
                         new Object[] {newBuffer, 0, len, self.getBytesPerElement()});
@@ -1643,7 +1656,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         // Move value in a new typed array of the same type
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
-                cx.newObject(
+                newIntrinsic(
+                        cx,
                         s,
                         self.getClassName(),
                         new Object[] {newBuffer, 0, len, self.getBytesPerElement()});
@@ -1678,7 +1692,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
-                cx.newObject(
+                newIntrinsic(
+                        cx,
                         s,
                         self.getClassName(),
                         new Object[] {newBuffer, 0, len, self.getBytesPerElement()});
@@ -1820,7 +1835,8 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
         NativeArrayBuffer newBuffer = new NativeArrayBuffer(len * self.getBytesPerElement());
         Scriptable result =
-                cx.newObject(
+                newIntrinsic(
+                        cx,
                         s,
                         self.getClassName(),
                         new Object[] {newBuffer, 0, len, self.getBytesPerElement()});

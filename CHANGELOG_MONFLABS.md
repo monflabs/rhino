@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Typed arrays use the intrinsic constructors (2026-10-16, plan M14)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.86): the buffer of a new typed array and the result of
+  `toReversed`, `toSorted` and `with` are created with the intrinsic `%ArrayBuffer%` and typed array constructors
+  (`TopLevel.getBuiltinCtor`), not by looking up the global property of that name, which a script may have replaced.
+  Found while making the built-in cache lazy.
+
 ### Lazily loaded built-ins stay lazy (2026-10-16, plan M14)
 
 - Performance (all versions, no behavior change): `TopLevel.cacheBuiltins` no longer builds every lazily loaded
