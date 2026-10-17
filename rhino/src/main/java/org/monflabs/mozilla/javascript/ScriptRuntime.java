@@ -2685,6 +2685,11 @@ public class ScriptRuntime {
     }
 
     /** Looks up a name in the scope chain and returns its value. */
+    /** The argument of a parameter that lives in a register, in a function with an activation. */
+    public static Object getArgument(Object[] args, int index) {
+        return index < args.length ? args[index] : Undefined.instance;
+    }
+
     public static Object name(Context cx, VarScope scope, String name) {
         VarScope parent = scope.getParentScope();
         if (parent == null) {

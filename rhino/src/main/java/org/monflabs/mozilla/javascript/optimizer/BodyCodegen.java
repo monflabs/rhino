@@ -214,7 +214,7 @@ class BodyCodegen {
         if (scriptOrFn.getType() == Token.FUNCTION) {
             fnCurrent = OptFunctionNode.get(scriptOrFn);
             hasVarsInRegs = !fnCurrent.fnode.requiresActivation();
-            if (hasVarsInRegs) {
+            if (fnCurrent.fnode.hasVarsInRegisters()) {
                 int n = fnCurrent.fnode.getParamAndVarCount();
                 if (n != 0) {
                     varRegisters = new int[n];
@@ -502,6 +502,9 @@ class BodyCodegen {
                     "(Lorg/monflabs/mozilla/javascript/Context;"
                             + "Lorg/monflabs/mozilla/javascript/VarScope;"
                             + ")V");
+            if (varRegisters != null) {
+                initRegisterVars();
+            }
         } else {
             debugVariableName = "global";
             cfw.addALoad(funObjLocal);
@@ -701,6 +704,42 @@ class BodyCodegen {
         cfw.addALoad(generatorStateLocal);
         cfw.add(ByteCode.SWAP);
         addOptRuntimeInvoke("setGeneratorReturnValue", "(Ljava/lang/Object;Ljava/lang/Object;)V");
+    }
+
+    /**
+     * The registers of the parameters and variables of a function with an activation object that
+     * live in registers (see FunctionNode#isVarInRegister).
+     */
+    private void initRegisterVars() {
+        FunctionNode fnode = fnCurrent.fnode;
+        int paramCount = fnode.getParamCount();
+        int varCount = fnode.getParamAndVarCount();
+        for (int i = 0; i != varCount; ++i) {
+            if (!fnode.isVarInRegister(i)) {
+                continue;
+            }
+            int reg = getNewWordLocal();
+            if (scriptOrFn.hasRestParameter() && i == paramCount - 1) {
+                // the array of the rest parameter, created with the activation
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                cfw.addPush(fnode.getParamOrVarName(i));
+                addScriptRuntimeInvoke(
+                        "name",
+                        "(Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + "Ljava/lang/String;"
+                                + ")Ljava/lang/Object;");
+            } else if (i < paramCount) {
+                cfw.addALoad(argsLocal);
+                cfw.addPush(i);
+                addScriptRuntimeInvoke("getArgument", "([Ljava/lang/Object;I)Ljava/lang/Object;");
+            } else {
+                Codegen.pushUndefined(cfw);
+            }
+            cfw.addAStore(reg);
+            varRegisters[i] = reg;
+        }
     }
 
     private void generateActivationExit() {
@@ -2530,6 +2569,7 @@ class BodyCodegen {
         if (!topLevel
                 && (count > 10 || cfw.getCurrentCodeOffset() > 30000)
                 && !hasVarsInRegs
+                && varRegisters == null
                 && !isGenerator
                 && !inLocalBlock) {
             if (literals == null) {
@@ -2899,6 +2939,7 @@ class BodyCodegen {
         if (!topLevel
                 && (count > 10 || cfw.getCurrentCodeOffset() > 30000)
                 && !hasVarsInRegs
+                && varRegisters == null
                 && !isGenerator
                 && !inLocalBlock) {
             if (literals == null) {
@@ -4099,9 +4140,9 @@ class BodyCodegen {
     }
 
     private void visitTypeofname(Node node) {
-        if (hasVarsInRegs) {
+        if (varRegisters != null) {
             int varIndex = fnCurrent.fnode.getIndexForNameNode(node);
-            if (varIndex >= 0) {
+            if (varIndex >= 0 && fnCurrent.fnode.isVarInRegister(varIndex)) {
                 if (fnCurrent.isNumberVar(varIndex)) {
                     cfw.addPush("number");
                 } else if (varIsDirectCallParameter(varIndex)) {
@@ -4192,7 +4233,7 @@ class BodyCodegen {
 
         switch (child.getType()) {
             case Token.GETVAR:
-                if (!hasVarsInRegs) Kit.codeBug();
+                if (varRegisters == null) Kit.codeBug();
                 boolean post = ((incrDecrMask & Node.POST_FLAG) != 0);
                 int varIndex = fnCurrent.getVarIndex(child);
                 int reg = varRegisters[varIndex];
@@ -4905,7 +4946,7 @@ class BodyCodegen {
     }
 
     private void visitGetVar(Node node) {
-        if (!hasVarsInRegs) Kit.codeBug();
+        if (varRegisters == null) Kit.codeBug();
         int varIndex = fnCurrent.getVarIndex(node);
         int reg = varRegisters[varIndex];
         if (varIsDirectCallParameter(varIndex)) {
@@ -4926,7 +4967,7 @@ class BodyCodegen {
     }
 
     private void visitSetVar(Node node, Node child, boolean needValue) {
-        if (!hasVarsInRegs) Kit.codeBug();
+        if (varRegisters == null) Kit.codeBug();
         int varIndex = fnCurrent.getVarIndex(node);
         generateExpression(child.getNext(), node);
         boolean isNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);
@@ -4979,7 +5020,7 @@ class BodyCodegen {
     }
 
     private void visitSetConstVar(Node node, Node child, boolean needValue) {
-        if (!hasVarsInRegs) Kit.codeBug();
+        if (varRegisters == null) Kit.codeBug();
         int varIndex = fnCurrent.getVarIndex(node);
         generateExpression(child.getNext(), node);
         boolean isNumber = (node.getIntProp(Node.ISNUMBER_PROP, -1) != -1);

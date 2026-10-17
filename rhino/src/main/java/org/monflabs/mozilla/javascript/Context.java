@@ -267,6 +267,9 @@ public class Context implements Closeable {
      *       global properties.
      *   <li>Iterator results are ordinary objects with own data properties: setters on {@code
      *       Object.prototype} are not called.
+     *   <li>A function with closures or catch clauses keeps the variables that its nested functions
+     *       do not refer to in registers: code evaluated in its scope at runtime other than a
+     *       direct eval (a legacy {@code Script} object, a host function) no longer sees them.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

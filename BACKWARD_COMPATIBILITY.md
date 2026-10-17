@@ -1422,6 +1422,27 @@ Object.defineProperty(Object.prototype, "value", { set(v) {}, get() { return "g"
 - **Why:** ECMA-262 2026, §7.4.14 (CreateIteratorResultObject: CreateDataPropertyOrThrow on
   OrdinaryObjectCreate(%Object.prototype%)).
 
+### 1.88 Code evaluated at runtime no longer sees the locals of functions with closures
+
+```js
+function f() {
+  var c = 1, w = 1;
+  var g = function () { return c; };   // a closure: f has an activation object
+  Script("c = 5; w = 2")();            // runs in the scope of its caller
+  return [g(), w];
+}
+f();   // before: [5, 2]   now: [5, 1]
+```
+
+- A function that contains a closure or a `catch` clause has an activation object (`NativeCall`); its variables
+  were all properties of it, so code run in its scope at runtime could read and write them: a legacy `Script`
+  object called as a function, or a host function that evaluates code in the scope it is called with. Now only the
+  variables that a nested function refers to are in the activation object; the others live in registers, as do all
+  the variables of a function without closures (which such code never saw). A direct `eval` or a `with` statement
+  anywhere in the function, `arguments`, and generators keep every variable in the activation object.
+- **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation): only a direct eval (§19.2.1.1) can reach the
+  variables of a function from code evaluated at runtime.
+
 ---
 
 ## 2. Platform and embedding

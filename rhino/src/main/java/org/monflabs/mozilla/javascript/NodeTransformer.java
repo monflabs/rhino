@@ -12,6 +12,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
@@ -48,6 +49,8 @@ public class NodeTransformer {
         }
         tdz = env.isLatestEcmaScript();
         inEval = env.isInEval();
+        activationNames = env.getActivationNames();
+        registersWithActivation = env.isLatestEcmaScript();
         transformCompilationUnit(tree, useStrictMode);
         for (int i = 0; i != tree.getFunctionCount(); ++i) {
             FunctionNode fn = tree.getFunctionNode(i);
@@ -66,6 +69,10 @@ public class NodeTransformer {
         boolean createScopeObjects =
                 tree.getType() != Token.FUNCTION || ((FunctionNode) tree).requiresActivation();
         tree.flattenSymbolTable(!createScopeObjects);
+        registerNames = null;
+        if (registersWithActivation && createScopeObjects && tree.getType() == Token.FUNCTION) {
+            keepVarsInRegisters((FunctionNode) tree);
+        }
         if (tdz && createScopeObjects && tree.getType() == Token.FUNCTION) {
             initFunctionLexicalsUninitialized(tree);
         }
@@ -457,7 +464,7 @@ public class NodeTransformer {
                 case Token.DELPROP:
                     {
                         // Turn name to var for faster access if possible
-                        if (createScopeObjects) {
+                        if (createScopeObjects && registerNames == null) {
                             break;
                         }
                         Node nameSource;
@@ -477,6 +484,10 @@ public class NodeTransformer {
                         }
                         String name = nameSource.getString();
                         Scope defining = scope.getDefiningScope(name);
+                        if (createScopeObjects
+                                && (defining != tree || !registerNames.contains(name))) {
+                            break;
+                        }
                         if (defining != null) {
                             nameSource.setScope(defining);
                             if (type == Token.NAME) {
@@ -729,6 +740,130 @@ public class NodeTransformer {
 
     /** Whether eval code is compiled: its top-level let/const are not global declarations. */
     private boolean inEval;
+
+    /**
+     * Whether a function with an activation object keeps the variables that no nested function
+     * refers to in registers (VERSION_ECMASCRIPT: code evaluated in its scope at runtime, other
+     * than direct eval, no longer sees them).
+     */
+    private boolean registersWithActivation;
+
+    /** The names that the backends may not move out of the activation object (embedding API). */
+    private Set<String> activationNames;
+
+    /**
+     * In a function with an activation object, the names of its parameters and variables that live
+     * in registers (null: none).
+     */
+    private Set<String> registerNames;
+
+    /**
+     * Keeps in registers the parameters and variables of a function with an activation object that
+     * no nested function can refer to: only those need to be properties of the activation object.
+     * Not done when names can be resolved dynamically (direct eval, with), for generators (their
+     * registers do not survive a yield) and when the arguments object aliases the parameters.
+     * Function declarations, let/const and class bindings stay in the activation object.
+     */
+    private void keepVarsInRegisters(FunctionNode fn) {
+        if (fn.isGenerator() || fn.isES6Generator() || fn.requiresArgumentObject()) {
+            return;
+        }
+        Set<String> captured = new HashSet<>();
+        if (!scanNames(fn, captured, false) || !scanNestedFunctions(fn, captured)) {
+            return;
+        }
+        if (activationNames != null) {
+            captured.addAll(activationNames);
+        }
+        List<Symbol> symbols = fn.getSymbols();
+        boolean[] inRegister = new boolean[symbols.size()];
+        Set<String> names = new HashSet<>();
+        for (Symbol symbol : symbols) {
+            Symbol.Type type = symbol.getDeclType();
+            if ((type == Symbol.Type.VAR || type == Symbol.Type.LP)
+                    && !captured.contains(symbol.getName())) {
+                inRegister[symbol.getIndex()] = true;
+                names.add(symbol.getName());
+            }
+        }
+        if (!names.isEmpty()) {
+            fn.setRegisterVars(inRegister);
+            registerNames = names;
+        }
+    }
+
+    /**
+     * Adds to captured the names referred to in the nested functions of fn, at any depth, and their
+     * names; returns false if one of them evaluates code or uses with.
+     */
+    private static boolean scanNestedFunctions(ScriptNode fn, Set<String> captured) {
+        for (FunctionNode nested : fn.getFunctions()) {
+            if (nested.getName() != null) {
+                captured.add(nested.getName());
+            }
+            if (!scanNames(nested, captured, true)
+                    || !scanNames(nested.getGeneratorParamInitBlock(), captured, true)
+                    || !scanNames((Node) nested.getProp(Node.DESTRUCTURING_PARAMS), captured, true)
+                    || !scanNestedFunctions(nested, captured)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Adds the names referred to in the children of node (if collect) and the catch parameters, not
+     * entering nested functions; returns false on a direct eval or a with statement.
+     */
+    private static boolean scanNames(Node node, Set<String> names, boolean collect) {
+        if (node == null) {
+            return true;
+        }
+        for (Node n = node.getFirstChild(); n != null; n = n.getNext()) {
+            if (!scanNode(n, names, collect)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** {@link #scanNames} for a node and its children. */
+    private static boolean scanNode(Node n, Set<String> names, boolean collect) {
+        int type = n.getType();
+        if (type == Token.ENTERWITH
+                || type == Token.DOTQUERY
+                || n.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
+                        != Node.NON_SPECIALCALL) {
+            return false;
+        }
+        if (type == Token.CATCH_SCOPE) {
+            // a catch parameter is bound at runtime, without a symbol: its name resolves
+            // dynamically in the catch block
+            if (n.getFirstChild() != null && n.getFirstChild().getType() == Token.NAME) {
+                names.add(n.getFirstChild().getString());
+            }
+        } else if (collect) {
+            if (n instanceof Name) {
+                names.add(((Name) n).getIdentifier());
+            } else if (type == Token.NAME || type == Token.BINDNAME || type == Token.TYPEOFNAME) {
+                names.add(n.getString());
+            }
+        }
+        // computed property keys are kept out of the children
+        Object ids = n.getProp(Node.OBJECT_IDS_PROP);
+        if (ids instanceof Object[]) {
+            for (Object id : (Object[]) ids) {
+                if (id instanceof Node && !scanNode((Node) id, names, collect)) {
+                    return false;
+                }
+            }
+        }
+        Object name = n.getProp(Node.NAME_PROP);
+        if (name instanceof Node && !scanNode((Node) name, names, collect)) {
+            return false;
+        }
+        return scanNames(n, names, collect);
+    }
 
     /**
      * The top-level let/const of a script are global lexical declarations: they are not variables

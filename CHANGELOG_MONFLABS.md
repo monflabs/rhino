@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Variables in registers in functions with closures (2026-10-17, plan M14)
+
+- Performance (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.88): a function that needs an activation object
+  (a closure, a `catch` clause, `super`, ...) no longer keeps all its parameters and variables in it, where each
+  access was a name lookup: `NodeTransformer.keepVarsInRegisters` leaves there only the names that a nested function
+  refers to (and the catch parameters, function declarations, let/const and class bindings); the other `var`s and
+  parameters become registers (`FunctionNode.isVarInRegister`), in both backends. Not done with a direct eval or
+  `with` in the function or a nested one, with `arguments`, or for generators. A loop in a function with a `catch`
+  clause: 156 ms → 52 ms (compiled); with a closure over one of its variables: 171 ms → 115 ms (compiled),
+  890 ms → 760 ms (interpreted).
+
 ### Spread and iterator records without iterator objects (2026-10-17, plan M14)
 
 - Performance (`VERSION_ECMASCRIPT`): array spread opens an `IteratorRecord`, which reads an array with the original

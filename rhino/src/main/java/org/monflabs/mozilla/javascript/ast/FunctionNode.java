@@ -130,6 +130,13 @@ public class FunctionNode extends ScriptNode {
     // codegen variables
     private int functionType;
     private boolean needsActivation;
+
+    /**
+     * With an activation object, the parameters and variables that live in registers rather than in
+     * it, by index (null: none).
+     */
+    private boolean[] registerVars;
+
     private boolean requiresArgumentObject;
     private boolean isGenerator;
     private boolean isES6Generator;
@@ -317,6 +324,23 @@ public class FunctionNode extends ScriptNode {
 
     public void setRequiresActivation() {
         needsActivation = true;
+    }
+
+    /**
+     * Whether the parameter or variable of this index lives in a register: always without an
+     * activation object; with one, only if no nested function can refer to it.
+     */
+    public boolean isVarInRegister(int index) {
+        return !needsActivation || (registerVars != null && registerVars[index]);
+    }
+
+    /** Whether some parameter or variable lives in a register. */
+    public boolean hasVarsInRegisters() {
+        return !needsActivation || registerVars != null;
+    }
+
+    public void setRegisterVars(boolean[] registerVars) {
+        this.registerVars = registerVars;
     }
 
     public boolean isAnnexBHoisted() {

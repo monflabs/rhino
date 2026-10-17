@@ -1174,10 +1174,14 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             case Token.TYPEOFNAME:
                 {
                     int index = -1;
-                    // use typeofname if an activation frame exists
-                    // since the vars all exist there instead of in jregs
-                    if (itsInFunctionFlag && !builder.requiresActivationFrame)
+                    // use typeofname for the vars of an activation frame, which exist there
+                    // instead of in jregs
+                    if (itsInFunctionFlag) {
                         index = scriptOrFn.getIndexForNameNode(node);
+                        if (index != -1 && !((FunctionNode) scriptOrFn).isVarInRegister(index)) {
+                            index = -1;
+                        }
+                    }
                     if (index == -1) {
                         addStringOp(Icode.TYPEOFNAME, node.getString());
                         stackChange(1);
@@ -1218,8 +1222,8 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.GETVAR:
                 {
-                    if (builder.requiresActivationFrame) Kit.codeBug();
                     int index = scriptOrFn.getIndexForNameNode(node);
+                    if (!isVarInRegister(index)) Kit.codeBug();
                     addVarOp(Token.GETVAR, index);
                     stackChange(1);
                 }
@@ -1227,8 +1231,8 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.SETVAR:
                 {
-                    if (builder.requiresActivationFrame) Kit.codeBug();
                     int index = scriptOrFn.getIndexForNameNode(child);
+                    if (!isVarInRegister(index)) Kit.codeBug();
                     child = child.getNext();
                     visitExpression(child, 0);
                     addVarOp(Token.SETVAR, index);
@@ -1547,6 +1551,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         return new CompleteOptionalCallJump(putArgsAndDoCallLabel, afterLabel);
     }
 
+    private boolean isVarInRegister(int index) {
+        return !builder.requiresActivationFrame
+                || ((FunctionNode) scriptOrFn).isVarInRegister(index);
+    }
+
     private void visitIncDec(Node node, Node child) {
         int incrDecrMask = node.getExistingIntProp(Node.INCRDECR_PROP);
         int childType = child.getType();
@@ -1559,8 +1568,8 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         switch (childType) {
             case Token.GETVAR:
                 {
-                    if (builder.requiresActivationFrame) Kit.codeBug();
                     int i = scriptOrFn.getIndexForNameNode(child);
+                    if (!isVarInRegister(i)) Kit.codeBug();
                     addVarOp(Icode.VAR_INC_DEC, i);
                     addUint8(incrDecrMask);
                     stackChange(1);
