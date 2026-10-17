@@ -1410,6 +1410,18 @@ a.toReversed();  // before: InternalError ("Int16Array" is not a constructor)   
 - **Why:** ECMA-262 2026, §23.2.5.1.6 (AllocateTypedArrayBuffer: %ArrayBuffer%), §23.2.4.3
   (TypedArrayCreateSameType: the intrinsic constructor of the same type).
 
+### 1.87 Iterator results define own data properties
+
+```js
+Object.defineProperty(Object.prototype, "value", { set(v) {}, get() { return "g"; } });
+[...[1, 2]];   // before: ["g", "g"] (the setter received 1 and 2)   now: [1, 2]
+```
+
+- The `{ value, done }` objects of the built-in iterators, generators and iterator helpers were filled with
+  `putProperty`, which calls setters inherited from `Object.prototype`, and were created from the global `Object`.
+- **Why:** ECMA-262 2026, §7.4.14 (CreateIteratorResultObject: CreateDataPropertyOrThrow on
+  OrdinaryObjectCreate(%Object.prototype%)).
+
 ---
 
 ## 2. Platform and embedding

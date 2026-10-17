@@ -265,6 +265,8 @@ public class Context implements Closeable {
      *   <li>The {@code flags} getter of {@code RegExp.prototype} rejects a primitive {@code this}.
      *   <li>Typed arrays create their buffers and copies with the intrinsic constructors, not the
      *       global properties.
+     *   <li>Iterator results are ordinary objects with own data properties: setters on {@code
+     *       Object.prototype} are not called.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

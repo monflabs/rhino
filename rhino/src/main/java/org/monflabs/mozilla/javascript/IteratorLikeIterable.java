@@ -31,6 +31,9 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
 
     private final Callable returnFunc;
 
+    /** A built-in iterator with its original next method, stepped without result objects. */
+    private final ES6Iterator builtIn;
+
     public IteratorLikeIterable(Context cx, VarScope scope, Object target) {
         this.cx = cx;
         this.scope = scope;
@@ -53,6 +56,13 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
             }
         }
         returnFunc = ret;
+        builtIn =
+                !eagerReturn
+                                && iterator instanceof ES6Iterator
+                                && ES6Iterator.isNextMethod(next)
+                                && ScriptRuntime.hasTopCall(cx)
+                        ? (ES6Iterator) iterator
+                        : null;
     }
 
     @Override
@@ -92,6 +102,15 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
         public boolean hasNext() {
             if (isDone) {
                 return false;
+            }
+            if (builtIn != null) {
+                Object value = builtIn.step(cx, scope);
+                if (value == ES6Iterator.DONE) {
+                    isDone = true;
+                    return false;
+                }
+                nextVal = value;
+                return true;
             }
             Object val = next.call(cx, scope, iterator, ScriptRuntime.emptyArgs);
             // This will throw if "val" is not an object.

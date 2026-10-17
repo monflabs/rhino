@@ -742,7 +742,11 @@ when a scope was initialized (about 45% of the initialization); `startup.50scope
 `perf-baseline` in both versions. `split` needed no change: it is level with `perf-baseline` since 14.1 (compiled
 mode runs 2.5 times the rounds of the interpreter, so the two are equal per round). Typed arrays now create their
 buffers and copies with the intrinsic constructors (`VERSION_ECMASCRIPT`, a spec deviation found during 14.2).
-Next: the candidate list above.
+**14.3 (done)** candidates measured (`VERSION_ECMASCRIPT`, both modes): array spread cost about 850 ns for 8 elements
+(the full iterator protocol, with a `{ value, done }` object per element); built-in iterators are now stepped
+directly, 4 times faster, after making iterator results ordinary objects (a spec deviation). `for-of` and
+destructuring already read arrays by index (`IteratorRecord`); symbol-keyed access, regexp literals and
+`Promise.then` showed no outlier. Next: the remaining candidates.
 ---
 
 ## Status tracker
@@ -778,5 +782,5 @@ Next: the candidate list above.
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | in progress | 99.1% (14.1–14.2)            | (this) |
+| 14   | Performance pass                                | in progress | 99.1% (14.1–14.3)            | (this) |
 | 15   | Single language version                         | todo        |                              |        |

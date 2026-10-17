@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Built-in iterators stepped without result objects (2026-10-17, plan M14)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.87): `ES6Iterator.makeIteratorResult` creates an
+  ordinary object of the intrinsic `%Object.prototype%` with own data properties, rather than `cx.newObject` and
+  `putProperty`, which called setters inherited from `Object.prototype`.
+- Performance (`VERSION_ECMASCRIPT`): with the result objects unobservable, `IteratorLikeIterable` (spread,
+  `Array.from`, the `Map`/`Set`/`WeakMap`/`WeakSet` constructors, `Promise.all`, ...) steps a built-in iterator whose
+  `next` is the original one (`ES6Iterator.isNextMethod`) through `ES6Iterator.step`, without calling `next` or
+  creating `{ value, done }` objects. Spreading an 8-element array: 170 ms → 40 ms (compiled) and 184 ms → 50 ms
+  (interpreted) for 200,000 spreads.
+
 ### Typed arrays use the intrinsic constructors (2026-10-16, plan M14)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.86): the buffer of a new typed array and the result of

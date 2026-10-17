@@ -821,6 +821,13 @@ public class ClassDescriptor {
         }
     }
 
+    /** Whether the function is a built-in method made with this code. */
+    static boolean isBuiltIn(Object f, BuiltInJSCodeExec<JSFunction> code) {
+        return f instanceof JSFunction
+                && ((JSFunction) f).getCode() instanceof BuiltInJSCode
+                && ((BuiltInJSCode) ((JSFunction) f).getCode()).exec == code;
+    }
+
     private static class BuiltInJSCode extends JSCode<JSFunction> implements Serializable {
 
         private static final long serialVersionUID = -346984669839537590L;

@@ -21,12 +21,22 @@ public abstract class ES6Iterator extends ScriptableObject {
     public static final String VALUE_PROPERTY = "value";
     public static final String RETURN_METHOD = "return";
 
+    private static final ClassDescriptor.BuiltInJSCodeExec<JSFunction> NEXT = ES6Iterator::js_next;
+
+    /** Returned by {@link #step} once the iterator is done. */
+    static final Object DONE = new Object();
+
+    /** Whether the function is the original next method of a built-in iterator. */
+    static boolean isNextMethod(Object f) {
+        return ClassDescriptor.isBuiltIn(f, NEXT);
+    }
+
     public static ClassDescriptor makeDescriptor(String name, String tag) {
         // Need a way to associate the built object with the tag. We
         // kind of need this in general, and at the top level, but we
         // can bodge it for now.
         return new ClassDescriptor.Builder(name)
-                .withMethod(CTOR, "next", 0, ES6Iterator::js_next)
+                .withMethod(CTOR, "next", 0, NEXT)
                 .withMethod(CTOR, SymbolKey.ITERATOR, 1, ES6Iterator::js_iterator)
                 .withProp(CTOR, SymbolKey.TO_STRING_TAG, value(tag, DONTENUM | READONLY))
                 .build();
@@ -90,14 +100,19 @@ public abstract class ES6Iterator extends ScriptableObject {
     protected abstract Object nextValue(Context cx, VarScope scope);
 
     protected Object next(Context cx, VarScope scope) {
-        Object value = Undefined.instance;
-        boolean done = isDone(cx, scope) || this.exhausted;
-        if (!done) {
-            value = nextValue(cx, scope);
-        } else {
+        Object value = step(cx, scope);
+        return value == DONE
+                ? makeIteratorResult(cx, scope, Boolean.TRUE)
+                : makeIteratorResult(cx, scope, Boolean.FALSE, value);
+    }
+
+    /** {@link #next} without its result object: the next value, or {@link #DONE}. */
+    Object step(Context cx, VarScope scope) {
+        if (isDone(cx, scope) || this.exhausted) {
             this.exhausted = true;
+            return DONE;
         }
-        return makeIteratorResult(cx, scope, Boolean.valueOf(done), value);
+        return nextValue(cx, scope);
     }
 
     protected String getTag() {
@@ -110,6 +125,14 @@ public abstract class ES6Iterator extends ScriptableObject {
     }
 
     static Scriptable makeIteratorResult(Context cx, VarScope scope, Boolean done, Object value) {
+        if (cx.isLatestEcmaScript()) {
+            // CreateIteratorResultObject (7.4.14): own data properties of an ordinary object
+            NativeObject result = new NativeObject();
+            ScriptRuntime.setBuiltinProtoAndParent(result, scope, TopLevel.Builtins.Object);
+            result.defineProperty(VALUE_PROPERTY, value, EMPTY);
+            result.defineProperty(DONE_PROPERTY, done, EMPTY);
+            return result;
+        }
         final Scriptable iteratorResult = cx.newObject(scope);
         ScriptableObject.putProperty(iteratorResult, VALUE_PROPERTY, value);
         ScriptableObject.putProperty(iteratorResult, DONE_PROPERTY, done);
