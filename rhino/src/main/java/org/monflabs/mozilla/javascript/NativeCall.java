@@ -41,6 +41,9 @@ public final class NativeCall extends DeclarationScope {
         // initialize values of arguments
         int paramAndVarCount = function.getParamAndVarCount();
         int paramCount = function.getParamCount();
+        // the parameters and variables in registers are not properties of the activation (the rest
+        // parameter aside: the compiled code reads its array from here)
+        JSDescriptor<JSFunction> desc = function.getDescriptor();
         if (paramAndVarCount != 0) {
             if (argsHasRest) {
                 Object[] vals;
@@ -52,6 +55,9 @@ public final class NativeCall extends DeclarationScope {
                 }
 
                 for (int i = 0; i < paramCount; ++i) {
+                    if (desc.isParamOrVarInRegister(i)) {
+                        continue;
+                    }
                     String name = function.getParamOrVarName(i);
                     Object val = i < args.length ? args[i] : Undefined.instance;
                     defineProperty(name, val, PERMANENT);
@@ -62,6 +68,9 @@ public final class NativeCall extends DeclarationScope {
                         PERMANENT);
             } else {
                 for (int i = 0; i < paramCount; ++i) {
+                    if (desc.isParamOrVarInRegister(i)) {
+                        continue;
+                    }
                     String name = function.getParamOrVarName(i);
                     Object val = i < args.length ? args[i] : Undefined.instance;
                     defineProperty(name, val, PERMANENT);
@@ -77,6 +86,9 @@ public final class NativeCall extends DeclarationScope {
 
         if (paramAndVarCount != 0) {
             for (int i = paramCount; i < paramAndVarCount; ++i) {
+                if (desc.isParamOrVarInRegister(i) && !(argsHasRest && i == paramCount)) {
+                    continue;
+                }
                 String name = function.getParamOrVarName(i);
                 if (!super.has(name, this)) {
                     if (function.getParamOrVarConst(i)) {

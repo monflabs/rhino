@@ -751,7 +751,9 @@ destructuring already read arrays by index (`IteratorRecord`); symbol-keyed acce
 built-in iterators directly (`for-of` over a `Map` twice as fast). **14.5 (done)** variables in registers in
 functions with an activation object (user decision, rather than a per-site cache of prototype-chain lookups): a
 closure or a `catch` clause put all the variables of a function in its activation object, 2 to 3 times slower than
-registers; now only those that nested functions refer to. Next: the remaining candidates.
+registers; now only those that nested functions refer to, and the activation object no longer defines the others
+(a call of such a function up to 7 times faster). Next: captured variables at fixed positions in the activation
+object, read by (depth, index) like Nashorn's scopes; then the remaining candidates.
 ---
 
 ## Status tracker

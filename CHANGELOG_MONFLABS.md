@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Activation objects without the variables in registers (2026-10-17, plan M14)
+
+- Performance (`VERSION_ECMASCRIPT`): `NativeCall` no longer defines the parameters and variables that live in
+  registers (`JSDescriptor.isParamOrVarInRegister`), the array of a rest parameter aside (compiled code reads it
+  from there): each was a property created on every call. A function with a `catch` clause and 7 variables,
+  called 3 million times: 592 ms → 87 ms (compiled), 1,295 ms → 866 ms (interpreted).
+
 ### Variables in registers in functions with closures (2026-10-17, plan M14)
 
 - Performance (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.88): a function that needs an activation object

@@ -63,6 +63,12 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     /** A script's global let/const declarations (see Token#GLOBAL_LEXICALS), or null. */
     private String globalLexicals;
 
+    /**
+     * With an activation frame, the parameters and variables that live in registers instead of in
+     * it (null: none).
+     */
+    private boolean[] paramIsRegister;
+
     public JSDescriptor(
             JSCode<T> code,
             JSCode<T> constructor,
@@ -297,6 +303,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return arity;
     }
 
+    /** Whether the parameter or variable lives in a register even with an activation frame. */
+    public boolean isParamOrVarInRegister(int index) {
+        return paramIsRegister != null && paramIsRegister[index];
+    }
+
     public boolean getParamOrVarConst(int index) {
         return paramIsConst[index];
     }
@@ -431,6 +442,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public Object securityDomain;
         public int functionType;
         public String globalLexicals;
+        public boolean[] paramIsRegister;
 
         public Builder() {}
 
@@ -510,6 +522,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             securityDomain,
                             functionType);
             result.globalLexicals = globalLexicals;
+            result.paramIsRegister = paramIsRegister;
             consumer.accept(result);
             result.nestedFunctions =
                     Collections.unmodifiableList(

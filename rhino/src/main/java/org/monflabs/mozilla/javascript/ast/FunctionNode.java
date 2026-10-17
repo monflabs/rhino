@@ -339,6 +339,11 @@ public class FunctionNode extends ScriptNode {
         return !needsActivation || registerVars != null;
     }
 
+    /** With an activation object, the parameters and variables in registers (null: none). */
+    public boolean[] getRegisterVars() {
+        return needsActivation ? registerVars : null;
+    }
+
     public void setRegisterVars(boolean[] registerVars) {
         this.registerVars = registerVars;
     }
