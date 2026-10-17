@@ -17,16 +17,22 @@ final class IteratorRecord {
     private final Scriptable iterator;
     private final Object nextMethod;
     private final Scriptable array;
+
+    /** A built-in iterator with its original next method, stepped without result objects. */
+    private final ES6Iterator builtIn;
+
     private long index;
     private boolean done;
 
     /** The record opened before this one in the same guarded statement, see #guard. */
     private IteratorRecord previous;
 
-    private IteratorRecord(Scriptable iterator, Object nextMethod, Scriptable array) {
+    private IteratorRecord(
+            Scriptable iterator, Object nextMethod, Scriptable array, ES6Iterator builtIn) {
         this.iterator = iterator;
         this.nextMethod = nextMethod;
         this.array = array;
+        this.builtIn = builtIn;
     }
 
     /** GetIterator(value, sync). */
@@ -46,7 +52,7 @@ final class IteratorRecord {
                 && ((JSFunction) method).getDescriptor() == NativeArray.VALUES_DESCRIPTOR
                 && value instanceof Scriptable
                 && hasOriginalArrayIteratorNext(scope)) {
-            return new IteratorRecord(null, null, (Scriptable) value);
+            return new IteratorRecord(null, null, (Scriptable) value, null);
         }
         if (!(method instanceof Callable)) {
             throw ScriptRuntime.typeErrorById("msg.not.iterable", ScriptRuntime.toString(value));
@@ -56,7 +62,14 @@ final class IteratorRecord {
             throw ScriptRuntime.typeErrorById("msg.iterator.not.object", "[Symbol.iterator]");
         }
         Scriptable it = (Scriptable) iterator;
-        return new IteratorRecord(it, ScriptableObject.getProperty(it, "next"), null);
+        Object next = ScriptableObject.getProperty(it, "next");
+        // iterator results are not observable before VERSION_ECMASCRIPT only
+        boolean builtIn =
+                it instanceof ES6Iterator
+                        && ES6Iterator.isNextMethod(next)
+                        && cx.isLatestEcmaScript()
+                        && ScriptRuntime.hasTopCall(cx);
+        return new IteratorRecord(it, next, null, builtIn ? (ES6Iterator) it : null);
     }
 
     static boolean hasOriginalArrayIteratorNext(VarScope scope) {
@@ -86,6 +99,14 @@ final class IteratorRecord {
             return ScriptRuntime.getObjectIndex(array, (double) index++, cx, scope);
         }
         try {
+            if (builtIn != null) {
+                Object value = builtIn.step(cx, scope);
+                if (value == ES6Iterator.DONE) {
+                    done = true;
+                    return Undefined.instance;
+                }
+                return value;
+            }
             if (!(nextMethod instanceof Callable)) {
                 throw ScriptRuntime.notFunctionError(nextMethod, "next");
             }

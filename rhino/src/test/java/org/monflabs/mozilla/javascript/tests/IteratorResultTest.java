@@ -91,4 +91,42 @@ class IteratorResultTest {
                         + "b.resize(1);"
                         + "try { [...it]; 'none'; } catch (e) { e.name }");
     }
+
+    @Test
+    void forOfAndDestructuringOverBuiltInIterators() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1:2,3:4|5,6|a-b",
+                "var r = [];"
+                        + "for (const [k, v] of new Map([[1, 2], [3, 4]])) r.push(k + ':' + v);"
+                        + "var [x, y] = new Set([5, 6]);"
+                        + "var [c, , d] = 'a.b';"
+                        + "r.join() + '|' + x + ',' + y + '|' + c + '-' + d");
+    }
+
+    @Test
+    void replacedNextOfMapIterator() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "z|1",
+                "var proto = Object.getPrototypeOf(new Map().entries());"
+                        + "var next = proto.next, n = 0;"
+                        + "proto.next = function() {"
+                        + "  return n++ ? { done: true } : { value: 'z', done: false }; };"
+                        + "var r = [];"
+                        + "for (const e of new Map([[1, 2]])) r.push(e);"
+                        + "proto.next = next;"
+                        + "r.join() + '|' + [...new Map([[1, 2]])].length");
+    }
+
+    @Test
+    void spreadOfArrays() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1,p,3|it|3",
+                "Array.prototype[1] = 'p';"
+                        + "var holes = [...[1, , 3]].join();"
+                        + "delete Array.prototype[1];"
+                        + "var a = [1, 2];"
+                        + "a[Symbol.iterator] = function* () { yield 'it'; };"
+                        + "class A extends Array {}"
+                        + "holes + '|' + [...a].join() + '|' + [...A.of(1, 2, 3)].length");
+    }
 }

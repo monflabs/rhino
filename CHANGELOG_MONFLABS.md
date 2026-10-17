@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Spread and iterator records without iterator objects (2026-10-17, plan M14)
+
+- Performance (`VERSION_ECMASCRIPT`): array spread opens an `IteratorRecord`, which reads an array with the original
+  iteration methods by index (as `for-of` and destructuring already did), without creating an iterator. An
+  `IteratorRecord` (for-of, destructuring, spread) steps the other built-in iterators (`Map`, `Set`, `String`, ...)
+  through `ES6Iterator.step`, without result objects. Spreading an 8-element array: 40 ms → 19 ms (compiled) and
+  50 ms → 38 ms (interpreted) for 200,000 spreads; `for (const [k, v] of map)` 39 ms → 19 ms (compiled);
+  `f(...args)` 63 ms → 50 ms (compiled).
+
 ### Built-in iterators stepped without result objects (2026-10-17, plan M14)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.87): `ES6Iterator.makeIteratorResult` creates an

@@ -89,12 +89,23 @@ public abstract class NewLiteralStorage {
     private void spreadArray(Context cx, VarScope scope, Object source) {
         // See ecma-262 2026, 13.2.5.5 (Array Spread). ToObject throws TypeError for null /
         // undefined; callIterator throws TypeError if @@iterator is missing.
-        Scriptable src = ScriptRuntime.toObject(cx, scope, source);
-        final Object iterator = ScriptRuntime.callIterator(src, cx, scope);
         List<Object> spreadValues = new ArrayList<>();
-        try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
-            for (Object temp : it) {
-                spreadValues.add(temp);
+        if (cx.isLatestEcmaScript()) {
+            IteratorRecord record = IteratorRecord.open(source, cx, scope);
+            while (true) {
+                Object value = record.step(cx, scope);
+                if (record.isDone()) {
+                    break;
+                }
+                spreadValues.add(value);
+            }
+        } else {
+            Scriptable src = ScriptRuntime.toObject(cx, scope, source);
+            final Object iterator = ScriptRuntime.callIterator(src, cx, scope);
+            try (IteratorLikeIterable it = new IteratorLikeIterable(cx, scope, iterator)) {
+                for (Object temp : it) {
+                    spreadValues.add(temp);
+                }
             }
         }
 

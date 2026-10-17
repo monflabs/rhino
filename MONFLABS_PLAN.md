@@ -746,7 +746,8 @@ buffers and copies with the intrinsic constructors (`VERSION_ECMASCRIPT`, a spec
 (the full iterator protocol, with a `{ value, done }` object per element); built-in iterators are now stepped
 directly, 4 times faster, after making iterator results ordinary objects (a spec deviation). `for-of` and
 destructuring already read arrays by index (`IteratorRecord`); symbol-keyed access, regexp literals and
-`Promise.then` showed no outlier. Next: the remaining candidates.
+`Promise.then` showed no outlier. **14.4 (done)** spread reads arrays by index and `IteratorRecord` steps the
+built-in iterators directly (`for-of` over a `Map` twice as fast). Next: the remaining candidates.
 ---
 
 ## Status tracker
@@ -782,5 +783,5 @@ destructuring already read arrays by index (`IteratorRecord`); symbol-keyed acce
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | in progress | 99.1% (14.1–14.3)            | (this) |
+| 14   | Performance pass                                | in progress | 99.1% (14.1–14.4)            | (this) |
 | 15   | Single language version                         | todo        |                              |        |
