@@ -52,6 +52,7 @@ existing code and without slowing the engine down.
 | 2026-10-18 | **M14: nested functions read the captured variables at their position in the activation** (user decision: the next step after 14.6, ahead of the remaining candidates): resolved at compile time rather than cached per site, for the variables that no scope inside the owning function declares; the code finds the owner's activation by its descriptor and falls back to a name lookup if it does not. |
 | 2026-10-18 | **M14: named property accesses cache the property found on the prototype chain** (user decision, option 2 of 3, rather than closing M14 or tuning the regexp matcher, after the final pass found no outlier against `perf-baseline`): `PropertyCache` per access site, invalidated by a global counter that changes to the objects of cached chains increment; not gated (no observable change). |
 | 2026-10-19 | **M14 closed** (user decision, rather than hidden classes for own-property access or reworking the interpreter dispatch): the last profile found no cheap hotspot left; next is M15. |
+| 2026-10-19 | **M15: `VERSION_ECMASCRIPT` becomes the default, without removing anything** (user decision, rather than dropping the JavaScript 1.x versions as Nashorn did or keeping only a legacy 1.x mode): every version and every `isLatestEcmaScript()` gate stay; removing the gates is deferred. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -719,6 +720,11 @@ gates (keeping the `VERSION_ECMASCRIPT` side), make `VERSION_ECMASCRIPT` the def
 the ES6+ versions, decide what remains of the JavaScript 1.x versions (a decision when reached), and update
 `BACKWARD_COMPATIBILITY.md` (everything listed there then applies to every embedding).
 
+Status (2026-10-19): **15.1 (done)** `VERSION_ECMASCRIPT` is the default language version of `Context`,
+`CompilerEnvirons`, the shell, the debugger and the `javax.script` engine (user decision: the default only; the
+versions and the gates stay). The engine keeps a script's scope while its bindings are the same (global lexical
+declarations last across scripts) and `BindingsObject` stores defined data properties in the bindings.
+
 ### M14 — Performance (continuous, with a final dedicated pass)
 
 Optimizations found along the way are done when obvious and measured. A final pass profiles the V8/SunSpider/perf-gate
@@ -805,4 +811,4 @@ were dropped. Hidden classes and a new interpreter dispatch were left out as too
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
-| 15   | Single language version                         | todo        |                              |        |
+| 15   | Single language version                         | in progress | 99.1% (15.1)                 | (this) |

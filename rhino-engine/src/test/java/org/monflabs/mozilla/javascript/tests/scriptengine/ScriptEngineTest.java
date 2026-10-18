@@ -360,4 +360,39 @@ public class ScriptEngineTest {
                                 + " && date instanceof Date && date.getTime() === 0"
                                 + " && object.value === 1 && array[0] === 2 && fn() === 3"));
     }
+
+    @Test
+    public void globalLexicalDeclarationsLastAcrossScripts() throws ScriptException {
+        engine.eval("let a = 1; const b = 2; class C { m() { return 3; } }");
+        assertEquals(6L, engine.eval("a + b + new C().m()"));
+        assertNull(engine.get("a"));
+        ScriptException e = assertThrows(ScriptException.class, () -> engine.eval("let a = 4;"));
+        assertTrue(e.getMessage().contains("SyntaxError"), e.getMessage());
+    }
+
+    @Test
+    public void globalFunctionDeclarationIsABinding() throws ScriptException {
+        engine.eval("function f() { return 5; }");
+        assertTrue(engine.getBindings(ScriptContext.ENGINE_SCOPE).containsKey("f"));
+        assertEquals(5L, engine.eval("f()"));
+    }
+
+    @Test
+    public void newBindingsStartAFreshGlobalEnvironment() throws ScriptException {
+        engine.eval("let a = 1;");
+        engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
+        assertEquals("undefined", engine.eval("typeof a"));
+        engine.eval("let a = 2;");
+    }
+
+    @Test
+    public void languageVersionES6KeepsTheStockBehavior() throws ScriptException {
+        engine.put(ScriptEngine.LANGUAGE_VERSION, 200);
+        assertEquals(
+                true,
+                engine.eval(
+                        "typeof new Uint16Array(new Uint8Array([1, 0]).buffer)[0] === 'number' && new Uint16Array(new Uint8Array([1, 0]).buffer)[0] === 256"));
+        engine.put(ScriptEngine.LANGUAGE_VERSION, 250);
+        assertEquals(true, engine.eval("new Uint16Array(new Uint8Array([1, 0]).buffer)[0] === 1"));
+    }
 }

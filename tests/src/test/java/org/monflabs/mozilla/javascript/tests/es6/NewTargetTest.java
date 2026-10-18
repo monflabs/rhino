@@ -1,6 +1,7 @@
 package org.monflabs.mozilla.javascript.tests.es6;
 
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.EcmaError;
 import org.monflabs.mozilla.javascript.EvaluatorException;
 import org.monflabs.mozilla.javascript.testutils.Utils;
@@ -29,10 +30,12 @@ public class NewTargetTest {
     public void evalInsideFunction() {
         Utils.assertWithAllModes("function", "function foo() { eval('new.target;') } typeof foo");
         Utils.assertException(
-                -1,
+                Context.VERSION_ES6,
                 EcmaError.class,
                 "SyntaxError: Invalid use of new.",
                 "function foo() { eval('new.target;') } foo()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "undefined", "function foo() { return typeof eval('new.target;') } foo()");
     }
 
     @Test

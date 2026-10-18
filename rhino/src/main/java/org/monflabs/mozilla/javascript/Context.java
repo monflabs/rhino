@@ -115,7 +115,8 @@ public class Context implements Closeable {
      * features that cannot break existing code are enabled for this version too, those that can are
      * not.
      *
-     * <p>As of version 1.8, this is the default language version.
+     * <p>From version 1.8 to plan M15 of this fork, this was the default language version; select
+     * it to keep the behavior of stock Rhino.
      */
     public static final int VERSION_ES6 = 200;
 
@@ -124,7 +125,8 @@ public class Context implements Closeable {
      * the latest version of the language that Rhino supports. This will include everything in
      * {@link #VERSION_ES6}, plus the behavior changes required by the specification that may break
      * existing code. Engine code tests for it with {@link #isLatestEcmaScript()} (or {@link
-     * CompilerEnvirons#isLatestEcmaScript()} at compile time).
+     * CompilerEnvirons#isLatestEcmaScript()} at compile time). This is the default language
+     * version.
      *
      * <p>Behavior changes compared to {@link #VERSION_ES6} (with examples in
      * BACKWARD_COMPATIBILITY.md):
@@ -530,10 +532,10 @@ public class Context implements Closeable {
     /**
      * Creates a new Context. The context will be associated with the {@link
      * ContextFactory#getGlobal() global context factory}. By default, the new context will run in
-     * compiled mode and use the {@link #VERSION_ES6} language version, which supports features as
-     * defined in the most recent ECMAScript standard. This default behavior can be changed by
-     * overriding the ContextFactory class and installing the new implementation as the global
-     * ContextFactory.
+     * compiled mode and use the {@link #VERSION_ECMASCRIPT} language version, which supports
+     * features as defined in the most recent ECMAScript standard. This default behavior can be
+     * changed by overriding the ContextFactory class and installing the new implementation as the
+     * global ContextFactory.
      *
      * <p>Note that the Context must be associated with a thread before it can be used to execute a
      * script.
@@ -551,9 +553,9 @@ public class Context implements Closeable {
     /**
      * Creates a new context. Provided as a preferred super constructor for subclasses in place of
      * the deprecated default public constructor. By default, the new context will run in compiled
-     * mode and use the {@link #VERSION_ES6} language version, which supports features as defined in
-     * the most recent ECMAScript standard. This default behavior can be changed by overriding the
-     * ContextFactory class
+     * mode and use the {@link #VERSION_ECMASCRIPT} language version, which supports features as
+     * defined in the most recent ECMAScript standard. This default behavior can be changed by
+     * overriding the ContextFactory class
      *
      * @param factory the context factory associated with this context (most likely, the one that
      *     created the context). Can not be null. The context features are inherited from the
@@ -565,7 +567,7 @@ public class Context implements Closeable {
             throw new IllegalArgumentException("factory == null");
         }
         this.factory = factory;
-        version = VERSION_ES6;
+        version = VERSION_ECMASCRIPT;
         evaluationMethod =
                 EvaluationMethod.Compiler.isValid()
                         ? EvaluationMethod.Compiler
@@ -906,8 +908,7 @@ public class Context implements Closeable {
      *
      * <p>Setting the language version will affect functions and scripts compiled subsequently. See
      * the overview documentation for version-specific behavior. The default version is {@link
-     * #VERSION_ES6}, which represents the newest ECMAScript features implemented by Rhino, minus
-     * some "const" and strict mode checks.
+     * #VERSION_ECMASCRIPT}; {@link #VERSION_ES6} keeps the behavior of stock Rhino.
      *
      * <p>New projects should use either {@link #VERSION_ES6} or {@link #VERSION_ECMASCRIPT} unless
      * a project needs backwards compatibility with older Rhino scripts that may depend on behaviors

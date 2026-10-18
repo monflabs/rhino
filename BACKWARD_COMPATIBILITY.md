@@ -5,10 +5,11 @@ This fork of Rhino (`org.monflabs.mozilla`) moves the engine toward ECMAScript 2
 differently from **stock Rhino 1.9.0**, so that upgrading is a deliberate, informed step. It is updated with each
 change; [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) has the full history.
 
-The target is the language version `Context.VERSION_ECMASCRIPT` (`cx.setLanguageVersion(Context.VERSION_ECMASCRIPT)`,
-or `-version 250` in the shell). The plan is to eventually remove the language versions and always behave that way;
-until then, every behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSION_ES6` and the older
-versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists platform and API changes.
+The target is the language version `Context.VERSION_ECMASCRIPT`, the default language version since plan M15 (2.3).
+Every behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSION_ES6` and the older versions keep
+the behavior of stock Rhino, bug fixes included, so an embedding that needs it selects `VERSION_ES6`
+(`cx.setLanguageVersion(Context.VERSION_ES6)`, or `-version 200` in the shell). Section 2 lists platform and API
+changes.
 
 | # | Change | Applies to |
 |---|--------|-----------|
@@ -100,13 +101,14 @@ versions keep the behavior of stock Rhino, bug fixes included. Section 2 lists p
 | 1.85 | The `flags` getter of `RegExp.prototype` rejects a primitive `this` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
+| 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
 
 ---
 
 ## 1. Changes under `VERSION_ECMASCRIPT` only
 
-Code running under `VERSION_ES6` (the default) is not affected. To keep the previous behavior, do not select
-`VERSION_ECMASCRIPT`. Each change is also listed in the Javadoc of `Context.VERSION_ECMASCRIPT`, and every place in
+Code running under `VERSION_ES6` is not affected. `VERSION_ECMASCRIPT` is the default (2.3): to keep the previous
+behavior, select `VERSION_ES6`. Each change is also listed in the Javadoc of `Context.VERSION_ECMASCRIPT`, and every place in
 the engine that implements one tests `isLatestEcmaScript()`.
 
 Entries 1.17 to 1.62 were numbered 2.1 to 2.46 (the CHANGELOG uses these numbers) and applied to every version from
@@ -1461,3 +1463,16 @@ f();   // before: [5, 2]   now: [5, 1]
   will move to Java 25 when it becomes available to us (expected early 2027).
 - This fork targets Java server applications: Android and micro JVMs are not supported (the Android integration
   tests were removed).
+
+### 2.3 `VERSION_ECMASCRIPT` is the default language version
+
+- A new `Context` (and a new `CompilerEnvirons`) uses `VERSION_ECMASCRIPT` (stock Rhino 1.9.0: `VERSION_ES6`), and so do
+  the shell, the debugger and the `javax.script` engine (whose `LANGUAGE_VERSION` parameter is now `"250"`). Every
+  change of section 1 therefore applies to an embedding that does not set a version.
+- In the `javax.script` engine, a script's global `let`, `const` and `class` declarations are visible to the scripts
+  evaluated after it with the same bindings (as in one global environment), and are not stored in the bindings; a
+  global function declaration is stored in the bindings, as before. Evaluating the same top-level `let` twice with
+  the same bindings throws a SyntaxError (redeclaration).
+- **Migration:** call `cx.setLanguageVersion(Context.VERSION_ES6)` (for example in `ContextFactory.onContextCreated`),
+  run the shell with `-version 200`, or put `ScriptEngine.LANGUAGE_VERSION` = `200` in the engine scope of
+  the `javax.script` engine.

@@ -27,8 +27,8 @@ public class FactoryTest {
                 assertFalse(factory.getEngineVersion().isEmpty());
                 assertEquals("javascript", factory.getLanguageName());
                 assertEquals("javascript", factory.getParameter(ScriptEngine.LANGUAGE));
-                assertEquals("200", factory.getLanguageVersion());
-                assertEquals("200", factory.getParameter(ScriptEngine.LANGUAGE_VERSION));
+                assertEquals("250", factory.getLanguageVersion());
+                assertEquals("250", factory.getParameter(ScriptEngine.LANGUAGE_VERSION));
                 assertNull(factory.getParameter("THREADING"));
                 assertTrue(factory.getExtensions().contains("js"));
                 assertTrue(factory.getMimeTypes().contains("application/javascript"));

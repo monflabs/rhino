@@ -15,7 +15,7 @@ import org.monflabs.mozilla.javascript.sourcemap.SourceMapper;
 public class CompilerEnvirons {
     public CompilerEnvirons() {
         errorReporter = DefaultErrorReporter.instance;
-        languageVersion = Context.VERSION_ES6;
+        languageVersion = Context.VERSION_ECMASCRIPT;
         generateDebugInfo = true;
         reservedKeywordAsIdentifier = true;
         allowMemberExprAsFunctionName = false;

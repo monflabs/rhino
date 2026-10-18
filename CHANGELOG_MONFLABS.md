@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### `VERSION_ECMASCRIPT` is the default language version (2026-10-19, plan M15)
+
+- Breaking (embeddings that do not set a version, BACKWARD_COMPATIBILITY 2.3): a new `Context` and a new
+  `CompilerEnvirons` use `VERSION_ECMASCRIPT` instead of `VERSION_ES6`, and so do the shell (`-version 250` by
+  default), the debugger and the `javax.script` engine (`LANGUAGE_VERSION` `"250"`). `VERSION_ES6` and the older
+  versions keep their behavior; the gates stay.
+- `javax.script` engine: the scope of a script is kept while the engine and global bindings are the same, so the
+  global `let`, `const` and `class` declarations of a script are visible to the next ones; `BindingsObject` stores
+  the data properties defined on it (a global function declaration under `VERSION_ECMASCRIPT`) in the bindings.
+
 ### Property accesses cache the property found on the prototype chain (2026-10-18, plan M14)
 
 - Performance (all versions, no observable change): a named property get or method lookup (`o.p`, `o.m()`) has a

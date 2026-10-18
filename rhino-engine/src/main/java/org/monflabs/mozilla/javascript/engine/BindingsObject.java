@@ -8,6 +8,7 @@ import javax.script.Bindings;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.Scriptable;
 import org.monflabs.mozilla.javascript.ScriptableObject;
+import org.monflabs.mozilla.javascript.Undefined;
 import org.monflabs.mozilla.javascript.VarScope;
 import org.monflabs.mozilla.javascript.Wrapper;
 
@@ -53,6 +54,33 @@ public class BindingsObject extends ScriptableObject {
     @Override
     public boolean has(String name, Scriptable start) {
         return bindings.containsKey(name);
+    }
+
+    /**
+     * A data property defined on the global object, such as a global function declaration, is a
+     * binding.
+     */
+    @Override
+    protected boolean defineOwnProperty(
+            Context cx, Object id, DescriptorInfo desc, boolean checkValid) {
+        if (id instanceof String && desc.getter == NOT_FOUND && desc.setter == NOT_FOUND) {
+            String name = (String) id;
+            if (desc.value != NOT_FOUND) {
+                put(name, this, desc.value);
+            } else if (!bindings.containsKey(name)) {
+                put(name, this, Undefined.instance);
+            }
+            return true;
+        }
+        return super.defineOwnProperty(cx, id, desc, checkValid);
+    }
+
+    @Override
+    protected DescriptorInfo getOwnPropertyDescriptor(Context cx, Object id) {
+        if (id instanceof String && bindings.containsKey(id)) {
+            return new DescriptorInfo(true, true, true, get((String) id, this));
+        }
+        return super.getOwnPropertyDescriptor(cx, id);
     }
 
     @Override

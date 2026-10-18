@@ -14,7 +14,7 @@ import org.monflabs.mozilla.javascript.ErrorReporter;
 public class ShellContextFactory extends ContextFactory {
     private boolean strictMode;
     private boolean warningAsError;
-    private int languageVersion = Context.VERSION_ES6;
+    private int languageVersion = Context.VERSION_ECMASCRIPT;
     private EvaluationMethod evaluationMode = EvaluationMethod.Compiler;
     private boolean generatingDebug;
     private boolean allowReservedKeywords = true;
