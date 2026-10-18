@@ -53,6 +53,7 @@ existing code and without slowing the engine down.
 | 2026-10-18 | **M14: named property accesses cache the property found on the prototype chain** (user decision, option 2 of 3, rather than closing M14 or tuning the regexp matcher, after the final pass found no outlier against `perf-baseline`): `PropertyCache` per access site, invalidated by a global counter that changes to the objects of cached chains increment; not gated (no observable change). |
 | 2026-10-19 | **M14 closed** (user decision, rather than hidden classes for own-property access or reworking the interpreter dispatch): the last profile found no cheap hotspot left; next is M15. |
 | 2026-10-19 | **M15: `VERSION_ECMASCRIPT` becomes the default, without removing anything** (user decision, rather than dropping the JavaScript 1.x versions as Nashorn did or keeping only a legacy 1.x mode): every version and every `isLatestEcmaScript()` gate stay; removing the gates and the 1.x decision are recorded as future work (M15 status). |
+| 2026-10-19 | **M16: second performance pass** (user decision): the 16 items of a code analysis, the small ones first; every optimization documented in `OPTIMIZATION.md`. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -787,6 +788,38 @@ benchmarks (JFR, both modes) shows the time in slot map lookups of own propertie
 hash maps without hidden classes), the regexp matcher and the interpreter loop; the two cheap fixes it suggested
 (skipping the non-BMP list for BMP characters in a class, a `Number` fast path in `toNumeric`) measured level and
 were dropped. Hidden classes and a new interpreter dispatch were left out as too large for the gain.
+
+### M16 — Second performance pass
+
+A code analysis of the call path, the object model, the code generated under `VERSION_ECMASCRIPT` and the built-ins
+(2026-10-19), with the main costs measured again. Most of them are costs of the ES2026 semantics. Each item is a
+commit with its own perf gate; an optimization with no observable change is not gated, whatever version it helps.
+Effort: S small, M medium, L large. The rationale of every optimization in the engine is in
+[OPTIMIZATION.md](OPTIMIZATION.md).
+
+| #     | Change                                                                                 | Measured (compiled)                | Effort | Versions  |
+|-------|----------------------------------------------------------------------------------------|------------------------------------|--------|-----------|
+| 16.1  | A write to a global `let` uses the `GlobalNameCache` slot                              | ES6 13 ms, ES2026 286 ms           | S      | ES2026    |
+| 16.2  | A `for (let …)` loop copies its scope per iteration only if a closure can capture it  | about 40% on such loops            | S      | ES2026    |
+| 16.3  | Object literals write their data properties directly                                   | literal −42%, splay −19%           | S      | ES2026    |
+| 16.4  | Compiled generators and async functions complete without a Java exception             | 5× compiled                        | S–M    | both      |
+| 16.5  | `putProperty` looks the name up once                                                   | richards −12%                      | S      | both      |
+| 16.6  | Integer fast path of number-to-string conversion                                      | `"x"+i` 2×, `join` 2×              | S      | both      |
+| 16.7  | Arrays stay dense across small gaps                                                    | crypto −32% (to confirm)           | S      | both      |
+| 16.8  | Fix: a closure assigning an uninitialized outer `let` evaluates the right-hand side first | conformance                      | S      | ES2026    |
+| 16.9  | Array destructuring and `for-of`: int index, cached "array iteration unmodified" check | `[x,y,z]=a` 2.4×                  | S–M    | ES2026    |
+| 16.10 | Array species fast path (`slice`, `splice`, `concat`, `map`, `filter`)                 | `slice` 1.7×                       | S–M    | both      |
+| 16.11 | `let`/`const` in registers in functions with closures                                  | 3–23× on that pattern              | L      | ES2026    |
+| 16.12 | Cheaper creation of function objects                                                   | 2–3× creation                      | M      | both      |
+| 16.13 | Unmapped `arguments` without an activation; cheaper `Arguments`                        | 3–5× strict                        | M      | mostly ES2026 |
+| 16.14 | Global names read from nested functions through `GlobalNameCache`                      | about 2×                           | M      | both      |
+| 16.15 | `push`/`unshift`: cached check that the array prototypes have no indexed elements      | `push` −17%, `unshift` 2.7×        | M      | ES2026    |
+| 16.16 | Method calls on primitive strings without a wrapper                                    | `indexOf` up to 3×                 | M      | both      |
+
+Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
+own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math
+methods (level), double-valued keys, a per-site own-property cache (needs shared shapes), `Map`/`Set` hash mixing.
+
 ---
 
 ## Status tracker
@@ -824,3 +857,4 @@ were dropped. Hidden classes and a new interpreter dispatch were left out as too
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
+| 16   | Second performance pass                         | in progress | 99.1%                        | (this) |

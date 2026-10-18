@@ -99,6 +99,9 @@ changes.
 | 1.83 | With parameter expressions, function declarations are instantiated after the parameters | `VERSION_ECMASCRIPT` |
 | 1.84 | A compound assignment in `with` resolves the name once | `VERSION_ECMASCRIPT` |
 | 1.85 | The `flags` getter of `RegExp.prototype` rejects a primitive `this` | `VERSION_ECMASCRIPT` |
+| 1.86 | Typed arrays use the intrinsic constructors, not the global properties | `VERSION_ECMASCRIPT` |
+| 1.87 | Iterator results define own data properties | `VERSION_ECMASCRIPT` |
+| 1.88 | Code evaluated at runtime no longer sees the locals of functions with closures | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
