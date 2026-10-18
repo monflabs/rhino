@@ -47,6 +47,7 @@ public class CodeGenUtils {
         builder.requiresActivationFrame = fn.requiresActivation();
         builder.requiresArgumentObject = fn.requiresArgumentObject();
         builder.paramIsRegister = fn.getRegisterVars();
+        builder.paramIsActivationVar = fn.getActivationVars();
         if (fn.getFunctionName() != null) {
             builder.name = fn.getName();
         }

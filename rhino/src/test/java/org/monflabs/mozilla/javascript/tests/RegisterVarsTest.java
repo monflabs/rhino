@@ -184,4 +184,38 @@ class RegisterVarsTest {
                         + "}"
                         + "f()");
     }
+
+    @Test
+    void capturedVariablesReadAndWrittenByTheFunction() {
+        assertAllVersions(
+                "13,5,6,3|1,2,3",
+                "function f(p, ...rest) {"
+                        + "  var t = 0, n = 0;"
+                        + "  var add = function (v) { t += v; n++; };"
+                        + "  for (var i = 0; i < 3; i++) { add(i); t = t + 1; }"
+                        + "  t += 7; n++;"
+                        + "  var r = [t, ++n, n++ + 1, p + rest.length];"
+                        + "  var get = function () { return [p, rest.length, rest[1]]; };"
+                        + "  return r.join() + '|' + get().join();"
+                        + "}"
+                        + "f(1, 'a', 3)");
+    }
+
+    @Test
+    void capturedVariableAfterTheActivationGrows() {
+        // enough function declarations to promote the slot map of the activation
+        StringBuilder declarations = new StringBuilder();
+        for (int i = 0; i < 1600; i++) {
+            declarations.append("function g").append(i).append("() { return v; }");
+        }
+        assertAllVersions(
+                "3,3",
+                "function f() {"
+                        + "  var v = 1;"
+                        + declarations
+                        + "  v = v + 2;"
+                        + "  return [v, g1599()].join();"
+                        + "}"
+                        + "f()");
+    }
 }

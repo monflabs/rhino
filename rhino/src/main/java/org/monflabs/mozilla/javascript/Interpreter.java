@@ -798,6 +798,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.BOUND_NAME] = new DoBoundName();
+        instructionObjs[base + Icode.ACTIVATION_GETVAR] = new DoActivationGetVar();
+        instructionObjs[base + Icode.ACTIVATION_SETVAR] = new DoActivationSetVar();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
         instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
         instructionObjs[base + Icode.FIELD_KEY] = new DoIterator(Icode.FIELD_KEY);
@@ -3496,6 +3498,26 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 lhs = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
             frame.scope = ScriptRuntime.enterWith(lhs, cx, frame.scope);
             frame.stackTop--;
+            return null;
+        }
+    }
+
+    private static class DoActivationGetVar extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[++frame.stackTop] = frame.activation.getVar(state.indexReg);
+            return null;
+        }
+    }
+
+    private static class DoActivationSetVar extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK) {
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            }
+            frame.activation.setVar(state.indexReg, value);
             return null;
         }
     }

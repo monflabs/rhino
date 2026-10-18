@@ -2685,6 +2685,17 @@ public class ScriptRuntime {
     }
 
     /** Looks up a name in the scope chain and returns its value. */
+    /** A variable at a fixed position of an activation (Node#ACTIVATION_VAR_PROP). */
+    public static Object getActivationVar(VarScope activation, int index) {
+        return ((NativeCall) activation).getVar(index);
+    }
+
+    /** Assigns a variable at a fixed position of an activation; returns the value. */
+    public static Object setActivationVar(Object value, VarScope activation, int index) {
+        ((NativeCall) activation).setVar(index, value);
+        return value;
+    }
+
     /** The argument of a parameter that lives in a register, in a function with an activation. */
     public static Object getArgument(Object[] args, int index) {
         return index < args.length ? args[index] : Undefined.instance;

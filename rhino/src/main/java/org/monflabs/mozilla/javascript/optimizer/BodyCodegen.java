@@ -211,6 +211,7 @@ class BodyCodegen {
 
     private void initBodyGeneration() {
         varRegisters = null;
+        activationLocal = 0;
         if (scriptOrFn.getType() == Token.FUNCTION) {
             fnCurrent = OptFunctionNode.get(scriptOrFn);
             hasVarsInRegs = !fnCurrent.fnode.requiresActivation();
@@ -504,6 +505,11 @@ class BodyCodegen {
                             + ")V");
             if (varRegisters != null) {
                 initRegisterVars();
+            }
+            if (fnCurrent.fnode.getActivationVars() != null) {
+                activationLocal = getNewWordLocal();
+                cfw.addALoad(variableObjectLocal);
+                cfw.addAStore(activationLocal);
             }
         } else {
             debugVariableName = "global";
@@ -1169,7 +1175,13 @@ class BodyCodegen {
                 break;
 
             case Token.NAME:
-                if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
+                if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
+                    cfw.addALoad(activationLocal);
+                    cfw.addPush(node.getIntProp(Node.ACTIVATION_VAR_PROP, -1));
+                    addScriptRuntimeInvoke(
+                            "getActivationVar",
+                            "(Lorg/monflabs/mozilla/javascript/VarScope;I)Ljava/lang/Object;");
+                } else if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
                     // stack: [scope] -> [scope, value]
                     cfw.add(ByteCode.DUP);
                     cfw.addPush(node.getString());
@@ -1839,11 +1851,20 @@ class BodyCodegen {
                 break;
 
             case Token.SETNAME:
-                visitSetName(node, child);
-                break;
-
             case Token.STRICT_SETNAME:
-                visitStrictSetName(node, child);
+                if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
+                    generateExpression(child.getNext(), node);
+                    cfw.addALoad(activationLocal);
+                    cfw.addPush(node.getIntProp(Node.ACTIVATION_VAR_PROP, -1));
+                    addScriptRuntimeInvoke(
+                            "setActivationVar",
+                            "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I)"
+                                    + "Ljava/lang/Object;");
+                } else if (type == Token.SETNAME) {
+                    visitSetName(node, child);
+                } else {
+                    visitStrictSetName(node, child);
+                }
                 break;
 
             case Token.SETCONST:
@@ -2570,6 +2591,7 @@ class BodyCodegen {
                 && (count > 10 || cfw.getCurrentCodeOffset() > 30000)
                 && !hasVarsInRegs
                 && varRegisters == null
+                && activationLocal == 0
                 && !isGenerator
                 && !inLocalBlock) {
             if (literals == null) {
@@ -2940,6 +2962,7 @@ class BodyCodegen {
                 && (count > 10 || cfw.getCurrentCodeOffset() > 30000)
                 && !hasVarsInRegs
                 && varRegisters == null
+                && activationLocal == 0
                 && !isGenerator
                 && !inLocalBlock) {
             if (literals == null) {
@@ -5431,6 +5454,13 @@ class BodyCodegen {
     private int itsLineNumber;
 
     private boolean hasVarsInRegs;
+
+    /**
+     * The register of the activation, when the function reads variables at a fixed position of it
+     * (0: none).
+     */
+    private int activationLocal;
+
     private int[] varRegisters;
     private boolean inDirectCallFunction;
     private boolean itsForcedObjectParameters;

@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Captured variables at a fixed position of the activation (2026-10-18, plan M14)
+
+- Performance (`VERSION_ECMASCRIPT`): in a function with an activation object, the reads and assignments of its own
+  variables that nested functions refer to (`Node.ACTIVATION_VAR_PROP`, set by `NodeTransformer`) go to their slot
+  in the activation (`NativeCall.getVar`/`setVar`, the slots kept by index at its creation and looked up again when
+  stale) instead of a name lookup; the nested functions still look them up by name. Compiled code keeps the
+  activation in a register (and no longer moves literals to separate methods then); the interpreter has
+  `Icode.ACTIVATION_GETVAR`/`ACTIVATION_SETVAR`. A loop updating a variable that a closure captures: 143 ms →
+  65 ms (compiled), 767 ms → 635 ms (interpreted), close to the same loop without a closure (58 ms).
+
 ### Activation objects without the variables in registers (2026-10-17, plan M14)
 
 - Performance (`VERSION_ECMASCRIPT`): `NativeCall` no longer defines the parameters and variables that live in

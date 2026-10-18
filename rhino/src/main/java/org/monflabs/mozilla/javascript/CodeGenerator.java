@@ -1150,6 +1150,12 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.STRICT_SETNAME:
             case Token.SETNAME:
+                if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
+                    visitExpression(child.getNext(), 0);
+                    addIndexOp(
+                            Icode.ACTIVATION_SETVAR, node.getIntProp(Node.ACTIVATION_VAR_PROP, -1));
+                    break;
+                }
                 {
                     String name = child.getString();
                     visitExpression(child, 0);
@@ -1195,6 +1201,12 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.BINDNAME:
             case Token.NAME:
+                if (type == Token.NAME && node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
+                    addIndexOp(
+                            Icode.ACTIVATION_GETVAR, node.getIntProp(Node.ACTIVATION_VAR_PROP, -1));
+                    stackChange(1);
+                    break;
+                }
                 if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
                     // stack: [scope] -> [scope, value]
                     addIcode(Icode.DUP);

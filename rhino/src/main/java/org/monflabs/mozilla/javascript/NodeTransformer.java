@@ -70,6 +70,7 @@ public class NodeTransformer {
                 tree.getType() != Token.FUNCTION || ((FunctionNode) tree).requiresActivation();
         tree.flattenSymbolTable(!createScopeObjects);
         registerNames = null;
+        activationVarNames = null;
         if (registersWithActivation && createScopeObjects && tree.getType() == Token.FUNCTION) {
             keepVarsInRegisters((FunctionNode) tree);
         }
@@ -464,7 +465,9 @@ public class NodeTransformer {
                 case Token.DELPROP:
                     {
                         // Turn name to var for faster access if possible
-                        if (createScopeObjects && registerNames == null) {
+                        if (createScopeObjects
+                                && registerNames == null
+                                && activationVarNames == null) {
                             break;
                         }
                         Node nameSource;
@@ -484,9 +487,23 @@ public class NodeTransformer {
                         }
                         String name = nameSource.getString();
                         Scope defining = scope.getDefiningScope(name);
-                        if (createScopeObjects
-                                && (defining != tree || !registerNames.contains(name))) {
-                            break;
+                        if (createScopeObjects) {
+                            if (defining == tree
+                                    && activationVarNames != null
+                                    && activationVarNames.contains(name)
+                                    && type != Token.SETCONST
+                                    && type != Token.DELPROP) {
+                                // read or assigned at its position in the activation
+                                node.putIntProp(
+                                        Node.ACTIVATION_VAR_PROP,
+                                        defining.getSymbol(name).getIndex());
+                                break;
+                            }
+                            if (defining != tree
+                                    || registerNames == null
+                                    || !registerNames.contains(name)) {
+                                break;
+                            }
                         }
                         if (defining != null) {
                             nameSource.setScope(defining);
@@ -758,53 +775,78 @@ public class NodeTransformer {
     private Set<String> registerNames;
 
     /**
+     * In a function with an activation object, the names of its parameters and variables that
+     * nested functions refer to, which it reads at a fixed position of the activation (null: none).
+     */
+    private Set<String> activationVarNames;
+
+    /**
      * Keeps in registers the parameters and variables of a function with an activation object that
      * no nested function can refer to: only those need to be properties of the activation object.
-     * Not done when names can be resolved dynamically (direct eval, with), for generators (their
-     * registers do not survive a yield) and when the arguments object aliases the parameters.
-     * Function declarations, let/const and class bindings stay in the activation object.
+     * The function itself reads the others at a fixed position of its activation. Not done when
+     * names can be resolved dynamically (direct eval, with), for generators (their registers do not
+     * survive a yield) and when the arguments object aliases the parameters. Function declarations,
+     * catch parameters, let/const and class bindings stay names of the activation object.
      */
     private void keepVarsInRegisters(FunctionNode fn) {
         if (fn.isGenerator() || fn.isES6Generator() || fn.requiresArgumentObject()) {
             return;
         }
-        Set<String> captured = new HashSet<>();
-        if (!scanNames(fn, captured, false) || !scanNestedFunctions(fn, captured)) {
+        Set<String> referenced = new HashSet<>();
+        Set<String> dynamic = new HashSet<>();
+        if (!scanNames(fn, referenced, dynamic, false)
+                || !scanNestedFunctions(fn, referenced, dynamic)) {
             return;
         }
         if (activationNames != null) {
-            captured.addAll(activationNames);
+            dynamic.addAll(activationNames);
         }
         List<Symbol> symbols = fn.getSymbols();
         boolean[] inRegister = new boolean[symbols.size()];
-        Set<String> names = new HashSet<>();
+        boolean[] inSlot = new boolean[symbols.size()];
+        Set<String> registers = new HashSet<>();
+        Set<String> slots = new HashSet<>();
         for (Symbol symbol : symbols) {
             Symbol.Type type = symbol.getDeclType();
-            if ((type == Symbol.Type.VAR || type == Symbol.Type.LP)
-                    && !captured.contains(symbol.getName())) {
+            String name = symbol.getName();
+            if ((type != Symbol.Type.VAR && type != Symbol.Type.LP) || dynamic.contains(name)) {
+                continue;
+            }
+            if (!referenced.contains(name)) {
                 inRegister[symbol.getIndex()] = true;
-                names.add(symbol.getName());
+                registers.add(name);
+            } else if (!name.equals(fn.getName())) {
+                // not the name of a function expression, which NativeCall binds too
+                inSlot[symbol.getIndex()] = true;
+                slots.add(name);
             }
         }
-        if (!names.isEmpty()) {
+        if (!registers.isEmpty()) {
             fn.setRegisterVars(inRegister);
-            registerNames = names;
+            registerNames = registers;
+        }
+        if (!slots.isEmpty()) {
+            fn.setActivationVars(inSlot);
+            activationVarNames = slots;
         }
     }
 
     /**
-     * Adds to captured the names referred to in the nested functions of fn, at any depth, and their
-     * names; returns false if one of them evaluates code or uses with.
+     * Adds to referenced the names referred to in the nested functions of fn, at any depth, and to
+     * dynamic their names and catch parameters; returns false if one of them evaluates code or uses
+     * with.
      */
-    private static boolean scanNestedFunctions(ScriptNode fn, Set<String> captured) {
+    private static boolean scanNestedFunctions(
+            ScriptNode fn, Set<String> referenced, Set<String> dynamic) {
         for (FunctionNode nested : fn.getFunctions()) {
             if (nested.getName() != null) {
-                captured.add(nested.getName());
+                dynamic.add(nested.getName());
             }
-            if (!scanNames(nested, captured, true)
-                    || !scanNames(nested.getGeneratorParamInitBlock(), captured, true)
-                    || !scanNames((Node) nested.getProp(Node.DESTRUCTURING_PARAMS), captured, true)
-                    || !scanNestedFunctions(nested, captured)) {
+            Node destructuring = (Node) nested.getProp(Node.DESTRUCTURING_PARAMS);
+            if (!scanNames(nested, referenced, dynamic, true)
+                    || !scanNames(nested.getGeneratorParamInitBlock(), referenced, dynamic, true)
+                    || !scanNames(destructuring, referenced, dynamic, true)
+                    || !scanNestedFunctions(nested, referenced, dynamic)) {
                 return false;
             }
         }
@@ -812,15 +854,16 @@ public class NodeTransformer {
     }
 
     /**
-     * Adds the names referred to in the children of node (if collect) and the catch parameters, not
-     * entering nested functions; returns false on a direct eval or a with statement.
+     * Adds the names referred to in the children of node (if collect), and the catch parameters to
+     * dynamic, not entering nested functions; returns false on a direct eval or a with statement.
      */
-    private static boolean scanNames(Node node, Set<String> names, boolean collect) {
+    private static boolean scanNames(
+            Node node, Set<String> names, Set<String> dynamic, boolean collect) {
         if (node == null) {
             return true;
         }
         for (Node n = node.getFirstChild(); n != null; n = n.getNext()) {
-            if (!scanNode(n, names, collect)) {
+            if (!scanNode(n, names, dynamic, collect)) {
                 return false;
             }
         }
@@ -828,7 +871,8 @@ public class NodeTransformer {
     }
 
     /** {@link #scanNames} for a node and its children. */
-    private static boolean scanNode(Node n, Set<String> names, boolean collect) {
+    private static boolean scanNode(
+            Node n, Set<String> names, Set<String> dynamic, boolean collect) {
         int type = n.getType();
         if (type == Token.ENTERWITH
                 || type == Token.DOTQUERY
@@ -840,7 +884,7 @@ public class NodeTransformer {
             // a catch parameter is bound at runtime, without a symbol: its name resolves
             // dynamically in the catch block
             if (n.getFirstChild() != null && n.getFirstChild().getType() == Token.NAME) {
-                names.add(n.getFirstChild().getString());
+                dynamic.add(n.getFirstChild().getString());
             }
         } else if (collect) {
             if (n instanceof Name) {
@@ -853,16 +897,16 @@ public class NodeTransformer {
         Object ids = n.getProp(Node.OBJECT_IDS_PROP);
         if (ids instanceof Object[]) {
             for (Object id : (Object[]) ids) {
-                if (id instanceof Node && !scanNode((Node) id, names, collect)) {
+                if (id instanceof Node && !scanNode((Node) id, names, dynamic, collect)) {
                     return false;
                 }
             }
         }
         Object name = n.getProp(Node.NAME_PROP);
-        if (name instanceof Node && !scanNode((Node) name, names, collect)) {
+        if (name instanceof Node && !scanNode((Node) name, names, dynamic, collect)) {
             return false;
         }
-        return scanNames(n, names, collect);
+        return scanNames(n, names, dynamic, collect);
     }
 
     /**

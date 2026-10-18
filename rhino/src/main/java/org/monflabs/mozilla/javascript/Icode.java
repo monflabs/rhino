@@ -233,9 +233,12 @@ abstract class Icode {
             ELEMENT_KEY = STATIC_BLOCK_KEY - 1,
             // the value of a name in the scope that a BINDNAME found (Node#BOUND_NAME_PROP)
             BOUND_NAME = ELEMENT_KEY - 1,
+            // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP)
+            ACTIVATION_GETVAR = BOUND_NAME - 1,
+            ACTIVATION_SETVAR = ACTIVATION_GETVAR - 1,
 
             // Last icode
-            MIN_ICODE = BOUND_NAME;
+            MIN_ICODE = ACTIVATION_SETVAR;
 
     /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
     static final int[] AWAIT_ICODES = {
@@ -515,6 +518,10 @@ abstract class Icode {
                 return "ELEMENT_KEY";
             case BOUND_NAME:
                 return "BOUND_NAME";
+            case ACTIVATION_GETVAR:
+                return "ACTIVATION_GETVAR";
+            case ACTIVATION_SETVAR:
+                return "ACTIVATION_SETVAR";
         }
 
         // icode without name

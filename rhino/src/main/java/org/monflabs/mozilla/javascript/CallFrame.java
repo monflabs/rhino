@@ -51,6 +51,7 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
         stackTop = original.stackTop;
         savedCallOp = original.savedCallOp;
         throwable = original.throwable;
+        activation = original.activation;
     }
 
     /* Copy the stack for running a generator. We're only doing
@@ -70,7 +71,11 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
         stackTop = original.stackTop;
         savedCallOp = original.savedCallOp;
         throwable = original.throwable;
+        activation = original.activation;
     }
+
+    /** The activation, when the function reads variables at a fixed position of it. */
+    NativeCall activation;
 
     void initializeArgs(
             Context cx,
@@ -118,6 +123,9 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
                                     desc.requiresArgumentObject());
                 }
                 ScriptRuntime.setActivationNewTarget(scope, newTarget);
+                if (desc.hasActivationVars()) {
+                    activation = (NativeCall) scope;
+                }
             }
         } else {
             scope = callerScope;

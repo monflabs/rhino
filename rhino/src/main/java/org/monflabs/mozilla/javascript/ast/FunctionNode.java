@@ -137,6 +137,9 @@ public class FunctionNode extends ScriptNode {
      */
     private boolean[] registerVars;
 
+    /** See {@link #getActivationVars}. */
+    private boolean[] activationVars;
+
     private boolean requiresArgumentObject;
     private boolean isGenerator;
     private boolean isES6Generator;
@@ -337,6 +340,18 @@ public class FunctionNode extends ScriptNode {
     /** Whether some parameter or variable lives in a register. */
     public boolean hasVarsInRegisters() {
         return !needsActivation || registerVars != null;
+    }
+
+    /**
+     * With an activation object, the parameters and variables that nested functions refer to: the
+     * function reads them at a fixed position of its activation (null: none).
+     */
+    public boolean[] getActivationVars() {
+        return needsActivation ? activationVars : null;
+    }
+
+    public void setActivationVars(boolean[] activationVars) {
+        this.activationVars = activationVars;
     }
 
     /** With an activation object, the parameters and variables in registers (null: none). */

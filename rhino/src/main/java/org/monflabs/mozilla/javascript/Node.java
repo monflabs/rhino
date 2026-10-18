@@ -90,7 +90,10 @@ public class Node implements Iterable<Node> {
             FUNCTION_DECLS_PROP = 44,
             // NAME read by a compound assignment in a with: from the scope its BINDNAME found
             BOUND_NAME_PROP = 45,
-            LAST_PROP = BOUND_NAME_PROP,
+            // NAME or SETNAME of a variable of the function at a fixed position of its activation
+            // object (NativeCall#getVar): the index of the variable
+            ACTIVATION_VAR_PROP = 46,
+            LAST_PROP = ACTIVATION_VAR_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -522,6 +525,8 @@ public class Node implements Iterable<Node> {
                 return "function_decls_prop";
             case BOUND_NAME_PROP:
                 return "bound_name_prop";
+            case ACTIVATION_VAR_PROP:
+                return "activation_var_prop";
 
             default:
                 Kit.codeBug();

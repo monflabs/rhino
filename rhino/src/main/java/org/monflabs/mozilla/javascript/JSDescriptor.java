@@ -69,6 +69,12 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     private boolean[] paramIsRegister;
 
+    /**
+     * With an activation frame, the parameters and variables that the function reads at a fixed
+     * position of it (NativeCall#getVar; null: none).
+     */
+    private boolean[] paramIsActivationVar;
+
     public JSDescriptor(
             JSCode<T> code,
             JSCode<T> constructor,
@@ -303,6 +309,17 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return arity;
     }
 
+    /**
+     * Whether the function reads the parameter or variable at a fixed position of its activation.
+     */
+    public boolean isActivationVar(int index) {
+        return paramIsActivationVar != null && paramIsActivationVar[index];
+    }
+
+    boolean hasActivationVars() {
+        return paramIsActivationVar != null;
+    }
+
     /** Whether the parameter or variable lives in a register even with an activation frame. */
     public boolean isParamOrVarInRegister(int index) {
         return paramIsRegister != null && paramIsRegister[index];
@@ -443,6 +460,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public int functionType;
         public String globalLexicals;
         public boolean[] paramIsRegister;
+        public boolean[] paramIsActivationVar;
 
         public Builder() {}
 
@@ -523,6 +541,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
                             functionType);
             result.globalLexicals = globalLexicals;
             result.paramIsRegister = paramIsRegister;
+            result.paramIsActivationVar = paramIsActivationVar;
             consumer.accept(result);
             result.nestedFunctions =
                     Collections.unmodifiableList(

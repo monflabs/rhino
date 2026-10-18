@@ -101,6 +101,14 @@ public final class NativeCall extends DeclarationScope {
                 }
             }
         }
+        if (desc.hasActivationVars()) {
+            vars = newSlots(paramAndVarCount);
+            for (int i = 0; i < paramAndVarCount; ++i) {
+                if (desc.isActivationVar(i)) {
+                    vars[i] = getMap().query(function.getParamOrVarName(i), 0);
+                }
+            }
+        }
         if (function.getDescriptor().hasSelfNameBinding()) {
             // the immutable binding of a function expression's name, already in the parameters
             defineProperty(function.getFunctionName(), function, PERMANENT);
@@ -109,6 +117,35 @@ public final class NativeCall extends DeclarationScope {
     }
 
     private boolean selfNameInitialized;
+
+    /** The slots of the variables that the function reads at a fixed position (by index). */
+    private Slot<VarScope>[] vars;
+
+    /**
+     * The value of a variable of the function at a fixed position (JSDescriptor#isActivationVar).
+     */
+    Object getVar(int index) {
+        return varSlot(index).value;
+    }
+
+    void setVar(int index, Object value) {
+        varSlot(index).value = value;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Slot<VarScope>[] newSlots(int length) {
+        return new Slot[length];
+    }
+
+    private Slot<VarScope> varSlot(int index) {
+        Slot<VarScope> slot = vars[index];
+        if (slot.stale) {
+            // copied into a promoted map
+            slot = getMap().query(function.getParamOrVarName(index), 0);
+            vars[index] = slot;
+        }
+        return slot;
+    }
 
     /**
      * Whether storing value in name assigns the immutable binding of a function expression's name

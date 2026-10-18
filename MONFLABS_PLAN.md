@@ -752,8 +752,10 @@ built-in iterators directly (`for-of` over a `Map` twice as fast). **14.5 (done)
 functions with an activation object (user decision, rather than a per-site cache of prototype-chain lookups): a
 closure or a `catch` clause put all the variables of a function in its activation object, 2 to 3 times slower than
 registers; now only those that nested functions refer to, and the activation object no longer defines the others
-(a call of such a function up to 7 times faster). Next: captured variables at fixed positions in the activation
-object, read by (depth, index) like Nashorn's scopes; then the remaining candidates.
+(a call of such a function up to 7 times faster). **14.6 (done)** the function reads and assigns its own captured
+variables at their position in the activation (2 times faster, close to registers); nested functions still look
+them up by name, which costs about as much as a property access. Next: a per-site cache of those lookups in nested
+functions, if a benchmark shows them; then the remaining candidates.
 ---
 
 ## Status tracker
@@ -789,5 +791,5 @@ object, read by (depth, index) like Nashorn's scopes; then the remaining candida
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | in progress | 99.1% (14.1–14.5)            | (this) |
+| 14   | Performance pass                                | in progress | 99.1% (14.1–14.6)            | (this) |
 | 15   | Single language version                         | todo        |                              |        |
