@@ -218,4 +218,73 @@ class RegisterVarsTest {
                         + "}"
                         + "f()");
     }
+
+    @Test
+    void nestedFunctionsReadAndWriteCapturedVariables() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "100,15,115,200,-85,2,100",
+                "function f() {"
+                        + "  var n = 0, total = 10;"
+                        + "  function inc() { n = n + 1; return n; }"
+                        + "  var add = (k) => { total = total + k; return total; };"
+                        + "  var deep = function () { return function () { return () => n + total; }; };"
+                        + "  var o = { m() { return n * 2; } };"
+                        + "  class C { get v() { return total - n; } }"
+                        + "  function* g() { yield n; n = 100; yield n; }"
+                        + "  inc(); inc(); add(5);"
+                        + "  var it = g(), a = it.next().value, b = it.next().value;"
+                        + "  return [n, total, deep()()(), o.m(), new C().v, a, b].join();"
+                        + "}"
+                        + "f()");
+    }
+
+    @Test
+    void nestedFunctionsSeeTheActivationOfTheirCall() {
+        assertAllVersions(
+                "10,2|6",
+                "function mk(v) {"
+                        + "  var x = v;"
+                        + "  return [() => x, (y) => { x = y; }];"
+                        + "}"
+                        + "var p = mk(1), q = mk(2); p[1](10);"
+                        + "function f(n) {"
+                        + "  var x = n;"
+                        + "  return function () { return n > 0 ? x + f(n - 1)() : x; };"
+                        + "}"
+                        + "[p[0](), q[0]()].join() + '|' + f(3)()");
+    }
+
+    @Test
+    void nestedFunctionsShadowingCapturedVariables() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "2,5,1|function,1|2,5|6,6",
+                "function f() {"
+                        + "  var x = 1;"
+                        + "  var a = function (x) { return x; };"
+                        + "  var b = function () { let x = 5; { return x; } };"
+                        + "  return [a(2), b(), x].join();"
+                        + "}"
+                        + "function g() {"
+                        + "  var C = 1;"
+                        + "  var h = function () { return typeof class C { static m() { return C; } }.m(); };"
+                        + "  return [h(), (() => C)()].join();"
+                        + "}"
+                        + "function k() {"
+                        + "  var arguments = 5;"
+                        + "  var h = function () { return arguments.length; };"
+                        + "  return [h(1, 2), (() => arguments)()].join();"
+                        + "}"
+                        + "function s() {"
+                        + "  'use strict';"
+                        + "  var x = 1;"
+                        + "  var h = function () {"
+                        + "    try {} catch (e) {}"
+                        + "    let y = 2;"
+                        + "    { let z = 3; x = x + y + z; }"
+                        + "    return x;"
+                        + "  };"
+                        + "  return [h(), x].join();"
+                        + "}"
+                        + "[f(), g(), k(), s()].join('|')");
+    }
 }

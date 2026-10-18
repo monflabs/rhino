@@ -140,6 +140,9 @@ public class FunctionNode extends ScriptNode {
     /** See {@link #getActivationVars}. */
     private boolean[] activationVars;
 
+    /** See {@link #getOuterVars}. */
+    private Map<String, Integer> outerVars;
+
     private boolean requiresArgumentObject;
     private boolean isGenerator;
     private boolean isES6Generator;
@@ -352,6 +355,22 @@ public class FunctionNode extends ScriptNode {
 
     public void setActivationVars(boolean[] activationVars) {
         this.activationVars = activationVars;
+    }
+
+    /**
+     * The variables of enclosing functions that this function reads at a fixed position of their
+     * activation, by name: the number of functions out (high byte) and the index of the variable
+     * (null: none).
+     */
+    public Map<String, Integer> getOuterVars() {
+        return outerVars;
+    }
+
+    public void addOuterVar(String name, int var) {
+        if (outerVars == null) {
+            outerVars = new HashMap<>();
+        }
+        outerVars.putIfAbsent(name, var);
     }
 
     /** With an activation object, the parameters and variables in registers (null: none). */

@@ -233,7 +233,9 @@ abstract class Icode {
             ELEMENT_KEY = STATIC_BLOCK_KEY - 1,
             // the value of a name in the scope that a BINDNAME found (Node#BOUND_NAME_PROP)
             BOUND_NAME = ELEMENT_KEY - 1,
-            // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP)
+            // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP), or of
+            // the activation of an enclosing function (Node#OUTER_VAR_PROP, the name in the
+            // string register)
             ACTIVATION_GETVAR = BOUND_NAME - 1,
             ACTIVATION_SETVAR = ACTIVATION_GETVAR - 1,
 

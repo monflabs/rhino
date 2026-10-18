@@ -1181,6 +1181,17 @@ class BodyCodegen {
                     addScriptRuntimeInvoke(
                             "getActivationVar",
                             "(Lorg/monflabs/mozilla/javascript/VarScope;I)Ljava/lang/Object;");
+                } else if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
+                    cfw.addALoad(funObjLocal);
+                    cfw.addALoad(variableObjectLocal);
+                    cfw.addPush(node.getIntProp(Node.OUTER_VAR_PROP, -1));
+                    cfw.addPush(node.getString());
+                    cfw.addALoad(contextLocal);
+                    addScriptRuntimeInvoke(
+                            "getOuterVar",
+                            "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
+                                    + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
+                                    + ")Ljava/lang/Object;");
                 } else if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
                     // stack: [scope] -> [scope, value]
                     cfw.add(ByteCode.DUP);
@@ -1860,6 +1871,19 @@ class BodyCodegen {
                             "setActivationVar",
                             "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I)"
                                     + "Ljava/lang/Object;");
+                } else if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
+                    generateExpression(child.getNext(), node);
+                    cfw.addALoad(funObjLocal);
+                    cfw.addALoad(variableObjectLocal);
+                    cfw.addPush(node.getIntProp(Node.OUTER_VAR_PROP, -1));
+                    cfw.addPush(child.getString());
+                    cfw.addALoad(contextLocal);
+                    addScriptRuntimeInvoke(
+                            "setOuterVar",
+                            "(Ljava/lang/Object;Ljava/lang/Object;"
+                                    + "Lorg/monflabs/mozilla/javascript/VarScope;I"
+                                    + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
+                                    + ")Ljava/lang/Object;");
                 } else if (type == Token.SETNAME) {
                     visitSetName(node, child);
                 } else {

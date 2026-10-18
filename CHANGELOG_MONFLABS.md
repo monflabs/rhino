@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Nested functions read captured variables at their position in the activation (2026-10-18, plan M14)
+
+- Performance (`VERSION_ECMASCRIPT`): a nested function reads and assigns a variable of an enclosing function at its
+  slot in that function's activation (`Node.OUTER_VAR_PROP`: the number of functions out and the index;
+  `ScriptRuntime.getOuterVar`/`setOuterVar`) instead of a name lookup through the scope chain. `NodeTransformer`
+  hands the slot variables of a function down to its nested functions (`FunctionNode.getOuterVars`), only those that
+  no scope inside it declares (a nested function then resolves the name to it whenever it does not resolve it
+  itself). At runtime the activation is the first `NativeCall` on the scope chain whose function has the owner's
+  descriptor (the descriptor of the nested function, that many parents out), its variable checked by name; the
+  name is looked up otherwise. The interpreter reuses `Icode.ACTIVATION_GETVAR`/`ACTIVATION_SETVAR` (the number of
+  functions out in the high byte of the index, the name in the string register), as the icodes fill their byte. A
+  closure reading and assigning captured variables in a loop: 202 ms → 50 ms (compiled), 571 ms → 517 ms
+  (interpreted).
+
 ### Captured variables at a fixed position of the activation (2026-10-18, plan M14)
 
 - Performance (`VERSION_ECMASCRIPT`): in a function with an activation object, the reads and assignments of its own

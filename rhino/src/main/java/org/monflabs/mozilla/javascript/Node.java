@@ -93,7 +93,11 @@ public class Node implements Iterable<Node> {
             // NAME or SETNAME of a variable of the function at a fixed position of its activation
             // object (NativeCall#getVar): the index of the variable
             ACTIVATION_VAR_PROP = 46,
-            LAST_PROP = ACTIVATION_VAR_PROP,
+            // NAME or SETNAME of a variable of an enclosing function at a fixed position of its
+            // activation object: the number of functions out (high byte) and the index of the
+            // variable (ScriptRuntime#getOuterVar)
+            OUTER_VAR_PROP = 47,
+            LAST_PROP = OUTER_VAR_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -527,6 +531,8 @@ public class Node implements Iterable<Node> {
                 return "bound_name_prop";
             case ACTIVATION_VAR_PROP:
                 return "activation_var_prop";
+            case OUTER_VAR_PROP:
+                return "outer_var_prop";
 
             default:
                 Kit.codeBug();

@@ -2684,7 +2684,6 @@ public class ScriptRuntime {
         return wrapBoolean(result);
     }
 
-    /** Looks up a name in the scope chain and returns its value. */
     /** A variable at a fixed position of an activation (Node#ACTIVATION_VAR_PROP). */
     public static Object getActivationVar(VarScope activation, int index) {
         return ((NativeCall) activation).getVar(index);
@@ -2701,6 +2700,59 @@ public class ScriptRuntime {
         return index < args.length ? args[index] : Undefined.instance;
     }
 
+    /**
+     * A variable of an enclosing function, read at its fixed position in the activation
+     * (Node#OUTER_VAR_PROP: the number of functions out from fn and the index of the variable).
+     */
+    public static Object getOuterVar(Object fn, VarScope scope, int var, String name, Context cx) {
+        NativeCall activation = outerActivation(fn, scope, var, name);
+        return activation != null
+                ? activation.getVar(var & OUTER_VAR_INDEX)
+                : name(cx, scope, name);
+    }
+
+    /** Assigns a variable of an enclosing function (see #getOuterVar); returns the value. */
+    public static Object setOuterVar(
+            Object value, Object fn, VarScope scope, int var, String name, Context cx) {
+        NativeCall activation = outerActivation(fn, scope, var, name);
+        if (activation != null) {
+            activation.setVar(var & OUTER_VAR_INDEX, value);
+            return value;
+        }
+        return setName(bind(cx, scope, name), value, cx, scope, name);
+    }
+
+    /** The bits of Node#OUTER_VAR_PROP that hold the index of the variable. */
+    public static final int OUTER_VAR_INDEX = 0xFFFFFF;
+
+    /**
+     * The activation of the enclosing function that owns a variable (null: not found, the name is
+     * then looked up).
+     */
+    private static NativeCall outerActivation(Object fn, VarScope scope, int var, String name) {
+        if (!(fn instanceof ScriptOrFn)) {
+            return null;
+        }
+        JSDescriptor<?> owner = ((ScriptOrFn<?>) fn).getDescriptor();
+        for (int depth = var >>> 24; depth > 0 && owner != null; --depth) {
+            owner = (JSDescriptor<?>) owner.getParent();
+        }
+        int index = var & OUTER_VAR_INDEX;
+        if (owner == null
+                || index >= owner.getParamAndVarCount()
+                || !owner.isActivationVar(index)
+                || !name.equals(owner.getParamOrVarName(index))) {
+            return null;
+        }
+        for (VarScope s = scope; s != null; s = s.getParentScope()) {
+            if (s instanceof NativeCall && ((NativeCall) s).function.getDescriptor() == owner) {
+                return (NativeCall) s;
+            }
+        }
+        return null;
+    }
+
+    /** Looks up a name in the scope chain and returns its value. */
     public static Object name(Context cx, VarScope scope, String name) {
         VarScope parent = scope.getParentScope();
         if (parent == null) {

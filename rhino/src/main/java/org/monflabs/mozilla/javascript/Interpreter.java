@@ -3505,7 +3505,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoActivationGetVar extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            frame.stack[++frame.stackTop] = frame.activation.getVar(state.indexReg);
+            int var = state.indexReg;
+            frame.stack[++frame.stackTop] =
+                    var >>> 24 == 0
+                            ? frame.activation.getVar(var)
+                            : ScriptRuntime.getOuterVar(
+                                    frame.fnOrScript, frame.scope, var, state.stringReg, cx);
             return null;
         }
     }
@@ -3517,7 +3522,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if (value == DOUBLE_MARK) {
                 value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
             }
-            frame.activation.setVar(state.indexReg, value);
+            int var = state.indexReg;
+            if (var >>> 24 == 0) {
+                frame.activation.setVar(var, value);
+            } else {
+                frame.stack[frame.stackTop] =
+                        ScriptRuntime.setOuterVar(
+                                value, frame.fnOrScript, frame.scope, var, state.stringReg, cx);
+            }
             return null;
         }
     }

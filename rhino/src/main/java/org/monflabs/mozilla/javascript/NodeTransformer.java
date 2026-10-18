@@ -12,9 +12,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.monflabs.mozilla.javascript.ast.AstNode;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
@@ -464,6 +466,9 @@ public class NodeTransformer {
                 case Token.SETCONST:
                 case Token.DELPROP:
                     {
+                        if (registersWithActivation && markOuterVar(tree, node, scope)) {
+                            break;
+                        }
                         // Turn name to var for faster access if possible
                         if (createScopeObjects
                                 && registerNames == null
@@ -550,6 +555,35 @@ public class NodeTransformer {
                     createScopeObjects,
                     inStrictMode);
         }
+    }
+
+    /**
+     * Marks a NAME or SETNAME of a variable that an enclosing function reads at a fixed position of
+     * its activation (Node#OUTER_VAR_PROP); returns whether it did.
+     */
+    private static boolean markOuterVar(ScriptNode tree, Node node, Scope scope) {
+        if (!(tree instanceof FunctionNode) || ((FunctionNode) tree).getOuterVars() == null) {
+            return false;
+        }
+        int type = node.getType();
+        Node nameSource;
+        if (type == Token.NAME) {
+            nameSource = node;
+        } else if (type == Token.SETNAME || type == Token.STRICT_SETNAME) {
+            nameSource = node.getFirstChild();
+            if (nameSource.getType() != Token.BINDNAME) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        String name = nameSource.getString();
+        Integer var = ((FunctionNode) tree).getOuterVars().get(name);
+        if (var == null || nameSource.getScope() != null || scope.getDefiningScope(name) != null) {
+            return false;
+        }
+        node.putIntProp(Node.OUTER_VAR_PROP, var);
+        return true;
     }
 
     /** An assignment to the name of the function expression being compiled, see IRFactory. */
@@ -794,8 +828,9 @@ public class NodeTransformer {
         }
         Set<String> referenced = new HashSet<>();
         Set<String> dynamic = new HashSet<>();
-        if (!scanNames(fn, referenced, dynamic, false)
-                || !scanNestedFunctions(fn, referenced, dynamic)) {
+        Set<String> declared = new HashSet<>();
+        if (!scanNames(fn, referenced, dynamic, declared, false)
+                || !scanNestedFunctions(fn, referenced, dynamic, declared)) {
             return;
         }
         if (activationNames != null) {
@@ -828,25 +863,62 @@ public class NodeTransformer {
         if (!slots.isEmpty()) {
             fn.setActivationVars(inSlot);
             activationVarNames = slots;
+            Map<String, Integer> outer = new HashMap<>();
+            for (String name : slots) {
+                int index = fn.getSymbol(name).getIndex();
+                if (!declared.contains(name)
+                        && !"arguments".equals(name)
+                        && index <= ScriptRuntime.OUTER_VAR_INDEX) {
+                    outer.put(name, index);
+                }
+            }
+            if (!outer.isEmpty()) {
+                addOuterVars(fn, outer, 1);
+            }
         }
     }
 
     /**
-     * Adds to referenced the names referred to in the nested functions of fn, at any depth, and to
-     * dynamic their names and catch parameters; returns false if one of them evaluates code or uses
-     * with.
+     * Lets the nested functions of fn, at any depth, read the variables of a function at a fixed
+     * position of its activation: only those that no scope inside the function declares, which the
+     * nested functions resolve to it whenever they do not resolve them themselves.
+     */
+    private static void addOuterVars(ScriptNode fn, Map<String, Integer> vars, int depth) {
+        if (depth > 0x7F) {
+            return;
+        }
+        for (FunctionNode nested : fn.getFunctions()) {
+            for (Map.Entry<String, Integer> var : vars.entrySet()) {
+                nested.addOuterVar(var.getKey(), (depth << 24) | var.getValue());
+            }
+            addOuterVars(nested, vars, depth + 1);
+        }
+    }
+
+    /**
+     * Adds to referenced the names referred to in the nested functions of fn, at any depth, to
+     * dynamic their names and catch parameters, and to declared the names they declare; returns
+     * false if one of them evaluates code or uses with.
      */
     private static boolean scanNestedFunctions(
-            ScriptNode fn, Set<String> referenced, Set<String> dynamic) {
+            ScriptNode fn, Set<String> referenced, Set<String> dynamic, Set<String> declared) {
         for (FunctionNode nested : fn.getFunctions()) {
             if (nested.getName() != null) {
                 dynamic.add(nested.getName());
             }
+            if (nested.getSymbolTable() != null) {
+                declared.addAll(nested.getSymbolTable().keySet());
+            }
             Node destructuring = (Node) nested.getProp(Node.DESTRUCTURING_PARAMS);
-            if (!scanNames(nested, referenced, dynamic, true)
-                    || !scanNames(nested.getGeneratorParamInitBlock(), referenced, dynamic, true)
-                    || !scanNames(destructuring, referenced, dynamic, true)
-                    || !scanNestedFunctions(nested, referenced, dynamic)) {
+            if (!scanNames(nested, referenced, dynamic, declared, true)
+                    || !scanNames(
+                            nested.getGeneratorParamInitBlock(),
+                            referenced,
+                            dynamic,
+                            declared,
+                            true)
+                    || !scanNames(destructuring, referenced, dynamic, declared, true)
+                    || !scanNestedFunctions(nested, referenced, dynamic, declared)) {
                 return false;
             }
         }
@@ -854,16 +926,21 @@ public class NodeTransformer {
     }
 
     /**
-     * Adds the names referred to in the children of node (if collect), and the catch parameters to
-     * dynamic, not entering nested functions; returns false on a direct eval or a with statement.
+     * Adds the names referred to in the children of node (if collect), the catch parameters to
+     * dynamic and the names that their scopes declare to declared, not entering nested functions;
+     * returns false on a direct eval or a with statement.
      */
     private static boolean scanNames(
-            Node node, Set<String> names, Set<String> dynamic, boolean collect) {
+            Node node,
+            Set<String> names,
+            Set<String> dynamic,
+            Set<String> declared,
+            boolean collect) {
         if (node == null) {
             return true;
         }
         for (Node n = node.getFirstChild(); n != null; n = n.getNext()) {
-            if (!scanNode(n, names, dynamic, collect)) {
+            if (!scanNode(n, names, dynamic, declared, collect)) {
                 return false;
             }
         }
@@ -872,13 +949,16 @@ public class NodeTransformer {
 
     /** {@link #scanNames} for a node and its children. */
     private static boolean scanNode(
-            Node n, Set<String> names, Set<String> dynamic, boolean collect) {
+            Node n, Set<String> names, Set<String> dynamic, Set<String> declared, boolean collect) {
         int type = n.getType();
         if (type == Token.ENTERWITH
                 || type == Token.DOTQUERY
                 || n.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
                         != Node.NON_SPECIALCALL) {
             return false;
+        }
+        if (n instanceof Scope && ((Scope) n).getSymbolTable() != null) {
+            declared.addAll(((Scope) n).getSymbolTable().keySet());
         }
         if (type == Token.CATCH_SCOPE) {
             // a catch parameter is bound at runtime, without a symbol: its name resolves
@@ -897,16 +977,16 @@ public class NodeTransformer {
         Object ids = n.getProp(Node.OBJECT_IDS_PROP);
         if (ids instanceof Object[]) {
             for (Object id : (Object[]) ids) {
-                if (id instanceof Node && !scanNode((Node) id, names, dynamic, collect)) {
+                if (id instanceof Node && !scanNode((Node) id, names, dynamic, declared, collect)) {
                     return false;
                 }
             }
         }
         Object name = n.getProp(Node.NAME_PROP);
-        if (name instanceof Node && !scanNode((Node) name, names, dynamic, collect)) {
+        if (name instanceof Node && !scanNode((Node) name, names, dynamic, declared, collect)) {
             return false;
         }
-        return scanNames(n, names, dynamic, collect);
+        return scanNames(n, names, dynamic, declared, collect);
     }
 
     /**
