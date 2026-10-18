@@ -9,9 +9,12 @@ import jdk.dynalink.linker.GuardedInvocation;
 import jdk.dynalink.linker.GuardingDynamicLinker;
 import jdk.dynalink.linker.LinkRequest;
 import jdk.dynalink.linker.LinkerServices;
+import jdk.dynalink.linker.support.Guards;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.GlobalNameCache;
+import org.monflabs.mozilla.javascript.PropertyCache;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
+import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.Token;
 import org.monflabs.mozilla.javascript.VarScope;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
@@ -32,7 +35,7 @@ class DefaultLinker implements GuardingDynamicLinker {
         MethodType mType = req.getCallSiteDescriptor().getMethodType();
         ParsedOperation op = new ParsedOperation(req.getCallSiteDescriptor().getOperation());
 
-        GuardedInvocation invocation = getInvocation(lookup, mType, op);
+        GuardedInvocation invocation = getInvocation(lookup, mType, op, req.getReceiver());
         if (DEBUG) {
             String t1 =
                     req.getReceiver() == null
@@ -48,10 +51,10 @@ class DefaultLinker implements GuardingDynamicLinker {
     }
 
     private GuardedInvocation getInvocation(
-            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op)
+            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op, Object receiver)
             throws NoSuchMethodException, IllegalAccessException {
         if (op.isNamespace(StandardNamespace.PROPERTY)) {
-            return getPropertyInvocation(lookup, mType, op);
+            return getPropertyInvocation(lookup, mType, op, receiver);
         } else if (op.isNamespace(RhinoNamespace.GNAME)) {
             return getCachedNameInvocation(lookup, mType, op);
         } else if (op.isNamespace(RhinoNamespace.NAME)) {
@@ -63,9 +66,26 @@ class DefaultLinker implements GuardingDynamicLinker {
     }
 
     private GuardedInvocation getPropertyInvocation(
-            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op)
+            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op, Object receiver)
             throws NoSuchMethodException, IllegalAccessException {
         MethodHandle mh = null;
+
+        // A get of a property that the receiver inherits gets a cache of the property found on
+        // the prototype chain, linked for the receivers that are objects; the others, and the
+        // gets of own properties, take the direct route.
+        String cached = null;
+        if (op.isOperation(StandardOperation.GET)) {
+            cached = "getObjectProp";
+        } else if (op.isOperation(RhinoOperation.GETNOWARN)) {
+            cached = "getObjectPropNoWarn";
+        } else if (op.isOperation(RhinoOperation.GETWITHTHIS)) {
+            cached = "getPropAndThis";
+        }
+        if (cached != null && PropertyCache.isInherited(receiver, op.getName())) {
+            return new GuardedInvocation(
+                    bindCache(lookup, mType, cached, op.getName()),
+                    Guards.isInstance(ScriptableObject.class, mType));
+        }
 
         // The name of the property to look up is now not on the Java stack,
         // but was passed as part of the operation name in the bytecode.
@@ -278,6 +298,19 @@ class DefaultLinker implements GuardingDynamicLinker {
         MethodHandle mh = lookup.findStatic(ScriptRuntime.class, "compare", tt);
         mh = MethodHandles.insertArguments(mh, 2, op);
         return mh;
+    }
+
+    /** A method of a new {@link PropertyCache}, with the name of the property bound. */
+    private static MethodHandle bindCache(
+            MethodHandles.Lookup lookup, MethodType mt, String method, String name)
+            throws NoSuchMethodException, IllegalAccessException {
+        MethodHandle mh =
+                lookup.findVirtual(
+                                PropertyCache.class,
+                                method,
+                                mt.insertParameterTypes(1, String.class))
+                        .bindTo(new PropertyCache());
+        return MethodHandles.insertArguments(mh, 1, name);
     }
 
     /**

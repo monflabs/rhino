@@ -2137,6 +2137,22 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
+    /** The cache of the property get of the name in stringReg, for this code. */
+    private static PropertyCache propCache(CallFrame frame, InterpreterState state) {
+        InterpreterData<?> data = frame.compilerData;
+        PropertyCache[] caches = data.propCaches;
+        if (caches == null) {
+            caches = new PropertyCache[data.itsStringTable.length];
+            data.propCaches = caches;
+        }
+        PropertyCache cache = caches[state.stringIndex];
+        if (cache == null) {
+            cache = new PropertyCache();
+            caches[state.stringIndex] = cache;
+        }
+        return cache;
+    }
+
     /** The cache of the name in stringReg, for this code, when it runs in the top scope. */
     private static GlobalNameCache nameCache(CallFrame frame, InterpreterState state) {
         InterpreterData<?> data = frame.compilerData;
@@ -2255,7 +2271,8 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             Object lhs = stack[frame.stackTop];
             if (lhs == DOUBLE_MARK) lhs = ScriptRuntime.wrapNumber(sDbl[frame.stackTop]);
             stack[frame.stackTop] =
-                    ScriptRuntime.getObjectPropNoWarn(lhs, state.stringReg, cx, frame.scope);
+                    propCache(frame, state)
+                            .getObjectPropNoWarn(lhs, state.stringReg, cx, frame.scope);
             return null;
         }
     }
@@ -2268,7 +2285,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             Object lhs = stack[frame.stackTop];
             if (lhs == DOUBLE_MARK) lhs = ScriptRuntime.wrapNumber(sDbl[frame.stackTop]);
             stack[frame.stackTop] =
-                    ScriptRuntime.getObjectProp(lhs, state.stringReg, cx, frame.scope);
+                    propCache(frame, state).getObjectProp(lhs, state.stringReg, cx, frame.scope);
             return null;
         }
     }
@@ -2580,7 +2597,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if (obj == DOUBLE_MARK) obj = ScriptRuntime.wrapNumber(sDbl[frame.stackTop]);
             // stringReg: property
             stack[frame.stackTop] =
-                    ScriptRuntime.getPropAndThis(obj, state.stringReg, cx, frame.scope);
+                    propCache(frame, state).getPropAndThis(obj, state.stringReg, cx, frame.scope);
             return null;
         }
     }

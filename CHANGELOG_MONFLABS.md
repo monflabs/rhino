@@ -6,6 +6,22 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Property accesses cache the property found on the prototype chain (2026-10-18, plan M14)
+
+- Performance (all versions, no observable change): a named property get or method lookup (`o.p`, `o.m()`) has a
+  `PropertyCache`: per call site in compiled code, linked by `DefaultLinker` (with the name as a constant) when the
+  first receiver is an object that inherits the property, the sites of own properties keeping the direct path; per
+  name of the code in the interpreter (`InterpreterData.propCaches`). For a receiver of the cached class it looks
+  the name up in the receiver only: an own property is read directly; otherwise the slot found on the prototype
+  chain is used when the receiver's prototype is the cached one, the slot is not stale and no object of the chain
+  changed since. The objects of a cached chain are marked (`SlotMapOwner.cachedPrototype`): adding or removing one
+  of their properties (`EmbeddedSlotMap`, `HashSlotMap`), replacing their map (`setMap`) or changing their
+  prototype (`setPrototype`) increments a global counter that every cache checks. Only objects whose class looks
+  named properties up in its slot map and whose map is one of these (not the thread-safe maps) are cached; the
+  cache is held in one immutable entry, and a site stops filling it after 64 attempts. Compiled, 3 million
+  accesses three levels up: a method 66 ms → 41–54 ms, a property 45 ms → 18–23 ms (one level up and
+  interpreted: level); `protochain` benchmark −28% compiled, −13% interpreted.
+
 ### Nested functions read captured variables at their position in the activation (2026-10-18, plan M14)
 
 - Performance (`VERSION_ECMASCRIPT`): a nested function reads and assigns a variable of an enclosing function at its

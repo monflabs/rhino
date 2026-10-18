@@ -125,6 +125,9 @@ public class EmbeddedSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
 
     @SuppressWarnings("unchecked")
     private void createNewSlot(SlotMapOwner<T> owner, Slot<T> newSlot) {
+        if (owner != null && owner.cachedPrototype) {
+            PropertyCache.invalidate();
+        }
         if (count == 0 && slots == null) {
             // Always throw away old slots if any on empty insert.
             slots = new Slot[INITIAL_SLOT_SIZE];
@@ -205,6 +208,9 @@ public class EmbeddedSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
         // Modify or remove existing slot
         S newSlot = c.compute(key, index, slot, compoundOp, owner);
         if (!compoundOp.touched) {
+            if (newSlot != slot && owner != null && owner.cachedPrototype) {
+                PropertyCache.invalidate();
+            }
             if (newSlot == null) {
                 // Need to delete this slot actually
                 removeSlot(slot, prev, slotIndex, key);

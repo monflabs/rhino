@@ -63,7 +63,14 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
     @Override
     public Slot<T> modify(SlotMapOwner<T> owner, Object key, int index, int attributes) {
         Object name = makeKey(key, index);
-        return map.computeIfAbsent(name, n -> new StandardSlot<T>(key, index, attributes));
+        return map.computeIfAbsent(
+                name,
+                n -> {
+                    if (owner != null && owner.cachedPrototype) {
+                        PropertyCache.invalidate();
+                    }
+                    return new StandardSlot<T>(key, index, attributes);
+                });
     }
 
     @SuppressWarnings("unchecked")
@@ -80,6 +87,9 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
                         name,
                         (n, existing) -> {
                             var slot = c.compute(key, index, existing, compoundOp, owner);
+                            if (slot != existing && owner != null && owner.cachedPrototype) {
+                                PropertyCache.invalidate();
+                            }
                             if (existing != null && slot != existing) {
                                 existing.stale = true;
                             }
@@ -90,6 +100,9 @@ public class HashSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
 
     @Override
     public void add(SlotMapOwner<T> owner, Slot<T> newSlot) {
+        if (owner != null && owner.cachedPrototype) {
+            PropertyCache.invalidate();
+        }
         Object name = makeKey(newSlot);
         var old = map.put(name, newSlot);
         if (old != null && old != newSlot) {

@@ -594,6 +594,9 @@ public abstract class ScriptableObject extends SlotMapOwner<Scriptable>
     /** Sets the prototype of the object. */
     @Override
     public void setPrototype(Scriptable m) {
+        if (cachedPrototype) {
+            PropertyCache.invalidate();
+        }
         prototypeObject = m;
     }
 

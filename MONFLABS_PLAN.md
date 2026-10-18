@@ -50,6 +50,7 @@ existing code and without slowing the engine down.
 | 2026-10-15 | **M14: top-level names are cached per access site** (user decision, option 1 of 3, rather than hunting the JIT trigger of the `VERSION_ECMASCRIPT`-only slowdown of top-level code or starting with the candidate list): `GlobalNameCache`, invalidated by `Slot.stale` and the size of the top scope, in both backends. |
 | 2026-10-17 | **M14: variables in registers in functions with an activation object** (user decision, switching from a per-site cache of prototype-chain lookups once measured: a 3-level chain costs +43%, a closure or a `catch` clause 2 to 3 times): only the names that nested functions refer to stay in the activation object; gated by `VERSION_ECMASCRIPT` (code evaluated in the caller's scope, such as a legacy `Script`, no longer sees the others). |
 | 2026-10-18 | **M14: nested functions read the captured variables at their position in the activation** (user decision: the next step after 14.6, ahead of the remaining candidates): resolved at compile time rather than cached per site, for the variables that no scope inside the owning function declares; the code finds the owner's activation by its descriptor and falls back to a name lookup if it does not. |
+| 2026-10-18 | **M14: named property accesses cache the property found on the prototype chain** (user decision, option 2 of 3, rather than closing M14 or tuning the regexp matcher, after the final pass found no outlier against `perf-baseline`): `PropertyCache` per access site, invalidated by a global counter that changes to the objects of cached chains increment; not gated (no observable change). |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -757,7 +758,12 @@ registers; now only those that nested functions refer to, and the activation obj
 variables at their position in the activation (2 times faster, close to registers); nested functions still look
 them up by name, which costs about as much as a property access. **14.7 (done)** nested functions read and assign
 those variables at their position in the activation of the owning function, found on the scope chain by its
-descriptor (a closure reading captured variables in a loop 4 times faster, compiled). Next: the remaining candidates.
+descriptor (a closure reading captured variables in a loop 4 times faster, compiled). **14.8 (done)** final pass
+against `perf-baseline`: every metric level or faster (up to 58%), `split` +15% from top-level code only (the
+operations inside a function are level), `v8-regexp` +5% interpreted (the matcher grew; no single hotspot). Named
+property accesses cache the property found on the prototype chain (`PropertyCache`, user decision): linked at the sites
+whose first receiver inherits the property (a lookup three levels up, compiled: a method 1.3 to 1.6 times, a property
+2 to 2.5 times faster; `protochain` −28%).
 ---
 
 ## Status tracker
@@ -793,5 +799,5 @@ descriptor (a closure reading captured variables in a loop 4 times faster, compi
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
-| 14   | Performance pass                                | in progress | 99.1% (14.1–14.7)            | (this) |
+| 14   | Performance pass                                | in progress | 99.1% (14.1–14.8)            | (this) |
 | 15   | Single language version                         | todo        |                              |        |

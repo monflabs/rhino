@@ -362,7 +362,26 @@ public abstract class SlotMapOwner<T extends PropHolder<T>> implements PropHolde
     }
 
     final void setMap(SlotMap<T> newMap) {
+        if (cachedPrototype) {
+            PropertyCache.invalidate();
+        }
         slotMap = newMap;
+    }
+
+    /**
+     * Whether a {@link PropertyCache} relies on this object, as an object of the prototype chain of
+     * a receiver: changes to its properties then invalidate the caches.
+     */
+    transient boolean cachedPrototype;
+
+    /** Whether the slot map of this object reports the changes that {@link PropertyCache} needs. */
+    boolean hasPlainMap() {
+        Class<?> type = slotMap.getClass();
+        return type == EmbeddedSlotMap.class
+                || type == HashSlotMap.class
+                || type == ImmutableSmallSlotMap.class
+                || type == EmptySlotMap.class
+                || type == SingleEntrySlotMap.class;
     }
 
     /**
