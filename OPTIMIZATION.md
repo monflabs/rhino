@@ -300,6 +300,23 @@ on, and what it gained. It also records the experiments that measured no gain, s
   55 ms, `unshift(x)` 400 ms → 150 ms; interpreted: `push(x)` 107 ms → 97 ms, `unshift(x)` 190 ms → 110 ms.
   `VERSION_ECMASCRIPT` only (the older versions never check).
 
+### Direct calls evaluate their arguments once
+
+- **What.** In compiled code, a call to a top-level function that is never reassigned is a direct call of its
+  static method (`BodyCodegen.visitOptimizedCall`), guarded by a check that the name still holds that function,
+  with a regular call otherwise. The arguments were generated in both branches; they are now evaluated once,
+  before the guard, into locals (a `double` pair for a number), and each branch loads them.
+- **Why it matters.** Bytecode size decides inlining: C2 inlines a hot callee only up to `FreqInlineSize` (325
+  bytes). Upstream's calling convention (strictness, `LookupResult`, `getThisObj`, `new.target`) had made a
+  recursive `fib` 345 bytes against 291 in Rhino 1.8.0, so C2 stopped inlining its recursion.
+- **Correctness.** The guard has no side effect, so the arguments are still evaluated once, after the callee,
+  in order. Generators keep the old code: their locals are saved across a `yield` as references. A number
+  argument goes to a local pair that only ever holds doubles (taken above every local in use, reused only by
+  later arguments, never released): Rhino's stack map frames cannot merge a double with a reference, and a
+  first version that released the pair failed to compile a loop whose next call reused the slot for an object
+  (test262 caught it in its resizable buffer helpers).
+- **Gain.** Recursive `fib(28)` ten times, compiled: 100 ms → 83 ms (Rhino 1.8.0: 55 ms; upstream base: 133 ms).
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

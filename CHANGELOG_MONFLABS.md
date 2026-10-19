@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Direct calls evaluate their arguments once (2026-10-20)
+
+- Performance (all versions, compiled mode, no observable change): a call to a top-level function compiles to a
+  direct call of its static method, with a regular call when the name no longer holds that function. The
+  arguments were generated twice, once for each path; they are now evaluated once into locals that both paths
+  read (not in generators, whose saved locals are references). A function that calls itself shrinks below the
+  325 bytes of bytecode that C2 inlines into a hot caller: the recursive `fib` of the JavaScriptPerformance
+  `ubench` suite, 345 → 311 bytes, runs 100 ms → 83 ms.
+
 ### Four compiled-mode fixes found by the JavaScriptPerformance benchmarks (2026-10-19)
 
 - Fixed (all versions, compiled mode): in a generator or async function, a `yield` or `await` in the value of a

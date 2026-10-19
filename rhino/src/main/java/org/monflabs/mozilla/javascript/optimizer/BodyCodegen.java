@@ -6,6 +6,7 @@ import static org.monflabs.mozilla.classfile.ClassFileWriter.ACC_STATIC;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -211,6 +212,8 @@ class BodyCodegen {
 
     private void initBodyGeneration() {
         varRegisters = null;
+        argDoubleLocals = new int[0];
+        argDoubleLocalsInUse = 0;
         activationLocal = 0;
         if (scriptOrFn.getType() == Token.FUNCTION) {
             fnCurrent = OptFunctionNode.get(scriptOrFn);
@@ -3294,6 +3297,28 @@ class BodyCodegen {
         }
         // stack: ... functionObj
 
+        // The arguments are evaluated once, for both the direct and the regular call (the locals
+        // of a generator do not hold doubles across a yield).
+        int argCount = countArguments(firstArgChild);
+        short[] argLocals = isGenerator ? null : new short[argCount];
+        if (argLocals != null) {
+            int i = 0;
+            for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {
+                if (nodeIsDirectCallParameter(arg) >= 0) {
+                    argLocals[i] = -1;
+                    continue;
+                }
+                generateExpression(arg, node);
+                if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                    argLocals[i] = getArgDoubleLocal();
+                    cfw.addDStore(argLocals[i]);
+                } else {
+                    argLocals[i] = getNewWordLocal();
+                    cfw.addAStore(argLocals[i]);
+                }
+            }
+        }
+
         int beyond = cfw.acquireLabel();
         int regularCall = cfw.acquireLabel();
 
@@ -3367,20 +3392,30 @@ class BodyCodegen {
         in the aReg and the number is the dReg
         Else pass the JS object in the aReg and 0.0 in the dReg.
         */
-        Node argChild = firstArgChild;
-        while (argChild != null) {
+        int argIndex = 0;
+        for (Node argChild = firstArgChild;
+                argChild != null;
+                argChild = argChild.getNext(), argIndex++) {
             int dcp_register = nodeIsDirectCallParameter(argChild);
+            boolean isNumber = argChild.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH;
             if (dcp_register >= 0) {
                 cfw.addALoad(dcp_register);
                 cfw.addDLoad(dcp_register + 1);
-            } else if (argChild.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+            } else if (isNumber) {
                 cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
-                generateExpression(argChild, node);
+                if (argLocals != null) {
+                    cfw.addDLoad(argLocals[argIndex]);
+                } else {
+                    generateExpression(argChild, node);
+                }
             } else {
-                generateExpression(argChild, node);
+                if (argLocals != null) {
+                    cfw.addALoad(argLocals[argIndex]);
+                } else {
+                    generateExpression(argChild, node);
+                }
                 cfw.addPush(0.0);
             }
-            argChild = argChild.getNext();
         }
 
         cfw.add(
@@ -3423,9 +3458,31 @@ class BodyCodegen {
             releaseWordLocal(thisObjLocal);
             // stack: ... functionObj cx scope thisObj
         }
-        // XXX: this will generate code for the child array the second time,
-        // so expression code generation better not to alter tree structure...
-        generateCallArgArray(node, firstArgChild, true);
+        if (argLocals != null) {
+            if (argCount == 1 && itsOneArgArray >= 0) {
+                cfw.addALoad(itsOneArgArray);
+            } else {
+                addNewObjectArray(argCount);
+            }
+            int i = 0;
+            for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {
+                cfw.add(ByteCode.DUP);
+                cfw.addPush(i);
+                if (argLocals[i] < 0) {
+                    dcpLoadAsObject(nodeIsDirectCallParameter(arg));
+                } else if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                    cfw.addDLoad(argLocals[i]);
+                    addDoubleWrap();
+                } else {
+                    cfw.addALoad(argLocals[i]);
+                }
+                cfw.add(ByteCode.AASTORE);
+            }
+        } else {
+            // XXX: this will generate code for the child array the second time,
+            // so expression code generation better not to alter tree structure...
+            generateCallArgArray(node, firstArgChild, true);
+        }
 
         if (type == Token.NEW) {
             addScriptRuntimeInvoke(
@@ -3448,7 +3505,47 @@ class BodyCodegen {
         }
 
         cfw.markLabel(beyond);
+        if (argLocals != null) {
+            int i = 0;
+            for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {
+                if (argLocals[i] >= 0) {
+                    if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                        argDoubleLocalsInUse--;
+                    } else {
+                        releaseWordLocal(argLocals[i]);
+                    }
+                }
+            }
+        }
     }
+
+    /**
+     * A local pair for a number argument of a direct call. These locals only ever hold doubles, so
+     * that the stack map frames never merge them with a reference: they are taken above every local
+     * used so far, and are reused only by the arguments of later calls.
+     */
+    private short getArgDoubleLocal() {
+        if (argDoubleLocalsInUse == argDoubleLocals.length) {
+            int reg = localsMax + 1;
+            for (int i = reg; i < MAX_LOCALS; i++) {
+                if (locals[i] != 0) {
+                    reg = i + 1;
+                }
+            }
+            if (reg + 2 > MAX_LOCALS) {
+                throw Context.reportRuntimeError("Program too complex (out of locals)");
+            }
+            locals[reg] = 1;
+            locals[reg + 1] = 1;
+            localsMax = reg + 2;
+            argDoubleLocals = Arrays.copyOf(argDoubleLocals, argDoubleLocals.length + 1);
+            argDoubleLocals[argDoubleLocals.length - 1] = reg;
+        }
+        return (short) argDoubleLocals[argDoubleLocalsInUse++];
+    }
+
+    private int[] argDoubleLocals;
+    private int argDoubleLocalsInUse;
 
     private void generateCallArgArray(Node node, Node argChild, boolean directCall) {
         if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
