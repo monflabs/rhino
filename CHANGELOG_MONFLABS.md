@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Object literals put their properties directly (2026-10-19, plan M16)
+
+- Performance (`VERSION_ECMASCRIPT`, no observable change): the properties of a plain object literal that defines no
+  getter or setter are put directly, as under `VERSION_ES6`, instead of `defineOwnProperty` with a descriptor (the
+  CreateDataPropertyOrThrow semantics, kept for the literals with accessors: a data property replaces an accessor
+  of the same literal). Nothing in such a literal can be anything but a data property of the object, which is new.
+  1 million literals, compiled: `{a, b, c, d}` 118 ms → 102 ms, `{x, y}` 61 ms → 44 ms, a nested literal
+  49 ms → 36 ms; interpreted 10–15% faster.
+- Tests: `ObjectLiteralPropertiesTest`.
+
 ### Per-iteration copies of loop scopes only where a closure can capture them (2026-10-19, plan M16)
 
 - Performance (`VERSION_ECMASCRIPT`, no observable change): a `for (let/const …)`, `for-in` or `for-of` loop whose

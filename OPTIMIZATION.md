@@ -29,7 +29,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   to run during one).
 - **Bimodal metrics.** `properties.cmp`, `v8-richards.cmp`, `closures.cmp`, `wideobject.cmp`, `typedarray.cmp` and
   `split` settle in one of two JIT states from one JVM to the next, and `v8-splay.cmp` (about 1 ms) varies by ±30%:
-  a single round can flag a regression that is not there. Confirm with
+  a single round can flag a regression that is not there. `typedarray.cmp` (8.6 ms or 13.5 ms in the full run, the
+  same alone) has a 60% tolerance since M16 for that reason; run it alone to see a real change. Confirm with
   several rounds, alternating the two jars.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of what
   runs next. A change can look neutral on a single benchmark and regress in the full run (see the prototype-chain
@@ -177,6 +178,20 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `for (const v of a)` in a function with a closure: 92 ms → 67 ms. A `let` loop in a function with a closure is
   bimodal in compiled mode (53 ms in most JVMs, about 105 ms in some, against 80 ms before); 16.11 removes the scope
   object of such loops altogether. `VERSION_ECMASCRIPT`.
+
+### Object literals put their properties directly
+
+- **What** (M16, 16.3). Under `VERSION_ECMASCRIPT` the properties of an object literal are created with the
+  CreateDataPropertyOrThrow semantics, so that a data property replaces an accessor defined earlier in the same
+  literal (`{get a() {}, a: 1}`): `ScriptRuntime.fillObjectLiteral` went through `defineOwnProperty` with a
+  descriptor, a compound operation and two lookups for every property. A plain `NativeObject` whose literal
+  defines no getter or setter (checked once per literal from its `getterSetters`) puts its properties directly,
+  as `VERSION_ES6` does: the object is new, so each name is either absent or a data property of the same literal,
+  and putting the value gives the same result.
+- **Lesson.** A first version looked each name up to check for an accessor, then put the value: two lookups
+  per property made a 4-property literal 12% slower. The check is per literal, not per property.
+- **Gain.** 1 million literals, compiled: `{a, b, c, d}` 118 ms → 102 ms, `{x, y}` 61 ms → 44 ms, a nested literal
+  49 ms → 36 ms; interpreted 10–15% faster. `VERSION_ECMASCRIPT`.
 
 ### Algorithms of built-ins
 

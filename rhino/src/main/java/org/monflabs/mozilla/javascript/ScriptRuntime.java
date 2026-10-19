@@ -7048,6 +7048,9 @@ public class ScriptRuntime {
             Context cx,
             VarScope scope) {
         int end = propertyIds == null ? 0 : propertyIds.length;
+        // a plain object whose literal defines no accessor has no property that putting a value
+        // would not replace with a data property
+        boolean defineData = object.getClass() != NativeObject.class || hasAccessor(getterSetters);
         for (int i = 0; i != end; ++i) {
             Object id = propertyIds[i];
 
@@ -7071,6 +7074,7 @@ public class ScriptRuntime {
                 }
             } else if (getterSetter == 0
                     && getterSetters != null
+                    && defineData
                     && cx.isLatestEcmaScript()
                     && object instanceof ScriptableObject
                     && !NativeObject.PROTO_PROPERTY.equals(id)) {
@@ -7143,6 +7147,17 @@ public class ScriptRuntime {
                 }
             }
         }
+    }
+
+    private static boolean hasAccessor(int[] getterSetters) {
+        if (getterSetters != null) {
+            for (int getterSetter : getterSetters) {
+                if (getterSetter == -1 || getterSetter == 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static boolean isArrayObject(Object obj) {
