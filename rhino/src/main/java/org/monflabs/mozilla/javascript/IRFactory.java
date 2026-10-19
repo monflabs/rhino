@@ -2321,7 +2321,9 @@ public final class IRFactory {
                             test,
                             new Node(Token.EMPTY),
                             incr,
-                            parser.compilerEnv.isLatestEcmaScript() && hasBindings(let)));
+                            parser.compilerEnv.isLatestEcmaScript()
+                                    && hasBindings(let)
+                                    && mayCapture(init, test, incr, body)));
             return let;
         }
         return createLoop(loop, LOOP_FOR, body, test, init, incr, false);
@@ -2347,6 +2349,36 @@ public final class IRFactory {
         return scope instanceof Scope
                 && ((Scope) scope).getSymbolTable() != null
                 && !((Scope) scope).getSymbolTable().isEmpty();
+    }
+
+    /**
+     * Whether a closure or a direct eval created by these nodes can capture the bindings of a loop
+     * head: only then does each iteration need its own copy of the loop's scope.
+     */
+    private static boolean mayCapture(Node... nodes) {
+        for (Node node : nodes) {
+            if (node != null && capturesScope(node)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean capturesScope(Node node) {
+        int type = node.getType();
+        if (type == Token.FUNCTION
+                || type == Token.CLASS
+                || type == Token.CLASS_STATIC
+                || node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
+                        == Node.SPECIALCALL_EVAL) {
+            return true;
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            if (capturesScope(child)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Node createLoop(Jump loop, int loopType, Node body, Node cond, Node init, Node incr) {
@@ -2532,7 +2564,8 @@ public final class IRFactory {
             }
             if ((declType == Token.LET || declType == Token.CONST)
                     && parser.compilerEnv.isLatestEcmaScript()
-                    && hasBindings(loop)) {
+                    && hasBindings(loop)
+                    && mayCapture(assign, body)) {
                 // a new binding for each iteration
                 newBody.addChildToBack(new Node(Token.COPY_SCOPE));
             }

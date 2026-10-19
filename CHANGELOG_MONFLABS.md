@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Per-iteration copies of loop scopes only where a closure can capture them (2026-10-19, plan M16)
+
+- Performance (`VERSION_ECMASCRIPT`, no observable change): a `for (let/const …)`, `for-in` or `for-of` loop whose
+  bindings live in a scope object copies that scope on each iteration (`COPY_SCOPE`) only if its head or body
+  creates a function or a class or calls `eval` directly (`IRFactory.mayCapture`): without them, nothing can
+  observe that the iterations share one scope. 3 million iterations of a top-level `let` loop: 271 ms → 180 ms
+  (compiled), 441 ms → 360 ms (interpreted); `for (const v of a)` in a function with a closure: 92 ms → 67 ms.
+- Tests: `PerIterationBindingsTest`.
+
 ### Writes of global let bindings through the name cache (2026-10-19, plan M16)
 
 - Performance (`VERSION_ECMASCRIPT`, no observable change): an assignment or `++`/`--` to a global `let` writes the

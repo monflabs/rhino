@@ -817,7 +817,8 @@ Effort: S small, M medium, L large. The rationale of every optimization in the e
 | 16.16 | Method calls on primitive strings without a wrapper                                    | `indexOf` up to 3×                 | M      | both      |
 
 Status: **16.1 (done)** global `let` writes, 3 million `G++` 140 ms → 12 ms compiled, 325 ms → 135 ms
-interpreted.
+interpreted. **16.2 (done)** per-iteration scope copies only where a closure can capture them, a top-level `let`
+loop 271 ms → 180 ms compiled.
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math

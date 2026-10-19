@@ -27,8 +27,9 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **The perf gate** runs the base and the working tree in interleaved rounds with the same harness; only the engine jar
   differs. It takes about 18 minutes and needs an idle machine: no build, and no Time Machine backup (the gate refuses
   to run during one).
-- **Bimodal metrics.** `properties.cmp`, `v8-richards.cmp`, `closures.cmp`, `wideobject.cmp` and `split` settle in one
-  of two JIT states from one JVM to the next: a single round can flag a regression that is not there. Confirm with
+- **Bimodal metrics.** `properties.cmp`, `v8-richards.cmp`, `closures.cmp`, `wideobject.cmp`, `typedarray.cmp` and
+  `split` settle in one of two JIT states from one JVM to the next, and `v8-splay.cmp` (about 1 ms) varies by ±30%:
+  a single round can flag a regression that is not there. Confirm with
   several rounds, alternating the two jars.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of what
   runs next. A change can look neutral on a single benchmark and regress in the full run (see the prototype-chain
@@ -167,7 +168,15 @@ on, and what it gained. It also records the experiments that measured no gain, s
 
 - **What.** A `let`/`const` loop head gets a fresh binding per iteration (a `COPY_SCOPE` of the loop's scope object),
   so that each closure sees its own iteration's value. Loops whose bindings live in registers do not pay for it.
-  M16 (16.2) extends this to loops whose bindings are in a scope object but that no closure can capture.
+- **Only where a closure can capture them** (M16, 16.2): when the bindings are in a scope object (top-level code, or
+  a function with a closure elsewhere), `IRFactory` emits `COPY_SCOPE` only if the loop's head or body creates a
+  function or a class or calls `eval` directly (`mayCapture`). Otherwise no code can observe that the iterations
+  share one scope, and the copy (an allocation and a fresh map per iteration) is skipped. A closure created in the
+  initializer counts too: it must keep seeing the scope of the first iteration.
+- **Gain.** 3 million iterations of a top-level `let` loop: 271 ms → 180 ms compiled, 441 ms → 360 ms interpreted;
+  `for (const v of a)` in a function with a closure: 92 ms → 67 ms. A `let` loop in a function with a closure is
+  bimodal in compiled mode (53 ms in most JVMs, about 105 ms in some, against 80 ms before); 16.11 removes the scope
+  object of such loops altogether. `VERSION_ECMASCRIPT`.
 
 ### Algorithms of built-ins
 
