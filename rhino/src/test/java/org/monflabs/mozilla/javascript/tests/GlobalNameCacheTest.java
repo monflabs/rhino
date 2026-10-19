@@ -213,4 +213,65 @@ class GlobalNameCacheTest {
                     return null;
                 });
     }
+
+    @Test
+    void writesOfAGlobalLet() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "6,3,4,7",
+                "let n = 0, m = 0;"
+                        + "function inc() { n++; }"
+                        + "function add(k) { m += k; }"
+                        + "for (var i = 0; i < 3; i++) { inc(); add(1); n = n + 1; }"
+                        + "var r = [n, m];"
+                        + "for (var j = 0; j < 2; j++) { --n; m = m + 2; }"
+                        + "r.push(n, m); r.join()");
+    }
+
+    @Test
+    void writesOfAGlobalConstThrowAfterTheCacheIsWarm() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "TypeError,TypeError,TypeError,1",
+                "const c = 1; let r = [];"
+                        + "function w() { c = 2; }"
+                        + "function u() { c++; }"
+                        + "for (var i = 0; i < 2; i++) { try { w(); } catch (e) { r.push(e.name); } }"
+                        + "try { u(); } catch (e) { r.push(e.name); }"
+                        + "r.push(c); r.join()");
+    }
+
+    @Test
+    void writesOfAGlobalLetInItsTemporalDeadZone() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError,ReferenceError,5,6",
+                "var r = [];"
+                        + "function w() { z = 5; }"
+                        + "function u() { z++; }"
+                        + "try { w(); } catch (e) { r.push(e.name); }"
+                        + "try { u(); } catch (e) { r.push(e.name); }"
+                        + "let z = 0;"
+                        + "for (var i = 0; i < 2; i++) w();"
+                        + "r.push(z); u(); r.push(z); r.join()");
+    }
+
+    @Test
+    void globalLetWrittenFromAnotherScript() {
+        Utils.runWithAllModes(
+                cx -> {
+                    cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+                    TopLevel scope = cx.initStandardObjects();
+                    cx.evaluateString(scope, "let g = 0;", "a.js", 1, null);
+                    Script write =
+                            cx.compileString(
+                                    "for (var i = 0; i < 3; i++) { g++; g = g + 1; } g",
+                                    "write.js",
+                                    1,
+                                    null);
+                    assertEquals(6, ((Number) write.exec(cx, scope, scope)).intValue());
+                    assertEquals(12, ((Number) write.exec(cx, scope, scope)).intValue());
+                    assertEquals(
+                            "undefined",
+                            cx.evaluateString(scope, "typeof globalThis.g", "c.js", 1, null));
+                    return null;
+                });
+    }
 }

@@ -35,6 +35,9 @@ on, and what it gained. It also records the experiments that measured no gain, s
   cache below): measure both ways.
 - **Micro-benchmarks** for a single pattern: warm up, keep the best of several runs, and run each language version in
   its own JVM, since the second one in a JVM inherits the profile of the first.
+- **Method size.** A runtime method called from compiled scripts (through invokedynamic) must stay small enough for
+  the JIT to inline it: adding a rare case to such a method can slow down the common one. Put the rare case in a
+  method of its own (see the global `let` writes below).
 - **Profiles** with JFR (`-XX:StartFlightRecording=settings=profile`). Its attribution to inlined frames can mislead:
   a hotspot removed from the profile does not always shorten the run (see the regexp experiment below). Trust the
   timing, not the profile.
@@ -53,6 +56,13 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Invalidation.** A slot that leaves its map (removed, replaced, or copied into a larger map) is marked
   `Slot.stale`, which the cache checks. A global `let`/`const` that shadows a property of the global object is seen
   through the size of the top scope, which only grows. The cache holds the scope and the slot weakly.
+- **Writes of global `let` bindings** (M16, 16.1) go to the cached slot too, when the binding is initialized, its
+  attributes are those of a `let` (not a `const`) and the top scope is not sealed. Otherwise the lookup runs and
+  throws the TDZ or `const` error. Before, every write took the lookup: 3 million `G++` from a function cost 140 ms
+  against 12 ms now (compiled), 325 ms against 135 ms (interpreted). The `let` paths are separate methods: written
+  inline, they grew `nameIncrDecr` from 143 to 207 bytes of bytecode, and the global `var` writes of `typedarray`
+  became 10% slower (28–36% in the full gate run), as the larger methods no longer inlined as well into the
+  compiled scripts.
 - **Gain.** The `testsrc/perf` scripts spend most of their time on global names. Against the previous commit:
   `typedarray` −42% to −66%, `toprimitive` −31% to −50%, `strbuild` −34% to −49%, `instanceof` −31% to −44%,
   `protochain` −28% to −53%, `arith` −30% to −35%. It also removed a slowdown of 10–25% that only `VERSION_ECMASCRIPT`

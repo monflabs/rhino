@@ -185,11 +185,50 @@ public final class GlobalNameCache {
         return result;
     }
 
+    /**
+     * Whether the cached slot is an initialized global let in a scope that accepts writes: a const,
+     * the temporal dead zone and any other kind of slot take the lookup, which throws as needed.
+     */
+    private static boolean isWritableLet(Slot slot, VarScope top) {
+        return slot.getClass() == StandardSlot.class
+                && slot.getAttributes() == ScriptableObject.PERMANENT
+                && slot.value != UniqueTag.UNINITIALIZED
+                && !((TopLevel) top).isSealed();
+    }
+
+    // the let paths are methods of their own, which keeps the methods that global vars take small
+    // enough to inline into compiled scripts
+
+    private Object setLet(Slot slot, VarScope bound, Object value, Context cx, VarScope scope) {
+        if (isWritableLet(slot, bound)) {
+            slot.value = value;
+            return value;
+        }
+        Object result = ScriptRuntime.setName(bound, value, cx, scope, name);
+        update(cx, bound);
+        return result;
+    }
+
+    private Object incrDecrLet(Slot slot, VarScope scope, Context cx, int incrDecrMask) {
+        if (isWritableLet(slot, scope) && slot.value instanceof Number) {
+            Number number = (Number) slot.value;
+            Number result = ScriptRuntime.incrDecrNumber(number, incrDecrMask);
+            slot.value = result;
+            return (incrDecrMask & Node.POST_FLAG) != 0 ? number : result;
+        }
+        Object result = ScriptRuntime.nameIncrDecr(scope, name, cx, incrDecrMask);
+        update(cx, scope);
+        return result;
+    }
+
     /** {@link ScriptRuntime#setName(VarScope, Object, Context, VarScope, String)} */
     public Object setName(VarScope bound, Object value, Context cx, VarScope scope) {
         Entry e = entry;
         Slot slot = slot(e, cx, bound);
-        if (slot != null && !e.lexical) {
+        if (slot != null && e.lexical) {
+            return setLet(slot, bound, value, cx, scope);
+        }
+        if (slot != null) {
             ScriptableObject global = ((TopLevel) bound).getGlobalThis();
             if (global.isExtensible() && !global.isSealed()) {
                 slot.setValue(value, global, global, cx.isStrictMode());
@@ -208,7 +247,10 @@ public final class GlobalNameCache {
         Entry e = entry;
         Slot slot = slot(e, cx, scope);
         // a data property holding a number: reading and converting it has no side effect
-        if (slot != null && !e.lexical && slot.getClass() == StandardSlot.class) {
+        if (slot != null && e.lexical) {
+            return incrDecrLet(slot, scope, cx, incrDecrMask);
+        }
+        if (slot != null && slot.getClass() == StandardSlot.class) {
             ScriptableObject global = ((TopLevel) scope).getGlobalThis();
             if (slot.value instanceof Number && global.isExtensible() && !global.isSealed()) {
                 Number number = (Number) slot.value;

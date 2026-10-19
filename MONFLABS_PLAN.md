@@ -816,6 +816,9 @@ Effort: S small, M medium, L large. The rationale of every optimization in the e
 | 16.15 | `push`/`unshift`: cached check that the array prototypes have no indexed elements      | `push` −17%, `unshift` 2.7×        | M      | ES2026    |
 | 16.16 | Method calls on primitive strings without a wrapper                                    | `indexOf` up to 3×                 | M      | both      |
 
+Status: **16.1 (done)** global `let` writes, 3 million `G++` 140 ms → 12 ms compiled, 325 ms → 135 ms
+interpreted.
+
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math
 methods (level), double-valued keys, a per-site own-property cache (needs shared shapes), `Map`/`Set` hash mixing.

@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Writes of global let bindings through the name cache (2026-10-19, plan M16)
+
+- Performance (`VERSION_ECMASCRIPT`, no observable change): an assignment or `++`/`--` to a global `let` writes the
+  slot that `GlobalNameCache` holds, as for a global `var`, when the binding is initialized and the top scope is not
+  sealed; a `const`, the temporal dead zone and any other slot take the lookup, which throws as before. 3 million
+  writes from a function: `G++` 140 ms → 12 ms, `G = i` 103 ms → 29 ms (compiled); `G++` 325 ms → 135 ms
+  (interpreted).
+
 ### `VERSION_ECMASCRIPT` is the default language version (2026-10-19, plan M15)
 
 - Breaking (embeddings that do not set a version, BACKWARD_COMPATIBILITY 2.3): a new `Context` and a new
