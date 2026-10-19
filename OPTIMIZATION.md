@@ -335,6 +335,21 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** `indexOf`, `charCodeAt`, `slice` and `startsWith` in a loop, 3 million times: 598 ms → 425 ms
   compiled, 1,425 ms → 1,099 ms interpreted.
 
+### Compiled functions called without a method handle
+
+- **What.** Upstream's compiled functions are `MHJSFunctionCode` objects that call the static method of the
+  function through a `MethodHandle` field. C2 inlines through a method handle only when it is a constant, so a
+  call through `JSFunction.call` never inlined the callee (`MHJSFunctionCode.lambda$new$0` was the top frame of
+  call-heavy profiles). On the first call of a function, `MHJSFunctionCode.link` replaces it by an instance of a
+  class made by `LambdaMetafactory`, whose `execute` calls the static method directly.
+- **When it applies.** Every call of a compiled function that is not a direct call (direct calls already call
+  the static method): methods, closures, functions passed as values. Linking happens on the first call, so a
+  function that never runs gets no class; a first version that linked after 1,000 calls lost the gain, since
+  the shared call site in `execute` then also saw the method-handle class.
+- **Gain.** SunSpider `math-spectral-norm` in the JavaScriptPerformance wrapper (nested functions called by
+  name): 2,790 ms → 2,500 ms compiled (Rhino 1.8.0: 2,150 ms). 2,000 functions each called once: 10 ms either
+  way.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the
@@ -351,6 +366,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 |---|---|---|
 | Skip the non-BMP code point list for BMP characters in regexp classes | level over 12 runs | JFR showed `ArrayList.contains` at 6–20%; the samples moved to the matcher's other frames |
 | `Number` fast path at the start of `ScriptRuntime.toNumeric` | level | the JIT already folds `toPrimitive` for numbers |
+| Cache the top-level scope of a function for its global `this` (`JSFunction.getThisObj`) | level (`math-spectral-norm`) | the `getTopLevelScope` samples moved to the method-handle call (see above) |
 | A BMP fast path in the regexp matcher | +2% | below noise; `v8-regexp` +5% interpreted comes from the matcher's growth, with no single hotspot |
 | Prototype-chain cache at every get site | richards 2× slower in the full run | code size and profile pollution at own-property sites; linked at inherited sites only |
 | Devirtualizing `EmbeddedSlotMap.query` (exact-class check) | level | the cost is the chain of dependent loads in the lookup |

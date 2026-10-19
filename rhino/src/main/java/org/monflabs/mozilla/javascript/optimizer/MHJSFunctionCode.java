@@ -1,5 +1,6 @@
 package org.monflabs.mozilla.javascript.optimizer;
 
+import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.invoke.MethodType;
@@ -10,24 +11,29 @@ import org.monflabs.mozilla.javascript.JSCode;
 import org.monflabs.mozilla.javascript.JSCodeExec;
 import org.monflabs.mozilla.javascript.JSCodeResume;
 import org.monflabs.mozilla.javascript.JSFunction;
+import org.monflabs.mozilla.javascript.ScriptOrFn;
 import org.monflabs.mozilla.javascript.VarScope;
 
 /** Subclass of {@link JSCode} for compiled Java methods. */
 public class MHJSFunctionCode extends MHJSCode<JSFunction> {
-    private final JSCodeExec<JSFunction> exec;
+    private JSCodeExec<JSFunction> exec;
     private final JSCodeResume<JSFunction> resume;
 
+    private final MethodHandle execMH;
+
+    /** The lookup of the compiled class until the method is linked (first call), null after. */
+    private Lookup lookup;
+
     protected MHJSFunctionCode(MethodHandle execMH, MethodHandle resumeMH) {
-        exec =
-                (cx, xobj, newTarget, scope, thisObj, args) -> {
-                    try {
-                        return execMH.invokeExact(cx, xobj, newTarget, scope, thisObj, args);
-                    } catch (Error e) {
-                        throw e;
-                    } catch (Throwable e) {
-                        throw (RuntimeException) e;
-                    }
-                };
+        this(null, execMH, resumeMH);
+    }
+
+    MHJSFunctionCode(Lookup lookup, MethodHandle execMH, MethodHandle resumeMH) {
+        this.execMH = execMH;
+        this.lookup = lookup;
+        if (lookup == null) {
+            exec = handleCall(execMH);
+        }
         resume =
                 resumeMH != null
                         ? (cx, xobj, state, scope, operation, value) -> {
@@ -45,6 +51,18 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
                         };
     }
 
+    private static JSCodeExec<JSFunction> handleCall(MethodHandle execMH) {
+        return (cx, xobj, newTarget, scope, thisObj, args) -> {
+            try {
+                return execMH.invokeExact(cx, xobj, newTarget, scope, thisObj, args);
+            } catch (Error e) {
+                throw e;
+            } catch (Throwable e) {
+                throw (RuntimeException) e;
+            }
+        };
+    }
+
     @Override
     public Object execute(
             Context cx,
@@ -53,7 +71,50 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
             VarScope scope,
             Object thisObj,
             Object[] args) {
+        if (lookup != null) {
+            link();
+        }
         return exec.execute(cx, executableObject, newTarget, scope, thisObj, args);
+    }
+
+    /**
+     * Makes the call go through an instance of a class whose method calls the compiled method
+     * directly, rather than through the method handle, which the JIT does not inline (it is not a
+     * constant). Done on the first call, so that a function that never runs does not get a class.
+     */
+    @SuppressWarnings("unchecked")
+    private synchronized void link() {
+        Lookup l = lookup;
+        if (l == null) {
+            return;
+        }
+        JSCodeExec<JSFunction> direct;
+        try {
+            MethodType sam =
+                    MethodType.methodType(
+                            Object.class,
+                            Context.class,
+                            ScriptOrFn.class,
+                            Object.class,
+                            VarScope.class,
+                            Object.class,
+                            Object[].class);
+            direct =
+                    (JSCodeExec<JSFunction>)
+                            LambdaMetafactory.metafactory(
+                                            l,
+                                            "execute",
+                                            MethodType.methodType(JSCodeExec.class),
+                                            sam,
+                                            execMH,
+                                            execMH.type())
+                                    .getTarget()
+                                    .invoke();
+        } catch (Throwable e) {
+            direct = handleCall(execMH);
+        }
+        exec = direct;
+        lookup = null;
     }
 
     @Override
@@ -75,7 +136,7 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
 
         @Override
         protected MHJSCode<JSFunction> buildCode(MethodHandle exec, MethodHandle resume) {
-            return new MHJSFunctionCode(exec, resume);
+            return new MHJSFunctionCode(lookup, exec, resume);
         }
 
         @Override

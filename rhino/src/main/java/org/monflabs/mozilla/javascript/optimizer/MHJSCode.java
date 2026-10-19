@@ -71,11 +71,15 @@ public abstract class MHJSCode<T extends ScriptOrFn<T>> extends JSCode<T> {
                                     MethodType.fromMethodDescriptorString(
                                             resumeType, env.compiledClass.getClassLoader()));
                 }
+                this.lookup = lookup;
                 return buildCode(exec, resume);
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
                 throw new Error("Gnerated class did not contain expected methods", e);
             }
         }
+
+        /** The lookup of the compiled class, while the code is built. */
+        protected MethodHandles.Lookup lookup;
 
         protected abstract MHJSCode<T> buildCode(MethodHandle exec, MethodHandle resume);
 
