@@ -155,8 +155,7 @@ function f() {
   (in the same function, after the declaration) are not checked; others are checked by one comparison.
 - **Not covered yet:** bindings of a destructuring declaration
   (`let [a, b] = …`, plan 1.3); a read that a `switch` case reaches by
-  jumping over a declaration in a function without closures; a write from a closure is checked before its
-  right-hand side is evaluated, not after.
+  jumping over a declaration in a function without closures.
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 

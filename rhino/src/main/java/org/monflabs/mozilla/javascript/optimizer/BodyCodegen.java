@@ -1629,6 +1629,12 @@ class BodyCodegen {
                         "(Ljava/lang/Object;Ljava/lang/String;)Ljava/lang/Object;");
                 break;
 
+            case Token.TDZ_AFTER:
+                generateExpression(child, node);
+                generateExpression(child.getNext(), node);
+                cfw.add(ByteCode.POP);
+                break;
+
             case Token.TYPEOF:
                 generateExpression(child, node);
                 addScriptRuntimeInvoke("typeof", "(Ljava/lang/Object;" + ")Ljava/lang/String;");

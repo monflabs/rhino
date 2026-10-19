@@ -977,6 +977,13 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 addStringOp(Icode.CHECK_TDZ, node.getString());
                 break;
 
+            case Token.TDZ_AFTER:
+                visitExpression(child, 0);
+                visitExpression(child.getNext(), 0);
+                addIcode(Icode.POP);
+                stackChange(-1);
+                break;
+
             case Token.ITER_OPEN:
                 visitExpression(child, 0);
                 if (node.getProp(Node.LOCAL_BLOCK_PROP) != null) {

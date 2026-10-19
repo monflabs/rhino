@@ -280,7 +280,10 @@ public class Token {
             CLASS_STATIC = FIELD_KEY + 1,
             // #name: a private name of a class; parser only (its string includes the #)
             PRIVATE_NAME = CLASS_STATIC + 1,
-            LAST_TOKEN = PRIVATE_NAME + 1;
+            // the value of its first child, after evaluating its second (a CHECK_TDZ): the
+            // assigned value of a let/const, checked once evaluated
+            TDZ_AFTER = PRIVATE_NAME + 1,
+            LAST_TOKEN = TDZ_AFTER + 1;
 
     /**
      * Returns a name for the token. If Rhino is compiled with certain hardcoded debugging flags in
@@ -675,6 +678,8 @@ public class Token {
                 return "CLASS_STATIC";
             case PRIVATE_NAME:
                 return "PRIVATE_NAME";
+            case TDZ_AFTER:
+                return "TDZ_AFTER";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
             case GET:

@@ -1239,16 +1239,17 @@ public class NodeTransformer {
                                 new Node(Token.COMMA, value, tdzError(target.getString())));
                     }
                     if (kind == TDZ_RUNTIME) {
+                        // PutValue throws once the value is evaluated: the binding is checked
+                        // between the evaluation of the value and the store
                         Node read = Node.newString(Token.NAME, target.getString());
                         read.putIntProp(Node.TDZ_CHECKED_PROP, 1);
                         node.putIntProp(Node.TDZ_CHECKED_PROP, 1);
                         Node check = Node.newString(Token.CHECK_TDZ, target.getString());
                         check.addChildToBack(read);
-                        Node comma = new Node(Token.COMMA);
-                        Node result = replaceCurrent(parent, previous, node, comma);
-                        comma.addChildToBack(check);
-                        comma.addChildToBack(node);
-                        return result;
+                        Node value = target.getNext();
+                        node.removeChild(value);
+                        node.addChildToBack(new Node(Token.TDZ_AFTER, value, check));
+                        return node;
                     }
                     return node;
                 }

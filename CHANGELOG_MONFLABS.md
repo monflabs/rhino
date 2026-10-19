@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### A write in the temporal dead zone throws after its right-hand side (2026-10-19, plan M16)
+
+- Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.2): an assignment from a closure to a `let`/`const`
+  binding that is not initialized yet threw before evaluating its right-hand side; it now evaluates it, then throws
+  (PutValue: SetMutableBinding, ECMA-262 §9.1.1.1.5 step 3), as a write in the same function already did. In
+  `NodeTransformer`, the runtime check sits between the value and the store (`Token.TDZ_AFTER`, which both backends
+  compile to the existing operations). Found by the M16 analysis; test262 does not cover it. A compound assignment
+  (`c += …`) reads the binding first and still throws before its right-hand side.
+- Tests: `TemporalDeadZoneWritesTest`.
+
 ### Arrays stay dense across small gaps (2026-10-19, plan M16)
 
 - Performance (all versions, no observable change): a write to an index below 1,024 grows the dense array of a
