@@ -111,7 +111,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   (`FunctionNode.isVarInRegister`), and `NativeCall` no longer defines them (`JSDescriptor.isParamOrVarInRegister`),
   which saved a property creation per variable and per call.
 - **When it does not apply.** A direct `eval` or `with` in the function or in a nested function, a use of
-  `arguments`, and generators keep every variable in the activation.
+  `arguments`, and generators keep every variable in the activation. So does a function with more than 256 such
+  variables (a module wrapper such as Octane's `pdfjs`), to stay within the 1024 JVM locals of a compiled method.
 - **Semantics.** Code evaluated at runtime in the function's scope other than a direct eval (a legacy `Script`
   object, a host function) no longer sees the variables in registers. Hence `VERSION_ECMASCRIPT` only
   (`BACKWARD_COMPATIBILITY.md` 1.88).

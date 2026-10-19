@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Four compiled-mode fixes found by the JavaScriptPerformance benchmarks (2026-10-19)
+
+- Fixed (all versions, compiled mode): in a generator or async function, a `yield` or `await` in the value of a
+  destructuring pattern (`const [a, b] = await Promise.all(...)`, `var { x } = yield`, `[a, b] = yield`) lost the
+  scope holding the pattern's temporaries: the code generator marked the scope local live only after the
+  initializers of `ENTER_SCOPE`, so it was not saved at the suspension, and the pattern failed with
+  `ReferenceError: "$0" is not defined`. An upstream bug.
+- Fixed (all versions, compiled mode): a generator or async function that returned `null` completed with
+  `undefined` (`OptRuntime.getGeneratorReturnValue` took the Java `null` for "no value"). An upstream bug.
+- Fixed (all versions, compiled mode): an object literal held its object, the home object of its methods, in a JVM
+  local that was never released, so a function with more than about a thousand inline object literals failed to
+  compile ("Program too complex (out of locals)"); and after a nested literal, a method of the outer literal got
+  the inner object as its home object (`super` looked up the wrong prototype). Upstream moves large literals to
+  separate methods, which hid the leak, but not in a function with variables in registers (M14), so Octane's
+  `pdfjs` no longer compiled under `VERSION_ECMASCRIPT`.
+- Fixed (`VERSION_ECMASCRIPT`, compiled mode): a function with an activation object and more than 256 variables
+  that no closure refers to keeps them in the activation instead of registers, within the 1024 JVM locals of a
+  method.
+
 ### `push` and `unshift` without a lookup per element (2026-10-19, plan M16)
 
 - Performance (`VERSION_ECMASCRIPT`): the fast path of `push` and `unshift` on a dense array checked that no

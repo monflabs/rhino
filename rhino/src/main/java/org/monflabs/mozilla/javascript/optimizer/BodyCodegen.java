@@ -2452,6 +2452,8 @@ class BodyCodegen {
                         + ")Lorg/monflabs/mozilla/javascript/VarScope;");
         cfw.add(ByteCode.DUP);
         cfw.addAStore(variableObjectLocal);
+        // live from here: an initializer may yield
+        incReferenceWordLocal(variableObjectLocal);
         int i = 0;
         while (child != null) {
             cfw.add(ByteCode.DUP);
@@ -2467,8 +2469,6 @@ class BodyCodegen {
             i++;
         }
         cfw.add(ByteCode.POP);
-
-        incReferenceWordLocal(variableObjectLocal);
     }
 
     private void visitFunction(OptFunctionNode ofn, int functionType) {
@@ -3033,11 +3033,14 @@ class BodyCodegen {
                 "newObject",
                 "(Lorg/monflabs/mozilla/javascript/VarScope;)Lorg/monflabs/mozilla/javascript/Scriptable;");
         cfw.add(ByteCode.DUP);
+        int outerHomeObjectLocal = savedHomeObjectLocal;
         savedHomeObjectLocal = getNewWordLocal();
         cfw.addAStore(savedHomeObjectLocal);
         cfw.add(ByteCode.DUP);
 
         addLoadProperties(node, child, properties, count);
+        releaseWordLocal(savedHomeObjectLocal);
+        savedHomeObjectLocal = outerHomeObjectLocal;
 
         // stack: [store]
         cfw.add(ByteCode.DUP); // stack: [store, store]

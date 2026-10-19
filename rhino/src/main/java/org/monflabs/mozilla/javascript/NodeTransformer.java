@@ -816,6 +816,12 @@ public class NodeTransformer {
     private Set<String> registerNames;
 
     /**
+     * Above this many variables in registers, a function with an activation object keeps them all
+     * in it: a variable takes up to three JVM locals, of the 1024 that the compiled code may use.
+     */
+    private static final int MAX_REGISTER_VARS = 256;
+
+    /**
      * In a function with an activation object, the names of its parameters and variables that
      * nested functions refer to, which it reads at a fixed position of the activation (null: none).
      */
@@ -863,7 +869,7 @@ public class NodeTransformer {
                 slots.add(name);
             }
         }
-        if (!registers.isEmpty()) {
+        if (!registers.isEmpty() && registers.size() <= MAX_REGISTER_VARS) {
             fn.setRegisterVars(inRegister);
             registerNames = registers;
         }

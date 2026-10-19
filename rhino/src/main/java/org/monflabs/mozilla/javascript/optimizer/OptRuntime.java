@@ -319,7 +319,7 @@ public final class OptRuntime extends ScriptRuntime {
 
     public static Object getGeneratorReturnValue(Object obj) {
         GeneratorState rgs = (GeneratorState) obj;
-        return (rgs.returnValue == null ? Undefined.instance : rgs.returnValue);
+        return rgs.returnValue;
     }
 
     public static boolean isNullOrUndefined(Object obj) {
@@ -360,7 +360,7 @@ public final class OptRuntime extends ScriptRuntime {
         Object[] localsState;
         int maxLocals;
         int maxStack;
-        Object returnValue;
+        Object returnValue = Undefined.instance;
 
         GeneratorState(VarScope activationFrame, Scriptable thisObj, int maxLocals, int maxStack) {
             this.activationFrame = activationFrame;

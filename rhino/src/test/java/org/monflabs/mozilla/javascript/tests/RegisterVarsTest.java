@@ -287,4 +287,16 @@ class RegisterVarsTest {
                         + "}"
                         + "[f(), g(), k(), s()].join('|')");
     }
+
+    @Test
+    void functionWithManyVariablesCompiles() {
+        StringBuilder script = new StringBuilder("function f() { var n = 0;");
+        for (int i = 0; i < 1200; i++) {
+            script.append("var v").append(i).append(" = ").append(i).append("; n++;");
+        }
+        script.append("var get = function () { return v1199; };")
+                .append("return n + ',' + get(); }")
+                .append("f()");
+        assertAllVersions("1200,1199", script.toString());
+    }
 }
