@@ -125,11 +125,21 @@ public final class NativeCall extends DeclarationScope {
      * The value of a variable of the function at a fixed position (JSDescriptor#isActivationVar).
      */
     Object getVar(int index) {
-        return varSlot(index).value;
+        Slot<VarScope> slot = varSlot(index);
+        if (slot == null) {
+            Object value = get(function.getParamOrVarName(index), this);
+            return value == Scriptable.NOT_FOUND ? Undefined.instance : value;
+        }
+        return slot.value;
     }
 
     void setVar(int index, Object value) {
-        varSlot(index).value = value;
+        Slot<VarScope> slot = varSlot(index);
+        if (slot == null) {
+            put(function.getParamOrVarName(index), this, value);
+        } else {
+            slot.value = value;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -139,8 +149,8 @@ public final class NativeCall extends DeclarationScope {
 
     private Slot<VarScope> varSlot(int index) {
         Slot<VarScope> slot = vars[index];
-        if (slot.stale) {
-            // copied into a promoted map
+        if (slot == null || slot.stale) {
+            // copied into a promoted map, or a function declaration defined after the activation
             slot = getMap().query(function.getParamOrVarName(index), 0);
             vars[index] = slot;
         }

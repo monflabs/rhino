@@ -843,11 +843,18 @@ public class NodeTransformer {
         Set<String> dynamic = new HashSet<>();
         Set<String> declared = new HashSet<>();
         if (!scanNames(fn, referenced, dynamic, declared, false)
-                || !scanNestedFunctions(fn, referenced, dynamic, declared)) {
+                || !scanNestedFunctions(fn, referenced, dynamic, declared, true)) {
             return;
         }
         if (activationNames != null) {
             dynamic.addAll(activationNames);
+        }
+        Set<String> declarations = new HashSet<>();
+        for (FunctionNode nested : fn.getFunctions()) {
+            if (nested.getName() != null
+                    && nested.getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
+                declarations.add(nested.getName());
+            }
         }
         List<Symbol> symbols = fn.getSymbols();
         boolean[] inRegister = new boolean[symbols.size()];
@@ -857,6 +864,17 @@ public class NodeTransformer {
         for (Symbol symbol : symbols) {
             Symbol.Type type = symbol.getDeclType();
             String name = symbol.getName();
+            if (type == Symbol.Type.FUNCTION_VAR || declarations.contains(name)) {
+                // a function declaration, stored by name in the activation: never in a register,
+                // at its position when nested functions refer to it
+                if (referenced.contains(name)
+                        && !dynamic.contains(name)
+                        && !name.equals(fn.getName())) {
+                    inSlot[symbol.getIndex()] = true;
+                    slots.add(name);
+                }
+                continue;
+            }
             if ((type != Symbol.Type.VAR && type != Symbol.Type.LP) || dynamic.contains(name)) {
                 continue;
             }
@@ -914,9 +932,16 @@ public class NodeTransformer {
      * false if one of them evaluates code or uses with.
      */
     private static boolean scanNestedFunctions(
-            ScriptNode fn, Set<String> referenced, Set<String> dynamic, Set<String> declared) {
+            ScriptNode fn,
+            Set<String> referenced,
+            Set<String> dynamic,
+            Set<String> declared,
+            boolean direct) {
         for (FunctionNode nested : fn.getFunctions()) {
-            if (nested.getName() != null) {
+            if (nested.getName() != null
+                    && (!direct || nested.getFunctionType() != FunctionNode.FUNCTION_STATEMENT)) {
+                // the name of a function expression is bound inside it; a declaration of the
+                // function itself is a binding of its own (see keepVarsInRegisters)
                 dynamic.add(nested.getName());
             }
             if (nested.getSymbolTable() != null) {
@@ -931,7 +956,7 @@ public class NodeTransformer {
                             declared,
                             true)
                     || !scanNames(destructuring, referenced, dynamic, declared, true)
-                    || !scanNestedFunctions(nested, referenced, dynamic, declared)) {
+                    || !scanNestedFunctions(nested, referenced, dynamic, declared, false)) {
                 return false;
             }
         }

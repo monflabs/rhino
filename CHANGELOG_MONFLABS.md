@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Function declarations at their position in the activation (2026-10-20)
+
+- Performance (`VERSION_ECMASCRIPT`, no observable change): the function declarations of a function with an
+  activation object that its nested functions refer to are read at their position in the activation, like its
+  captured `var`s (M14), and a call of such a name in compiled code reads that position instead of looking the
+  name up (`ScriptRuntime.getVarAndThis`, `this` undefined as for a name found in an activation). The names of
+  nested function expressions stay dynamic (bound inside the expression). SunSpider `math-spectral-norm` in the
+  JavaScriptPerformance wrapper: 2,450 ms → 2,358 ms compiled; level for a function with few names.
+
 ### Compiled functions called without a method handle (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): upstream calls a compiled function through

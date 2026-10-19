@@ -4080,6 +4080,21 @@ public class ScriptRuntime {
      * Prepare for calling &lt;expression&gt;(...): return function corresponding to
      * &lt;expression&gt; and make parent scope of the function available in the result.
      */
+    /**
+     * A function called by name, read at a fixed position of an activation (Node#OUTER_VAR_PROP,
+     * Node#ACTIVATION_VAR_PROP): this is undefined, as for a name found in an activation, and an
+     * error names it.
+     */
+    public static LookupResult getVarAndThis(
+            Object value, String name, boolean isOptionalChainingCall) {
+        if (isOptionalChainingCall
+                && !(value instanceof Callable)
+                && (value == null || Undefined.isUndefined(value))) {
+            return null;
+        }
+        return new LookupResult(value, Undefined.SCRIPTABLE_UNDEFINED, name);
+    }
+
     public static LookupResult getValueAndThis(Object value, Context cx) {
         return getValueAndThisInner(value, cx, false);
     }

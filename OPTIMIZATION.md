@@ -143,6 +143,15 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** A closure reading and writing captured variables in a loop: 202 ms → 50 ms compiled, 571 ms → 517 ms
   interpreted. `VERSION_ECMASCRIPT`.
 
+- **Function declarations** (2026-10-20). The function declarations of the function take positions too when
+  nested functions refer to them (they are defined in the activation when the body starts, so `NativeCall`
+  finds their slot on first use), and a call of such a name in compiled code reads the position
+  (`ScriptRuntime.getVarAndThis`) instead of `getNameAndThis`. A declaration is never in a register, since it is
+  stored by name; the names of function expressions stay out, since they are bound inside the expression. The
+  interpreter reads the positions but still calls by name (no icode left). Gain: `math-spectral-norm` in the
+  JavaScriptPerformance wrapper (four nested declarations called by name) 2,450 ms → 2,358 ms compiled; level when
+  the activation holds only a few names, whose lookup costs about as much as `outerActivation`.
+
 ### Per-site cache of properties found on the prototype chain
 
 - **What.** A named property get or method lookup (`o.p`, `o.m()`) has a `PropertyCache`. For a receiver of the
@@ -366,7 +375,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 |---|---|---|
 | Skip the non-BMP code point list for BMP characters in regexp classes | level over 12 runs | JFR showed `ArrayList.contains` at 6–20%; the samples moved to the matcher's other frames |
 | `Number` fast path at the start of `ScriptRuntime.toNumeric` | level | the JIT already folds `toPrimitive` for numbers |
-| Cache the top-level scope of a function for its global `this` (`JSFunction.getThisObj`) | level (`math-spectral-norm`) | the `getTopLevelScope` samples moved to the method-handle call (see above) |
+| Cache the top-level scope of a function for its global `this` (`JSFunction.getThisObj`) | level, then +9% (`math-spectral-norm`) | the `getTopLevelScope` samples first moved to the method-handle call; once that was fixed, the larger `getThisObj` cost more than the walk it saved |
 | A BMP fast path in the regexp matcher | +2% | below noise; `v8-regexp` +5% interpreted comes from the matcher's growth, with no single hotspot |
 | Prototype-chain cache at every get site | richards 2× slower in the full run | code size and profile pollution at own-property sites; linked at inherited sites only |
 | Devirtualizing `EmbeddedSlotMap.query` (exact-class check) | level | the cost is the chain of dependent loads in the lookup |

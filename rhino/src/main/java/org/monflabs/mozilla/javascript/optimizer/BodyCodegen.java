@@ -3667,6 +3667,18 @@ class BodyCodegen {
                 }
 
             case Token.NAME:
+                if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1
+                        || node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
+                    // at its position in an activation
+                    generateExpression(node, parent);
+                    cfw.addPush(node.getString());
+                    cfw.addPush(isOptionalChainingCall);
+                    addScriptRuntimeInvoke(
+                            "getVarAndThis",
+                            "(Ljava/lang/Object;Ljava/lang/String;Z)"
+                                    + "Lorg/monflabs/mozilla/javascript/ScriptRuntime$LookupResult;");
+                    break;
+                }
                 {
                     String name = node.getString();
                     cfw.addALoad(variableObjectLocal);
