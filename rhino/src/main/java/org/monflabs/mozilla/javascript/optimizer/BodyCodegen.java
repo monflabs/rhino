@@ -938,7 +938,11 @@ class BodyCodegen {
                         "(Lorg/monflabs/mozilla/javascript/VarScope;"
                                 + ")Lorg/monflabs/mozilla/javascript/VarScope;");
                 cfw.addAStore(variableObjectLocal);
-                decReferenceWordLocal(variableObjectLocal);
+                if (node.getIntProp(Node.JUMP_EXIT_PROP, 0) == 0) {
+                    // a jump out leaves the scope open for the code after it (the locals live
+                    // across a yield)
+                    decReferenceWordLocal(variableObjectLocal);
+                }
                 break;
 
             case Token.GLOBAL_LEXICALS:

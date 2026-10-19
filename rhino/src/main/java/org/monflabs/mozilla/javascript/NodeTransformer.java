@@ -248,6 +248,7 @@ public class NodeTransformer {
                                     unwind = jsrnode;
                                 } else {
                                     unwind = new Node(Token.LEAVE_SCOPE);
+                                    unwind.putIntProp(Node.JUMP_EXIT_PROP, 1);
                                 }
                                 if (unwindBlock == null) {
                                     unwindBlock = new Node(Token.BLOCK);
@@ -310,6 +311,7 @@ public class NodeTransformer {
                                     || elemtype == Token.SCOPEEXPR
                                     || elemtype == Token.SCOPE_BLOCK) {
                                 Node leave = new Node(Token.LEAVE_SCOPE);
+                                leave.putIntProp(Node.JUMP_EXIT_PROP, 1);
                                 previous = addBeforeCurrent(parent, previous, node, leave);
                             } else if (elemtype == Token.TRY) {
                                 Jump tryNode = (Jump) n;
@@ -694,6 +696,7 @@ public class NodeTransformer {
             result = new Node(isExpression ? Token.COMMA : Token.BLOCK);
             result = replaceCurrent(parent, previous, scopeNode, result);
             newVars = new Node(Token.COMMA);
+            boolean destructuring = scopeNode.getProp(Node.DESTRUCTURING_NAMES) != null;
             for (Node v = vars.getFirstChild(); v != null; v = v.getNext()) {
                 Node current = v;
                 if (current.getType() == Token.LETEXPR) {
@@ -724,9 +727,13 @@ public class NodeTransformer {
                     continue; // Already processed all children, move to next sibling of LETEXPR
                 }
                 if (current.getType() != Token.NAME) throw Kit.codeBug();
+                Node init = current.getFirstChild();
+                if (init == null && destructuring) {
+                    // a temporary of the pattern, written before it is read
+                    continue;
+                }
                 Node stringNode = Node.newString(current.getString());
                 stringNode.setScope((Scope) scopeNode);
-                Node init = current.getFirstChild();
                 if (init == null) {
                     init = new Node(Token.VOID, Node.newNumber(0.0));
                 }

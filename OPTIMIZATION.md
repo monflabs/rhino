@@ -237,6 +237,51 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** `v8-crypto` 46–52 ms → 36 ms compiled, −3% interpreted; a 300-element array filled downward 26 ms →
   13 ms compiled. All versions.
 
+### Array patterns without temporaries and guards
+
+- **What** (M16, 16.9). An array pattern compiles to an `ITER_OPEN`, one `ITER_STEP` per element and an
+  `ITER_CLOSE`, inside a statement-wide `try`/`finally` that closes the iterators left open by an abrupt completion
+  (`IRFactory.guardIterators`). Three changes trim that code:
+  - an element that is a plain name is assigned the step directly, without a temporary;
+  - the temporaries of a pattern are not initialized to `undefined` (`NodeTransformer.visitLet`): each is written
+    before it is read;
+  - a pattern that only binds names (holes and a rest element included) in a `let`/`const` declaration or a
+    parameter list is not guarded (`Node.UNGUARDED_ITERATOR_PROP`).
+
+  At run time, `IteratorRecord.open` recognizes a plain array of the realm whose iteration methods are the original
+  ones without looking them up: `TopLevel.arrayIteration` holds the slots of `Array.prototype[Symbol.iterator]` and
+  `%ArrayIteratorPrototype%.next` with their original values, and `IteratorRecord.step` reads a `NativeArray` by
+  `int` index.
+- **Correctness.** Initializing a `let`, `const` or parameter binding cannot throw, and an iterator whose step
+  throws is done, so nothing can leave the iterator of such a pattern open. A cached slot is valid while it is not
+  `stale` (it leaves its map when deleted, replaced by an accessor, or when its map is rebuilt) and holds the same
+  value; the array must not have an own `Symbol.iterator`. Otherwise the slots are looked up again, as before.
+  Assigning the step directly also resolves the target before the iterator is stepped, which is the specification's
+  order (13.15.5.5) and was not the case before. Dropping the guard exposed a bug of compiled generators that
+  it hid (a `return` in a `for await (const x …)` loop, see `CHANGELOG_MONFLABS.md`), fixed with it.
+- **Gain.** 300,000 executions, compiled / interpreted: `let [x, y, z] = a` 7 ms → 4 ms / 130 ms → 58 ms (ES6: 3 /
+  49 ms); `[x, y, z] = a` 6 ms → 3 ms / 127 ms → 79 ms; the swap `[x, y] = [y, x]` 9 ms → 5 ms / 104 ms → 79 ms; a
+  destructured parameter 12 ms → 8 ms / 136 ms → 102 ms; `for (const [k, v] of pairs)` 7 ms → 5 ms / 71 ms → 43 ms.
+  `VERSION_ECMASCRIPT` (the older versions read the elements by index).
+
+### Array species without lookups
+
+- **What** (M16, 16.10). `slice`, `splice`, `concat`, `map`, `filter` and `flat`/`flatMap` create their result
+  through ArraySpeciesCreate: a lookup of `constructor` along the chain of the array, a cross-realm check, and a call
+  of the `Symbol.species` getter, then a construction through the `Array` constructor. When the array is a plain
+  `NativeArray` whose prototype is the `Array.prototype` of the realm, without an own `constructor`, and
+  `Array.prototype.constructor` and `Array[Symbol.species]` are the original ones, the result is created directly
+  (`ArrayLikeAbstractOperations.ArraySpecies`, cached in `TopLevel.arraySpecies`).
+- **Correctness.** As for array iteration, the cache holds the slots: `constructor` must not be `stale` and must
+  hold the original `Array`; the species accessor must not be `stale` and must hold the original getter, since
+  `defineProperty` changes an accessor in place. The original getter returns its receiver, so the species of the
+  original `Array` is `Array`, which creates the same array as `cx.newArray`. The original getter is recognized
+  by its Java lambda (`ScriptRuntimeES6.isSpeciesGetter`), not by calling it: a first version called the getter to
+  check it, which test262 caught (`create-proto-from-ctor-realm-*` count the calls of a replaced getter).
+- **Gain.** 200,000 calls on an 8-element array, compiled, `VERSION_ECMASCRIPT`: `concat` 41 ms → 24 ms, `slice`
+  22 ms → 17 ms, `splice` 23 ms → 17 ms; interpreted `concat` 58 ms → 43 ms. `map` and `filter` are dominated by
+  the callback. All versions.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

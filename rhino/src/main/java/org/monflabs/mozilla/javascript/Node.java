@@ -97,7 +97,13 @@ public class Node implements Iterable<Node> {
             // activation object: the number of functions out (high byte) and the index of the
             // variable (ScriptRuntime#getOuterVar)
             OUTER_VAR_PROP = 47,
-            LAST_PROP = OUTER_VAR_PROP,
+            // ITER_OPEN of an array pattern that cannot complete abruptly while its iterator is
+            // open: its statement does not guard it (IRFactory#guardIterators)
+            UNGUARDED_ITERATOR_PROP = 48,
+            // LEAVE_SCOPE of a jump out of its scope (break, continue, return): the scope is still
+            // open in the code that follows
+            JUMP_EXIT_PROP = 49,
+            LAST_PROP = JUMP_EXIT_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -533,6 +539,10 @@ public class Node implements Iterable<Node> {
                 return "activation_var_prop";
             case OUTER_VAR_PROP:
                 return "outer_var_prop";
+            case UNGUARDED_ITERATOR_PROP:
+                return "unguarded_iterator_prop";
+            case JUMP_EXIT_PROP:
+                return "jump_exit_prop";
 
             default:
                 Kit.codeBug();

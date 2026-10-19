@@ -35,18 +35,23 @@ public class ScriptRuntimeES6 {
         constructor.defineOwnProperty(cx, SymbolKey.SPECIES, desc, false);
     }
 
+    /** The get [Symbol.species] of the built-in constructors: the constructor itself. */
+    static final SerializableCallable SPECIES_GETTER =
+            (Context lcx, VarScope lscope, Object thisObj, Object[] args) -> thisObj;
+
+    /** Whether getter is the get [Symbol.species] of a built-in constructor. */
+    static boolean isSpeciesGetter(Object getter) {
+        return getter instanceof LambdaFunction
+                && ((LambdaFunction) getter).target == SPECIES_GETTER;
+    }
+
     public static DescriptorInfo symbolSpecies(
             Context cx, VarScope scope, ScriptableObject constructor) {
         return new DescriptorInfo(
                 false,
                 ScriptableObject.NOT_FOUND,
                 true,
-                new LambdaFunction(
-                        scope,
-                        "get [Symbol.species]",
-                        0,
-                        (Context lcx, VarScope lscope, Object thisObj, Object[] args) -> thisObj,
-                        false),
+                new LambdaFunction(scope, "get [Symbol.species]", 0, SPECIES_GETTER, false),
                 ScriptableObject.NOT_FOUND,
                 ScriptableObject.NOT_FOUND);
     }

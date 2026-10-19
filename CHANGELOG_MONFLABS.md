@@ -6,6 +6,30 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Array patterns and array species without lookups (2026-10-19, plan M16)
+
+- Performance (`VERSION_ECMASCRIPT`): an array pattern assigns a plain name element the iterator step directly,
+  its temporaries are no longer initialized to `undefined`, and a pattern that only binds names in a `let`/`const`
+  declaration or a parameter list is no longer wrapped in the `try`/`finally` that closes its iterator (nothing in
+  it can throw while the iterator is open). `IteratorRecord.open` recognizes an array whose iteration methods are
+  the original ones from slots cached in the realm (`TopLevel.arrayIteration`), and steps a `NativeArray` by `int`
+  index. 300,000 executions, compiled / interpreted: `let [x, y, z] = a` 7 ms → 4 ms / 130 ms → 58 ms,
+  `[x, y] = [y, x]` 9 ms → 5 ms / 104 ms → 79 ms, `for (const [k, v] of pairs)` 7 ms → 5 ms / 71 ms → 43 ms.
+- Fixed (`VERSION_ECMASCRIPT`): the target of a name element is resolved before the iterator is stepped
+  (13.15.5.5 IteratorDestructuringAssignmentEvaluation), observable with a `with` statement over a proxy.
+- Performance (all versions, no observable change): ArraySpeciesCreate (`slice`, `splice`, `concat`, `map`,
+  `filter`, `flat`, `flatMap`) creates a plain array directly when the array inherits the original
+  `Array.prototype.constructor` and `Array[Symbol.species]` of the realm, checked from slots cached in the realm
+  (`TopLevel.arraySpecies`). Compiled, 200,000 calls: `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms, `splice`
+  23 ms → 17 ms.
+- Fixed (all versions, compiled mode): in a compiled generator or async function, a `return`, `break` or
+  `continue` that leaves a block scope held in a scope object (such as the `const` of a `for await` loop) made the
+  code generator treat the scope as closed for the code after the jump, so a later `await` or `yield` in that scope
+  did not save it: `for await (const x of …) { return; }` failed with a `NullPointerException`, or a
+  "redeclaration" error when an outer `x` existed. The `LEAVE_SCOPE` of a jump (`Node.JUMP_EXIT_PROP`) no longer
+  counts. The statement-wide guard of array patterns hid it in test262 (`for-await-of/*-ary-ptrn-rest-id-iter-close`).
+- Tests: `ArrayIterationCacheTest`, `ArraySpeciesCacheTest`, `AsyncIterationTest.forAwaitLeftByAJump`.
+
 ### A write in the temporal dead zone throws after its right-hand side (2026-10-19, plan M16)
 
 - Fixed (`VERSION_ECMASCRIPT`, `BACKWARD_COMPATIBILITY.md` 1.2): an assignment from a closure to a `let`/`const`

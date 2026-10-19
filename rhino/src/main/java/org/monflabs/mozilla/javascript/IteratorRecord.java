@@ -37,6 +37,11 @@ final class IteratorRecord {
 
     /** GetIterator(value, sync). */
     static IteratorRecord open(Object value, Context cx, VarScope scope) {
+        if (value != null
+                && value.getClass() == NativeArray.class
+                && iteratesByIndex((NativeArray) value, scope)) {
+            return new IteratorRecord(null, null, (Scriptable) value, null);
+        }
         if (value == null || Undefined.isUndefined(value)) {
             throw ScriptRuntime.typeErrorById("msg.not.iterable", ScriptRuntime.toString(value));
         }
@@ -72,6 +77,85 @@ final class IteratorRecord {
         return new IteratorRecord(it, next, null, builtIn ? (ES6Iterator) it : null);
     }
 
+    /**
+     * Whether an array inherits the original iteration methods of the realm of scope: its iterator
+     * reads it by index. The slots of these methods are cached in the realm and checked in place.
+     */
+    private static boolean iteratesByIndex(NativeArray array, VarScope scope) {
+        Scriptable proto = array.getPrototype();
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        ArrayIteration iteration = top.arrayIteration;
+        if (iteration == null || iteration.arrayPrototype != proto || !iteration.isIntact()) {
+            iteration = ArrayIteration.of(proto, top);
+            if (iteration == null) {
+                return false;
+            }
+            top.arrayIteration = iteration;
+        }
+        return array.getMap().query(SymbolKey.ITERATOR, 0) == null;
+    }
+
+    /**
+     * The original Array.prototype[Symbol.iterator] and %ArrayIteratorPrototype%.next of a realm,
+     * with the slots that hold them: they are unchanged while the slots are still in their maps
+     * ({@link Slot#stale}) and hold the same values.
+     */
+    static final class ArrayIteration {
+        final Scriptable arrayPrototype;
+        private final Slot<?> iterator;
+        private final Object values;
+        private final Slot<?> next;
+        private final Object nextMethod;
+
+        private ArrayIteration(
+                Scriptable arrayPrototype,
+                Slot<?> iterator,
+                Object values,
+                Slot<?> next,
+                Object nextMethod) {
+            this.arrayPrototype = arrayPrototype;
+            this.iterator = iterator;
+            this.values = values;
+            this.next = next;
+            this.nextMethod = nextMethod;
+        }
+
+        boolean isIntact() {
+            return !iterator.stale
+                    && iterator.value == values
+                    && !next.stale
+                    && next.value == nextMethod;
+        }
+
+        /** The iteration methods of the realm of top, if arrayPrototype has the original ones. */
+        static ArrayIteration of(Scriptable arrayPrototype, TopLevel top) {
+            if (arrayPrototype != ScriptableObject.getClassPrototype(top, "Array")
+                    || !(arrayPrototype instanceof ScriptableObject)) {
+                return null;
+            }
+            Slot<?> iterator =
+                    ((ScriptableObject) arrayPrototype).getMap().query(SymbolKey.ITERATOR, 0);
+            if (!(iterator instanceof StandardSlot)
+                    || !(iterator.value instanceof JSFunction)
+                    || ((JSFunction) iterator.value).getDescriptor()
+                            != NativeArray.VALUES_DESCRIPTOR) {
+                return null;
+            }
+            Scriptable iteratorPrototype = NativeArrayIterator.prototype(top);
+            if (!(iteratorPrototype instanceof ScriptableObject)) {
+                return null;
+            }
+            Slot<?> next = ((ScriptableObject) iteratorPrototype).getMap().query("next", 0);
+            if (!(next instanceof StandardSlot)
+                    || !(next.value instanceof JSFunction)
+                    || ((JSFunction) next.value).getDescriptor()
+                            != NativeArrayIterator.NEXT_DESCRIPTOR) {
+                return null;
+            }
+            return new ArrayIteration(arrayPrototype, iterator, iterator.value, next, next.value);
+        }
+    }
+
     static boolean hasOriginalArrayIteratorNext(VarScope scope) {
         Scriptable prototype = NativeArrayIterator.prototype(scope);
         if (prototype == null) {
@@ -95,6 +179,13 @@ final class IteratorRecord {
             if (index >= NativeArray.getLengthProperty(cx, array)) {
                 done = true;
                 return Undefined.instance;
+            }
+            if (array instanceof NativeArray) {
+                Object value = array.get((int) index, array);
+                if (value != Scriptable.NOT_FOUND) {
+                    index++;
+                    return value;
+                }
             }
             return ScriptRuntime.getObjectIndex(array, (double) index++, cx, scope);
         }

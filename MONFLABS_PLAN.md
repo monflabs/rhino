@@ -823,7 +823,10 @@ loop 271 ms → 180 ms compiled. **16.3 (done)** object literals without accesso
 365 ms → 13 ms for 30,000 (compiled). **16.5 (dropped)** assignments looking the property up once: three versions
 gained alone (own writes 48 ms → 20 ms) and regressed `v8-richards` by 58–74% in the gate. **16.6 (done)** integers convert
 to strings without the double formatter, `"x" + i` 22 ms → 7 ms (compiled), `join` 2.8 times faster. **16.7 (done)** arrays stay dense across gaps below 1,024, `v8-crypto` −22% compiled. **16.8 (done)** a
-write from a closure to a binding in its temporal dead zone throws after its right-hand side.
+write from a closure to a binding in its temporal dead zone throws after its right-hand side. **16.9 (done)** array
+patterns without temporaries, without a guard when they only bind names in a declaration, and arrays recognized
+from slots cached in the realm: `let [x, y, z] = a` 7 ms → 4 ms compiled, 130 ms → 58 ms interpreted. **16.10
+(done)** array species from slots cached in the realm, `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms compiled.
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math

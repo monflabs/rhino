@@ -7152,11 +7152,13 @@ public class Parser {
         String iteratorName = null;
         if (useIterator) {
             iteratorName = defineTemp();
+            Node open = new Node(Token.ITER_OPEN, createName(tempName));
+            if (bindsNamesOnly(array, variableType, isFunctionParameter)) {
+                // only the iterator itself can throw before it is done
+                open.putIntProp(Node.UNGUARDED_ITERATOR_PROP, 1);
+            }
             parent.addChildToBack(
-                    new Node(
-                            Token.SETNAME,
-                            createName(Token.BINDNAME, iteratorName, null),
-                            new Node(Token.ITER_OPEN, createName(tempName))));
+                    new Node(Token.SETNAME, createName(Token.BINDNAME, iteratorName, null), open));
             ++iteratorOpenCount;
         }
         boolean empty = !useIterator;
@@ -7231,6 +7233,24 @@ public class Parser {
                 continue;
             }
 
+            if (useIterator && n.getType() == Token.NAME) {
+                // [x] = a: the binding is resolved before the iterator is stepped
+                String name = n.getString();
+                parent.addChildToBack(
+                        destructuringSet(
+                                setOp,
+                                name,
+                                new Node(Token.ITER_STEP, createName(iteratorName)),
+                                variableType));
+                if (variableType != -1) {
+                    defineSymbol(variableType, name, true);
+                    destructuringNames.add(name);
+                }
+                index++;
+                empty = false;
+                continue;
+            }
+
             Node rightElem;
             if (useIterator) {
                 String elemName = defineTemp();
@@ -7282,6 +7302,24 @@ public class Parser {
             parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
         }
         return empty;
+    }
+
+    /**
+     * Whether an array pattern only initializes parameters or let or const bindings by name, holes
+     * and a rest element included: such an initialization cannot throw.
+     */
+    private static boolean bindsNamesOnly(
+            ArrayLiteral array, int variableType, boolean isFunctionParameter) {
+        if (variableType != Token.LET && variableType != Token.CONST && !isFunctionParameter) {
+            return false;
+        }
+        for (AstNode n : array.getElements()) {
+            AstNode target = n instanceof Spread ? ((Spread) n).getExpression() : n;
+            if (target.getType() != Token.NAME && target.getType() != Token.EMPTY) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -8106,8 +8144,8 @@ public class Parser {
         } finally {
             popScope();
         }
-        destructuringLet.addChildToBack(
-                createName(Token.NAME, name, new Node(Token.VOID, Node.newNumber(0.0))));
+        // written before it is read: no initializer
+        destructuringLet.addChildToBack(createName(Token.NAME, name, null));
         return name;
     }
 

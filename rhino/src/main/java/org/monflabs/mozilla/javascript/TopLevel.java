@@ -515,6 +515,14 @@ public class TopLevel extends ScopeObject {
         return ScriptableObject.getProperty(globalThis, name);
     }
 
+    /** The original array iteration methods of this realm, see IteratorRecord#open. */
+    transient IteratorRecord.ArrayIteration arrayIteration;
+
+    /**
+     * The original Array species of this realm, see ArrayLikeAbstractOperations#arraySpeciesCreate.
+     */
+    transient ArrayLikeAbstractOperations.ArraySpecies arraySpecies;
+
     /**
      * Whether this scope holds global lexical declarations: the top-level let/const of scripts
      * compiled for {@link Context#VERSION_ECMASCRIPT}, which live in this scope (the declarative

@@ -109,6 +109,20 @@ class AsyncIterationTest {
     }
 
     @Test
+    void forAwaitLeftByAJump() {
+        assertLog(
+                "1,returned,1,broken,2,continued",
+                "var x = 'outer';\n"
+                        + "async function r() { for await (const x of [1]) { log.push(x); return; } }\n"
+                        + "async function b() { for await (const x of [1]) { log.push(x); break; } }\n"
+                        + "async function c() { for await (const x of [1, 2]) {"
+                        + " if (x == 1) continue; log.push(x); } }\n"
+                        + "r().then(() => log.push('returned'))"
+                        + ".then(b).then(() => log.push('broken'))"
+                        + ".then(c).then(() => log.push('continued'));");
+    }
+
+    @Test
     void forAsyncOfIsGated() {
         Utils.assertGatedBehavior(
                 "ok",

@@ -258,7 +258,9 @@ public final class IRFactory {
     /** Tags the ITER_OPEN of a statement that no inner statement guards yet. */
     private static boolean tagIteratorOpens(Node node, Node guard) {
         boolean tagged = false;
-        if (node.getType() == Token.ITER_OPEN && node.getProp(Node.LOCAL_BLOCK_PROP) == null) {
+        if (node.getType() == Token.ITER_OPEN
+                && node.getProp(Node.LOCAL_BLOCK_PROP) == null
+                && node.getIntProp(Node.UNGUARDED_ITERATOR_PROP, 0) == 0) {
             node.putProp(Node.LOCAL_BLOCK_PROP, guard);
             tagged = true;
         }

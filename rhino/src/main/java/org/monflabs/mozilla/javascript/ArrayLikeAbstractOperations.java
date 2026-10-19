@@ -202,6 +202,12 @@ public class ArrayLikeAbstractOperations {
 
     /** ArraySpeciesCreate (ECMA-262 10.4.2.3). */
     static Scriptable arraySpeciesCreate(Context cx, VarScope scope, Object o, long length) {
+        if (length <= Integer.MAX_VALUE
+                && o != null
+                && o.getClass() == NativeArray.class
+                && ArraySpecies.createsArray((NativeArray) o, scope)) {
+            return cx.newArray(scope, (int) length);
+        }
         if (!cx.isLatestEcmaScript()) {
             return legacyArraySpeciesCreate(cx, scope, o, (int) length);
         }
@@ -240,6 +246,88 @@ public class ArrayLikeAbstractOperations {
             throw ScriptRuntime.rangeError(msg);
         }
         return cx.newArray(scope, (int) length);
+    }
+
+    /**
+     * The original Array.prototype.constructor and Array[Symbol.species] of a realm, with the slots
+     * that hold them: they are unchanged while the slots are still in their maps ({@link
+     * Slot#stale}) and hold the same value and getter.
+     */
+    static final class ArraySpecies {
+        final Scriptable arrayPrototype;
+        private final Slot<?> constructor;
+        private final Object array;
+        private final AccessorSlot species;
+        private final Object getter;
+
+        private ArraySpecies(
+                Scriptable arrayPrototype,
+                Slot<?> constructor,
+                Object array,
+                AccessorSlot species,
+                Object getter) {
+            this.arrayPrototype = arrayPrototype;
+            this.constructor = constructor;
+            this.array = array;
+            this.species = species;
+            this.getter = getter;
+        }
+
+        boolean isIntact() {
+            return !constructor.stale
+                    && constructor.value == array
+                    && !species.stale
+                    && species.getter == getter;
+        }
+
+        /**
+         * Whether ArraySpeciesCreate of an array creates an array of the realm of scope: the array
+         * inherits the original constructor of that realm, whose species is itself.
+         */
+        static boolean createsArray(NativeArray o, VarScope scope) {
+            TopLevel top = ScriptableObject.getTopLevelScope(scope);
+            ArraySpecies species = top.arraySpecies;
+            if (species == null
+                    || species.arrayPrototype != o.getPrototype()
+                    || !species.isIntact()) {
+                species = of(o.getPrototype(), top);
+                if (species == null) {
+                    return false;
+                }
+                top.arraySpecies = species;
+            }
+            return o.getMap().query("constructor", 0) == null;
+        }
+
+        private static ArraySpecies of(Scriptable arrayPrototype, TopLevel top) {
+            if (arrayPrototype == null
+                    || arrayPrototype != ScriptableObject.getClassPrototype(top, "Array")) {
+                return null;
+            }
+            Slot<?> constructor =
+                    ((ScriptableObject) arrayPrototype).getMap().query("constructor", 0);
+            Object array = top.getBuiltinCtor(TopLevel.Builtins.Array);
+            if (constructor == null
+                    || constructor instanceof AccessorSlot
+                    || constructor.value != array
+                    || !(array instanceof ScriptableObject)) {
+                return null;
+            }
+            Slot<?> species = ((ScriptableObject) array).getMap().query(SymbolKey.SPECIES, 0);
+            if (!(species instanceof AccessorSlot)
+                    || !(((AccessorSlot) species).getter instanceof AccessorSlot.FunctionGetter)
+                    || !ScriptRuntimeES6.isSpeciesGetter(
+                            ((AccessorSlot.FunctionGetter) ((AccessorSlot) species).getter)
+                                    .target)) {
+                return null;
+            }
+            return new ArraySpecies(
+                    arrayPrototype,
+                    constructor,
+                    array,
+                    (AccessorSlot) species,
+                    ((AccessorSlot) species).getter);
+        }
     }
 
     /** ArraySpeciesCreate of stock Rhino, before VERSION_ECMASCRIPT. */
