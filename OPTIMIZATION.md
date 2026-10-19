@@ -228,6 +228,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 | Devirtualizing `EmbeddedSlotMap.query` (exact-class check) | level | the cost is the chain of dependent loads in the lookup |
 | A per-site cache of own slots by map | not worth it | maps belong to objects, not to shared shapes: a site only hits for a single object |
 | Hash mixing of integral `Double` keys in `Map`/`Set` | slower | loses the locality of sequential keys |
+| `putProperty` with one lookup (M16, 16.5): the receiver's map queried once, an own writable data property written directly | richards +58–74% in the gate, three versions | an exact `NativeObject` check with or without the prototype walk for new properties, with or without a method split to keep `putProperty` inlinable; own writes 48 ms → 20 ms and constructors 155 ms → 86 ms alone, but `v8-richards` (and once `sort`) regressed in the full gate run every time |
 | Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
 
 ## Second pass (M16)

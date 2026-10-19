@@ -6,6 +6,13 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Tests of property assignments (2026-10-19, plan M16)
+
+- `PropertyAssignmentTest`: assignments to own, inherited, accessor, read-only, frozen, sealed and non-extensible
+  properties, in loops where the prototype changes. Written for 16.5 (assignments looking the property up once),
+  which was dropped: every version of it regressed `v8-richards` in the perf gate (see `OPTIMIZATION.md`). No
+  engine change.
+
 ### Compiled generators complete without a stack trace (2026-10-19, plan M16)
 
 - Performance (all versions, no observable change): a compiled generator (and so an async function) signals its
