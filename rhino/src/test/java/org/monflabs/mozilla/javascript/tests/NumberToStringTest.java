@@ -371,4 +371,35 @@ public class NumberToStringTest {
         // An undefined value to toPrecision is the same as toString
         assertEquals(expected, ScriptRuntime.toString(v));
     }
+
+    @Test
+    public void integersAroundTheSafeRange() {
+        Object[][] cases = {
+            {"0", 0.0},
+            {"0", -0.0},
+            {"-1", -1.0},
+            {"2147483648", 2147483648.0},
+            {"-2147483649", -2147483649.0},
+            {"9007199254740991", 9007199254740991.0},
+            {"-9007199254740991", -9007199254740991.0},
+            {"9007199254740992", 9007199254740992.0},
+            {"1152921504606847000", Math.pow(2, 60)},
+            {"100000000000000000000", 1e20},
+            {"1e+21", 1e21},
+            {"0.5", 0.5},
+            {"NaN", Double.NaN},
+            {"-Infinity", Double.NEGATIVE_INFINITY}
+        };
+        for (Object[] c : cases) {
+            double d = (Double) c[1];
+            assertEquals(c[0], ScriptRuntime.toString(d), "toString(double) " + d);
+            assertEquals(c[0], ScriptRuntime.toString((Object) d), "toString(Object) " + d);
+        }
+        assertEquals("-2147483648", ScriptRuntime.toString((Object) Integer.MIN_VALUE));
+        // Math.abs(Long.MIN_VALUE) is negative: the bound is checked on the double
+        assertEquals("-9223372036854776000", ScriptRuntime.toString((Object) Long.MIN_VALUE));
+        assertEquals("9223372036854776000", ScriptRuntime.toString((Object) Long.MAX_VALUE));
+        assertEquals("-9223372036854776000", ScriptRuntime.toString((double) Long.MIN_VALUE));
+        assertEquals("0", ScriptRuntime.toString((Object) 0));
+    }
 }

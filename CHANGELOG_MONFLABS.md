@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Integers convert to strings without the double formatter (2026-10-19, plan M16)
+
+- Performance (all versions, no observable change): `ScriptRuntime.toString` gives an `Integer` its `Integer.toString`
+  and an integral double below 2^53 (but `-0`) its `Long.toString`, instead of the shortest-digits algorithm of
+  `DoubleFormatter`: below 2^53 the digits of the integer are the shortest that round-trip, so the result is the
+  same. Compiled, 1 million conversions: `String(i)` 32 ms → 15 ms, `"x" + i` 22 ms → 7 ms; `[...].join()` of
+  1,000 integers 2.8 times faster in both modes; `JSON.stringify` of objects with integer values 94 ms → 81 ms.
+  Fractional numbers are unchanged.
+- Tests: `NumberToStringTest.integersAroundTheSafeRange`.
+
 ### Tests of property assignments (2026-10-19, plan M16)
 
 - `PropertyAssignmentTest`: assignments to own, inherited, accessor, read-only, frozen, sealed and non-extensible

@@ -1251,10 +1251,13 @@ public class ScriptRuntime {
             if (val instanceof BigInteger) {
                 return ((BigInteger) val).toString(10);
             }
+            if (val instanceof Integer) {
+                return Integer.toString((Integer) val);
+            }
             if (val instanceof Number) {
                 // XXX should we just teach NativeNumber.stringValue()
                 // about Numbers?
-                return numberToString(((Number) val).doubleValue(), 10);
+                return integerOrNumberToString(((Number) val).doubleValue());
             }
             if (val instanceof Boolean) {
                 return val.toString();
@@ -1355,7 +1358,19 @@ public class ScriptRuntime {
 
     /** Optimized version of toString(Object) for numbers. */
     public static String toString(double val) {
-        return numberToString(val, 10);
+        return integerOrNumberToString(val);
+    }
+
+    /**
+     * {@link #numberToString(double, int)} in base 10, with integers below 2^53 (but -0) printed as
+     * their digits, which are the shortest that round-trip.
+     */
+    private static String integerOrNumberToString(double d) {
+        long l = (long) d;
+        if (l == d && l != 0 && Math.abs(d) <= NativeNumber.MAX_SAFE_INTEGER) {
+            return Long.toString(l);
+        }
+        return DoubleFormatter.toString(d);
     }
 
     public static String numberToString(double d, int base) {

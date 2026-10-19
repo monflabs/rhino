@@ -821,7 +821,8 @@ interpreted. **16.2 (done)** per-iteration scope copies only where a closure can
 loop 271 ms → 180 ms compiled. **16.3 (done)** object literals without accessors put their properties directly,
 `{x, y}` 61 ms → 44 ms compiled. **16.4 (done)** compiled generators complete without a stack trace, an async call
 365 ms → 13 ms for 30,000 (compiled). **16.5 (dropped)** assignments looking the property up once: three versions
-gained alone (own writes 48 ms → 20 ms) and regressed `v8-richards` by 58–74% in the gate.
+gained alone (own writes 48 ms → 20 ms) and regressed `v8-richards` by 58–74% in the gate. **16.6 (done)** integers convert
+to strings without the double formatter, `"x" + i` 22 ms → 7 ms (compiled), `join` 2.8 times faster.
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math

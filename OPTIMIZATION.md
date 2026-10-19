@@ -207,6 +207,24 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** 30,000 calls, compiled: a generator returning a value 333 ms → 7 ms, an async function 365 ms → 13 ms,
   `for-of` over a generator 49 ms → 13 ms. All versions.
 
+### Integers convert to strings without the double formatter
+
+- **What** (M16, 16.6). `ScriptRuntime.toString(Object)` and `toString(double)` (string concatenation, `String()`,
+  `join`, JSON, property keys) gave every number to `DoubleFormatter`, which computes the shortest decimal digits
+  of a double (Ryu-like) and builds a `Decimal`: about 29 ns against 5 ns for `Long.toString`. An `Integer` now
+  takes `Integer.toString`, and an integral double whose magnitude is at most 2^53 − 1 (but `-0`, which prints as
+  `0` through the formatter) takes `Long.toString` (`integerOrNumberToString`).
+- **Correctness.** Below 2^53, integers are exactly representable and spaced by at most 1, so no shorter decimal
+  rounds to the same double: the integer's digits are the shortest ones. Above, they are not: `2**60` prints as
+  `1152921504606847000`, which is why the fast path stops at 2^53. The bound is tested on the double:
+  `Math.abs(Long.MIN_VALUE)` is negative, and a first version printed `Long.MIN_VALUE` with all its digits.
+  `numberToString` (any radix) is unchanged.
+- **Lesson.** The check was first put in `numberToString`, where it grew the method that calls `DoubleFormatter`;
+  it lives in a method of its own on the `toString` paths.
+- **Gain.** Compiled, 1 million conversions: `String(i)` 32 ms → 15 ms, `"x" + i` 22 ms → 7 ms; `join` of 1,000
+  integers 40 ms → 14 ms (compiled) and 36 ms → 14 ms (interpreted); `JSON.stringify` of integer-valued objects
+  94 ms → 81 ms. All versions.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the
