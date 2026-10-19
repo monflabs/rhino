@@ -27,6 +27,11 @@ public final class PropertyCache {
         epoch++;
     }
 
+    /** The number of changes to objects of cached chains so far. */
+    static int epoch() {
+        return epoch;
+    }
+
     /** Objects that look their named properties up in their slot map and their prototype. */
     private static final ClassValue<Boolean> CACHEABLE =
             new ClassValue<>() {

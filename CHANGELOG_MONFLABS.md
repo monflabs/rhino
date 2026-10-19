@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### `push` and `unshift` without a lookup per element (2026-10-19, plan M16)
+
+- Performance (`VERSION_ECMASCRIPT`): the fast path of `push` and `unshift` on a dense array checked that no
+  prototype has a property at the indexes written with a lookup per element (`push`) or a scan of the prototypes'
+  keys (`unshift`). An array whose prototype is an empty `Array.prototype` followed by plain objects without index
+  keys now skips it: `Array.prototype` is checked by its length, and the other prototypes once, then again only
+  after a change to an object of a cached prototype chain (`PropertyCache.epoch()`, kept in
+  `TopLevel.indexFreeArrayPrototype`). 4 million calls on 20-element arrays, compiled: `push(x)` 100 ms → 80 ms,
+  `push(x, y, z)` 82 ms → 55 ms, `unshift(x)` 400 ms → 150 ms; interpreted `unshift(x)` 190 ms → 110 ms.
+
 ### Array patterns and array species without lookups (2026-10-19, plan M16)
 
 - Performance (`VERSION_ECMASCRIPT`): an array pattern assigns a plain name element the iterator step directly,

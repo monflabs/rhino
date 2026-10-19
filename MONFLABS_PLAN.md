@@ -826,7 +826,9 @@ to strings without the double formatter, `"x" + i` 22 ms → 7 ms (compiled), `j
 write from a closure to a binding in its temporal dead zone throws after its right-hand side. **16.9 (done)** array
 patterns without temporaries, without a guard when they only bind names in a declaration, and arrays recognized
 from slots cached in the realm: `let [x, y, z] = a` 7 ms → 4 ms compiled, 130 ms → 58 ms interpreted. **16.10
-(done)** array species from slots cached in the realm, `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms compiled.
+(done)** array species from slots cached in the realm, `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms compiled. **16.15 (done)** `push` and `unshift` check the
+prototypes for indexes from the realm and the prototype cache epoch, `unshift(x)` 400 ms → 150 ms, `push(x, y, z)`
+82 ms → 55 ms compiled.
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math

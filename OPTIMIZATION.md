@@ -282,6 +282,23 @@ on, and what it gained. It also records the experiments that measured no gain, s
   22 ms → 17 ms, `splice` 23 ms → 17 ms; interpreted `concat` 58 ms → 43 ms. `map` and `filter` are dominated by
   the callback. All versions.
 
+### `push` and `unshift` without a lookup per element
+
+- **What** (M16, 16.15). Under `VERSION_ECMASCRIPT`, the dense fast path of `push` and `unshift` is taken only
+  when no prototype has a property at the indexes written (`BACKWARD_COMPATIBILITY.md` 1.76): `push` looked each
+  index up along the chain, `unshift` scanned the keys of every prototype. When the prototype of the array is a
+  `NativeArray` of length 0 followed by plain `NativeObject`s, the check is cached in the realm
+  (`NativeArray.prototypesHaveNoIndex`, `TopLevel.indexFreeArrayPrototype`).
+- **Correctness.** An array has no index at or above its length, so an empty `Array.prototype` has no index
+  property: its length is read on every call, since an element written to it goes to its dense storage without a
+  slot. The other prototypes are scanned for index keys once, and marked as objects of a cached chain
+  (`SlotMapOwner.cachedPrototype`): adding or removing one of their properties, replacing their map or changing a
+  prototype of the chain then increments `PropertyCache.epoch()`, and the cache holds the epoch it was verified
+  at. Only plain slot maps, which report those changes, are trusted. Otherwise the per-element check runs as before.
+- **Gain.** 4 million calls on 20-element arrays, compiled: `push(x)` 100 ms → 80 ms, `push(x, y, z)` 82 ms →
+  55 ms, `unshift(x)` 400 ms → 150 ms; interpreted: `push(x)` 107 ms → 97 ms, `unshift(x)` 190 ms → 110 ms.
+  `VERSION_ECMASCRIPT` only (the older versions never check).
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the
@@ -290,7 +307,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
   values spread over the whole exponent range. `VERSION_ECMASCRIPT`.
 - **Dense fast paths** of the array methods write the elements of a dense array directly. Under
   `VERSION_ECMASCRIPT`, those of `push` and `unshift` are taken only when no prototype has a property at the indexes
-  written (`BACKWARD_COMPATIBILITY.md` 1.76), which costs a lookup per pushed element; M16 (16.15) caches that check.
+  written (`BACKWARD_COMPATIBILITY.md` 1.76), a check cached in the realm (see above).
 
 ## Tried and dropped
 

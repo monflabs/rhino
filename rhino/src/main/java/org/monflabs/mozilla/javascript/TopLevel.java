@@ -524,6 +524,14 @@ public class TopLevel extends ScopeObject {
     transient ArrayLikeAbstractOperations.ArraySpecies arraySpecies;
 
     /**
+     * The Array.prototype whose prototypes were last found without indexed properties, and the
+     * {@link PropertyCache#epoch()} at that time, see NativeArray#prototypesHaveNoIndex.
+     */
+    transient Scriptable indexFreeArrayPrototype;
+
+    transient int indexFreeEpoch;
+
+    /**
      * Whether this scope holds global lexical declarations: the top-level let/const of scripts
      * compiled for {@link Context#VERSION_ECMASCRIPT}, which live in this scope (the declarative
      * record of the global environment) rather than on the global object.

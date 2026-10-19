@@ -1350,7 +1350,8 @@ public class NativeArray extends ScriptableObject implements List {
             if (na.denseOnly
                     && (!cx.isLatestEcmaScript()
                             || (na.isWritableDense()
-                                    && !prototypeHasIndex(na, na.length, args.length)))
+                                    && (prototypesHaveNoIndex(na, s)
+                                            || !prototypeHasIndex(na, na.length, args.length))))
                     && na.ensureCapacity((int) na.length + args.length)) {
                 for (Object arg : args) {
                     na.dense[(int) na.length++] = arg;
@@ -1479,6 +1480,45 @@ public class NativeArray extends ScriptableObject implements List {
         return false;
     }
 
+    /**
+     * Whether the prototypes of the array have no indexed property: an empty Array.prototype, then
+     * plain objects without index keys, found so since the last change to their properties or
+     * prototypes ({@link PropertyCache#epoch()}). An index of Array.prototype is seen by its
+     * length.
+     */
+    private static boolean prototypesHaveNoIndex(NativeArray na, VarScope scope) {
+        Scriptable proto = na.getPrototype();
+        if (proto == null || proto.getClass() != NativeArray.class) {
+            return false;
+        }
+        NativeArray arrayProto = (NativeArray) proto;
+        if (arrayProto.length != 0) {
+            return false;
+        }
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        int epoch = PropertyCache.epoch();
+        if (top.indexFreeArrayPrototype == proto && top.indexFreeEpoch == epoch) {
+            return true;
+        }
+        for (Scriptable p = arrayProto.getPrototype(); p != null; p = p.getPrototype()) {
+            if (p.getClass() != NativeObject.class || !((NativeObject) p).hasPlainMap()) {
+                return false;
+            }
+            for (Slot<?> slot : ((NativeObject) p).getMap()) {
+                if (slot.getName() == null) {
+                    return false;
+                }
+            }
+        }
+        arrayProto.cachedPrototype = true;
+        for (Scriptable p = arrayProto.getPrototype(); p != null; p = p.getPrototype()) {
+            ((NativeObject) p).cachedPrototype = true;
+        }
+        top.indexFreeArrayPrototype = proto;
+        top.indexFreeEpoch = epoch;
+        return true;
+    }
+
     /** Whether a prototype of the array may have a property at an index below end. */
     private static boolean prototypeHasIndexBelow(NativeArray na, long end) {
         for (Scriptable p = na.getPrototype(); p != null; p = p.getPrototype()) {
@@ -1508,7 +1548,9 @@ public class NativeArray extends ScriptableObject implements List {
             if (na.denseOnly
                     && (!cx.isLatestEcmaScript()
                             || (na.isWritableDense()
-                                    && !prototypeHasIndexBelow(na, na.length + args.length)))
+                                    && (prototypesHaveNoIndex(na, s)
+                                            || !prototypeHasIndexBelow(
+                                                    na, na.length + args.length))))
                     && na.ensureCapacity((int) na.length + args.length)) {
                 System.arraycopy(na.dense, 0, na.dense, args.length, (int) na.length);
                 System.arraycopy(args, 0, na.dense, 0, args.length);
