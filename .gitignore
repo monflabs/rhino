@@ -7,9 +7,6 @@ lib/
 
 # artifacts
 *.zip
-*.iml
-.idea/
-out/
 target/
 .gradle
 *~
@@ -19,13 +16,29 @@ target/
 .project
 bin/
 .settings/
+.factorypath
+.apt_generated/
+.apt_generated_tests/
+.metadata/
+.recommenders/
+.externalToolBuilders/
+.loadpath
+.checkstyle
+.springBeans
+.sts4-cache/
+*.launch
 
 # idea
-rhino.ipr
-rhino.iws
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
 
 # VSCode
-.vscode
+.vscode/
+*.code-workspace
+.history/
 
 .java-version
 .kotlin

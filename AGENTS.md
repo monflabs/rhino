@@ -112,3 +112,5 @@ it documents. Port the logic, not the code structure, and keep the differences i
   stays correct, and the measured gain; an experiment that measured no gain goes to its "Tried and dropped" table.
 - When several reasonable options exist, ask the user; recommend the option aligned with Nashorn.
 - When a feature is done, present it to the user, then commit it on the `monflabs_enhancements` branch.
+- All work goes on the `monflabs_enhancements` branch, never directly on `master`. Do not merge, fast-forward or push
+  it to `master` until the user explicitly asks, typically when releasing.
