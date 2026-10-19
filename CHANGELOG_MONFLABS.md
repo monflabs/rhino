@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Arrays stay dense across small gaps (2026-10-19, plan M16)
+
+- Performance (all versions, no observable change): a write to an index below 1,024 grows the dense array of a
+  `NativeArray` whatever its capacity (before, only up to 1.5 times the capacity). An array filled from its last
+  index down (`for (i = n - 1; i >= 0; i--) a[i] = …`, as `v8-crypto` does) or with an early gap no longer moves
+  its elements to the slot map for good, where every access looked the index up in a hash map first. Holes are
+  stored as `NOT_FOUND` in the dense array, as before. `v8-crypto` −22% (compiled), −3% (interpreted); a
+  300-element array filled downward: 26 ms → 13 ms.
+- Tests: `ArrayHolesTest`.
+
 ### Integers convert to strings without the double formatter (2026-10-19, plan M16)
 
 - Performance (all versions, no observable change): `ScriptRuntime.toString` gives an `Integer` its `Integer.toString`

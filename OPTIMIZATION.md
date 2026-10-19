@@ -225,6 +225,18 @@ on, and what it gained. It also records the experiments that measured no gain, s
   integers 40 ms → 14 ms (compiled) and 36 ms → 14 ms (interpreted); `JSON.stringify` of integer-valued objects
   94 ms → 81 ms. All versions.
 
+### Arrays stay dense across small gaps
+
+- **What** (M16, 16.7). A `NativeArray` keeps its elements in a dense Java array while `denseOnly` holds; the first
+  write beyond 1.5 times the dense capacity cleared it for good, after which every element lived in the slot map
+  and every `get`/`put` queried the map first. An array filled from its last index down started that way: its
+  first write (index 299 of an empty array) was beyond the capacity of 10. A write to an index below
+  `MAX_DENSE_GAP` (1,024) now grows the dense array whatever its capacity.
+- **Correctness.** A hole is `NOT_FOUND` in the dense array, so reads go through the prototype chain, `in` and
+  `hasOwnProperty` are false, and enumeration skips it, as before. Cost: up to 4 KB of holes per array.
+- **Gain.** `v8-crypto` 46–52 ms → 36 ms compiled, −3% interpreted; a 300-element array filled downward 26 ms →
+  13 ms compiled. All versions.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

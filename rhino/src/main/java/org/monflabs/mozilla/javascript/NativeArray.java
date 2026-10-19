@@ -365,7 +365,7 @@ public class NativeArray extends ScriptableObject implements List {
                 }
                 return;
             } else if (denseOnly
-                    && index < dense.length * GROW_FACTOR
+                    && (index < dense.length * GROW_FACTOR || index < MAX_DENSE_GAP)
                     && ensureCapacity(index + 1)) {
                 dense[index] = value;
                 this.length = (long) index + 1;
@@ -3246,6 +3246,12 @@ public class NativeArray extends ScriptableObject implements List {
 
     /** The factor to grow {@code dense} by. */
     private static final double GROW_FACTOR = 1.5;
+
+    /**
+     * The indexes below which a write keeps the array dense, whatever its capacity: an array filled
+     * from its last index down (or with small gaps) would otherwise move to the slot map for good.
+     */
+    private static final int MAX_DENSE_GAP = 1024;
 
     private static final int MAX_PRE_GROW_SIZE = (int) (Integer.MAX_VALUE / GROW_FACTOR);
 }
