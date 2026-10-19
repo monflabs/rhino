@@ -3153,7 +3153,7 @@ class BodyCodegen {
         cfw.addALoad(contextLocal);
         cfw.add(ByteCode.SWAP);
         // stack: ... cx lookupResult
-        popFunctionAndThis();
+        popFunctionAndThis(false);
         // stack: ... cx functionObj thisObj
 
         child = child.getNext();
@@ -3223,7 +3223,7 @@ class BodyCodegen {
             cfw.addALoad(thisObjLocal);
             addScriptRuntimeInvoke("derivedThis", "(Ljava/lang/Object;)Ljava/lang/Object;");
         } else {
-            popFunctionAndThis();
+            popFunctionAndThis(true);
         }
 
         // stack: ... functionObj thisObj
@@ -3616,7 +3616,7 @@ class BodyCodegen {
      */
     private void generateFunctionAndThisObj(Node node, Node parent) {
         generateLookupResult(node, parent);
-        popFunctionAndThis();
+        popFunctionAndThis(true);
     }
 
     /**
@@ -3696,9 +3696,11 @@ class BodyCodegen {
     }
 
     /**
-     * Assume that a LookupResult is at the top of the stack, and push the callable and this object.
+     * Assume that a LookupResult is at the top of the stack, and push the callable and this object:
+     * the this to pass to a call (thisValue: a primitive for a method that takes one), or else the
+     * this as an object.
      */
-    private void popFunctionAndThis() {
+    private void popFunctionAndThis(boolean thisValue) {
         cfw.add(ByteCode.DUP);
         cfw.addInvoke(
                 ByteCode.INVOKEVIRTUAL,
@@ -3709,8 +3711,10 @@ class BodyCodegen {
         cfw.addInvoke(
                 ByteCode.INVOKEVIRTUAL,
                 "org.monflabs.mozilla.javascript.ScriptRuntime$LookupResult",
-                "getThis",
-                "()Lorg/monflabs/mozilla/javascript/Scriptable;");
+                thisValue ? "getThisValue" : "getThis",
+                thisValue
+                        ? "()Ljava/lang/Object;"
+                        : "()Lorg/monflabs/mozilla/javascript/Scriptable;");
     }
 
     private void updateLineNumber(Node node) {

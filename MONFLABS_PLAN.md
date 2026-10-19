@@ -828,7 +828,8 @@ patterns without temporaries, without a guard when they only bind names in a dec
 from slots cached in the realm: `let [x, y, z] = a` 7 ms → 4 ms compiled, 130 ms → 58 ms interpreted. **16.10
 (done)** array species from slots cached in the realm, `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms compiled. **16.15 (done)** `push` and `unshift` check the
 prototypes for indexes from the realm and the prototype cache epoch, `unshift(x)` 400 ms → 150 ms, `push(x, y, z)`
-82 ms → 55 ms compiled.
+82 ms → 55 ms compiled. **16.16 (done)** method calls on primitive strings pass the string as `this` without a
+String object (also a conformance fix), 598 ms → 425 ms compiled.
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math

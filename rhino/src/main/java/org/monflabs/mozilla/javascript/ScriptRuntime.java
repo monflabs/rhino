@@ -3918,8 +3918,56 @@ public class ScriptRuntime {
             Context cx,
             VarScope scope,
             boolean isOptionalChainingCall) {
+        if (obj instanceof CharSequence && cx.isLatestEcmaScript()) {
+            LookupResult result = stringMethod((CharSequence) obj, property, scope);
+            if (result != null) {
+                return result;
+            }
+        }
         Scriptable thisObj = toObjectOrNull(cx, obj, scope);
         return getPropAndThisHelper(obj, property, cx, thisObj, isOptionalChainingCall);
+    }
+
+    /**
+     * s.m() on a primitive string: a function found as a data property of String.prototype or of
+     * its plain prototypes, called with the string itself as this (OrdinaryCallBindThis), without a
+     * String object. Null when the call needs that object: the own properties of a string (length
+     * and the indexes), an accessor, an exotic prototype, a built-in that does not take a primitive
+     * this, or a missing method (for the error message).
+     */
+    @SuppressWarnings("unchecked")
+    private static LookupResult stringMethod(CharSequence s, String property, VarScope scope) {
+        if (property.equals("length")
+                || (!property.isEmpty() && Character.isDigit(property.charAt(0)))) {
+            return null;
+        }
+        Scriptable p =
+                TopLevel.getBuiltinPrototype(
+                        ScriptableObject.getTopLevelScope(scope), TopLevel.Builtins.String);
+        while (p != null) {
+            Class<?> type = p.getClass();
+            if ((type != NativeString.class && type != NativeObject.class)
+                    || !((ScriptableObject) p).hasPlainMap()) {
+                return null;
+            }
+            Slot<?> slot = ((ScriptableObject) p).getMap().query(property, 0);
+            if (slot != null) {
+                if (!slot.isValueSlot()) {
+                    return null;
+                }
+                Object value = ((Slot<Scriptable>) slot).getValue(p);
+                if (!(value instanceof JSFunction)) {
+                    return null;
+                }
+                JSFunction f = (JSFunction) value;
+                if (f.isBuiltIn() && !f.acceptsPrimitiveThis()) {
+                    return null;
+                }
+                return new LookupResult(f, s, property, scope);
+            }
+            p = p.getPrototype();
+        }
+        return null;
     }
 
     private static LookupResult getPropAndThisHelper(
@@ -7819,12 +7867,24 @@ public class ScriptRuntime {
         private static final long serialVersionUID = 8491017987326545970L;
 
         private final Object result;
-        private final Scriptable thisObj;
+        private Scriptable thisObj;
+        private final Object thisValue;
+        private final VarScope scope;
         private final Object name;
 
         LookupResult(Object result, Scriptable thisObj, Object name) {
             this.result = result;
             this.thisObj = thisObj;
+            this.thisValue = thisObj;
+            this.scope = null;
+            this.name = name;
+        }
+
+        /** A method found for a primitive this, which the call passes as is. */
+        LookupResult(Object result, Object primitiveThis, Object name, VarScope scope) {
+            this.result = result;
+            this.thisValue = primitiveThis;
+            this.scope = scope;
             this.name = name;
         }
 
@@ -7832,8 +7892,17 @@ public class ScriptRuntime {
             return result;
         }
 
+        /** The this of the lookup as an object (a primitive is converted). */
         public Scriptable getThis() {
+            if (thisObj == null && thisValue != null) {
+                thisObj = toObject(scope, thisValue);
+            }
             return thisObj;
+        }
+
+        /** The this to pass to a call of the result: a primitive for a method that takes one. */
+        public Object getThisValue() {
+            return thisValue;
         }
 
         public String getName() {
@@ -7856,7 +7925,7 @@ public class ScriptRuntime {
          * the result with ths stored "this".
          */
         public Object call(Context cx, VarScope scope, Object[] args) {
-            return getCallable().call(cx, scope, thisObj, args);
+            return getCallable().call(cx, scope, thisValue, args);
         }
     }
 

@@ -272,6 +272,9 @@ public class Context implements Closeable {
      *   <li>A function with closures or catch clauses keeps the variables that its nested functions
      *       do not refer to in registers: code evaluated in its scope at runtime other than a
      *       direct eval (a legacy {@code Script} object, a host function) no longer sees them.
+     *   <li>A method called on a primitive string ({@code "abc".indexOf("b")}) receives the string
+     *       itself as {@code this}, not a String object: the built-ins of {@code String.prototype}
+     *       no longer call an overridden {@code toString} or {@code valueOf}.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

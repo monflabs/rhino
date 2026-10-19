@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Method calls on primitive strings without a String object (2026-10-20, plan M16)
+
+- Fixed and performance (`VERSION_ECMASCRIPT`): `s.m()` on a primitive string looks `m` up on `String.prototype`
+  and its plain prototypes directly and calls it with the string as `this` when it is a data property holding a
+  user function or a built-in that takes a primitive `this` (all the `String.prototype` methods now do), without
+  creating a String object (`ScriptRuntime.stringMethod`, `LookupResult.getThisValue`). The built-ins no longer
+  call an overridden `String.prototype.toString` (`BACKWARD_COMPATIBILITY.md` 1.89); a non-strict function
+  still gets a String object. `indexOf`, `charCodeAt`, `slice` and `startsWith` in a loop, 3 million times:
+  598 ms → 425 ms compiled, 1,425 ms → 1,099 ms interpreted. `VERSION_ES6` keeps the String object.
+
 ### Direct calls evaluate their arguments once (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): a call to a top-level function compiles to a

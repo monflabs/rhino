@@ -2755,7 +2755,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             // Check if the lookup result is a function and throw if it's not
             // must not be done sooner according to the spec
             Callable fun = result.getCallable();
-            Object funThisObj = result.getThis();
+            Object funThisObj = result.getThisValue();
             Scriptable funHomeObj =
                     (fun instanceof BaseFunction) ? ((BaseFunction) fun).getHomeObject() : null;
             if (op == Icode.CALL_ON_SUPER) {
@@ -3697,7 +3697,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 Object thisObj =
                         op == Icode.CALL_SPREAD_ON_SUPER
                                 ? ScriptRuntime.derivedThis(frame.thisObj)
-                                : result.getThis();
+                                : result.getThisValue();
                 frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
             }
             return null;

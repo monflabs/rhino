@@ -102,6 +102,7 @@ changes.
 | 1.86 | Typed arrays use the intrinsic constructors, not the global properties | `VERSION_ECMASCRIPT` |
 | 1.87 | Iterator results define own data properties | `VERSION_ECMASCRIPT` |
 | 1.88 | Code evaluated at runtime no longer sees the locals of functions with closures | `VERSION_ECMASCRIPT` |
+| 1.89 | Methods called on a primitive string receive the string as `this` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1446,6 +1447,22 @@ f();   // before: [5, 2]   now: [5, 1]
   anywhere in the function, `arguments`, and generators keep every variable in the activation object.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation): only a direct eval (§19.2.1.1) can reach the
   variables of a function from code evaluated at runtime.
+
+### 1.89 Methods called on a primitive string receive the string as `this`
+
+```js
+String.prototype.toString = function () { return "X"; };
+"abc".toLowerCase();   // before: "x"   now: "abc"
+"abc".indexOf("b");    // before: -1    now: 1
+```
+
+- A call `s.m()` on a primitive string passed a String object as `this`; the built-ins of `String.prototype`
+  converted it to a string with ToString, which calls `toString` (or `valueOf`) and so saw an override. Now the
+  call passes the string itself, as the spec does for every built-in and strict function; a non-strict function
+  still receives a String object (OrdinaryCallBindThis). `String.prototype.toString` and `valueOf` accept a
+  primitive string (thisStringValue).
+- **Why:** ECMA-262 2026, §7.3.14 (Call with the primitive as thisArgument), §10.2.1.2 (OrdinaryCallBindThis) and
+  §22.1.3 (the String methods apply ToString to `this`, a string already).
 
 ---
 

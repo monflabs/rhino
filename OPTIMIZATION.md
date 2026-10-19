@@ -317,6 +317,24 @@ on, and what it gained. It also records the experiments that measured no gain, s
   (test262 caught it in its resizable buffer helpers).
 - **Gain.** Recursive `fib(28)` ten times, compiled: 100 ms → 83 ms (Rhino 1.8.0: 55 ms; upstream base: 133 ms).
 
+### Method calls on primitive strings without a String object
+
+- **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its
+  own `length` property), looked `m` up through it, and passed it as `this`. Under `VERSION_ECMASCRIPT`,
+  `ScriptRuntime.stringMethod` looks `m` up in the slot maps of `String.prototype` and its prototypes and returns
+  a `LookupResult` whose call `this` is the string itself (`getThisValue`); the String object is made only if
+  `getThis()` is asked for.
+- **When it applies.** The name is not `length` or an index (the own properties of a string), every object up to
+  the one holding `m` is a `NativeString` or `NativeObject` with a plain slot map, and `m` is a data property
+  holding a user function or a built-in that takes a primitive `this`; otherwise the lookup goes through the
+  String object, which also gives the error messages.
+- **Correctness.** Passing the primitive is what the spec does (`BACKWARD_COMPATIBILITY.md` 1.89): a non-strict
+  function boxes it (`JSFunction.getThisObj`), and the `String.prototype` built-ins apply ToString or
+  thisStringValue to it. `VERSION_ES6` keeps the String object, since its built-ins observe an overridden
+  `toString`.
+- **Gain.** `indexOf`, `charCodeAt`, `slice` and `startsWith` in a loop, 3 million times: 598 ms → 425 ms
+  compiled, 1,425 ms → 1,099 ms interpreted.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

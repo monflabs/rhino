@@ -96,6 +96,8 @@ final class NativeString extends ScriptableObject {
 
                         /* Back to prototype methods -- these are all part of ECMAScript */
 
+                        // they take a primitive this (thisStringValue, or ToString)
+                        .withPrimitiveThis(latest)
                         .withMethod(PROTO, SymbolKey.ITERATOR, 0, NativeString::js_iterator)
                         .withMethod(PROTO, "toString", 0, NativeString::js_toString)
                         .withMethod(PROTO, "toSource", 0, NativeString::js_toSource)
@@ -106,7 +108,7 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "lastIndexOf", 1, NativeString::js_lastIndexOf)
                         .withPrimitiveThis(true)
                         .withMethod(PROTO, "split", 2, NativeString::js_split)
-                        .withPrimitiveThis(false)
+                        .withPrimitiveThis(latest)
                         .withMethod(PROTO, "substring", 2, NativeString::js_substring)
                         .withMethod(PROTO, "toLowerCase", 0, NativeString::js_toLowerCase)
                         .withMethod(PROTO, "toUpperCase", 0, NativeString::js_toUpperCase)
@@ -135,7 +137,7 @@ final class NativeString extends ScriptableObject {
                         .withMethod(PROTO, "search", 1, NativeString::js_search)
                         .withMethod(PROTO, "replace", 2, NativeString::js_replace)
                         .withMethod(PROTO, "replaceAll", 2, NativeString::js_replaceAll)
-                        .withPrimitiveThis(false)
+                        .withPrimitiveThis(latest)
                         .withMethod(PROTO, "at", 1, NativeString::js_at)
                         .withMethod(PROTO, "localeCompare", 1, NativeString::js_localeCompare)
                         .withMethod(
@@ -484,8 +486,12 @@ final class NativeString extends ScriptableObject {
         return cx.newArray(s, substrings.toArray());
     }
 
-    private static NativeString realThis(Object thisObj) {
-        return LambdaConstructor.convertThisObject(thisObj, NativeString.class);
+    /** thisStringValue(this): a primitive string, or the string of a String object. */
+    private static CharSequence thisStringValue(Object thisObj) {
+        if (thisObj instanceof CharSequence) {
+            return (CharSequence) thisObj;
+        }
+        return LambdaConstructor.convertThisObject(thisObj, NativeString.class).string;
     }
 
     private static Object js_iterator(
@@ -498,13 +504,13 @@ final class NativeString extends ScriptableObject {
     private static Object js_toString(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         // ECMA 15.5.4.2: the toString function is not generic.
-        CharSequence cs = realThis(thisObj).string;
+        CharSequence cs = thisStringValue(thisObj);
         return cs instanceof String ? cs : cs.toString();
     }
 
     private static Object js_toSource(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        CharSequence str = realThis(thisObj).string;
+        CharSequence str = thisStringValue(thisObj);
         return "(new String(\"" + ScriptRuntime.escapeString(str.toString()) + "\"))";
     }
 
