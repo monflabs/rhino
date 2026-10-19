@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled generators complete without a stack trace (2026-10-19, plan M16)
+
+- Performance (all versions, no observable change): a compiled generator (and so an async function) signals its
+  completion with a `NativeIterator.GeneratorCompletion`, a `JavaScriptException` holding the `StopIteration` that
+  records no Java stack trace and whose details do not convert the value. Converting it threw and caught a
+  TypeError, with its own stack trace and message formatting: together about 10 µs per completed generator, which
+  made compiled generators 5 times slower than interpreted ones. 30,000 calls, compiled: a generator returning a
+  value 333 ms → 7 ms, an async function 365 ms → 13 ms, `for-of` over a generator 49 ms → 13 ms. Legacy
+  generators still throw `StopIteration` to the script.
+- Tests: `GeneratorCompletionTest`.
+
 ### Object literals put their properties directly (2026-10-19, plan M16)
 
 - Performance (`VERSION_ECMASCRIPT`, no observable change): the properties of a plain object literal that defines no

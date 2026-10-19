@@ -92,6 +92,30 @@ public final class NativeIterator extends ScriptableObject {
         return ScriptableObject.getTopScopeValue(top, ITERATOR_TAG);
     }
 
+    /**
+     * Thrown by a compiled generator when it completes, with a {@link StopIteration}: the generator
+     * catches it (an ES6 generator) or rethrows it to the script (a legacy one, which only sees the
+     * value). It has no Java stack trace, and its details do not convert the value, which throws
+     * and catches a TypeError: both cost about ten microseconds per completed generator.
+     */
+    public static final class GeneratorCompletion extends JavaScriptException {
+        @Serial private static final long serialVersionUID = 1L;
+
+        public GeneratorCompletion(StopIteration value) {
+            super(value, "", 0);
+        }
+
+        @Override
+        public String getDetails() {
+            return ScriptRuntime.defaultObjectToString(getValue());
+        }
+
+        @Override
+        public synchronized Throwable fillInStackTrace() {
+            return this;
+        }
+    }
+
     public static class StopIteration extends NativeObject {
         @Serial private static final long serialVersionUID = 2485151085722377663L;
 

@@ -193,6 +193,20 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** 1 million literals, compiled: `{a, b, c, d}` 118 ms → 102 ms, `{x, y}` 61 ms → 44 ms, a nested literal
   49 ms → 36 ms; interpreted 10–15% faster. `VERSION_ECMASCRIPT`.
 
+### Compiled generators complete without a stack trace
+
+- **What** (M16, 16.4). A compiled generator body completes by throwing a `StopIteration` wrapped in a
+  `JavaScriptException` (`OptRuntime.throwStopIteration`), which `ES6Generator` catches to produce
+  `{ value, done: true }`. Building that exception walked the Java stack, and its details converted the
+  `StopIteration` object to a string, which threw and caught an internal TypeError with a stack trace and message
+  formatting of its own: about 10 µs per completed generator or async call, 5 times the interpreter's cost.
+  `NativeIterator.GeneratorCompletion` overrides `fillInStackTrace` and computes its details without conversion.
+- **Correctness.** ES6 generators and async functions catch it internally. A legacy (JavaScript 1.7) generator
+  rethrows it to the script, which only sees the `StopIteration` value; a Java caller that catches it gets no Java
+  stack trace for it.
+- **Gain.** 30,000 calls, compiled: a generator returning a value 333 ms → 7 ms, an async function 365 ms → 13 ms,
+  `for-of` over a generator 49 ms → 13 ms. All versions.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

@@ -273,6 +273,9 @@ public final class OptRuntime extends ScriptRuntime {
                 (value == Undefined.instance)
                         ? NativeIterator.getStopIterationObject((VarScope) scope)
                         : new NativeIterator.StopIteration(value);
+        if (si instanceof NativeIterator.StopIteration) {
+            throw new NativeIterator.GeneratorCompletion((NativeIterator.StopIteration) si);
+        }
         throw new JavaScriptException(si, "", 0);
     }
 
