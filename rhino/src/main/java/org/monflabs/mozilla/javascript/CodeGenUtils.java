@@ -83,7 +83,48 @@ public class CodeGenUtils {
             builder.isAsync = true;
             builder.hasPrototype = false;
         }
+        builder.ignoresThis =
+                fn.getFunctionType() != FunctionNode.ARROW_FUNCTION
+                        && !fn.isGenerator()
+                        && !fn.isES6Generator()
+                        && !fn.isAsync()
+                        && !readsThis(fn);
         fillInCommon(builder, fn);
+    }
+
+    /**
+     * Whether a function can read its this: a this, a super or a direct eval in its body or in its
+     * arrow functions, which share its this.
+     */
+    public static boolean readsThis(FunctionNode fn) {
+        return readsThis_r(fn);
+    }
+
+    private static boolean readsThis_r(Node node) {
+        if (node instanceof ScriptNode) {
+            ScriptNode scriptOrFn = (ScriptNode) node;
+            for (int i = 0, n = scriptOrFn.getFunctionCount(); i != n; ++i) {
+                FunctionNode nested = scriptOrFn.getFunctionNode(i);
+                if (nested.getFunctionType() == FunctionNode.ARROW_FUNCTION
+                        && readsThis_r(nested)) {
+                    return true;
+                }
+            }
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int type = child.getType();
+            if (type == Token.THIS
+                    || type == Token.SUPER
+                    || ((type == Token.CALL || type == Token.NEW)
+                            && child.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
+                                    != Node.NON_SPECIALCALL)) {
+                return true;
+            }
+            if (!(child instanceof ScriptNode) && readsThis_r(child)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Populate builder data for a top level function. */

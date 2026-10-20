@@ -4,6 +4,7 @@
 
 package org.monflabs.mozilla.javascript.optimizer;
 
+import org.monflabs.mozilla.javascript.CodeGenUtils;
 import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
@@ -120,36 +121,9 @@ public final class OptFunctionNode {
      */
     boolean readsThis() {
         if (readsThis == null) {
-            readsThis = readsThis_r(fnode);
+            readsThis = CodeGenUtils.readsThis(fnode);
         }
         return readsThis;
-    }
-
-    private static boolean readsThis_r(Node node) {
-        if (node instanceof ScriptNode) {
-            ScriptNode scriptOrFn = (ScriptNode) node;
-            for (int i = 0, n = scriptOrFn.getFunctionCount(); i != n; ++i) {
-                FunctionNode nested = scriptOrFn.getFunctionNode(i);
-                if (nested.getFunctionType() == FunctionNode.ARROW_FUNCTION
-                        && readsThis_r(nested)) {
-                    return true;
-                }
-            }
-        }
-        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
-            int type = child.getType();
-            if (type == Token.THIS
-                    || type == Token.SUPER
-                    || ((type == Token.CALL || type == Token.NEW)
-                            && child.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
-                                    != Node.NON_SPECIALCALL)) {
-                return true;
-            }
-            if (!(child instanceof ScriptNode) && readsThis_r(child)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private boolean[] numberVarFlags;

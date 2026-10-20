@@ -470,6 +470,21 @@ on, and what it gained. It also records the experiments that measured no gain, s
   its time was `getTopLevelScope` once the arithmetic was unboxed); SunSpider in one JVM:
   `controlflow-recursive` 1,538 → 1,131 ms, `crypto-md5` 556 → 496 ms.
 
+### Calls without `this`
+
+- **What.** Every call of a non-strict function computed its `this` (`JSFunction.getThisObj`): with an
+  undefined `this` (a function called by name, a callback of `map` or `forEach`), the global object through
+  `ScriptableObject.getTopLevelScope`, a walk up the scope chain; with a primitive, a wrapper object. As for
+  direct calls, `JSFunction.getCallThis`, used by `JSFunction.call` and by the interpreter's calls of
+  interpreted functions, now passes the `this` unchanged when the function cannot read it:
+  `JSDescriptor.ignoresThis`, set by `CodeGenUtils` from the same scan as `OptFunctionNode.readsThis` (no `this`,
+  `super` or direct `eval` in its body or its arrow functions), and false for arrow functions, generators and
+  async functions.
+- **Correctness.** Nothing else reads the `this` of a call but the debugger (`DebugFrame.onEnter`), so the
+  `this` is still computed when a debugger is set.
+- **Gain.** `map`, `reduce`, `forEach` and calls through a variable, 2,000 times over 1,000 elements: 122 → 106
+  ms compiled (`VERSION_ECMASCRIPT`), 1,100 → 1,060 ms interpreted.
+
 ### Method calls on primitive strings without a String object
 
 - **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its

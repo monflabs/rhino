@@ -204,8 +204,19 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         if (!ScriptRuntime.hasTopCall(cx)) {
             return ScriptRuntime.doTopCall(this, cx, scope, thisObj, args, isStrict());
         }
-        var realThis = getThisObj(thisObj);
+        var realThis = getCallThis(cx, thisObj);
         return descriptor.getCode().execute(cx, this, lexicalNewTarget, scope, realThis, args);
+    }
+
+    /**
+     * The this a call passes to the body: getThisObj, unless the function cannot read it (which
+     * saves finding the global object), and no debugger can see it.
+     */
+    final Object getCallThis(Context cx, Object thisObj) {
+        if (descriptor.ignoresThis() && cx.getDebugger() == null) {
+            return thisObj;
+        }
+        return getThisObj(thisObj);
     }
 
     public final Object getThisObj(Object thisObj) {

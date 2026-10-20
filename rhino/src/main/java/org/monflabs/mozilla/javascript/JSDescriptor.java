@@ -75,6 +75,9 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     private boolean[] paramIsActivationVar;
 
+    /** Whether the function cannot read its this (see JSFunction#getCallThis). */
+    private boolean ignoresThis;
+
     public JSDescriptor(
             JSCode<T> code,
             JSCode<T> constructor,
@@ -254,6 +257,14 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
 
     public boolean hasLexicalThis() {
         return (flags & HAS_LEXICAL_THIS_FLAG) != 0;
+    }
+
+    /**
+     * Whether the function cannot read its this: no this, super or direct eval in its body or its
+     * arrow functions; not an arrow function, a generator or an async function.
+     */
+    public boolean ignoresThis() {
+        return ignoresThis;
     }
 
     public boolean isEvalFunction() {
@@ -461,6 +472,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public String globalLexicals;
         public boolean[] paramIsRegister;
         public boolean[] paramIsActivationVar;
+        public boolean ignoresThis;
 
         public Builder() {}
 
@@ -542,6 +554,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             result.globalLexicals = globalLexicals;
             result.paramIsRegister = paramIsRegister;
             result.paramIsActivationVar = paramIsActivationVar;
+            result.ignoresThis = ignoresThis;
             consumer.accept(result);
             result.nestedFunctions =
                     Collections.unmodifiableList(

@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Calls without `this` (2026-10-21)
+
+- Performance (all versions, both modes, no observable change): a call of a non-strict function that cannot
+  read its `this` (no `this`, `super` or direct `eval` in its body or its arrow functions; not a generator or an
+  async function) no longer computes it: for an undefined `this`, that was a walk up to the global object at
+  every call, and for a primitive, a wrapper object. The `this` is still computed when a debugger is set.
+  Callbacks of `map`, `reduce` and `forEach` and calls through a variable: 122 → 106 ms compiled, 1,100 →
+  1,060 ms interpreted.
+
 ### Number variables of functions with an activation (2026-10-21)
 
 - Performance (`VERSION_ECMASCRIPT`, compiled mode, no observable change): the optimizer also runs on functions
