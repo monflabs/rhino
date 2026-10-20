@@ -272,7 +272,7 @@ class Optimizer {
             case Token.URSH:
                 return true;
             case Token.GETVAR:
-                return !f.fnode.requiresActivation() && numberVar.test(f.getVarIndex(n));
+                return numberVar.test(f.getVarIndex(n));
             case Token.INC:
             case Token.DEC:
             case Token.NEG:
@@ -445,9 +445,17 @@ class Optimizer {
         return isNumberExpression(arg, caller, caller::isNumberVar, null);
     }
 
+    /**
+     * Whether a function has variables in registers: all of them, or with an activation object, the
+     * ones that no nested function refers to (VERSION_ECMASCRIPT).
+     */
+    private static boolean hasRegisterVars(OptFunctionNode f) {
+        return !f.fnode.requiresActivation() || f.fnode.getRegisterVars() != null;
+    }
+
     /** Finds the variables of a function that only hold numbers. */
     private void analyzeFunction(OptFunctionNode theFunction) {
-        if (theFunction.fnode.requiresActivation()) return;
+        if (!hasRegisterVars(theFunction)) return;
 
         ArrayList<Node> statementsArray = new ArrayList<>();
         buildStatementList_r(theFunction.fnode, statementsArray);
@@ -459,7 +467,7 @@ class Optimizer {
     }
 
     private void rewriteFunction(OptFunctionNode theFunction, boolean nested) {
-        if (theFunction.fnode.requiresActivation()) return;
+        if (!hasRegisterVars(theFunction)) return;
 
         inDirectCallFunction = theFunction.isTargetOfDirectCall();
         // nested functions were not optimized before, hence never had the legacy typing

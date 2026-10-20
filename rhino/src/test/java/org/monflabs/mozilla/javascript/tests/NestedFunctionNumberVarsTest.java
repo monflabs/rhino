@@ -64,6 +64,38 @@ class NestedFunctionNumberVarsTest {
     }
 
     @Test
+    void variablesOfFunctionsWithAnActivation() {
+        assertAllVersions(
+                "57775 3 x1 NaN 6 2 4 caught 1,2 number",
+                "function outer() {"
+                        + "  function ack(m, n) {"
+                        + "    if (m == 0) { return n + 1; }"
+                        + "    if (n == 0) { return ack(m - 1, 1); }"
+                        + "    return ack(m - 1, ack(m, n - 1));"
+                        + "  }"
+                        + "  function fib(n) { if (n < 2) { return 1; } return fib(n - 2) + fib(n - 1); }"
+                        + "  function tak(x, y, z) {"
+                        + "    if (y >= x) return z;"
+                        + "    return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y));"
+                        + "  }"
+                        + "  var result = 0;"
+                        + "  for (var i = 3; i <= 5; i++) {"
+                        + "    result += ack(3, i); result += fib(17.0 + i); result += tak(3 * i + 3, 2 * i + 2, i + 1);"
+                        + "  }"
+                        + "  var shared = 1; var inc = function () { shared += 2; };"
+                        + "  inc();"
+                        + "  var s = 0; s = 'x' + (s + 1);"
+                        + "  var u; u = u + 1;"
+                        + "  var t = 0; for (var k = 0; k < 4; k++) t += k;"
+                        + "  var c = 0; try { c = 2; throw 1; } catch (e) { c = c * 2; }"
+                        + "  var l = 'caught';"
+                        + "  var a = []; for (var j = 1; j <= 2; j++) a.push(j);"
+                        + "  return [result, shared, s, u, t, c / 2, c, l, a, typeof i].join(' ');"
+                        + "}"
+                        + "outer()");
+    }
+
+    @Test
     void bigInts() {
         assertAllVersions(
                 "1024 bigint 6 TypeError",

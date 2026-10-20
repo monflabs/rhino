@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Number variables of functions with an activation (2026-10-21)
+
+- Performance (`VERSION_ECMASCRIPT`, compiled mode, no observable change): the optimizer also runs on functions
+  with an activation object, for the variables they keep in registers (the ones no nested function refers to):
+  those that only hold numbers are doubles, and count as numbers for the parameters and returns of the
+  functions they call. A function wrapping its declarations benefits. SunSpider in one JVM:
+  `controlflow-recursive` 1,143 → 925 ms, `3d-morph` 773 → 694 ms.
+
 ### Number return values (2026-10-21)
 
 - Performance (all versions, compiled mode, no observable change): a nested function declaration that only its

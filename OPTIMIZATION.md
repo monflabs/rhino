@@ -421,6 +421,22 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** `math-spectral-norm` alone: its `A(i, j)` compiles to double arithmetic; level by itself (C2 had
   inlined the boxed version), but see the next item.
 
+### Number variables of functions with an activation
+
+- **What.** The optimizer skipped every function with an activation object, such as a function wrapping its
+  declarations (a module pattern, the JavaScriptPerformance wrapper). Under `VERSION_ECMASCRIPT`, such a
+  function keeps the variables that no nested function refers to in registers (M14); the optimizer now types
+  those too, and the ones that only hold numbers get double registers (`BodyCodegen.initRegisterVars`). Their
+  values then count for the number parameters and returns of the functions they call: in SunSpider
+  `controlflow-recursive`, `ack(3, i)` and `tak(3 * i + 3, 2 * i + 2, i + 1)` pass numbers, and `ack` and `tak`
+  get number parameters and return doubles.
+- **Correctness.** Only register variables are GETVAR/SETVAR nodes in such a function; the variables in the
+  activation keep their names, untyped. Generators and functions with `eval`, `with` or an aliasing `arguments`
+  have no register variables.
+- **Gain.** `controlflow-recursive` alone 955 → 895 ms, in the SunSpider sequence 1,143 → 925 ms; `3d-morph`
+  in the sequence 773 → 694 ms; the other files are level (rerun alone). `VERSION_ES6` keeps these variables in
+  the activation, so it is unchanged.
+
 ### Number return values
 
 - **What.** A compiled function returned an `Object`, so `fib(n - 1) + fib(n - 2)` boxed both results and

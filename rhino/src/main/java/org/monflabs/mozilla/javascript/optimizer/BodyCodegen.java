@@ -772,6 +772,13 @@ class BodyCodegen {
             if (!fnode.isVarInRegister(i)) {
                 continue;
             }
+            if (fnCurrent.isNumberVar(i)) {
+                int reg = getNewWordPairLocal(false);
+                cfw.addPush(0.0);
+                cfw.addDStore(reg);
+                varRegisters[i] = reg;
+                continue;
+            }
             int reg = getNewWordLocal();
             if (scriptOrFn.hasRestParameter() && i == paramCount - 1) {
                 // the array of the rest parameter, created with the activation
