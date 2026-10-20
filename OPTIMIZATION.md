@@ -406,9 +406,18 @@ on, and what it gained. It also records the experiments that measured no gain, s
   that position (`OptFunctionNode.hasNumberArgument`); the type flow of `Block` starts it as a number, and keeps
   it a number variable only if the body assigns it nothing else. The prologue takes the double of the pair, or
   converts the object (a call through the `Object[]` entry, which the analysis excludes).
+- **Recursion.** Functions that call themselves or each other cannot wait for their callers. They are assumed to
+  take numbers everywhere, then `Optimizer.recursiveNumberArguments` drops each parameter that a call may pass
+  something else, until nothing changes: a call from one of them passes a number when the argument is a number
+  literal, a number parameter that the caller never assigns, or an arithmetic operation on those (`fib(n - 1)`);
+  the operands must all be numbers, since the operation on BigInts gives a BigInt. A caller that is not
+  optimized (one that needs an activation, such as a function wrapping its declarations) gets the same check
+  without parameters, so its literal arguments count as numbers. SunSpider `controlflow-recursive` alone
+  1,130 ms → 1,000 ms (its `ack`, `fib` and `tak` inside the JavaScriptPerformance wrapper); `fib` and `tak` in a
+  wrapper, 82 → 75 ms. A top-level `fib` is unchanged (not a candidate).
 - **When it does not apply.** A top-level declaration (a global property that other scripts and the host can
-  call), a function used as a value, called with another number of arguments or with a spread, a function with
-  a rest or destructured parameter, and recursion (its own calls are not optimized before it).
+  call), a function used as a value, called with another number of arguments or with a spread, and a function
+  with a rest or destructured parameter.
 - **Gain.** `math-spectral-norm` alone: its `A(i, j)` compiles to double arithmetic; level by itself (C2 had
   inlined the boxed version), but see the next item.
 

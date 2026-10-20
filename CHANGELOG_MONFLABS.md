@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Number parameters of recursive functions (2026-10-21)
+
+- Performance (all versions, compiled mode, no observable change): the nested function declarations that call
+  themselves or each other get number parameters too: they are assumed to take numbers, then each parameter a
+  call may pass something else is dropped until nothing changes (an argument is a number when it is a number
+  literal, a number parameter never assigned, or arithmetic on those). The literal arguments of a caller that
+  is not optimized (one with an activation, such as a wrapping function) now count as numbers. SunSpider
+  `controlflow-recursive` 1,130 ms → 1,000 ms.
+
 ### Number parameters, and direct calls without `this` (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): the parameters of a nested function

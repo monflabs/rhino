@@ -6,6 +6,7 @@ package org.monflabs.mozilla.javascript.optimizer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -65,11 +66,131 @@ class Optimizer {
                 }
             }
         }
-        // calls from each other (recursion): arguments of any type
+        // calls from each other (recursion), and the functions they call
+        Map<OptFunctionNode, boolean[]> pending = new HashMap<>();
         for (OptFunctionNode f : calls.keySet()) {
             if (!done.contains(f)) {
-                optimizeFunction(f, functions.get(f));
+                boolean[] numbers = new boolean[f.fnode.getParamCount()];
+                Arrays.fill(numbers, true);
+                pending.put(f, numbers);
             }
+        }
+        recursiveNumberArguments(pending, calls, callers, done);
+        for (Map.Entry<OptFunctionNode, boolean[]> e : pending.entrySet()) {
+            e.getKey().setNumberArguments(e.getValue());
+        }
+        for (OptFunctionNode f : pending.keySet()) {
+            optimizeFunction(f, functions.get(f));
+        }
+    }
+
+    /**
+     * The number parameters of functions that call each other: assumed to be numbers, until a call
+     * may pass something else. A call from one of them passes a number when it computes it from
+     * numbers with an arithmetic operation, before the caller is optimized.
+     */
+    private static void recursiveNumberArguments(
+            Map<OptFunctionNode, boolean[]> pending,
+            Map<OptFunctionNode, List<Node>> calls,
+            Map<Node, OptFunctionNode> callers,
+            Set<OptFunctionNode> done) {
+        Map<OptFunctionNode, BitSet> assigned = new HashMap<>();
+        for (OptFunctionNode f : pending.keySet()) {
+            BitSet vars = new BitSet();
+            collectAssignedVars_r(f, f.fnode, vars);
+            assigned.put(f, vars);
+        }
+        for (boolean changed = true; changed; ) {
+            changed = false;
+            for (Map.Entry<OptFunctionNode, boolean[]> e : pending.entrySet()) {
+                boolean[] numbers = e.getValue();
+                for (Node call : calls.get(e.getKey())) {
+                    OptFunctionNode caller = callers.get(call);
+                    int i = 0;
+                    for (Node arg = call.getFirstChild().getNext();
+                            arg != null;
+                            arg = arg.getNext(), i++) {
+                        if (!numbers[i]) {
+                            continue;
+                        }
+                        boolean number;
+                        if (caller != null && pending.containsKey(caller)) {
+                            number =
+                                    isNumberExpression(
+                                            arg, caller, pending.get(caller), assigned.get(caller));
+                        } else {
+                            number =
+                                    caller != null
+                                            && done.contains(caller)
+                                            && isNumberArgument(caller, arg);
+                        }
+                        if (!number) {
+                            numbers[i] = false;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static final boolean[] NO_PARAMS = new boolean[0];
+    private static final BitSet NO_VARS = new BitSet();
+
+    private static void collectAssignedVars_r(OptFunctionNode f, Node node, BitSet vars) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int type = child.getType();
+            if (type == Token.SETVAR || type == Token.SETCONSTVAR) {
+                vars.set(f.getVarIndex(child));
+            } else if ((type == Token.INC || type == Token.DEC)
+                    && child.getFirstChild().getType() == Token.GETVAR) {
+                vars.set(f.getVarIndex(child.getFirstChild()));
+            }
+            if (!(child instanceof ScriptNode)) {
+                collectAssignedVars_r(f, child, vars);
+            }
+        }
+    }
+
+    /**
+     * Whether an expression of a function that is not optimized yet always evaluates to a number: a
+     * number literal, a number parameter that is never assigned, or an arithmetic operation on
+     * those (one on BigInts would not).
+     */
+    private static boolean isNumberExpression(
+            Node n, OptFunctionNode f, boolean[] numberParams, BitSet assigned) {
+        switch (n.getType()) {
+            case Token.NUMBER:
+                return true;
+            case Token.GETVAR:
+                {
+                    int index = f.getVarIndex(n);
+                    return index < numberParams.length
+                            && numberParams[index]
+                            && !assigned.get(index);
+                }
+            case Token.ADD:
+            case Token.SUB:
+            case Token.MUL:
+            case Token.DIV:
+            case Token.MOD:
+            case Token.EXP:
+            case Token.BITAND:
+            case Token.BITOR:
+            case Token.BITXOR:
+            case Token.LSH:
+            case Token.RSH:
+            case Token.URSH:
+            case Token.NEG:
+            case Token.BITNOT:
+                for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
+                    if (!isNumberExpression(child, f, numberParams, assigned)) {
+                        return false;
+                    }
+                }
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -186,17 +307,25 @@ class Optimizer {
             OptFunctionNode caller = callers.get(call);
             int i = 0;
             for (Node arg = call.getFirstChild().getNext(); arg != null; arg = arg.getNext()) {
-                // a parameter of a direct call target is passed as its object and double
-                boolean passedThrough =
-                        caller != null
-                                && caller.isTargetOfDirectCall()
-                                && arg.getType() == Token.GETVAR
-                                && caller.isParameter(caller.getVarIndex(arg));
-                numbers[i] &= caller != null && !passedThrough && isNumberValue(arg);
+                numbers[i] &= caller != null && isNumberArgument(caller, arg);
                 i++;
             }
         }
         return numbers;
+    }
+
+    /** Whether an argument of a direct call from a function already optimized is a number. */
+    private static boolean isNumberArgument(OptFunctionNode caller, Node arg) {
+        if (caller.fnode.requiresActivation()) {
+            // not optimized: no variable is typed
+            return isNumberExpression(arg, caller, NO_PARAMS, NO_VARS);
+        }
+        // a parameter of a direct call target is passed as its object and double
+        boolean passedThrough =
+                caller.isTargetOfDirectCall()
+                        && arg.getType() == Token.GETVAR
+                        && caller.isParameter(caller.getVarIndex(arg));
+        return !passedThrough && isNumberValue(arg);
     }
 
     private void optimizeFunction(OptFunctionNode theFunction, boolean nested) {

@@ -76,6 +76,30 @@ class NumberParametersTest {
     }
 
     @Test
+    void recursiveFunctions() {
+        assertAllVersions(
+                "55 true,false 7 3 1x21 1.5 7 x2 1111 4",
+                "function outer() {"
+                        + "  function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }"
+                        + "  function even(n) { return n == 0 ? true : odd(n - 1); }"
+                        + "  function odd(n) { return n == 0 ? false : even(n - 1); }"
+                        + "  function tak(x, y, z) {"
+                        + "    return y >= x ? z : tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y));"
+                        + "  }"
+                        + "  function down(n) { if (n > 3) { n = n - 1; return down(n); } return n; }"
+                        + "  function str(n, s) { return n == 0 ? s : str(n - 1, s + n); }"
+                        + "  function half(n) { return n < 2 ? n : half(n / 2); }"
+                        + "  function big(n) { return n > 5 ? n : big(n + 2); }"
+                        + "  function mixed(n) { return n === 'x' ? n + 2 : mixed(n + 'x'); }"
+                        + "  function rep(n, k) { return k == 0 ? n : rep(n + n, k - 1); }"
+                        + "  function rep2(n, k) { return k == 0 ? n : rep2(n + n, k - 1); }"
+                        + "  return [fib(10), [even(4), odd(4)], tak(18, 12, 6), down(9), str(2, '1x'),"
+                        + "    half(3), big(1), mixed(''), rep(1 + '', 2), rep2(-(-1), 2)].join(' ');"
+                        + "}"
+                        + "outer()");
+    }
+
+    @Test
     void comparisonsOfNumbersAsArguments() {
         assertAllVersions(
                 "true,false,boolean|true,boolean",
