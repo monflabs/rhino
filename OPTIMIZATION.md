@@ -377,6 +377,24 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** SunSpider compiled, alone: `access-fannkuch` 1,319 ms → 830 ms, `access-nsieve` 320 → 244,
   `bitops-nsieve-bits` 1,175 → 934; `math-spectral-norm` after the other SunSpider files 2,222 → 2,046.
 
+### Nested functions optimized
+
+- **What.** The optimizer (`Optimizer`, with the type flow of `Block`) keeps the variables of a function without
+  an activation that only ever hold numbers in double registers, and compiles arithmetic, comparisons and
+  element indexes on them without boxing; the arguments of a direct call are passed as doubles. Upstream ran it
+  on the functions declared at the top level of the script only, so a function nested in another one (a module
+  pattern, an IIFE, the JavaScriptPerformance `__benchmarkBody__` wrapper) ran on boxed `Double`s and
+  `Integer`s. `Optimizer.optimize` now walks every function.
+- **BigInt parameters.** In a direct-call target, the optimizer typed parameters as numbers in arithmetic and
+  converted them with ToNumber, so `mul(2n, 3n)` threw (an upstream bug, in top-level functions). An operation
+  whose two operands can both be BigInts (two parameters, a parameter and an operand of unknown type) now takes
+  the generic path; a parameter against a number keeps double arithmetic, since a BigInt there throws a TypeError
+  either way. Under `VERSION_ES6`, top-level functions keep the old typing (`BACKWARD_COMPATIBILITY.md` 1.90).
+- **Gain.** SunSpider in one JVM, compiled: `math-spectral-norm` 1,839 ms → 745 ms, `bitops-3bit-bits-in-byte`
+  18,804 → 6,086 ms (about 4,100 alone), `bitops-nsieve-bits` 919 → 312, `access-fannkuch` 741 → 414,
+  `3d-morph` 1,258 → 765, `access-nbody` 4,333 → 3,154, `math-cordic` 1,628 → 1,142, `crypto-md5` 772 → 556,
+  `crypto-aes` 575 → 431; the string and date files are level.
+
 ### Method calls on primitive strings without a String object
 
 - **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its

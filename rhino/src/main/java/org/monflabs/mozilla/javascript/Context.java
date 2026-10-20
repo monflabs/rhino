@@ -275,6 +275,8 @@ public class Context implements Closeable {
      *   <li>A method called on a primitive string ({@code "abc".indexOf("b")}) receives the string
      *       itself as {@code this}, not a String object: the built-ins of {@code String.prototype}
      *       no longer call an overridden {@code toString} or {@code valueOf}.
+     *   <li>In compiled mode, arithmetic on two parameters of a top-level function ({@code x * y})
+     *       accepts BigInts instead of throwing a TypeError.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

@@ -1464,6 +1464,20 @@ String.prototype.toString = function () { return "X"; };
 - **Why:** ECMA-262 2026, §7.3.14 (Call with the primitive as thisArgument), §10.2.1.2 (OrdinaryCallBindThis) and
   §22.1.3 (the String methods apply ToString to `this`, a string already).
 
+### 1.90 Arithmetic on BigInt parameters in compiled top-level functions
+
+```js
+function mul(x, y) { return x * y; }
+mul(2n, 3n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: 6n
+```
+
+- In compiled mode, a top-level function that the script calls directly took its parameters as numbers in
+  `-`, `*`, `/`, `%`, `**` and the bitwise operators, converting them with ToNumber, which throws for a BigInt.
+  Now an operation whose two operands can both be BigInts (two parameters, or a parameter and an operand of
+  unknown type) is the generic one. A parameter and a number still use double arithmetic: a BigInt there throws
+  a TypeError either way. The interpreter was not affected.
+- **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator: two BigInts use the BigInt operation).
+
 ---
 
 ## 2. Platform and embedding

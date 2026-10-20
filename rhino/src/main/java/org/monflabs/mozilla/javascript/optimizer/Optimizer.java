@@ -6,6 +6,7 @@ package org.monflabs.mozilla.javascript.optimizer;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.monflabs.mozilla.javascript.CompilerEnvirons;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
@@ -18,19 +19,26 @@ class Optimizer {
 
     // It is assumed that (NumberType | AnyType) == AnyType
 
+    Optimizer(CompilerEnvirons compilerEnv) {
+        this.compilerEnv = compilerEnv;
+    }
+
     void optimize(ScriptNode scriptOrFn) {
         //  run on one function at a time for now
         int functionCount = scriptOrFn.getFunctionCount();
         for (int i = 0; i != functionCount; ++i) {
             OptFunctionNode f = OptFunctionNode.get(scriptOrFn, i);
-            optimizeFunction(f);
+            optimizeFunction(f, scriptOrFn.getType() == Token.FUNCTION);
+            optimize(f.fnode);
         }
     }
 
-    private void optimizeFunction(OptFunctionNode theFunction) {
+    private void optimizeFunction(OptFunctionNode theFunction, boolean nested) {
         if (theFunction.fnode.requiresActivation()) return;
 
         inDirectCallFunction = theFunction.isTargetOfDirectCall();
+        // nested functions were not optimized before, hence never had the legacy typing
+        bigIntSafeParameters = nested || compilerEnv.isLatestEcmaScript();
         this.theFunction = theFunction;
 
         ArrayList<Node> statementsArray = new ArrayList<>();
@@ -104,6 +112,27 @@ class Optimizer {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether an arithmetic operation on these operands, typed as numbers, may have two BigInt
+     * operands: a parameter (which can hold a BigInt) and another parameter or an operand of
+     * unknown type. A parameter and a number throw a TypeError either way.
+     */
+    private boolean mayBeBigIntOperation(Node lChild, int lType, Node rChild, int rType) {
+        if (!bigIntSafeParameters) {
+            return false;
+        }
+        boolean lParam = isDirectCallParameter(lChild);
+        boolean rParam = isDirectCallParameter(rChild);
+        return (lParam && (rParam || rType != NumberType))
+                || (rParam && (lParam || lType != NumberType));
+    }
+
+    private boolean isDirectCallParameter(Node n) {
+        return inDirectCallFunction
+                && n.getType() == Token.GETVAR
+                && theFunction.isParameter(theFunction.getVarIndex(n));
     }
 
     private int rewriteForNumberVariables(Node n, int desired) {
@@ -281,6 +310,11 @@ class Optimizer {
                     Node rChild = lChild.getNext();
                     int lType = rewriteForNumberVariables(lChild, NumberType);
                     int rType = rewriteForNumberVariables(rChild, NumberType);
+                    if (mayBeBigIntOperation(lChild, lType, rChild, rType)) {
+                        convertParameter(lChild);
+                        convertParameter(rChild);
+                        return AnyType;
+                    }
                     markDCPNumberContext(lChild);
                     markDCPNumberContext(rChild);
                     if (lType == NumberType) {
@@ -440,7 +474,9 @@ class Optimizer {
         }
     }
 
+    private final CompilerEnvirons compilerEnv;
     private boolean inDirectCallFunction;
+    private boolean bigIntSafeParameters;
     OptFunctionNode theFunction;
     private boolean parameterUsedInNumberContext;
 }

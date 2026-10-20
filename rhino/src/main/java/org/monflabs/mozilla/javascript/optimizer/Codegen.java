@@ -268,7 +268,7 @@ public class Codegen implements Evaluator {
                         tree, declarations.isEmpty() ? null : declarations, directCallTargets);
         ot.transform(tree, compilerEnv);
 
-        new Optimizer().optimize(tree);
+        new Optimizer(compilerEnv).optimize(tree);
     }
 
     private static void collectDeclarations_r(

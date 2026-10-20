@@ -6,6 +6,19 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Nested functions optimized like top-level functions (2026-10-20)
+
+- Performance (all versions, compiled mode, no observable change): the optimizer, which keeps the variables that
+  only hold numbers in double registers, ran on the top-level functions of a script only (as upstream); it now
+  runs on nested functions too. Code wrapped in a function (a module pattern, the JavaScriptPerformance
+  wrapper) was compiled with boxed numbers. SunSpider in one JVM: `math-spectral-norm` 1,839 ms → 745 ms,
+  `bitops-3bit-bits-in-byte` 18,804 → 6,086 ms, `bitops-nsieve-bits` 919 → 312 ms, `access-fannkuch` 741 → 414 ms,
+  `3d-morph` 1,258 → 765 ms, `access-nbody` 4,333 → 3,154 ms, `math-cordic` 1,628 → 1,142 ms.
+- Conformance (`VERSION_ECMASCRIPT`, BACKWARD_COMPATIBILITY.md 1.90): in a function called directly, arithmetic
+  whose two operands can both be BigInts (two parameters, or a parameter and an operand of unknown type) uses
+  the generic operation instead of converting the parameters with ToNumber, which threw a TypeError for
+  `mul(2n, 3n)`. Nested functions use this rule in every version, since they were not optimized before.
+
 ### Closure variables read from the activation found once per call (2026-10-20)
 
 - Performance (`VERSION_ECMASCRIPT`, compiled mode, no observable change): a compiled nested function that reads
