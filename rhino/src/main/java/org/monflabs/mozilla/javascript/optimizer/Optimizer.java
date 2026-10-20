@@ -5,10 +5,18 @@
 package org.monflabs.mozilla.javascript.optimizer;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.monflabs.mozilla.javascript.CompilerEnvirons;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
+import org.monflabs.mozilla.javascript.ast.FunctionNode;
+import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
 
 class Optimizer {
@@ -23,14 +31,172 @@ class Optimizer {
         this.compilerEnv = compilerEnv;
     }
 
-    void optimize(ScriptNode scriptOrFn) {
-        //  run on one function at a time for now
-        int functionCount = scriptOrFn.getFunctionCount();
-        for (int i = 0; i != functionCount; ++i) {
-            OptFunctionNode f = OptFunctionNode.get(scriptOrFn, i);
-            optimizeFunction(f, scriptOrFn.getType() == Token.FUNCTION);
-            optimize(f.fnode);
+    void optimize(ScriptNode tree) {
+        Map<OptFunctionNode, Boolean> functions = new LinkedHashMap<>();
+        collectFunctions_r(tree, functions);
+        Map<OptFunctionNode, List<Node>> calls = new HashMap<>();
+        Map<Node, OptFunctionNode> callers = new HashMap<>();
+        collectNumberArgumentCandidates_r(tree, calls, callers);
+
+        // a function whose arguments may be numbers is optimized after the functions that call it
+        Set<OptFunctionNode> done = new HashSet<>();
+        for (Map.Entry<OptFunctionNode, Boolean> e : functions.entrySet()) {
+            if (!calls.containsKey(e.getKey())) {
+                optimizeFunction(e.getKey(), e.getValue());
+                done.add(e.getKey());
+            }
         }
+        for (boolean progress = true; progress; ) {
+            progress = false;
+            for (Map.Entry<OptFunctionNode, List<Node>> e : calls.entrySet()) {
+                OptFunctionNode f = e.getKey();
+                if (done.contains(f)) {
+                    continue;
+                }
+                boolean ready = true;
+                for (Node call : e.getValue()) {
+                    ready &= done.contains(callers.get(call));
+                }
+                if (ready) {
+                    f.setNumberArguments(numberArguments(f, e.getValue(), callers));
+                    optimizeFunction(f, functions.get(f));
+                    done.add(f);
+                    progress = true;
+                }
+            }
+        }
+        // calls from each other (recursion): arguments of any type
+        for (OptFunctionNode f : calls.keySet()) {
+            if (!done.contains(f)) {
+                optimizeFunction(f, functions.get(f));
+            }
+        }
+    }
+
+    /** The functions of the tree, and whether each is nested in another function. */
+    private static void collectFunctions_r(
+            ScriptNode scriptOrFn, Map<OptFunctionNode, Boolean> functions) {
+        for (int i = 0, n = scriptOrFn.getFunctionCount(); i != n; ++i) {
+            OptFunctionNode f = OptFunctionNode.get(scriptOrFn, i);
+            functions.put(f, scriptOrFn.getType() == Token.FUNCTION);
+            collectFunctions_r(f.fnode, functions);
+        }
+    }
+
+    /**
+     * The function declarations nested in a function that only its direct calls can call, with
+     * those calls: the name is used nowhere else in the enclosing function (a value, an assignment,
+     * typeof), which has no direct eval or with. Every call then passes its arguments in the code
+     * optimized for the caller.
+     */
+    private static void collectNumberArgumentCandidates_r(
+            ScriptNode scriptOrFn,
+            Map<OptFunctionNode, List<Node>> calls,
+            Map<Node, OptFunctionNode> callers) {
+        int functionCount = scriptOrFn.getFunctionCount();
+        if (scriptOrFn.getType() == Token.FUNCTION && functionCount != 0) {
+            Map<String, Integer> names = new HashMap<>();
+            Map<OptFunctionNode, List<Node>> directCalls = new HashMap<>();
+            if (scanNames_r(scriptOrFn, null, names, directCalls, callers)) {
+                for (int i = 0; i != functionCount; ++i) {
+                    OptFunctionNode f = OptFunctionNode.get(scriptOrFn, i);
+                    FunctionNode fnode = f.fnode;
+                    List<Node> fCalls = directCalls.get(f);
+                    if (fCalls != null
+                            && fnode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT
+                            && fnode.getParamCount() != 0
+                            && !fnode.requiresActivation()
+                            && !fnode.hasRestParameter()
+                            && !fnode.hasDestructuredParams()
+                            && names.getOrDefault(fnode.getName(), 0) == calleeNames(fCalls)) {
+                        calls.put(f, fCalls);
+                    }
+                }
+            }
+        }
+        for (int i = 0; i != functionCount; ++i) {
+            collectNumberArgumentCandidates_r(
+                    OptFunctionNode.get(scriptOrFn, i).fnode, calls, callers);
+        }
+    }
+
+    /**
+     * Counts the names used in a function and the functions nested in it, and collects their direct
+     * calls; returns false if one has a direct eval or a with.
+     */
+    private static boolean scanNames_r(
+            Node node,
+            OptFunctionNode caller,
+            Map<String, Integer> names,
+            Map<OptFunctionNode, List<Node>> directCalls,
+            Map<Node, OptFunctionNode> callers) {
+        if (node instanceof ScriptNode) {
+            ScriptNode scriptOrFn = (ScriptNode) node;
+            caller = OptFunctionNode.get(scriptOrFn);
+            for (int i = 0, n = scriptOrFn.getFunctionCount(); i != n; ++i) {
+                if (!scanNames_r(
+                        scriptOrFn.getFunctionNode(i), null, names, directCalls, callers)) {
+                    return false;
+                }
+            }
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int type = child.getType();
+            if (type == Token.ENTERWITH
+                    || ((type == Token.CALL || type == Token.NEW)
+                            && child.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
+                                    != Node.NON_SPECIALCALL)) {
+                return false;
+            }
+            // not a property name, nor the statement of a declaration
+            if (child instanceof Name && type != Token.STRING && type != Token.FUNCTION) {
+                names.merge(child.getString(), 1, Integer::sum);
+            }
+            OptFunctionNode target = (OptFunctionNode) child.getProp(Node.DIRECTCALL_PROP);
+            if (target != null) {
+                directCalls.computeIfAbsent(target, k -> new ArrayList<>()).add(child);
+                callers.put(child, caller);
+            }
+            if (!(child instanceof ScriptNode)
+                    && !scanNames_r(child, caller, names, directCalls, callers)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The uses of the name of the target that are the callee of its direct calls. */
+    private static int calleeNames(List<Node> calls) {
+        int count = 0;
+        for (Node call : calls) {
+            Node callee = call.getFirstChild();
+            if (callee instanceof Name && callee.getType() != Token.STRING) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** By parameter, whether every direct call of a function passes it a double. */
+    private static boolean[] numberArguments(
+            OptFunctionNode f, List<Node> calls, Map<Node, OptFunctionNode> callers) {
+        boolean[] numbers = new boolean[f.fnode.getParamCount()];
+        Arrays.fill(numbers, true);
+        for (Node call : calls) {
+            OptFunctionNode caller = callers.get(call);
+            int i = 0;
+            for (Node arg = call.getFirstChild().getNext(); arg != null; arg = arg.getNext()) {
+                // a parameter of a direct call target is passed as its object and double
+                boolean passedThrough =
+                        caller != null
+                                && caller.isTargetOfDirectCall()
+                                && arg.getType() == Token.GETVAR
+                                && caller.isParameter(caller.getVarIndex(arg));
+                numbers[i] &= caller != null && !passedThrough && isNumberValue(arg);
+                i++;
+            }
+        }
+        return numbers;
     }
 
     private void optimizeFunction(OptFunctionNode theFunction, boolean nested) {
@@ -112,6 +278,22 @@ class Optimizer {
             }
         }
         return false;
+    }
+
+    /**
+     * Whether the code of a node, an argument of a direct call, produces a double: typed as a
+     * number, and not a comparison (whose ISNUMBER_PROP types its operands).
+     */
+    static boolean isNumberValue(Node n) {
+        switch (n.getType()) {
+            case Token.LE:
+            case Token.LT:
+            case Token.GE:
+            case Token.GT:
+                return false;
+            default:
+                return n.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH;
+        }
     }
 
     /**

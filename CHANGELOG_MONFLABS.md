@@ -6,6 +6,19 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Number parameters, and direct calls without `this` (2026-10-20)
+
+- Performance (all versions, compiled mode, no observable change): the parameters of a nested function
+  declaration are doubles when only its direct calls can call it (its name is used nowhere else in the enclosing
+  function, which has no direct `eval` or `with`) and every call passes a number in that position; the
+  optimizer handles the callers first. A direct call no longer computes the `this` of a function that cannot
+  read it (no `this`, `super` or direct `eval` in its body or its arrow functions): for a non-strict function,
+  that was a walk up to the global object at every call. SunSpider in one JVM: `math-spectral-norm` 745 ms →
+  560 ms (alone 635 → 400 ms), `controlflow-recursive` 1,538 → 1,131 ms, `crypto-md5` 556 → 496 ms.
+- Fix (all versions, compiled mode): a comparison of numbers passed to a direct call (`f(i < j)`, with `i` and
+  `j` number variables) failed to compile with "Stack underflow" (an upstream bug, also in Rhino 1.8.0); the
+  call passed the boolean as a double.
+
 ### Nested functions optimized like top-level functions (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): the optimizer, which keeps the variables that

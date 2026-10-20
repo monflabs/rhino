@@ -65,9 +65,10 @@ class Block {
         int paramCount = fn.fnode.getParamCount();
         int varCount = fn.fnode.getParamAndVarCount();
         int[] varTypes = new int[varCount];
-        // If the variable is a parameter, it could have any type.
+        // If the variable is a parameter, it could have any type, unless every call passes a
+        // number to it.
         for (int i = 0; i != paramCount; ++i) {
-            varTypes[i] = Optimizer.AnyType;
+            varTypes[i] = fn.hasNumberArgument(i) ? Optimizer.NumberType : Optimizer.AnyType;
         }
         // If the variable is from a "var" statement, its typeEvent will be set
         // when we see the setVar node.
@@ -103,8 +104,9 @@ class Block {
             }
         }
 
-        for (int i = paramCount; i != varCount; i++) {
-            if (varTypes[i] == Optimizer.NumberType) {
+        for (int i = 0; i != varCount; i++) {
+            if (varTypes[i] == Optimizer.NumberType
+                    && (i >= paramCount || fn.hasNumberArgument(i))) {
                 fn.setIsNumberVar(i);
             }
         }
@@ -295,7 +297,7 @@ class Block {
                 'undefined'-ness of that variable.
         */
 
-        theBlocks[0].markAnyTypeVariables(varTypes);
+        theBlocks[0].markAnyTypeVariables(fn, varTypes);
     }
 
     private static void typeFlow(
@@ -338,9 +340,11 @@ class Block {
         return prev != (varTypes[index] |= type);
     }
 
-    private void markAnyTypeVariables(int[] varTypes) {
+    private void markAnyTypeVariables(OptFunctionNode fn, int[] varTypes) {
         for (int i = 0; i != varTypes.length; i++) {
-            if (itsLiveOnEntrySet.get(i)) {
+            // a parameter that every call passes a number to is a number on entry
+            if (itsLiveOnEntrySet.get(i)
+                    && !(i < fn.fnode.getParamCount() && fn.hasNumberArgument(i))) {
                 assignType(varTypes, i, Optimizer.AnyType);
             }
         }

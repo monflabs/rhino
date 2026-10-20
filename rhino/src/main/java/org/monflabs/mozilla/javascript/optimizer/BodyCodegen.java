@@ -281,6 +281,9 @@ class BodyCodegen {
                 // make sure that all parameters are objects
                 itsForcedObjectParameters = true;
                 for (int i = 0; i != directParameterCount; ++i) {
+                    if (fnCurrent.isNumberVar(i)) {
+                        continue;
+                    }
                     int reg = varRegisters[i];
                     cfw.addALoad(reg);
                     cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
@@ -418,7 +421,11 @@ class BodyCodegen {
             int firstUndefVar = -1;
             for (int i = 0; i != varCount; ++i) {
                 int reg = -1;
-                if (i < paramCount) {
+                if (i < paramCount && fnCurrent.isNumberVar(i)) {
+                    // every call passes a number: from the double of the pair
+                    reg = getNewWordPairLocal(false);
+                    initNumberParameter(varRegisters[i], reg);
+                } else if (i < paramCount) {
                     if (!inDirectCallFunction) {
                         reg = getNewWordLocal();
                         cfw.addALoad(argsLocal);
@@ -3293,7 +3300,7 @@ class BodyCodegen {
                     continue;
                 }
                 generateExpression(arg, node);
-                if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                if (Optimizer.isNumberValue(arg)) {
                     argLocals[i] = getArgDoubleLocal();
                     cfw.addDStore(argLocals[i]);
                 } else {
@@ -3336,13 +3343,16 @@ class BodyCodegen {
                         + ": "
                         + codegen.cleanName(target.fnode));
         if (type != Token.NEW) {
-            cfw.add(ByteCode.DUP);
-            cfw.addALoad(thisObjLocal);
-            cfw.addInvoke(
-                    ByteCode.INVOKEVIRTUAL,
-                    "org/monflabs/mozilla/javascript/JSFunction",
-                    "getThisObj",
-                    "(Ljava/lang/Object;)Ljava/lang/Object;");
+            if (target.readsThis()) {
+                cfw.add(ByteCode.DUP);
+                cfw.addALoad(thisObjLocal);
+                cfw.addInvoke(
+                        ByteCode.INVOKEVIRTUAL,
+                        "org/monflabs/mozilla/javascript/JSFunction",
+                        "getThisObj",
+                        "(Ljava/lang/Object;)Ljava/lang/Object;");
+                cfw.addAStore(thisObjLocal);
+            }
         } else {
             cfw.add(ByteCode.DUP);
             cfw.addALoad(contextLocal);
@@ -3354,8 +3364,8 @@ class BodyCodegen {
                     "(Lorg/monflabs/mozilla/javascript/Context;"
                             + "Lorg/monflabs/mozilla/javascript/VarScope;"
                             + ")Lorg/monflabs/mozilla/javascript/Scriptable;");
+            cfw.addAStore(thisObjLocal);
         }
-        cfw.addAStore(thisObjLocal);
         cfw.addALoad(contextLocal);
         cfw.add(ByteCode.SWAP);
         if (type == Token.NEW) {
@@ -3381,7 +3391,7 @@ class BodyCodegen {
                 argChild != null;
                 argChild = argChild.getNext(), argIndex++) {
             int dcp_register = nodeIsDirectCallParameter(argChild);
-            boolean isNumber = argChild.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH;
+            boolean isNumber = Optimizer.isNumberValue(argChild);
             if (dcp_register >= 0) {
                 cfw.addALoad(dcp_register);
                 cfw.addDLoad(dcp_register + 1);
@@ -3454,7 +3464,7 @@ class BodyCodegen {
                 cfw.addPush(i);
                 if (argLocals[i] < 0) {
                     dcpLoadAsObject(nodeIsDirectCallParameter(arg));
-                } else if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                } else if (Optimizer.isNumberValue(arg)) {
                     cfw.addDLoad(argLocals[i]);
                     addDoubleWrap();
                 } else {
@@ -3493,7 +3503,7 @@ class BodyCodegen {
             int i = 0;
             for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {
                 if (argLocals[i] >= 0) {
-                    if (arg.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
+                    if (Optimizer.isNumberValue(arg)) {
                         argDoubleLocalsInUse--;
                     } else {
                         releaseWordLocal(argLocals[i]);
@@ -5427,6 +5437,27 @@ class BodyCodegen {
     private void addGoto(Node target, int jumpcode) {
         int targetLabel = getTargetLabel(target);
         cfw.add(jumpcode, targetLabel);
+    }
+
+    /**
+     * Stores in a double register a direct call parameter that every call passes a number to: the
+     * double of the pair, or its object converted (a call through the Object[] entry).
+     */
+    private void initNumberParameter(int pair, int reg) {
+        if (!inDirectCallFunction) throw Kit.codeBug();
+        int isObject = cfw.acquireLabel();
+        int store = cfw.acquireLabel();
+        int stack = cfw.getStackTop();
+        cfw.addALoad(pair);
+        cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
+        cfw.add(ByteCode.IF_ACMPNE, isObject);
+        cfw.addDLoad(pair + 1);
+        cfw.add(ByteCode.GOTO, store);
+        cfw.markLabel(isObject, stack);
+        cfw.addALoad(pair);
+        addObjectToDouble();
+        cfw.markLabel(store);
+        cfw.addDStore(reg);
     }
 
     private void addObjectToDouble() {

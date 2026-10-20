@@ -319,7 +319,7 @@ public class NewTargetDirectCallTest {
     public void generatesInlinedPlainCallSite() {
         String source =
                 Utils.lines(
-                        "function target(a) { return typeof new.target; }",
+                        "function target(a) { return typeof new.target + typeof this; }",
                         "function caller() { return target(1); }",
                         "caller();");
 
@@ -327,6 +327,7 @@ public class NewTargetDirectCallTest {
         assertTrue(
                 invoked.contains("getDescriptor"),
                 "expected the guarded direct call site of visitOptimizedCall");
+        // getThisObj: target reads its this
         assertTrue(
                 invoked.contains("getThisObj"),
                 "expected the non-constructor branch of visitOptimizedCall");

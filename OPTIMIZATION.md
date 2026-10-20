@@ -395,6 +395,34 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `3d-morph` 1,258 → 765, `access-nbody` 4,333 → 3,154, `math-cordic` 1,628 → 1,142, `crypto-md5` 772 → 556,
   `crypto-aes` 575 → 431; the string and date files are level.
 
+### Number parameters
+
+- **What.** A direct call passes each argument as an object and a double (`Void.TYPE` in the object when it is a
+  number), and the callee converts its parameters to objects on entry unless it uses them in arithmetic. The
+  parameters of a nested function declaration are now doubles, like its number variables, when every call is
+  known to pass a number: `Optimizer.optimize` keeps the declarations whose name the enclosing function (and
+  the functions nested in it) only uses as the callee of their direct calls, without a direct `eval` or `with`
+  anywhere in it; it optimizes the callers first, then marks a parameter when every call passes a double in
+  that position (`OptFunctionNode.hasNumberArgument`); the type flow of `Block` starts it as a number, and keeps
+  it a number variable only if the body assigns it nothing else. The prologue takes the double of the pair, or
+  converts the object (a call through the `Object[]` entry, which the analysis excludes).
+- **When it does not apply.** A top-level declaration (a global property that other scripts and the host can
+  call), a function used as a value, called with another number of arguments or with a spread, a function with
+  a rest or destructured parameter, and recursion (its own calls are not optimized before it).
+- **Gain.** `math-spectral-norm` alone: its `A(i, j)` compiles to double arithmetic; level by itself (C2 had
+  inlined the boxed version), but see the next item.
+
+### Direct calls without `this`
+
+- **What.** A direct call computed the `this` of its target (`JSFunction.getThisObj`): for a non-strict function
+  called by name, the global object, through `ScriptableObject.getTopLevelScope`, a walk up the scope chain at
+  every call. It now skips it when the target cannot read its `this` (`OptFunctionNode.readsThis`: no `this`,
+  `super` or direct `eval` in its body or in its arrow functions, which share it); the target then receives
+  `undefined`, which it never reads.
+- **Gain.** `math-spectral-norm` alone 635 ms → 400 ms, after the other SunSpider files 742 → 573 ms (42% of
+  its time was `getTopLevelScope` once the arithmetic was unboxed); SunSpider in one JVM:
+  `controlflow-recursive` 1,538 → 1,131 ms, `crypto-md5` 556 → 496 ms.
+
 ### Method calls on primitive strings without a String object
 
 - **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its
