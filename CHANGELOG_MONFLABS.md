@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Array elements linked per call site (2026-10-20)
+
+- Performance (all versions, compiled mode, no observable change): element reads and writes on a dense array
+  link, per call site, to small methods that read or replace the element directly
+  (`NativeArray.getDenseElement`, `setDenseElement`), with the general path for holes, growth, accessors, frozen
+  and non-extensible arrays and other receivers. SunSpider `access-fannkuch` 1,319 ms → 830 ms, `access-nsieve`
+  320 → 244 ms, `bitops-nsieve-bits` 1,175 → 934 ms compiled.
+
 ### Direct calls to nested function declarations (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): a call to a function declared in an

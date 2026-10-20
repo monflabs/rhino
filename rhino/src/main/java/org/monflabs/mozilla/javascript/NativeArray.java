@@ -256,6 +256,37 @@ public class NativeArray extends ScriptableObject implements List {
         return new DescriptorInfo(res, DONTENUM | READONLY, true);
     }
 
+    /**
+     * The element at {@code index} when this array holds only dense elements, else {@link
+     * #NOT_FOUND} (also for a hole), for which the caller takes the general path.
+     */
+    public Object getDenseElement(int index) {
+        Object[] d = dense;
+        if (denseOnly && d != null && 0 <= index && index < d.length) {
+            return d[index];
+        }
+        return NOT_FOUND;
+    }
+
+    /**
+     * Replaces the element at {@code index} when this array holds only dense elements and has one
+     * there; false when the caller has to take the general path.
+     */
+    public boolean setDenseElement(int index, Object value) {
+        Object[] d = dense;
+        if (denseOnly
+                && d != null
+                && 0 <= index
+                && index < d.length
+                && index < length
+                && d[index] != NOT_FOUND
+                && !isSealed()) {
+            d[index] = value;
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public Object get(int index, Scriptable start) {
         var slot = denseOnly ? null : getMap().query(null, index);

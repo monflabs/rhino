@@ -348,6 +348,23 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** SunSpider in one JVM, compiled: `math-spectral-norm` 2,806 ms → 2,296 ms (alone 2,372 → 2,101),
   `controlflow-recursive` 3,534 → 2,591, `crypto-md5` 877 → 737.
 
+### Array elements linked per call site
+
+- **What.** Compiled element reads and writes (`a[i]`, `a[i] = v`) are `invokedynamic` sites that linked to
+  `ScriptRuntime.getObjectElem`, `getObjectIndex`, `setObjectElem` and `setObjectIndex`. `NativeArrayLinker`
+  now links them, for a receiver of exactly the `NativeArray` class, to small methods that read or replace a
+  dense element (`NativeArray.getDenseElement`, `setDenseElement`) and call the general method otherwise.
+- **Why it matters.** The general methods are shared by every script; in a JVM that has run other scripts they
+  are compiled on their own into code too big to inline (see the direct calls to nested declarations above), and
+  `math-spectral-norm` spent about 28% of its time in `getObjectElem` and the prototype walk it calls. The
+  linked methods are small and per site, so they inline whatever other scripts did.
+- **When it applies.** The array holds only dense elements (no accessor or attribute on an index); a read
+  needs an element at the index (a hole reads the prototypes on the general path); a write needs an existing
+  element below the length on an array that is not sealed, so growing, holes (where a prototype setter may
+  apply), frozen and non-extensible arrays take the general path.
+- **Gain.** SunSpider compiled, alone: `access-fannkuch` 1,319 ms → 830 ms, `access-nsieve` 320 → 244,
+  `bitops-nsieve-bits` 1,175 → 934; `math-spectral-norm` after the other SunSpider files 2,222 → 2,046.
+
 ### Method calls on primitive strings without a String object
 
 - **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its
