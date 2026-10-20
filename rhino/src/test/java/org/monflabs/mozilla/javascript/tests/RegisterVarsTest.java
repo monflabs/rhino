@@ -255,6 +255,52 @@ class RegisterVarsTest {
     }
 
     @Test
+    void nestedFunctionsKeepTheActivationsOfTheirCall() {
+        assertAllVersions(
+                "12,21,14,23|27,14|15,9|1,3,6",
+                "function outer(a) {"
+                        + "  var x = a;"
+                        + "  function mid(b) {"
+                        + "    var y = b;"
+                        + "    return function (n, odd) {"
+                        + "      var r = 0;"
+                        + "      for (var i = 0; i < n; i++) {"
+                        + "        if (odd && i % 2) { r += y; } else { let k = x; r += k; }"
+                        + "      }"
+                        + "      x = x + 1; y = y + 1;"
+                        + "      return r;"
+                        + "    };"
+                        + "  }"
+                        + "  return mid;"
+                        + "}"
+                        + "var p = outer(1)(10), q = outer(2)(20), r = [];"
+                        + "for (var i = 0; i < 2; i++) { r.push(p(2, true) + 1, q(2, true) - 1); }"
+                        + "function t() {"
+                        + "  var v = 1, w = 0;"
+                        + "  var h = function () {"
+                        + "    try { if (v > 0) throw v; } catch (e) { w = w + e + v; }"
+                        + "    finally { v = v * 2; }"
+                        + "    return v;"
+                        + "  };"
+                        + "  return [h() + h() + h() + w - 1, w].join();"
+                        + "}"
+                        + "function u() {"
+                        + "  var s = 0;"
+                        + "  function add(k) { if (k > 0) { add(k - 1); } s = s + k; return s; }"
+                        + "  var arrow = () => add(4) + s;"
+                        + "  return [arrow() - 5, s - 1].join();"
+                        + "}"
+                        + "function g() {"
+                        + "  var c = 0;"
+                        + "  return function () { c = c + 1; return c; };"
+                        + "}"
+                        + "var c1 = g(), c2 = g(), c3 = g();"
+                        + "c2(); c3(); c3();"
+                        + "[r.join(), t(), u(),"
+                        + " [c1(), c2() + 1, c3() + 3].join()].join('|')");
+    }
+
+    @Test
     void nestedFunctionsShadowingCapturedVariables() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 "2,5,1|function,1|2,5|6,6",

@@ -152,6 +152,18 @@ on, and what it gained. It also records the experiments that measured no gain, s
   JavaScriptPerformance wrapper (four nested declarations called by name) 2,450 ms → 2,358 ms compiled; level when
   the activation holds only a few names, whose lookup costs about as much as `outerActivation`.
 
+- **The activation found once per call** (2026-10-20). `outerActivation` walked the scope chain at every access,
+  and in a JVM that had run other scripts it was no longer inlined: 13% of `math-spectral-norm` after the other
+  SunSpider files, for the name of the declaration called in its inner loops. A compiled function now reserves
+  a register per number of functions out that it reads (null on entry); the first access stores the activation
+  that `ScriptRuntime.getOuterActivation` finds, and the next ones read the slot from it. The activation of an
+  enclosing function is the same for the whole call, whatever block or `catch` scope the access is in, since the
+  walk only stops at the `NativeCall` of the owner's descriptor. When it is not found (null), the access takes
+  `getOuterVar`/`setOuterVar` as before. Generators keep the walk, since their registers do not survive a
+  `yield`. Gain: `math-spectral-norm` 2,150 ms → 1,985 ms alone, 2,116 → 1,905 ms after the other SunSpider
+  files; a closure that reads and writes a captured variable once per call, 3 million calls, 925 → 665 ms; in a
+  loop of the closure, 380 → 235 ms.
+
 ### Per-site cache of properties found on the prototype chain
 
 - **What.** A named property get or method lookup (`o.p`, `o.m()`) has a `PropertyCache`. For a receiver of the

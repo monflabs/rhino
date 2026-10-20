@@ -2741,6 +2741,14 @@ public class ScriptRuntime {
     public static final int OUTER_VAR_INDEX = 0xFFFFFF;
 
     /**
+     * The activation that owns a variable of an enclosing function (see #getOuterVar), which
+     * compiled code keeps for the rest of the call (null: the name is looked up).
+     */
+    public static VarScope getOuterActivation(Object fn, VarScope scope, int var, String name) {
+        return outerActivation(fn, scope, var, name);
+    }
+
+    /**
      * The activation of the enclosing function that owns a variable (null: not found, the name is
      * then looked up).
      */

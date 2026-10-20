@@ -7,6 +7,7 @@ import static org.monflabs.mozilla.classfile.ClassFileWriter.ACC_STATIC;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -215,6 +216,7 @@ class BodyCodegen {
         argDoubleLocals = new int[0];
         argDoubleLocalsInUse = 0;
         activationLocal = 0;
+        outerActivationLocals = null;
         if (scriptOrFn.getType() == Token.FUNCTION) {
             fnCurrent = OptFunctionNode.get(scriptOrFn);
             hasVarsInRegs = !fnCurrent.fnode.requiresActivation();
@@ -369,6 +371,7 @@ class BodyCodegen {
             addScriptRuntimeInvoke(
                     "enterFunctionStrictness", "(Lorg/monflabs/mozilla/javascript/Context;Z)Z");
             cfw.addIStore(parentStrictnessLocal);
+            initOuterActivationLocals();
         }
 
         if (hasVarsInRegs) {
@@ -1189,16 +1192,7 @@ class BodyCodegen {
                             "getActivationVar",
                             "(Lorg/monflabs/mozilla/javascript/VarScope;I)Ljava/lang/Object;");
                 } else if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
-                    cfw.addALoad(funObjLocal);
-                    cfw.addALoad(variableObjectLocal);
-                    cfw.addPush(node.getIntProp(Node.OUTER_VAR_PROP, -1));
-                    cfw.addPush(node.getString());
-                    cfw.addALoad(contextLocal);
-                    addScriptRuntimeInvoke(
-                            "getOuterVar",
-                            "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
-                                    + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
-                                    + ")Ljava/lang/Object;");
+                    visitGetOuterVar(node.getIntProp(Node.OUTER_VAR_PROP, -1), node.getString());
                 } else if (node.getIntProp(Node.BOUND_NAME_PROP, 0) == 1) {
                     // stack: [scope] -> [scope, value]
                     cfw.add(ByteCode.DUP);
@@ -1886,17 +1880,7 @@ class BodyCodegen {
                                     + "Ljava/lang/Object;");
                 } else if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
                     generateExpression(child.getNext(), node);
-                    cfw.addALoad(funObjLocal);
-                    cfw.addALoad(variableObjectLocal);
-                    cfw.addPush(node.getIntProp(Node.OUTER_VAR_PROP, -1));
-                    cfw.addPush(child.getString());
-                    cfw.addALoad(contextLocal);
-                    addScriptRuntimeInvoke(
-                            "setOuterVar",
-                            "(Ljava/lang/Object;Ljava/lang/Object;"
-                                    + "Lorg/monflabs/mozilla/javascript/VarScope;I"
-                                    + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
-                                    + ")Ljava/lang/Object;");
+                    visitSetOuterVar(node.getIntProp(Node.OUTER_VAR_PROP, -1), child.getString());
                 } else if (type == Token.SETNAME) {
                     visitSetName(node, child);
                 } else {
@@ -5519,6 +5503,128 @@ class BodyCodegen {
         return getNewWordIntern(isConst ? 2 : 1);
     }
 
+    /**
+     * Reserves a register, null on entry, for the activation of each enclosing function whose
+     * variables the function reads at their position (Node#OUTER_VAR_PROP). Not in a generator,
+     * whose registers do not survive a yield.
+     */
+    private void initOuterActivationLocals() {
+        if (!(scriptOrFn instanceof FunctionNode)
+                || ((FunctionNode) scriptOrFn).getOuterVars() == null) {
+            return;
+        }
+        BitSet depths = new BitSet();
+        collectOuterVarDepths(scriptOrFn, depths);
+        if (depths.isEmpty()) {
+            return;
+        }
+        outerActivationLocals = new int[depths.length()];
+        for (int depth = depths.nextSetBit(0); depth >= 0; depth = depths.nextSetBit(depth + 1)) {
+            outerActivationLocals[depth] = getNewWordLocal();
+            cfw.add(ByteCode.ACONST_NULL);
+            cfw.addAStore(outerActivationLocals[depth]);
+        }
+    }
+
+    private static void collectOuterVarDepths(Node node, BitSet depths) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int var = child.getIntProp(Node.OUTER_VAR_PROP, -1);
+            if (var != -1) {
+                depths.set(var >>> 24);
+            }
+            collectOuterVarDepths(child, depths);
+        }
+    }
+
+    private void visitGetOuterVar(int var, String name) {
+        int lookup = cfw.acquireLabel();
+        int end = cfw.acquireLabel();
+        if (addOuterActivation(var, name, lookup)) {
+            int stack = cfw.getStackTop();
+            cfw.addPush(var & ScriptRuntime.OUTER_VAR_INDEX);
+            addScriptRuntimeInvoke(
+                    "getActivationVar",
+                    "(Lorg/monflabs/mozilla/javascript/VarScope;I)Ljava/lang/Object;");
+            cfw.add(ByteCode.GOTO, end);
+            cfw.markLabel(lookup, stack);
+            cfw.add(ByteCode.POP);
+        }
+        cfw.addALoad(funObjLocal);
+        cfw.addALoad(variableObjectLocal);
+        cfw.addPush(var);
+        cfw.addPush(name);
+        cfw.addALoad(contextLocal);
+        addScriptRuntimeInvoke(
+                "getOuterVar",
+                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
+                        + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
+                        + ")Ljava/lang/Object;");
+        cfw.markLabel(end);
+    }
+
+    /** stack: [value] -> [value] */
+    private void visitSetOuterVar(int var, String name) {
+        int lookup = cfw.acquireLabel();
+        int end = cfw.acquireLabel();
+        if (addOuterActivation(var, name, lookup)) {
+            int stack = cfw.getStackTop();
+            cfw.addPush(var & ScriptRuntime.OUTER_VAR_INDEX);
+            addScriptRuntimeInvoke(
+                    "setActivationVar",
+                    "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I)"
+                            + "Ljava/lang/Object;");
+            cfw.add(ByteCode.GOTO, end);
+            cfw.markLabel(lookup, stack);
+            cfw.add(ByteCode.POP);
+        }
+        cfw.addALoad(funObjLocal);
+        cfw.addALoad(variableObjectLocal);
+        cfw.addPush(var);
+        cfw.addPush(name);
+        cfw.addALoad(contextLocal);
+        addScriptRuntimeInvoke(
+                "setOuterVar",
+                "(Ljava/lang/Object;Ljava/lang/Object;"
+                        + "Lorg/monflabs/mozilla/javascript/VarScope;I"
+                        + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
+                        + ")Ljava/lang/Object;");
+        cfw.markLabel(end);
+    }
+
+    /**
+     * Pushes the activation that owns a variable of an enclosing function, from its register or
+     * looked up and kept there, and jumps to lookup with it (null) when the name has to be looked
+     * up; returns false, pushing nothing, when the function keeps no register for it.
+     */
+    private boolean addOuterActivation(int var, String name, int lookup) {
+        int depth = var >>> 24;
+        if (outerActivationLocals == null
+                || depth >= outerActivationLocals.length
+                || outerActivationLocals[depth] == 0) {
+            return false;
+        }
+        int local = outerActivationLocals[depth];
+        int found = cfw.acquireLabel();
+        cfw.addALoad(local);
+        cfw.add(ByteCode.DUP);
+        cfw.add(ByteCode.IFNONNULL, found);
+        cfw.add(ByteCode.POP);
+        cfw.addALoad(funObjLocal);
+        cfw.addALoad(variableObjectLocal);
+        cfw.addPush(var);
+        cfw.addPush(name);
+        addScriptRuntimeInvoke(
+                "getOuterActivation",
+                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
+                        + "Ljava/lang/String;)Lorg/monflabs/mozilla/javascript/VarScope;");
+        cfw.add(ByteCode.DUP);
+        cfw.addAStore(local);
+        cfw.add(ByteCode.DUP);
+        cfw.add(ByteCode.IFNULL, lookup);
+        cfw.markLabel(found);
+        return true;
+    }
+
     private short getNewWordLocal() {
         return getNewWordIntern(1);
     }
@@ -5610,6 +5716,12 @@ class BodyCodegen {
      * (0: none).
      */
     private int activationLocal;
+
+    /**
+     * By number of functions out, the register that keeps the activation of an enclosing function
+     * once a variable of it was read (null: the reads look it up every time).
+     */
+    private int[] outerActivationLocals;
 
     private int[] varRegisters;
     private boolean inDirectCallFunction;

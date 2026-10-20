@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Closure variables read from the activation found once per call (2026-10-20)
+
+- Performance (`VERSION_ECMASCRIPT`, compiled mode, no observable change): a compiled nested function that reads
+  or writes the variables of an enclosing function at their position (M14) keeps that function's activation in a
+  register once it has found it, instead of walking the scope chain at every access
+  (`ScriptRuntime.getOuterActivation`); generators keep the walk. SunSpider `math-spectral-norm` 2,150 ms →
+  1,985 ms alone and 2,116 → 1,905 ms after the other SunSpider files; a closure updating a captured variable in
+  a loop 380 → 235 ms.
+
 ### Array elements linked per call site (2026-10-20)
 
 - Performance (all versions, compiled mode, no observable change): element reads and writes on a dense array
