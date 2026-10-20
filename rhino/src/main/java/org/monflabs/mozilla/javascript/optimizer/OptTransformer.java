@@ -10,6 +10,7 @@ import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.NodeTransformer;
 import org.monflabs.mozilla.javascript.Token;
+import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
 
 /**
@@ -21,9 +22,11 @@ import org.monflabs.mozilla.javascript.ast.ScriptNode;
 class OptTransformer extends NodeTransformer {
 
     OptTransformer(
-            Map<String, OptFunctionNode> possibleDirectCalls,
+            ScriptNode root,
+            Map<ScriptNode, Map<String, OptFunctionNode>> declarations,
             List<OptFunctionNode> directCallTargets) {
-        this.possibleDirectCalls = possibleDirectCalls;
+        this.root = root;
+        this.declarations = declarations;
         this.directCallTargets = directCallTargets;
     }
 
@@ -69,7 +72,7 @@ class OptTransformer extends NodeTransformer {
              *  else
              *      ScriptRuntime.Call(fn, tmp, b, c)
              */
-            if (possibleDirectCalls != null) {
+            if (declarations != null) {
                 String targetName = null;
                 if (left.getType() == Token.NAME) {
                     targetName = left.getString();
@@ -79,8 +82,7 @@ class OptTransformer extends NodeTransformer {
                     throw Kit.codeBug();
                 }
                 if (targetName != null) {
-                    OptFunctionNode ofn;
-                    ofn = possibleDirectCalls.get(targetName);
+                    OptFunctionNode ofn = findDeclaration(tree, targetName);
                     if (ofn != null
                             && node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 0
                             && argCount == ofn.fnode.getParamCount()
@@ -102,6 +104,24 @@ class OptTransformer extends NodeTransformer {
         }
     }
 
-    private Map<String, OptFunctionNode> possibleDirectCalls;
+    /**
+     * The declaration of the function the name most likely holds in the scope of the call: the
+     * nearest declaration in the enclosing functions. The call checks at run time that it got that
+     * function.
+     */
+    private OptFunctionNode findDeclaration(ScriptNode tree, String name) {
+        for (ScriptNode s = tree; ; ) {
+            Map<String, OptFunctionNode> names = declarations.get(s);
+            OptFunctionNode ofn = names == null ? null : names.get(name);
+            if (ofn != null || s == root || !(s instanceof FunctionNode)) {
+                return ofn;
+            }
+            FunctionNode enclosing = s.getEnclosingFunction();
+            s = enclosing == null ? root : enclosing;
+        }
+    }
+
+    private final ScriptNode root;
+    private Map<ScriptNode, Map<String, OptFunctionNode>> declarations;
     private List<OptFunctionNode> directCallTargets;
 }

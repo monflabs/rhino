@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Direct calls to nested function declarations (2026-10-20)
+
+- Performance (all versions, compiled mode, no observable change): a call to a function declared in an
+  enclosing function is a direct call, like a call to a top-level function: a static call guarded by a check
+  that the name holds that function, with the regular call otherwise. The shared call path loses its inlining
+  in a JVM that has run other scripts; SunSpider `math-spectral-norm` after the other SunSpider files 2,806 ms →
+  2,296 ms, `controlflow-recursive` 3,534 → 2,591 ms.
+
 ### Function declarations at their position in the activation (2026-10-20)
 
 - Performance (`VERSION_ECMASCRIPT`, no observable change): the function declarations of a function with an

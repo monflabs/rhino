@@ -326,6 +326,28 @@ on, and what it gained. It also records the experiments that measured no gain, s
   (test262 caught it in its resizable buffer helpers).
 - **Gain.** Recursive `fib(28)` ten times, compiled: 100 ms → 83 ms (Rhino 1.8.0: 55 ms; upstream base: 133 ms).
 
+### Direct calls to nested function declarations
+
+- **What.** Direct calls (above) covered the function declarations of the script only. A call in a function now
+  also targets a declaration of an enclosing function: `OptTransformer.findDeclaration` takes the nearest
+  declaration of the name in the enclosing functions, then the script, and the guard checks at run time that
+  the name holds a function of that declaration.
+- **Why it matters.** Code that wraps its work in a function (a module pattern, an IIFE, the
+  JavaScriptPerformance `__benchmarkBody__` wrapper) called its helpers through `JSFunction.call` and
+  `MHJSFunctionCode.execute`, whose call of the linked `execute` is one site for every compiled function of
+  every script. Run alone, a script keeps that site monomorphic and C2 inlines through it; in a JVM that has run
+  other scripts, the site is megamorphic and the shared methods are already compiled into code too big to
+  inline (`InlineSmallCode`, 2,500 bytes), so the callee is a separate call and the caller's profile no longer
+  types its arguments. `math-spectral-norm` after 19 other SunSpider files: 2,750 ms against 2,450 ms alone;
+  `-XX:InlineSmallCode=10000` closed the gap for it and slowed other files. A direct call is a static call of
+  its own site, which no other script can pollute.
+- **Correctness.** The direct path passes the function object, and the callee takes its scope from it
+  (`getDeclarationScope`), so any closure of the declaration runs in its own scope. A name that holds something
+  else (reassigned, shadowed by a `var`, a parameter or an inner declaration that was not chosen) fails the guard
+  and takes the regular call.
+- **Gain.** SunSpider in one JVM, compiled: `math-spectral-norm` 2,806 ms → 2,296 ms (alone 2,372 → 2,101),
+  `controlflow-recursive` 3,534 → 2,591, `crypto-md5` 877 → 737.
+
 ### Method calls on primitive strings without a String object
 
 - **What** (M16, 16.16). A call `s.m()` on a primitive string converted the string to a `NativeString` (with its

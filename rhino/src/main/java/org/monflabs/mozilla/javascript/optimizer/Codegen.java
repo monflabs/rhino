@@ -255,36 +255,34 @@ public class Codegen implements Evaluator {
             // Kit.codeBug("Codegen must not run in interpreted Mode");
             throw new Error();
         }
-        Map<String, OptFunctionNode> possibleDirectCalls = null;
-        /*
-         * Collect all of the contained functions into a hashtable
-         * so that the call optimizer can access the class name & parameter
-         * count for any call it encounters
-         */
-        if (tree.getType() == Token.SCRIPT) {
-            int functionCount = tree.getFunctionCount();
-            for (int i = 0; i != functionCount; ++i) {
-                OptFunctionNode ofn = OptFunctionNode.get(tree, i);
-                if (ofn.fnode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
-                    String name = ofn.fnode.getName();
-                    if (name.length() != 0) {
-                        if (possibleDirectCalls == null) {
-                            possibleDirectCalls = new HashMap<>();
-                        }
-                        possibleDirectCalls.put(name, ofn);
-                    }
-                }
-            }
-        }
-
-        if (possibleDirectCalls != null) {
+        // The function declarations of each script or function, which the calls in its functions
+        // can target directly
+        Map<ScriptNode, Map<String, OptFunctionNode>> declarations = new HashMap<>();
+        collectDeclarations_r(tree, declarations);
+        if (!declarations.isEmpty()) {
             directCallTargets = new ArrayList<>();
         }
 
-        OptTransformer ot = new OptTransformer(possibleDirectCalls, directCallTargets);
+        OptTransformer ot =
+                new OptTransformer(
+                        tree, declarations.isEmpty() ? null : declarations, directCallTargets);
         ot.transform(tree, compilerEnv);
 
         new Optimizer().optimize(tree);
+    }
+
+    private static void collectDeclarations_r(
+            ScriptNode scriptOrFn, Map<ScriptNode, Map<String, OptFunctionNode>> declarations) {
+        for (int i = 0, N = scriptOrFn.getFunctionCount(); i != N; ++i) {
+            OptFunctionNode ofn = OptFunctionNode.get(scriptOrFn, i);
+            if (ofn.fnode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
+                String name = ofn.fnode.getName();
+                if (name.length() != 0) {
+                    declarations.computeIfAbsent(scriptOrFn, k -> new HashMap<>()).put(name, ofn);
+                }
+            }
+            collectDeclarations_r(ofn.fnode, declarations);
+        }
     }
 
     private static void initOptFunctions_r(ScriptNode scriptOrFn) {
