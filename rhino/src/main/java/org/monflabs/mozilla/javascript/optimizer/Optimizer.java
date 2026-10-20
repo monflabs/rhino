@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.IntPredicate;
 import org.monflabs.mozilla.javascript.CompilerEnvirons;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
@@ -39,12 +40,12 @@ class Optimizer {
         Map<Node, OptFunctionNode> callers = new HashMap<>();
         collectNumberArgumentCandidates_r(tree, calls, callers);
 
-        // a function whose arguments may be numbers is optimized after the functions that call it
+        // a function whose arguments may be numbers is analyzed after the functions that call it
         Set<OptFunctionNode> done = new HashSet<>();
-        for (Map.Entry<OptFunctionNode, Boolean> e : functions.entrySet()) {
-            if (!calls.containsKey(e.getKey())) {
-                optimizeFunction(e.getKey(), e.getValue());
-                done.add(e.getKey());
+        for (OptFunctionNode f : functions.keySet()) {
+            if (!calls.containsKey(f)) {
+                analyzeFunction(f);
+                done.add(f);
             }
         }
         for (boolean progress = true; progress; ) {
@@ -60,12 +61,13 @@ class Optimizer {
                 }
                 if (ready) {
                     f.setNumberArguments(numberArguments(f, e.getValue(), callers));
-                    optimizeFunction(f, functions.get(f));
+                    analyzeFunction(f);
                     done.add(f);
                     progress = true;
                 }
             }
         }
+        Map<OptFunctionNode, List<Node>> returnValues = returnValues(calls);
         // calls from each other (recursion), and the functions they call
         Map<OptFunctionNode, boolean[]> pending = new HashMap<>();
         for (OptFunctionNode f : calls.keySet()) {
@@ -75,30 +77,43 @@ class Optimizer {
                 pending.put(f, numbers);
             }
         }
-        recursiveNumberArguments(pending, calls, callers, done);
+        recursiveNumberArguments(pending, calls, callers, returnValues);
         for (Map.Entry<OptFunctionNode, boolean[]> e : pending.entrySet()) {
             e.getKey().setNumberArguments(e.getValue());
+            analyzeFunction(e.getKey());
         }
-        for (OptFunctionNode f : pending.keySet()) {
-            optimizeFunction(f, functions.get(f));
+
+        numberReturns(returnValues);
+        for (Map.Entry<OptFunctionNode, Boolean> e : functions.entrySet()) {
+            rewriteFunction(e.getKey(), e.getValue());
         }
     }
 
     /**
      * The number parameters of functions that call each other: assumed to be numbers, until a call
      * may pass something else. A call from one of them passes a number when it computes it from
-     * numbers with an arithmetic operation, before the caller is optimized.
+     * numbers, before the caller is analyzed: the number parameters it never assigns, and the calls
+     * of the functions returning numbers, which are found along (see #numberReturns).
      */
     private static void recursiveNumberArguments(
             Map<OptFunctionNode, boolean[]> pending,
             Map<OptFunctionNode, List<Node>> calls,
             Map<Node, OptFunctionNode> callers,
-            Set<OptFunctionNode> done) {
-        Map<OptFunctionNode, BitSet> assigned = new HashMap<>();
-        for (OptFunctionNode f : pending.keySet()) {
-            BitSet vars = new BitSet();
-            collectAssignedVars_r(f, f.fnode, vars);
-            assigned.put(f, vars);
+            Map<OptFunctionNode, List<Node>> returnValues) {
+        if (pending.isEmpty()) {
+            return;
+        }
+        Map<OptFunctionNode, IntPredicate> numberVars = new HashMap<>();
+        for (Map.Entry<OptFunctionNode, boolean[]> e : pending.entrySet()) {
+            OptFunctionNode f = e.getKey();
+            boolean[] numbers = e.getValue();
+            BitSet assigned = new BitSet();
+            collectAssignedVars_r(f, f.fnode, assigned);
+            numberVars.put(f, i -> i < numbers.length && numbers[i] && !assigned.get(i));
+        }
+        Map<OptFunctionNode, Boolean> numberReturns = new HashMap<>();
+        for (OptFunctionNode f : returnValues.keySet()) {
+            numberReturns.put(f, Boolean.TRUE);
         }
         for (boolean changed = true; changed; ) {
             changed = false;
@@ -110,32 +125,47 @@ class Optimizer {
                     for (Node arg = call.getFirstChild().getNext();
                             arg != null;
                             arg = arg.getNext(), i++) {
-                        if (!numbers[i]) {
-                            continue;
-                        }
-                        boolean number;
-                        if (caller != null && pending.containsKey(caller)) {
-                            number =
-                                    isNumberExpression(
-                                            arg, caller, pending.get(caller), assigned.get(caller));
-                        } else {
-                            number =
-                                    caller != null
-                                            && done.contains(caller)
-                                            && isNumberArgument(caller, arg);
-                        }
-                        if (!number) {
+                        if (numbers[i]
+                                && (caller == null
+                                        || !isNumberExpression(
+                                                arg,
+                                                caller,
+                                                numberVars.getOrDefault(
+                                                        caller, caller::isNumberVar),
+                                                numberReturns))) {
                             numbers[i] = false;
                             changed = true;
                         }
                     }
                 }
             }
+            for (Map.Entry<OptFunctionNode, List<Node>> e : returnValues.entrySet()) {
+                OptFunctionNode f = e.getKey();
+                if (numberReturns.get(f)
+                        && !allNumbers(
+                                e.getValue(),
+                                f,
+                                numberVars.getOrDefault(f, f::isNumberVar),
+                                numberReturns)) {
+                    numberReturns.put(f, Boolean.FALSE);
+                    changed = true;
+                }
+            }
         }
     }
 
-    private static final boolean[] NO_PARAMS = new boolean[0];
-    private static final BitSet NO_VARS = new BitSet();
+    private static boolean allNumbers(
+            List<Node> values,
+            OptFunctionNode f,
+            IntPredicate numberVar,
+            Map<OptFunctionNode, Boolean> numberReturns) {
+        for (Node value : values) {
+            if (!isNumberExpression(value, f, numberVar, numberReturns)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     private static void collectAssignedVars_r(OptFunctionNode f, Node node, BitSet vars) {
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
@@ -153,23 +183,107 @@ class Optimizer {
     }
 
     /**
-     * Whether an expression of a function that is not optimized yet always evaluates to a number: a
-     * number literal, a number parameter that is never assigned, or an arithmetic operation on
-     * those (one on BigInts would not).
+     * The functions that only their direct calls can call, with the values of their returns, if
+     * they always return one.
+     */
+    private static Map<OptFunctionNode, List<Node>> returnValues(
+            Map<OptFunctionNode, List<Node>> calls) {
+        Map<OptFunctionNode, List<Node>> returns = new HashMap<>();
+        for (Map.Entry<OptFunctionNode, List<Node>> e : calls.entrySet()) {
+            OptFunctionNode f = e.getKey();
+            boolean onlyCalls = !f.fnode.isGenerator() && !f.fnode.isAsync();
+            for (Node call : e.getValue()) {
+                onlyCalls &= call.getType() == Token.CALL;
+            }
+            List<Node> values = new ArrayList<>();
+            if (onlyCalls && collectReturnValues_r(f.fnode, values)) {
+                returns.put(f, values);
+            }
+        }
+        return returns;
+    }
+
+    /**
+     * Marks the functions that always return a number: each return has a value that is a number,
+     * the calls of these functions being assumed to return numbers until one may not. This includes
+     * the ones assumed by #recursiveNumberArguments, which knew less about the variables.
+     */
+    private static void numberReturns(Map<OptFunctionNode, List<Node>> returnValues) {
+        Map<OptFunctionNode, Boolean> numberReturns = new HashMap<>();
+        for (OptFunctionNode f : returnValues.keySet()) {
+            numberReturns.put(f, Boolean.TRUE);
+        }
+        for (boolean changed = true; changed; ) {
+            changed = false;
+            for (Map.Entry<OptFunctionNode, List<Node>> e : returnValues.entrySet()) {
+                OptFunctionNode f = e.getKey();
+                if (numberReturns.get(f)
+                        && !allNumbers(e.getValue(), f, f::isNumberVar, numberReturns)) {
+                    numberReturns.put(f, Boolean.FALSE);
+                    changed = true;
+                }
+            }
+        }
+        for (Map.Entry<OptFunctionNode, Boolean> e : numberReturns.entrySet()) {
+            if (e.getValue()) {
+                e.getKey().setReturnsNumber();
+            }
+        }
+    }
+
+    /**
+     * Collects the values of the returns of a function; false if one has none, or the function
+     * returns otherwise (a return in a try, a yield).
+     */
+    private static boolean collectReturnValues_r(Node node, List<Node> values) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int type = child.getType();
+            if (type == Token.TRY
+                    || type == Token.RETURN_RESULT
+                    || type == Token.YIELD
+                    || type == Token.YIELD_STAR
+                    || (type == Token.RETURN && child.getFirstChild() == null)) {
+                return false;
+            }
+            if (type == Token.RETURN) {
+                values.add(child.getFirstChild());
+            }
+            if (!(child instanceof ScriptNode) && !collectReturnValues_r(child, values)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Whether an expression of a function always evaluates to a number (or throws): a number
+     * literal, a number variable, an arithmetic operation that cannot give a BigInt (on a number,
+     * since a BigInt and a number throw a TypeError), or a direct call of a function returning a
+     * number.
      */
     private static boolean isNumberExpression(
-            Node n, OptFunctionNode f, boolean[] numberParams, BitSet assigned) {
+            Node n,
+            OptFunctionNode f,
+            IntPredicate numberVar,
+            Map<OptFunctionNode, Boolean> numberReturns) {
         switch (n.getType()) {
             case Token.NUMBER:
+            case Token.POS:
+            case Token.URSH:
                 return true;
             case Token.GETVAR:
+                return !f.fnode.requiresActivation() && numberVar.test(f.getVarIndex(n));
+            case Token.INC:
+            case Token.DEC:
+            case Token.NEG:
+            case Token.BITNOT:
                 {
-                    int index = f.getVarIndex(n);
-                    return index < numberParams.length
-                            && numberParams[index]
-                            && !assigned.get(index);
+                    Node child = n.getFirstChild();
+                    return (n.getType() == Token.NEG
+                                    || n.getType() == Token.BITNOT
+                                    || child.getType() == Token.GETVAR)
+                            && isNumberExpression(child, f, numberVar, numberReturns);
                 }
-            case Token.ADD:
             case Token.SUB:
             case Token.MUL:
             case Token.DIV:
@@ -180,15 +294,28 @@ class Optimizer {
             case Token.BITXOR:
             case Token.LSH:
             case Token.RSH:
-            case Token.URSH:
-            case Token.NEG:
-            case Token.BITNOT:
-                for (Node child = n.getFirstChild(); child != null; child = child.getNext()) {
-                    if (!isNumberExpression(child, f, numberParams, assigned)) {
-                        return false;
-                    }
+                return isNumberExpression(n.getFirstChild(), f, numberVar, numberReturns)
+                        || isNumberExpression(n.getLastChild(), f, numberVar, numberReturns);
+            case Token.ADD:
+                return isNumberExpression(n.getFirstChild(), f, numberVar, numberReturns)
+                        && isNumberExpression(n.getLastChild(), f, numberVar, numberReturns);
+            case Token.HOOK:
+                {
+                    Node ifTrue = n.getFirstChild().getNext();
+                    return isNumberExpression(ifTrue, f, numberVar, numberReturns)
+                            && isNumberExpression(ifTrue.getNext(), f, numberVar, numberReturns);
                 }
-                return true;
+            case Token.COMMA:
+            case Token.SETVAR:
+            case Token.SETCONSTVAR:
+                return isNumberExpression(n.getLastChild(), f, numberVar, numberReturns);
+            case Token.CALL:
+                {
+                    Object target = n.getProp(Node.DIRECTCALL_PROP);
+                    return target != null
+                            && numberReturns != null
+                            && numberReturns.getOrDefault(target, Boolean.FALSE);
+                }
             default:
                 return false;
         }
@@ -225,7 +352,6 @@ class Optimizer {
                     List<Node> fCalls = directCalls.get(f);
                     if (fCalls != null
                             && fnode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT
-                            && fnode.getParamCount() != 0
                             && !fnode.requiresActivation()
                             && !fnode.hasRestParameter()
                             && !fnode.hasDestructuredParams()
@@ -314,27 +440,14 @@ class Optimizer {
         return numbers;
     }
 
-    /** Whether an argument of a direct call from a function already optimized is a number. */
+    /** Whether an argument of a direct call from a function already analyzed is a number. */
     private static boolean isNumberArgument(OptFunctionNode caller, Node arg) {
-        if (caller.fnode.requiresActivation()) {
-            // not optimized: no variable is typed
-            return isNumberExpression(arg, caller, NO_PARAMS, NO_VARS);
-        }
-        // a parameter of a direct call target is passed as its object and double
-        boolean passedThrough =
-                caller.isTargetOfDirectCall()
-                        && arg.getType() == Token.GETVAR
-                        && caller.isParameter(caller.getVarIndex(arg));
-        return !passedThrough && isNumberValue(arg);
+        return isNumberExpression(arg, caller, caller::isNumberVar, null);
     }
 
-    private void optimizeFunction(OptFunctionNode theFunction, boolean nested) {
+    /** Finds the variables of a function that only hold numbers. */
+    private void analyzeFunction(OptFunctionNode theFunction) {
         if (theFunction.fnode.requiresActivation()) return;
-
-        inDirectCallFunction = theFunction.isTargetOfDirectCall();
-        // nested functions were not optimized before, hence never had the legacy typing
-        bigIntSafeParameters = nested || compilerEnv.isLatestEcmaScript();
-        this.theFunction = theFunction;
 
         ArrayList<Node> statementsArray = new ArrayList<>();
         buildStatementList_r(theFunction.fnode, statementsArray);
@@ -342,21 +455,30 @@ class Optimizer {
         statementsArray.toArray(theStatementNodes);
 
         Block.runFlowAnalyzes(theFunction, theStatementNodes);
+        statements.put(theFunction, theStatementNodes);
+    }
 
-        if (!theFunction.fnode.requiresActivation()) {
-            /*
-             * Now that we know which local vars are in fact always
-             * Numbers, we re-write the tree to take advantage of
-             * that. Any arithmetic or assignment op involving just
-             * Number typed vars is marked so that the codegen will
-             * generate non-object code.
-             */
-            parameterUsedInNumberContext = false;
-            for (Node theStatementNode : theStatementNodes) {
-                rewriteForNumberVariables(theStatementNode, NumberType);
-            }
-            theFunction.setParameterNumberContext(parameterUsedInNumberContext);
+    private void rewriteFunction(OptFunctionNode theFunction, boolean nested) {
+        if (theFunction.fnode.requiresActivation()) return;
+
+        inDirectCallFunction = theFunction.isTargetOfDirectCall();
+        // nested functions were not optimized before, hence never had the legacy typing
+        bigIntSafeParameters = nested || compilerEnv.isLatestEcmaScript();
+        this.theFunction = theFunction;
+        Node[] theStatementNodes = statements.get(theFunction);
+
+        /*
+         * Now that we know which local vars are in fact always
+         * Numbers, we re-write the tree to take advantage of
+         * that. Any arithmetic or assignment op involving just
+         * Number typed vars is marked so that the codegen will
+         * generate non-object code.
+         */
+        parameterUsedInNumberContext = false;
+        for (Node theStatementNode : theStatementNodes) {
+            rewriteForNumberVariables(theStatementNode, NumberType);
         }
+        theFunction.setParameterNumberContext(parameterUsedInNumberContext);
     }
 
     /*
@@ -739,6 +861,50 @@ class Optimizer {
                             }
                             child = child.getNext();
                         }
+                        if (target.returnsNumber()) {
+                            n.putIntProp(Node.ISNUMBER_PROP, Node.BOTH);
+                            return NumberType;
+                        }
+                    } else {
+                        rewriteAsObjectChildren(n, child);
+                    }
+                    return NoType;
+                }
+            case Token.HOOK:
+                {
+                    Node cond = n.getFirstChild();
+                    Node ifTrue = cond.getNext();
+                    Node ifFalse = ifTrue.getNext();
+                    int condType = rewriteForNumberVariables(cond, NoType);
+                    boolean trueNumber =
+                            rewriteForNumberVariables(ifTrue, NumberType) == NumberType
+                                    && !convertParameter(ifTrue);
+                    boolean falseNumber =
+                            rewriteForNumberVariables(ifFalse, NumberType) == NumberType
+                                    && !convertParameter(ifFalse);
+                    if (condType == NumberType && !convertParameter(cond)) {
+                        wrapAsObject(n, cond);
+                    }
+                    if (trueNumber && falseNumber) {
+                        n.putIntProp(Node.ISNUMBER_PROP, Node.BOTH);
+                        return NumberType;
+                    }
+                    if (trueNumber) {
+                        wrapAsObject(n, ifTrue);
+                    }
+                    if (falseNumber) {
+                        wrapAsObject(n, ifFalse);
+                    }
+                    return NoType;
+                }
+            case Token.RETURN:
+                {
+                    Node child = n.getFirstChild();
+                    if (theFunction.returnsNumber()) {
+                        int type = rewriteForNumberVariables(child, NumberType);
+                        if (type == NumberType && !convertParameter(child)) {
+                            n.putIntProp(Node.ISNUMBER_PROP, Node.BOTH);
+                        }
                     } else {
                         rewriteAsObjectChildren(n, child);
                     }
@@ -750,6 +916,14 @@ class Optimizer {
                     return NoType;
                 }
         }
+    }
+
+    private static void wrapAsObject(Node parent, Node child) {
+        Node next = child.getNext();
+        parent.removeChild(child);
+        Node nuChild = new Node(Token.TO_OBJECT, child);
+        if (next == null) parent.addChildToBack(nuChild);
+        else parent.addChildBefore(nuChild, next);
     }
 
     private void rewriteAsObjectChildren(Node n, Node child) {
@@ -786,6 +960,7 @@ class Optimizer {
     }
 
     private final CompilerEnvirons compilerEnv;
+    private final Map<OptFunctionNode, Node[]> statements = new HashMap<>();
     private boolean inDirectCallFunction;
     private boolean bigIntSafeParameters;
     OptFunctionNode theFunction;

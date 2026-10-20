@@ -421,6 +421,28 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** `math-spectral-norm` alone: its `A(i, j)` compiles to double arithmetic; level by itself (C2 had
   inlined the boxed version), but see the next item.
 
+### Number return values
+
+- **What.** A compiled function returned an `Object`, so `fib(n - 1) + fib(n - 2)` boxed both results and
+  added them with the generic `+`. A nested function declaration that only its direct calls can call (as for
+  number parameters) and that always returns a number now has its body in a `_c_<name>_<n>_num` method returning
+  a `double`; its `_c_` body method, which the other calls use, calls it and boxes the result. A direct call
+  from optimized code calls the `double` method and types the call as a number, and a `?:` whose branches are
+  numbers stays a double.
+- **When it applies.** Each `return` has a value, outside a `try`, and the function is not a generator or async;
+  every value is a number: a literal, a number variable, an arithmetic operation that cannot give a BigInt (on a
+  number, or `+x` and `>>>`), a `?:` of numbers, or a direct call of such a function. `Optimizer.numberReturns`
+  assumes the candidates return numbers and drops each one with a value that may not be, until nothing changes;
+  for recursive functions, `recursiveNumberArguments` finds their number parameters and number returns
+  together, since `tak(tak(x - 1, y, z), …)` passes the results of calls and returns a parameter.
+- **Correctness.** The analysis runs on the tree before it is rewritten: every function's types are found first
+  (`analyzeFunction`), then all are rewritten. A direct call that finds another function under the name (which
+  only the analyzed calls use, so this does not happen) converts the result with ToNumber. The `_num` method
+  keeps the `_c_` prefix, so the script stack of an error still lists the function.
+- **Gain.** `fib` and `tak` in a wrapper, 74 → 61 ms; SunSpider `controlflow-recursive` alone 1,000 →
+  950 ms (only its `fib` qualifies: `ack` and `tak` are called with a variable of the wrapper, which has an
+  activation and no types).
+
 ### Direct calls without `this`
 
 - **What.** A direct call computed the `this` of its target (`JSFunction.getThisObj`): for a non-strict function

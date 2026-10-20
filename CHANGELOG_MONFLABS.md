@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Number return values (2026-10-21)
+
+- Performance (all versions, compiled mode, no observable change): a nested function declaration that only its
+  direct calls can call and that always returns a number (each `return` has a number value: a literal, a number
+  variable, arithmetic that cannot give a BigInt, a `?:` of numbers, or a call of such a function) returns it as
+  a double to the direct calls from optimized code, which no longer box it; the other calls get it boxed.
+  Recursive functions get their number parameters and returns together. A `?:` whose branches are numbers is a
+  double. `fib` and `tak` in a wrapper 74 → 61 ms, SunSpider `controlflow-recursive` 1,000 → 950 ms.
+
 ### Number parameters of recursive functions (2026-10-21)
 
 - Performance (all versions, compiled mode, no observable change): the nested function declarations that call

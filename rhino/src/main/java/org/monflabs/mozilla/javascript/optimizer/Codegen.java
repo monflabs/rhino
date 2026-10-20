@@ -909,6 +909,20 @@ public class Codegen implements Evaluator {
     }
 
     /**
+     * The method holding the body of a function that always returns a number, which returns it as a
+     * double; the body method calls it and wraps the result. Its name matches the pattern of
+     * RhinoException, for the script stack.
+     */
+    String getNumberBodyMethodName(ScriptNode n) {
+        return getBodyMethodName(n) + "_num";
+    }
+
+    String getNumberBodyMethodSignature(ScriptNode n) {
+        String signature = getBodyMethodSignature(n);
+        return signature.substring(0, signature.lastIndexOf(')') + 1) + "D";
+    }
+
+    /**
      * List of illegal characters in unqualified names as specified in
      * https://docs.oracle.com/javase/specs/jvms/se25/html/jvms-4.html#jvms-4.2.2
      */

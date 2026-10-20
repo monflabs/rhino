@@ -81,6 +81,18 @@ public final class OptFunctionNode {
         this.numberArguments = numberArguments;
     }
 
+    /**
+     * Whether the function always returns a number, which its body method then returns as a double
+     * (see Codegen#getNumberBodyMethodName).
+     */
+    public boolean returnsNumber() {
+        return returnsNumber;
+    }
+
+    void setReturnsNumber() {
+        returnsNumber = true;
+    }
+
     public int getVarIndex(Node n) {
         int index = n.getIntProp(Node.VARIABLE_PROP, -1);
         if (index == -1) {
@@ -143,6 +155,7 @@ public final class OptFunctionNode {
     private boolean[] numberVarFlags;
     private boolean[] numberArguments;
     private Boolean readsThis;
+    private boolean returnsNumber;
     private int directTargetIndex = -1;
     private boolean itsParameterNumberContext;
     boolean itsContainsCalls0;
