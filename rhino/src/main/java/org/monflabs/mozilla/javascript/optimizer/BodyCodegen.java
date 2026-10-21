@@ -3627,6 +3627,10 @@ class BodyCodegen {
         }
 
         cfw.markLabel(beyond);
+        if (type == Token.NEW) {
+            // the new object of the direct call (a call releases its this on the regular path)
+            releaseWordLocal(thisObjLocal);
+        }
         if (argLocals != null) {
             int i = 0;
             for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {

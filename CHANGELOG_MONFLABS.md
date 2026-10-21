@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled generators with a direct construction in a yield or await (2026-10-22)
+
+- Fix (all versions, compiled mode): `yield new C()` or `await new C()`, where `C` is a function declaration of
+  the script (a direct call), failed to compile ("bad local variable type") and ran in the interpreter. The
+  local holding the new object of a direct construction was never released, so the next yield saved it, unset
+  on the regular path. Since "Direct calls evaluate their arguments once"; it also kept one local per direct
+  construction in any function. The two remaining test262 scripts of the previous entry compile.
+
 ### Compiled generators with a return through nested try statements (2026-10-22)
 
 - Fix (all versions, compiled mode): a generator or an async function returning out of nested try statements,
