@@ -69,6 +69,19 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `typedarray` −42% to −66%, `toprimitive` −31% to −50%, `strbuild` −34% to −49%, `instanceof` −31% to −44%,
   `protochain` −28% to −53%, `arith` −30% to −35%. It also removed a slowdown of 10–25% that only `VERSION_ECMASCRIPT`
   had on top-level code. All versions.
+- **Reads from nested functions** (M16, 16.14). The reads of a name in other code (`NAME:GET` and
+  `NAME:GETWITHTHIS`, and the interpreter's `NAME` and `NAMEANDTHIS` when the scope is not the top scope) walked
+  the scope chain by name, then looked the name up in the top scope and the global object. They now get a cache
+  too: `GlobalNameCache.nestedName` walks up the activations and block scopes (`NativeCall`, `LocalScope`,
+  `CatchScope`) and checks that none of them has the name, one query of a small map each, then reads the cached
+  slot of the top scope. Any other scope on the way (`with`, a scope of the embedding) takes the lookup. Since
+  every scope on the way is still checked, a name that `eval` or code run in the caller's scope adds to an
+  activation is found as before. Gain: a function nested in a wrapper reading `Math.abs` 3 million times, 205 →
+  88 ms compiled (`VERSION_ECMASCRIPT`, the other name captured), 266 → 209 ms when it also reads a global
+  (`VERSION_ES6` 268 → 232 ms), interpreted 5–10%; SunSpider in one JVM, compiled (every file wrapped in a
+  function): 21,744 → 20,939 ms, `access-nbody` 3,151 → 2,632 ms, `math-partial-sums` 1,710 → 1,506 ms,
+  `string-validate-input` 490 → 417 ms; `access-fannkuch` 397 → 463 ms in that sequence, which reads no name in
+  its loops (the profile of the files before it changes how C2 compiles its array writes). All versions.
 
 ### Lazily loaded built-ins stay lazy
 

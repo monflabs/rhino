@@ -58,7 +58,7 @@ class DefaultLinker implements GuardingDynamicLinker {
         } else if (op.isNamespace(RhinoNamespace.GNAME)) {
             return getCachedNameInvocation(lookup, mType, op);
         } else if (op.isNamespace(RhinoNamespace.NAME)) {
-            return getNameInvocation(lookup, mType, op);
+            return getNestedNameInvocation(lookup, mType, op);
         } else if (op.isNamespace(RhinoNamespace.MATH)) {
             return getMathInvocation(lookup, mType, op);
         }
@@ -191,6 +191,38 @@ class DefaultLinker implements GuardingDynamicLinker {
             return getNameInvocation(lookup, mType, op);
         }
         mh = MethodHandles.permuteArguments(mh.bindTo(cache), mType, 1, 0);
+        return new GuardedInvocation(mh);
+    }
+
+    /**
+     * The names of code whose scope is inside the top scope: the reads get a cache of the binding
+     * the name has in the top scope, used when the scopes on the way do not have it.
+     */
+    private GuardedInvocation getNestedNameInvocation(
+            MethodHandles.Lookup lookup, MethodType mType, ParsedOperation op)
+            throws NoSuchMethodException, IllegalAccessException {
+        MethodHandle mh;
+        if (op.isOperation(StandardOperation.GET)) {
+            mh =
+                    lookup.findVirtual(
+                            GlobalNameCache.class,
+                            "nestedName",
+                            MethodType.methodType(Object.class, Context.class, VarScope.class));
+        } else if (op.isOperation(RhinoOperation.GETWITHTHIS)) {
+            mh =
+                    lookup.findVirtual(
+                            GlobalNameCache.class,
+                            "nestedNameAndThis",
+                            MethodType.methodType(
+                                    ScriptRuntime.LookupResult.class,
+                                    Context.class,
+                                    VarScope.class));
+        } else {
+            return getNameInvocation(lookup, mType, op);
+        }
+        mh =
+                MethodHandles.permuteArguments(
+                        mh.bindTo(new GlobalNameCache(op.getName())), mType, 1, 0);
         return new GuardedInvocation(mh);
     }
 

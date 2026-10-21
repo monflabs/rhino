@@ -2153,7 +2153,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         return cache;
     }
 
-    /** The cache of the name in stringReg, for this code, when it runs in the top scope. */
+    /** The cache of the binding that the name in stringReg has in the top scope, for this code. */
     private static GlobalNameCache nameCache(CallFrame frame, InterpreterState state) {
         InterpreterData<?> data = frame.compilerData;
         GlobalNameCache[] caches = data.nameCaches;
@@ -2573,7 +2573,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             stack[++frame.stackTop] =
                     frame.scope instanceof TopLevel
                             ? nameCache(frame, state).getNameAndThis(cx, frame.scope)
-                            : ScriptRuntime.getNameAndThis(state.stringReg, cx, frame.scope);
+                            : nameCache(frame, state).nestedNameAndThis(cx, frame.scope);
             return null;
         }
     }
@@ -3171,7 +3171,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             frame.stack[++frame.stackTop] =
                     frame.scope instanceof TopLevel
                             ? nameCache(frame, state).name(cx, frame.scope)
-                            : ScriptRuntime.name(cx, frame.scope, state.stringReg);
+                            : nameCache(frame, state).nestedName(cx, frame.scope);
             return null;
         }
     }

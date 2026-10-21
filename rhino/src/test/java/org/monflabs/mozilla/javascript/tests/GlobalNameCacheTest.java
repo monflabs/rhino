@@ -274,4 +274,94 @@ class GlobalNameCacheTest {
                     return null;
                 });
     }
+
+    @Test
+    void globalsReadFromNestedFunctions() {
+        assertAllVersions(
+                "3,v,true,undefined,v,3",
+                "var gv = 'v';"
+                        + "function sloppy() { return this === globalThis; }"
+                        + "function strict() { 'use strict'; return this; }"
+                        + "(function () {"
+                        + "  var r = [];"
+                        + "  function read() { return [Math.abs(-3), gv, sloppy(), strict()]; }"
+                        + "  for (var i = 0; i < 3; i++) r = read();"
+                        + "  r.push((function () { return (function () { return gv; })(); })());"
+                        + "  r.push((function () { var x = 1; return function () { return Math.abs(-3); }; })()());"
+                        + "  return r.join();"
+                        + "})()");
+    }
+
+    @Test
+    void nestedLookupSeesTheScopesOnTheWay() {
+        assertAllVersions(
+                "g,e,g,g,b,c,g,g,w,g",
+                "var v = 'g';"
+                        + "function outer(withEval) {"
+                        + "  if (withEval) eval(\"var v = 'e'\");"
+                        + "  return function () { return v; };"
+                        + "}"
+                        + "var r = [outer(false)(), outer(true)(), outer(false)()];"
+                        + "function scopes() {"
+                        + "  var read = function () { return v; };"
+                        + "  r.push(read());"
+                        + "  { let v = 'b'; r.push((function () { return v; })()); }"
+                        + "  try { throw 'c'; } catch (v) { r.push((function () { return v; })()); }"
+                        + "  r.push(read());"
+                        + "}"
+                        + "scopes();"
+                        + "function inWith(o) { with (o) { return (function () { return v; })(); } }"
+                        + "r.push(inWith({}), inWith({ v: 'w' }), inWith({}));"
+                        + "r.join()");
+    }
+
+    @Test
+    void nestedReadOfADeletedGlobal() {
+        assertAllVersions(
+                "1,1,ReferenceError,2",
+                "x = 1;"
+                        + "var f = (function () {"
+                        + "  return function () { try { return x; } catch (e) { return e.name; } };"
+                        + "})();"
+                        + "var r = [];"
+                        + "for (var i = 0; i < 3; i++) { if (i == 2) delete globalThis.x; r.push(f()); }"
+                        + "x = 2; r.push(f());"
+                        + "r.join()");
+    }
+
+    @Test
+    void nestedReadOfAGlobalLetInItsTemporalDeadZone() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError,1,1",
+                "var f = (function () {"
+                        + "  return function () { try { return gl; } catch (e) { return e.name; } };"
+                        + "})();"
+                        + "var r = [f()];"
+                        + "let gl = 1;"
+                        + "r.push(f(), f());"
+                        + "r.join()");
+    }
+
+    @Test
+    void nestedFunctionRunInTwoScopes() {
+        Utils.runWithAllModes(
+                cx -> {
+                    Script script =
+                            cx.compileString(
+                                    "(function () { var r = 0;"
+                                            + " function add() { r += v; }"
+                                            + " for (var i = 0; i < 3; i++) add(); return r; })()",
+                                    "test.js",
+                                    1,
+                                    null);
+                    TopLevel one = cx.initStandardObjects();
+                    TopLevel two = cx.initStandardObjects();
+                    cx.evaluateString(one, "var v = 1;", "one.js", 1, null);
+                    cx.evaluateString(two, "var v = 2;", "two.js", 1, null);
+                    assertEquals(3, ((Number) script.exec(cx, one, one)).intValue());
+                    assertEquals(6, ((Number) script.exec(cx, two, two)).intValue());
+                    assertEquals(3, ((Number) script.exec(cx, one, one)).intValue());
+                    return null;
+                });
+    }
 }

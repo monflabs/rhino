@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Global names read from nested functions through the name cache (2026-10-21)
+
+- Performance (plan M16, 16.14; all versions, both modes, no observable change): a name read from code whose scope
+  is not the top scope (a nested function, a function with an activation, a block) checks the activations and
+  block scopes on the way and then reads the slot that the per-site `GlobalNameCache` holds for the top scope,
+  instead of looking the name up in the top scope and the global object. A function in a wrapper reading
+  `Math.abs`: 205 → 88 ms compiled; SunSpider in one JVM (each file wrapped in a function): −4%, `access-nbody`
+  −16%.
+
 ### Calls without `this` (2026-10-21)
 
 - Performance (all versions, both modes, no observable change): a call of a non-strict function that cannot

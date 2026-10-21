@@ -175,6 +175,68 @@ public final class GlobalNameCache {
         return result;
     }
 
+    /**
+     * The top scope that a lookup of the name from this scope reaches: the scopes on the way are
+     * activations and block scopes that do not have the name. Null if one has it, or if another
+     * kind of scope is on the way.
+     */
+    private VarScope topOf(VarScope scope) {
+        for (; ; ) {
+            Class<?> type = scope.getClass();
+            if (type != NativeCall.class && type != LocalScope.class && type != CatchScope.class) {
+                return scope instanceof TopLevel ? scope : null;
+            }
+            if (((ScopeObject) scope).getMap().query(name, 0) != null) {
+                return null;
+            }
+            scope = scope.getParentScope();
+        }
+    }
+
+    /** {@link ScriptRuntime#name(Context, VarScope, String)} from a scope inside the top scope. */
+    public Object nestedName(Context cx, VarScope scope) {
+        VarScope top = disabled ? null : topOf(scope);
+        if (top != null) {
+            Entry e = entry;
+            Slot slot = slot(e, cx, top);
+            if (slot != null) {
+                Object value = value(e, slot, top);
+                if (value != MISS) {
+                    return value;
+                }
+            }
+        }
+        Object result = ScriptRuntime.name(cx, scope, name);
+        if (top != null) {
+            update(cx, top);
+        }
+        return result;
+    }
+
+    /**
+     * {@link ScriptRuntime#getNameAndThis(String, Context, VarScope)} from a scope inside the top
+     * scope.
+     */
+    public ScriptRuntime.LookupResult nestedNameAndThis(Context cx, VarScope scope) {
+        VarScope top = disabled ? null : topOf(scope);
+        if (top != null) {
+            Entry e = entry;
+            Slot slot = slot(e, cx, top);
+            if (slot != null) {
+                Object value = value(e, slot, top);
+                if (value != MISS) {
+                    return new ScriptRuntime.LookupResult(
+                            value, Undefined.SCRIPTABLE_UNDEFINED, name);
+                }
+            }
+        }
+        ScriptRuntime.LookupResult result = ScriptRuntime.getNameAndThis(name, cx, scope);
+        if (top != null) {
+            update(cx, top);
+        }
+        return result;
+    }
+
     /** {@link ScriptRuntime#bind(Context, VarScope, String)} */
     public VarScope bind(Context cx, VarScope scope) {
         if (slot(entry, cx, scope) != null) {
