@@ -6722,7 +6722,9 @@ public class Parser {
                 // An arrow function not generate arguments. So it not need activation.
                 ((FunctionNode) currentScriptOrFn).getFunctionType()
                         != FunctionNode.ARROW_FUNCTION) {
-            activation = true;
+            // under VERSION_ECMASCRIPT, IRFactory decides once the function is parsed: a strict
+            // function can keep its arguments object in a register
+            activation = !compilerEnv.isLatestEcmaScript();
         } else if (compilerEnv.getActivationNames() != null
                 && compilerEnv.getActivationNames().contains(name)) {
             activation = true;

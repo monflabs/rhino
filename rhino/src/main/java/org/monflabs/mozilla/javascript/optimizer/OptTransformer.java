@@ -86,7 +86,8 @@ class OptTransformer extends NodeTransformer {
                     if (ofn != null
                             && node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 0
                             && argCount == ofn.fnode.getParamCount()
-                            && !ofn.fnode.requiresActivation()) {
+                            && !ofn.fnode.requiresActivation()
+                            && !ofn.fnode.requiresArgumentObject()) {
                         // Refuse to directCall any function with more
                         // than 32 parameters - prevent code explosion
                         // for wacky test cases

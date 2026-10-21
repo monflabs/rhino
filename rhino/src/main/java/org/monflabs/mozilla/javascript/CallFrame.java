@@ -170,6 +170,19 @@ final class CallFrame extends ACallFrame<CallFrame, InterpreterData<?>> implemen
         for (int i = definedArgs; i != compilerData.maxVars; ++i) {
             stack[i] = Undefined.instance;
         }
+        int argumentsVar = desc.argumentsVar();
+        if (argumentsVar >= 0 && !useActivation) {
+            Object[] callArgs = args;
+            if (argsDbl != null || boundArgs != null || argShift != 0 || args.length != argCount) {
+                int blen2 = boundArgs == null ? 0 : boundArgs.length;
+                callArgs =
+                        Interpreter.getArgsArray(
+                                args, argsDbl, boundArgs, blen2, argShift, argCount);
+            }
+            stack[argumentsVar] =
+                    ScriptRuntime.createUnmappedArguments(
+                            (JSFunction) fnOrScript, cx, scope, callArgs);
+        }
 
         if (desc.hasRestArg()) {
             Object[] vals;

@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### The arguments object of strict functions without an activation (2026-10-21)
+
+- Performance (plan M16, 16.13; `VERSION_ECMASCRIPT`, both modes): a strict function that uses `arguments` and
+  needs no activation object for anything else keeps its unmapped arguments object in a variable, created on
+  entry, and its variables in registers; a function that keeps an activation keeps its other variables in
+  registers when its arguments object is unmapped (strict, or non-strict without parameters); the arguments
+  object gets its properties in one map. A strict function summing `arguments`: 818 → 200 ms compiled for 1
+  million calls. Code evaluated in the scope of such a function other than a direct eval no longer sees its
+  variables (`BACKWARD_COMPATIBILITY.md` 1.88, updated).
+
 ### Function objects created with their properties laid out (2026-10-21)
 
 - Performance (plan M16, 16.12; all versions, both modes, no observable change): a function created under

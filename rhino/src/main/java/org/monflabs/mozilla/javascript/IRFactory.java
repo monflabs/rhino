@@ -2226,6 +2226,24 @@ public final class IRFactory {
             fnNode.setRequiresActivation();
             propagateRequiresArgumentObjectFromNestedArrowFunctions(fnNode);
         }
+        if (parser.compilerEnv.isLatestEcmaScript()
+                && fnNode.requiresArgumentObject()
+                && !fnNode.requiresActivation()
+                && functionType != FunctionNode.ARROW_FUNCTION) {
+            if (fnNode.isInStrictMode()
+                    && !fnNode.isGenerator()
+                    && !fnNode.isES6Generator()
+                    && !fnNode.isAsync()
+                    && !fnNode.isAsyncGenerator()
+                    && fnNode.getSymbol("arguments") == null) {
+                // the unmapped arguments object of a strict function is a variable of its own,
+                // created on entry: nothing else needs an activation
+                fnNode.putSymbol(new Symbol(Symbol.Type.VAR, "arguments"));
+                fnNode.setArgumentsInRegister();
+            } else {
+                fnNode.setRequiresActivation();
+            }
+        }
 
         if (functionType == FunctionNode.FUNCTION_EXPRESSION) {
             Name name = fnNode.getFunctionName();

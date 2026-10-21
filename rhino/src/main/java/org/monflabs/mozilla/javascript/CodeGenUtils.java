@@ -89,6 +89,9 @@ public class CodeGenUtils {
                         && !fn.isES6Generator()
                         && !fn.isAsync()
                         && !readsThis(fn);
+        if (fn.isArgumentsInRegister()) {
+            builder.argumentsVar = fn.getArgumentsVarIndex();
+        }
         fillInCommon(builder, fn);
     }
 

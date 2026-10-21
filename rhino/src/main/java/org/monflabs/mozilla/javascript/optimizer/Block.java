@@ -106,7 +106,8 @@ class Block {
 
         for (int i = 0; i != varCount; i++) {
             if (varTypes[i] == Optimizer.NumberType
-                    && (i >= paramCount || fn.hasNumberArgument(i))) {
+                    && (i >= paramCount || fn.hasNumberArgument(i))
+                    && i != fn.fnode.getArgumentsVarIndex()) {
                 fn.setIsNumberVar(i);
             }
         }

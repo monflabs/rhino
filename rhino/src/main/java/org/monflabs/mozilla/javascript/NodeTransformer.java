@@ -832,11 +832,17 @@ public class NodeTransformer {
      * no nested function can refer to: only those need to be properties of the activation object.
      * The function itself reads the others at a fixed position of its activation. Not done when
      * names can be resolved dynamically (direct eval, with), for generators (their registers do not
-     * survive a yield) and when the arguments object aliases the parameters. Function declarations,
-     * catch parameters, let/const and class bindings stay names of the activation object.
+     * survive a yield) and when the arguments object can alias the parameters (a non-strict
+     * function with parameters: an unmapped arguments object only holds the values passed).
+     * Function declarations, catch parameters, let/const and class bindings stay names of the
+     * activation object.
      */
     private void keepVarsInRegisters(FunctionNode fn) {
-        if (fn.isGenerator() || fn.isES6Generator() || fn.requiresArgumentObject()) {
+        if (fn.isGenerator()
+                || fn.isES6Generator()
+                || (fn.requiresArgumentObject()
+                        && ((!fn.isInStrictMode() && fn.getParamCount() != 0)
+                                || fn.getSymbol("arguments") != null))) {
             return;
         }
         Set<String> referenced = new HashSet<>();

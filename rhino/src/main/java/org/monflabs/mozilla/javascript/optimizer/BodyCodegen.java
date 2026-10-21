@@ -413,6 +413,25 @@ class BodyCodegen {
         }
 
         if (hasVarsInRegs) {
+            // the arguments object of a strict function, from the arguments as passed
+            int argumentsVar = fnCurrent.fnode.getArgumentsVarIndex();
+            int argumentsReg = -1;
+            if (argumentsVar >= 0) {
+                argumentsReg = getNewWordLocal();
+                cfw.addALoad(funObjLocal);
+                cfw.addALoad(contextLocal);
+                cfw.addALoad(variableObjectLocal);
+                cfw.addALoad(argsLocal);
+                addScriptRuntimeInvoke(
+                        "createUnmappedArguments",
+                        "(Lorg/monflabs/mozilla/javascript/JSFunction;"
+                                + "Lorg/monflabs/mozilla/javascript/Context;"
+                                + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                + "[Ljava/lang/Object;"
+                                + ")Lorg/monflabs/mozilla/javascript/Scriptable;");
+                cfw.addAStore(argumentsReg);
+            }
+
             // No need to create activation. Pad arguments if need be.
             int parmCount = scriptOrFn.getParamCount();
             if (parmCount > 0 && !inDirectCallFunction) {
@@ -456,7 +475,9 @@ class BodyCodegen {
             int firstUndefVar = -1;
             for (int i = 0; i != varCount; ++i) {
                 int reg = -1;
-                if (i < paramCount && fnCurrent.isNumberVar(i)) {
+                if (i == argumentsVar) {
+                    reg = argumentsReg;
+                } else if (i < paramCount && fnCurrent.isNumberVar(i)) {
                     // every call passes a number: from the double of the pair
                     reg = getNewWordPairLocal(false);
                     initNumberParameter(varRegisters[i], reg);

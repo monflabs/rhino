@@ -158,7 +158,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   (`FunctionNode.isVarInRegister`), and `NativeCall` no longer defines them (`JSDescriptor.isParamOrVarInRegister`),
   which saved a property creation per variable and per call.
 - **When it does not apply.** A direct `eval` or `with` in the function or in a nested function, a use of
-  `arguments`, and generators keep every variable in the activation. So does a function with more than 256 such
+  `arguments` in a non-strict function with parameters (see "The arguments object of strict functions"), and
+  generators keep every variable in the activation. So does a function with more than 256 such
   variables (a module wrapper such as Octane's `pdfjs`), to stay within the 1024 JVM locals of a compiled method.
 - **Semantics.** Code evaluated at runtime in the function's scope other than a direct eval (a legacy `Script`
   object, a host function) no longer sees the variables in registers. Hence `VERSION_ECMASCRIPT` only
@@ -166,6 +167,29 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** A loop in a function with a `catch` clause: 156 ms → 52 ms compiled. With a closure over one variable:
   171 ms → 115 ms compiled, 890 ms → 760 ms interpreted. A function with a `catch` clause and 7 variables, called
   3 million times: 592 ms → 87 ms compiled, 1,295 ms → 866 ms interpreted.
+
+### The arguments object of strict functions
+
+- **What** (M16, 16.13). A use of `arguments` gave the function an activation object, defined the arguments object
+  in it, and kept every variable of the function in it, read and written by name. Under `VERSION_ECMASCRIPT`, the
+  decision is made once the function is parsed (`IRFactory`): a strict function that needs no activation for
+  anything else (no nested function, `eval`, `with`, generator or async function) gets a variable `arguments`
+  instead (`FunctionNode.isArgumentsInRegister`), which its code and the interpreter initialize on entry with an
+  unmapped arguments object built from the arguments passed (`ScriptRuntime.createUnmappedArguments`), before
+  they are padded to the parameter count. A function that keeps an activation keeps its other variables in
+  registers when its arguments object is unmapped (a strict function, or a non-strict one without parameters)
+  and it declares no variable named `arguments` (which the arguments object of the activation initializes):
+  that object only holds the values passed. Under `VERSION_ECMASCRIPT`, the arguments object also gets its
+  @@iterator, `length` and `callee` in one map instead of three definitions.
+- **Correctness.** An unmapped arguments object never reads the activation; its properties and behavior are
+  the same (`StrictArgumentsTest`). A non-strict function keeps its activation: `f.arguments` finds the arguments
+  object there (a strict function's throws). A function using `arguments` is never the target of a direct call,
+  which passes the arguments one by one. Code evaluated in the function's scope other than a direct eval no
+  longer sees its variables, as for the other functions (`BACKWARD_COMPATIBILITY.md` 1.88).
+- **Gain.** 1 million calls with three arguments, compiled: a strict function summing `arguments` 818 → 200 ms
+  (a rest parameter: 74 ms; Rhino 1.8.0: 735 ms), passing it to `apply` 1,194 → 341 ms, reading
+  `arguments.length` 244 → 121 ms; a non-strict function without parameters 789 → 302 ms and 1,145 → 552 ms.
+  Interpreted: 1,909 → 1,069 ms and 2,413 → 1,394 ms. `VERSION_ECMASCRIPT`.
 
 ### Captured variables at a fixed position of the activation
 

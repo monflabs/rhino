@@ -1444,7 +1444,10 @@ f();   // before: [5, 2]   now: [5, 1]
   object called as a function, or a host function that evaluates code in the scope it is called with. Now only the
   variables that a nested function refers to are in the activation object; the others live in registers, as do all
   the variables of a function without closures (which such code never saw). A direct `eval` or a `with` statement
-  anywhere in the function, `arguments`, and generators keep every variable in the activation object.
+  anywhere in the function, generators, and `arguments` in a non-strict function with parameters (whose
+  arguments object aliases them) keep every variable in the activation object. A strict function that uses
+  `arguments` and has no other reason for an activation object no longer has one: its arguments object, which
+  holds the values passed and nothing else, is a variable of the function.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation): only a direct eval (§19.2.1.1) can reach the
   variables of a function from code evaluated at runtime.
 

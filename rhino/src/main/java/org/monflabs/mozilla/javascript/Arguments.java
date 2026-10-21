@@ -27,7 +27,13 @@ class Arguments extends ScriptableObject {
     private Object calleeObj;
     private Object lengthObj;
 
+    /** The activation of the call, or null for an unmapped arguments object without one. */
     private NativeCall activation;
+
+    private final JSFunction function;
+
+    /** The arguments of the call, shared until a write (see {@link #setArg}). */
+    private final Object[] originalArgs;
 
     /**
      * The parameter map of a mapped arguments object (ECMA-262 10.4.4): {@code mapped[i]} is true
@@ -42,23 +48,42 @@ class Arguments extends ScriptableObject {
     // The values of the indexed properties that are not slots yet: an index i with args[i] !=
     // NOT_FOUND is an ordinary writable, enumerable and configurable data property. It becomes a
     // slot (and NOT_FOUND here) when it is redefined or deleted, so that a call with many arguments
-    // does not create one slot per argument. Initially activation.originalArgs, copied on write.
+    // does not create one slot per argument. Initially originalArgs, copied on write.
     private Object[] args;
 
     public Arguments(NativeCall activation, Context cx) {
-        this.activation = activation;
+        this(
+                activation.function,
+                activation.originalArgs,
+                activation.getParentScope(),
+                activation,
+                cx);
+    }
 
-        VarScope parent = activation.getParentScope();
+    /**
+     * The arguments object of a strict function without an activation (VERSION_ECMASCRIPT): an
+     * unmapped arguments object, created in the scope of the function.
+     */
+    Arguments(JSFunction function, Object[] args, VarScope parent, Context cx) {
+        this(function, args, parent, null, cx);
+    }
+
+    private Arguments(
+            JSFunction f, Object[] callArgs, VarScope parent, NativeCall activation, Context cx) {
+        this.activation = activation;
+        this.function = f;
+        this.originalArgs = callArgs;
+
         setParentScope(parent);
         setPrototype(ScriptableObject.getObjectPrototype(parent));
 
-        args = activation.originalArgs;
+        args = callArgs;
         lengthObj = Integer.valueOf(args.length);
         legacy = !cx.isLatestEcmaScript();
         boolean[] map = null;
-        int mappable = legacy ? 0 : Math.min(args.length, activation.function.getParamCount());
+        int mappable = legacy || activation == null ? 0 : Math.min(args.length, f.getParamCount());
         for (int i = 0; i < mappable; i++) {
-            if (isMappedParameter(activation.function, i)) {
+            if (isMappedParameter(f, i)) {
                 if (map == null) {
                     map = new boolean[mappable];
                 }
@@ -67,14 +92,18 @@ class Arguments extends ScriptableObject {
         }
         mapped = map;
 
-        JSFunction f = activation.function;
         calleeObj = f;
 
         var iter =
                 TopLevel.getBuiltinPrototype(
                         ScriptableObject.getTopLevelScope(parent), TopLevel.Builtins.Array);
 
-        defineProperty(SymbolKey.ITERATOR, iter.get("values", iter), ScriptableObject.DONTENUM);
+        Object values = iter.get("values", iter);
+        if (!legacy) {
+            installProperties(cx, f, values);
+            return;
+        }
+        defineProperty(SymbolKey.ITERATOR, values, ScriptableObject.DONTENUM);
         defineProperty("length", lengthObj, ScriptableObject.DONTENUM);
 
         if (f.isStrict()) {
@@ -104,6 +133,39 @@ class Arguments extends ScriptableObject {
         } else {
             defineProperty("callee", calleeObj, ScriptableObject.DONTENUM);
         }
+    }
+
+    /**
+     * The own properties of a new arguments object under VERSION_ECMASCRIPT, in one
+     * map: @@iterator, length, and callee, the function or, for a strict function, an accessor that
+     * throws (as defineProperty and setGetterOrSetter would create them, in that order).
+     */
+    private void installProperties(Context cx, JSFunction f, Object values) {
+        EmbeddedSlotMap<Scriptable> map =
+                cx.hasFeature(Context.FEATURE_THREAD_SAFE_OBJECTS)
+                        ? new ThreadSafeEmbeddedSlotMap<>(4)
+                        : new EmbeddedSlotMap<>(4);
+        StandardSlot<Scriptable> iterator = new StandardSlot<>(SymbolKey.ITERATOR, 0, DONTENUM);
+        iterator.value = values;
+        map.add(null, iterator);
+        StandardSlot<Scriptable> length = new StandardSlot<>("length", 0, DONTENUM);
+        length.value = lengthObj;
+        map.add(null, length);
+        if (f.isStrict()) {
+            BaseFunction typeErrorThrower = ScriptRuntime.typeErrorThrower(cx);
+            AccessorSlot callee = new AccessorSlot("callee", 0);
+            callee.setAttributes(DONTENUM | PERMANENT);
+            callee.getter = new AccessorSlot.FunctionGetter(typeErrorThrower);
+            callee.setter = new AccessorSlot.FunctionSetter(typeErrorThrower);
+            callee.value = Undefined.instance;
+            map.add(null, callee);
+            calleeObj = null;
+        } else {
+            StandardSlot<Scriptable> callee = new StandardSlot<>("callee", 0, DONTENUM);
+            callee.value = calleeObj;
+            map.add(null, callee);
+        }
+        setMap(map);
     }
 
     @Override
@@ -161,7 +223,7 @@ class Arguments extends ScriptableObject {
     }
 
     private synchronized void setArg(int index, Object value) {
-        if (args == activation.originalArgs) {
+        if (args == originalArgs) {
             args = args.clone();
         }
         args[index] = value;
@@ -346,7 +408,7 @@ class Arguments extends ScriptableObject {
     // accessor or non-writable), and redefinitions apply the descriptor as given.
 
     private boolean sharedWithActivation(int index) {
-        JSFunction f = activation.function;
+        JSFunction f = function;
         if (f.isStrict() || f.hasDefaultParameters()) {
             return false;
         }
@@ -482,7 +544,12 @@ class Arguments extends ScriptableObject {
         private boolean initialized;
 
         public ReadonlyArguments(Arguments arguments, Context cx) {
-            super(arguments.activation, cx);
+            super(
+                    arguments.function,
+                    arguments.originalArgs,
+                    arguments.getParentScope(),
+                    arguments.activation,
+                    cx);
             initialized = true;
         }
 

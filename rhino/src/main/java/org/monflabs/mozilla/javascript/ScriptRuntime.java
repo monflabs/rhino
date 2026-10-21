@@ -6231,6 +6231,15 @@ public class ScriptRuntime {
      *     boolean, boolean)} instead
      */
     @Deprecated
+    /**
+     * The unmapped arguments object of a strict function that keeps it in a variable (see
+     * FunctionNode#isArgumentsInRegister), from the arguments of the call.
+     */
+    public static Scriptable createUnmappedArguments(
+            JSFunction funObj, Context cx, VarScope scope, Object[] args) {
+        return new Arguments(funObj, args == null ? emptyArgs : args, scope, cx);
+    }
+
     public static VarScope createFunctionActivation(
             JSFunction funObj, VarScope scope, Object[] args) {
         return createFunctionActivation(

@@ -78,6 +78,9 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     /** Whether the function cannot read its this (see JSFunction#getCallThis). */
     private boolean ignoresThis;
 
+    /** The index of the variable that holds the arguments object, or -1 (see #argumentsVar). */
+    private int argumentsVar = -1;
+
     public JSDescriptor(
             JSCode<T> code,
             JSCode<T> constructor,
@@ -265,6 +268,15 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     public boolean ignoresThis() {
         return ignoresThis;
+    }
+
+    /**
+     * The index of the variable "arguments", which the interpreter initializes with the unmapped
+     * arguments object on entry, or -1 when the arguments object, if any, is a property of the
+     * activation (see FunctionNode#isArgumentsInRegister).
+     */
+    public int argumentsVar() {
+        return argumentsVar;
     }
 
     public boolean isEvalFunction() {
@@ -473,6 +485,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean[] paramIsRegister;
         public boolean[] paramIsActivationVar;
         public boolean ignoresThis;
+        public int argumentsVar = -1;
 
         public Builder() {}
 
@@ -555,6 +568,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             result.paramIsRegister = paramIsRegister;
             result.paramIsActivationVar = paramIsActivationVar;
             result.ignoresThis = ignoresThis;
+            result.argumentsVar = argumentsVar;
             consumer.accept(result);
             result.nestedFunctions =
                     Collections.unmodifiableList(

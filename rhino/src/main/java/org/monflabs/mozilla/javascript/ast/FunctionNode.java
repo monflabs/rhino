@@ -398,6 +398,35 @@ public class FunctionNode extends ScriptNode {
         this.requiresArgumentObject = true;
     }
 
+    private boolean argumentsInRegister;
+
+    /**
+     * Whether the arguments object is the variable "arguments" of the function, created on entry,
+     * rather than a property of its activation (a strict function under VERSION_ECMASCRIPT, see
+     * IRFactory).
+     */
+    public boolean isArgumentsInRegister() {
+        return argumentsInRegister;
+    }
+
+    public void setArgumentsInRegister() {
+        argumentsInRegister = true;
+    }
+
+    /** The index of the variable "arguments" of {@link #isArgumentsInRegister}, or -1. */
+    public int getArgumentsVarIndex() {
+        if (!argumentsInRegister) {
+            return -1;
+        }
+        String[] names = getParamAndVarNames();
+        for (int i = getParamCount(); i < names.length; i++) {
+            if ("arguments".equals(names[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     public boolean isGenerator() {
         return isGenerator;
     }

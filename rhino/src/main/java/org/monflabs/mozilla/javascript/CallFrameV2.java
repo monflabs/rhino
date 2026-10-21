@@ -122,6 +122,16 @@ public class CallFrameV2 extends ACallFrame<CallFrameV2, CompilerData<?>> implem
         for (int i = definedArgs; i != compilerData.maxVars; ++i) {
             stack[i] = Undefined.instance;
         }
+        int argumentsVar = desc.argumentsVar();
+        if (argumentsVar >= 0 && !useActivation) {
+            Object[] callArgs = args;
+            if (doubleArgs != null || argShift != 0 || args.length != argCount) {
+                callArgs = wrapArguments(args, doubleArgs, argShift, argCount);
+            }
+            stack[argumentsVar] =
+                    ScriptRuntime.createUnmappedArguments(
+                            (JSFunction) fnOrScript, cx, scope, callArgs);
+        }
 
         if (desc.hasRestArg()) {
             Object[] vals;
