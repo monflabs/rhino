@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.monflabs.mozilla.javascript.ast.AstNode;
+import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.Name;
@@ -26,6 +27,7 @@ import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
 import org.monflabs.mozilla.javascript.ast.SwitchStatement;
 import org.monflabs.mozilla.javascript.ast.Symbol;
+import org.monflabs.mozilla.javascript.ast.VariableInitializer;
 
 /**
  * This class transforms a tree to a lower-level representation for codegen.
@@ -72,6 +74,7 @@ public class NodeTransformer {
                 tree.getType() != Token.FUNCTION || ((FunctionNode) tree).requiresActivation();
         tree.flattenSymbolTable(!createScopeObjects);
         registerNames = null;
+        registerLexicals = null;
         activationVarNames = null;
         if (registersWithActivation && createScopeObjects && tree.getType() == Token.FUNCTION) {
             keepVarsInRegisters((FunctionNode) tree);
@@ -120,13 +123,21 @@ public class NodeTransformer {
                     && (type == Token.BLOCK || type == Token.LOOP || type == Token.ARRAYCOMP)
                     && (node instanceof Scope)) {
                 Scope newScope = (Scope) node;
-                if (newScope.getSymbolTable() != null && wrappedScopes.add(newScope)) {
+                if (newScope.getSymbolTable() != null
+                        && registerLexicals != null
+                        && registerLexicals.containsAll(newScope.getSymbolTable().values())) {
+                    // all its bindings live in registers: no scope object
+                    unwrappedScopes.add(newScope);
+                } else if (newScope.getSymbolTable() != null && wrappedScopes.add(newScope)) {
                     // transform to let statement so we get a with statement
                     // created to contain scoped let variables
                     Node let = new Node(type == Token.ARRAYCOMP ? Token.LETEXPR : Token.LET);
                     Node innerLet = new Node(Token.LET);
                     let.addChildToBack(innerLet);
                     for (Symbol symbol : newScope.getSymbolTable().values()) {
+                        if (registerLexicals != null && registerLexicals.contains(symbol)) {
+                            continue;
+                        }
                         Node name = Node.newString(Token.NAME, symbol.getName());
                         if (tdz && isLexical(symbol) && symbol.getNode() != null) {
                             // starts in its temporal dead zone, see visitLet
@@ -155,7 +166,9 @@ public class NodeTransformer {
 
             switch (type) {
                 case Token.COPY_SCOPE:
-                    if (!createScopeObjects) {
+                    if (!createScopeObjects
+                            || unwrappedScopes.contains(scope)
+                            || unwrappedScopes.contains(scope.getParentScope())) {
                         // bindings live in registers: no closure can observe a per-iteration copy
                         node = replaceCurrent(parent, previous, node, new Node(Token.EMPTY));
                     }
@@ -349,6 +362,11 @@ public class NodeTransformer {
                             boolean createWith =
                                     tree.getType() != Token.FUNCTION
                                             || ((FunctionNode) tree).requiresActivation();
+                            if (createWith && inRegisters(node)) {
+                                // all its bindings live in registers: initialized as variables
+                                createWith = false;
+                                unwrappedScopes.add((Scope) node);
+                            }
                             node = visitLet(createWith, parent, previous, node);
                             break;
                         }
@@ -474,6 +492,7 @@ public class NodeTransformer {
                         // Turn name to var for faster access if possible
                         if (createScopeObjects
                                 && registerNames == null
+                                && registerLexicals == null
                                 && activationVarNames == null) {
                             break;
                         }
@@ -494,7 +513,11 @@ public class NodeTransformer {
                         }
                         String name = nameSource.getString();
                         Scope defining = scope.getDefiningScope(name);
-                        if (createScopeObjects) {
+                        boolean lexicalRegister =
+                                defining != null
+                                        && registerLexicals != null
+                                        && registerLexicals.contains(defining.getSymbol(name));
+                        if (createScopeObjects && !lexicalRegister) {
                             if (defining == tree
                                     && activationVarNames != null
                                     && activationVarNames.contains(name)
@@ -816,6 +839,16 @@ public class NodeTransformer {
     private Set<String> registerNames;
 
     /**
+     * In a function with an activation object, the let/const bindings of its blocks that live in
+     * registers (null: none): they are variables of the function, still resolved through the scope
+     * of their block (see #registerLexicals).
+     */
+    private Set<Symbol> registerLexicals;
+
+    /** The block scopes left without a binding in a scope object: they need no runtime scope. */
+    private final Set<Scope> unwrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /**
      * Above this many variables in registers, a function with an activation object keeps them all
      * in it: a variable takes up to three JVM locals, of the 1024 that the compiled code may use.
      */
@@ -862,6 +895,23 @@ public class NodeTransformer {
                 declarations.add(nested.getName());
             }
         }
+        // the let/const bindings that only the function refers to: variables of the function, the
+        // bindings of its blocks added after its own
+        Set<Symbol> lexicals = Collections.newSetFromMap(new IdentityHashMap<>());
+        collectRegisterLexicals(fn, fn, referenced, dynamic, lexicals);
+        List<Symbol> blockLexicals = new ArrayList<>();
+        for (Symbol symbol : lexicals) {
+            if (symbol.getContainingTable() != fn) {
+                blockLexicals.add(symbol);
+            }
+        }
+        if (lexicals.size() > MAX_REGISTER_VARS) {
+            lexicals.clear();
+            blockLexicals.clear();
+        }
+        if (!blockLexicals.isEmpty()) {
+            fn.addBlockVariables(blockLexicals);
+        }
         List<Symbol> symbols = fn.getSymbols();
         boolean[] inRegister = new boolean[symbols.size()];
         boolean[] inSlot = new boolean[symbols.size()];
@@ -870,6 +920,10 @@ public class NodeTransformer {
         for (Symbol symbol : symbols) {
             Symbol.Type type = symbol.getDeclType();
             String name = symbol.getName();
+            if (lexicals.contains(symbol)) {
+                inRegister[symbol.getIndex()] = true;
+                continue;
+            }
             if (type == Symbol.Type.FUNCTION_VAR || declarations.contains(name)) {
                 // a function declaration, stored by name in the activation: never in a register,
                 // at its position when nested functions refer to it
@@ -893,9 +947,19 @@ public class NodeTransformer {
                 slots.add(name);
             }
         }
-        if (!registers.isEmpty() && registers.size() <= MAX_REGISTER_VARS) {
+        if (registers.size() + lexicals.size() > MAX_REGISTER_VARS) {
+            // the bindings of the blocks are variables of the function now: they stay registers
+            for (Symbol symbol : symbols) {
+                if (!lexicals.contains(symbol)) {
+                    inRegister[symbol.getIndex()] = false;
+                }
+            }
+            registers.clear();
+        }
+        if (!registers.isEmpty() || !lexicals.isEmpty()) {
             fn.setRegisterVars(inRegister);
-            registerNames = registers;
+            registerNames = registers.isEmpty() ? null : registers;
+            registerLexicals = lexicals.isEmpty() ? null : lexicals;
         }
         if (!slots.isEmpty()) {
             fn.setActivationVars(inSlot);
@@ -913,6 +977,63 @@ public class NodeTransformer {
                 addOuterVars(fn, outer, 1);
             }
         }
+    }
+
+    /**
+     * Adds to lexicals the let/const bindings of the scopes in node (not entering nested functions)
+     * that can live in registers of fn: no nested function refers to their name, and their temporal
+     * dead zone is known from the syntax (a declaration of a single name, outside a switch, see
+     * classifyTdz).
+     */
+    private static void collectRegisterLexicals(
+            Node node,
+            FunctionNode fn,
+            Set<String> referenced,
+            Set<String> dynamic,
+            Set<Symbol> lexicals) {
+        if (node instanceof Scope
+                && !(node instanceof SwitchStatement)
+                && ((Scope) node).getSymbolTable() != null) {
+            boolean letScope = node.getType() == Token.LET || node.getType() == Token.LETEXPR;
+            Set<Symbol> found = letScope ? new HashSet<>() : lexicals;
+            for (Symbol symbol : ((Scope) node).getSymbolTable().values()) {
+                String name = symbol.getName();
+                if (isLexical(symbol)
+                        && !referenced.contains(name)
+                        && !dynamic.contains(name)
+                        && !name.equals(fn.getName())
+                        && isSingleNameDeclaration(symbol.getNode())) {
+                    found.add(symbol);
+                }
+            }
+            if (letScope && found.size() == ((Scope) node).getSymbolTable().size()) {
+                // the head of a for loop or a let expression: initialized together, either as
+                // variables or in a scope object (see visitLet)
+                lexicals.addAll(found);
+            }
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            collectRegisterLexicals(child, fn, referenced, dynamic, lexicals);
+        }
+    }
+
+    /** Whether node is a scope whose bindings all live in registers (see #registerLexicals). */
+    private boolean inRegisters(Node node) {
+        return node instanceof Scope
+                && registerLexicals != null
+                && ((Scope) node).getSymbolTable() != null
+                && registerLexicals.containsAll(((Scope) node).getSymbolTable().values());
+    }
+
+    /**
+     * Whether the declaration of a binding is a let/const declaration of a single name (not a class
+     * declaration, whose binding the class definition handles).
+     */
+    private static boolean isSingleNameDeclaration(Node node) {
+        return node instanceof VariableInitializer
+                && isInSyntaxTree((VariableInitializer) node)
+                && ((VariableInitializer) node).getTarget() instanceof Name
+                && !(((VariableInitializer) node).getInitializer() instanceof ClassNode);
     }
 
     /**
@@ -1088,8 +1209,11 @@ public class NodeTransformer {
         }
         for (Symbol symbol : tree.getSymbolTable().values()) {
             // only bindings declared by a let statement of the body: destructured parameters are
-            // also let bindings, but are initialized before the body runs
-            if (isLexical(symbol) && symbol.getNode() != null) {
+            // also let bindings, but are initialized before the body runs; those in registers have
+            // their temporal dead zone checked from the syntax
+            if (isLexical(symbol)
+                    && symbol.getNode() != null
+                    && (registerLexicals == null || !registerLexicals.contains(symbol))) {
                 boolean isConst = symbol.getDeclType() == Symbol.Type.CONST;
                 Node set =
                         new Node(

@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### let and const in registers in functions with closures (2026-10-22)
+
+- Performance (plan M16, 16.11; `VERSION_ECMASCRIPT`, both modes): in a function with an activation object, the
+  let/const bindings of the function and of its blocks that no nested function refers to live in registers, with
+  their temporal dead zone checked from the syntax; a block or a loop head whose bindings are all registers gets
+  no scope object and no per-iteration copies. 3 million iterations of a `let` loop in a function with a closure:
+  84 → 6 ms compiled. Code evaluated in the scope of such a function other than a direct eval no longer sees
+  these bindings (`BACKWARD_COMPATIBILITY.md` 1.88, updated).
+
 ### The arguments object of strict functions without an activation (2026-10-21)
 
 - Performance (plan M16, 16.13; `VERSION_ECMASCRIPT`, both modes): a strict function that uses `arguments` and

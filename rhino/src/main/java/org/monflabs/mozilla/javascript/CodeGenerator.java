@@ -1272,8 +1272,8 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.SETCONSTVAR:
                 {
-                    if (builder.requiresActivationFrame) Kit.codeBug();
                     int index = scriptOrFn.getIndexForNameNode(child);
+                    if (!isVarInRegister(index)) Kit.codeBug();
                     child = child.getNext();
                     visitExpression(child, 0);
                     addVarOp(Token.SETCONSTVAR, index);

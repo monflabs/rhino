@@ -167,6 +167,18 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** A loop in a function with a `catch` clause: 156 ms → 52 ms compiled. With a closure over one variable:
   171 ms → 115 ms compiled, 890 ms → 760 ms interpreted. A function with a `catch` clause and 7 variables, called
   3 million times: 592 ms → 87 ms compiled, 1,295 ms → 866 ms interpreted.
+- **`let` and `const`** (M16, 16.11). The let/const bindings of the function and of its blocks that no nested
+  function refers to are registers too: `keepVarsInRegisters` adds those of the blocks to the variables of the
+  function (`ScriptNode.addBlockVariables`), where they keep the scope of their block for name resolution, so that
+  two bindings of the same name stay apart (`NodeTransformer.registerLexicals`, converted by symbol). A block whose
+  bindings are all registers gets no scope object, nor do its per-iteration copies; the head of a `for` loop is
+  initialized as variables when all its bindings are registers (`visitLet`), and in a scope object otherwise.
+  Their temporal dead zone is checked from the syntax, as in functions without an activation: only a declaration
+  of a single name, outside a `switch`, qualifies (not a destructuring, a class declaration or a catch
+  parameter). A const register keeps its flag local (`initRegisterVars`). Gain, 3 million iterations, compiled: a
+  `let` in the body of a function with a closure 104 → 6 ms, a `let` loop 84 → 6 ms, a `const` in a loop body
+  155 → 5 ms, a function with a `try`/`catch` 273 → 22 ms, a loop beside a captured `let` 259 → 88 ms (a `var`:
+  9 ms); interpreted 1.5–2.9 times faster.
 
 ### The arguments object of strict functions
 
@@ -270,7 +282,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** 3 million iterations of a top-level `let` loop: 271 ms → 180 ms compiled, 441 ms → 360 ms interpreted;
   `for (const v of a)` in a function with a closure: 92 ms → 67 ms. A `let` loop in a function with a closure is
   bimodal in compiled mode (53 ms in most JVMs, about 105 ms in some, against 80 ms before); 16.11 removes the scope
-  object of such loops altogether. `VERSION_ECMASCRIPT`.
+  object of such loops altogether when no closure refers to their bindings (see "Variables in registers in
+  functions with closures"). `VERSION_ECMASCRIPT`.
 
 ### Object literals put their properties directly
 

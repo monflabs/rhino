@@ -1443,7 +1443,8 @@ f();   // before: [5, 2]   now: [5, 1]
   were all properties of it, so code run in its scope at runtime could read and write them: a legacy `Script`
   object called as a function, or a host function that evaluates code in the scope it is called with. Now only the
   variables that a nested function refers to are in the activation object; the others live in registers, as do all
-  the variables of a function without closures (which such code never saw). A direct `eval` or a `with` statement
+  the variables of a function without closures (which such code never saw). The same holds for the let and const
+  bindings of the function and of its blocks. A direct `eval` or a `with` statement
   anywhere in the function, generators, and `arguments` in a non-strict function with parameters (whose
   arguments object aliases them) keep every variable in the activation object. A strict function that uses
   `arguments` and has no other reason for an activation object no longer has one: its arguments object, which

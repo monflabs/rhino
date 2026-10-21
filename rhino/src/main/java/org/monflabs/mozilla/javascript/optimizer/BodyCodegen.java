@@ -789,18 +789,29 @@ class BodyCodegen {
         FunctionNode fnode = fnCurrent.fnode;
         int paramCount = fnode.getParamCount();
         int varCount = fnode.getParamAndVarCount();
+        boolean[] constDeclarations = fnode.getParamAndVarConst();
         for (int i = 0; i != varCount; ++i) {
             if (!fnode.isVarInRegister(i)) {
                 continue;
             }
+            boolean isConst = constDeclarations[i];
             if (fnCurrent.isNumberVar(i)) {
-                int reg = getNewWordPairLocal(false);
+                int reg = getNewWordPairLocal(isConst);
                 cfw.addPush(0.0);
                 cfw.addDStore(reg);
+                if (isConst) {
+                    cfw.addPush(0);
+                    cfw.addIStore(reg + 2);
+                }
                 varRegisters[i] = reg;
                 continue;
             }
-            int reg = getNewWordLocal();
+            int reg = getNewWordLocal(isConst);
+            if (isConst) {
+                // the flag of a const in a register (see visitSetConstVar)
+                cfw.addPush(0);
+                cfw.addIStore(reg + 1);
+            }
             if (scriptOrFn.hasRestParameter() && i == paramCount - 1) {
                 // the array of the rest parameter, created with the activation
                 cfw.addALoad(contextLocal);

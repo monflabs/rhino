@@ -396,6 +396,15 @@ public class ScriptNode extends Scope {
     }
 
     /**
+     * Adds let/const bindings of inner block scopes to the variables, after the others: they stay
+     * in the tables of their scopes, which names still resolve against, and get an index here.
+     */
+    public void addBlockVariables(List<Symbol> blockSymbols) {
+        symbols.addAll(blockSymbols);
+        flattenSymbolTable(true);
+    }
+
+    /**
      * Removes the let/const bindings from the variables of a script: under {@link
      * org.monflabs.mozilla.javascript.Context#VERSION_ECMASCRIPT}, they are global lexical
      * declarations, not properties of the global object.
