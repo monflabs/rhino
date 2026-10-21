@@ -25,6 +25,7 @@ import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.ast.SwitchCase;
 import org.monflabs.mozilla.javascript.ast.SwitchStatement;
 import org.monflabs.mozilla.javascript.ast.Symbol;
 import org.monflabs.mozilla.javascript.ast.VariableInitializer;
@@ -119,6 +120,33 @@ public class NodeTransformer {
             }
 
             int type = node.getType();
+            if (tdz
+                    && !createScopeObjects
+                    && node instanceof Scope
+                    && isSwitchScope((Scope) node)
+                    && ((Scope) node).getSymbolTable() != null
+                    && uninitializedSwitches.add((Scope) node)) {
+                // its bindings live in registers: uninitialized whenever the switch is entered,
+                // for the clauses entered past their declarations (see classifyTdz)
+                for (Symbol symbol : ((Scope) node).getSymbolTable().values()) {
+                    if (isLexical(symbol)
+                            && isSingleNameDeclaration(symbol.getNode())
+                            && hasOtherClauseReference(
+                                    node,
+                                    symbol.getName(),
+                                    switchClause((AstNode) symbol.getNode()))) {
+                        Node set =
+                                new Node(
+                                        symbol.getDeclType() == Symbol.Type.CONST
+                                                ? Token.SETCONST
+                                                : Token.SETNAME,
+                                        Node.newString(Token.BINDNAME, symbol.getName()),
+                                        new Node(Token.TDZ_SENTINEL));
+                        set.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+                        node.addChildToFront(new Node(Token.EXPR_VOID, set));
+                    }
+                }
+            }
             if (createScopeObjects
                     && (type == Token.BLOCK || type == Token.LOOP || type == Token.ARRAYCOMP)
                     && (node instanceof Scope)) {
@@ -845,6 +873,10 @@ public class NodeTransformer {
      */
     private Set<Symbol> registerLexicals;
 
+    /** The switch scopes whose register bindings are already made uninitialized on entry. */
+    private final Set<Scope> uninitializedSwitches =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+
     /** The block scopes left without a binding in a scope object: they need no runtime scope. */
     private final Set<Scope> unwrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
 
@@ -992,7 +1024,7 @@ public class NodeTransformer {
             Set<String> dynamic,
             Set<Symbol> lexicals) {
         if (node instanceof Scope
-                && !(node instanceof SwitchStatement)
+                && !isSwitchScope((Scope) node)
                 && ((Scope) node).getSymbolTable() != null) {
             boolean letScope = node.getType() == Token.LET || node.getType() == Token.LETEXPR;
             Set<Symbol> found = letScope ? new HashSet<>() : lexicals;
@@ -1015,6 +1047,54 @@ public class NodeTransformer {
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             collectRegisterLexicals(child, fn, referenced, dynamic, lexicals);
         }
+    }
+
+    /**
+     * Whether scope holds the let/const bindings of the clauses of a switch: IRFactory moves them
+     * from the switch to a block around it (see IRFactory#transformSwitch).
+     */
+    private static boolean isSwitchScope(Scope scope) {
+        if (scope instanceof SwitchStatement) {
+            return true;
+        }
+        // the switch follows the statements that make its bindings uninitialized, if any
+        for (Node child = scope.getFirstChild(); child != null; child = child.getNext()) {
+            if (child instanceof SwitchStatement) {
+                return true;
+            }
+            if (child.getType() != Token.EXPR_VOID) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /** The clause of a switch that a node of the syntax tree is in, or null. */
+    private static SwitchCase switchClause(AstNode node) {
+        for (AstNode n = node; n != null; n = n.getParent()) {
+            if (n instanceof SwitchCase) {
+                return (SwitchCase) n;
+            }
+            if (n instanceof SwitchStatement || n instanceof FunctionNode) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** Whether a reference to name in node is outside the clause of its declaration. */
+    private static boolean hasOtherClauseReference(Node node, String name, SwitchCase clause) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            if (child instanceof Name
+                    && name.equals(((Name) child).getIdentifier())
+                    && switchClause((Name) child) != clause) {
+                return true;
+            }
+            if (hasOtherClauseReference(child, name, clause)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether node is a scope whose bindings all live in registers (see #registerLexicals). */
@@ -1317,8 +1397,10 @@ public class NodeTransformer {
         if (((Name) reference).getAbsolutePosition() < end) {
             return TDZ_THROW;
         }
-        if (defining instanceof SwitchStatement) {
-            return createScopeObjects ? TDZ_RUNTIME : TDZ_NONE;
+        if (isSwitchScope(defining)
+                && switchClause(declaration) != switchClause((Name) reference)) {
+            // a clause can be entered past the declaration of an earlier clause
+            return TDZ_RUNTIME;
         }
         return TDZ_NONE;
     }
@@ -1345,6 +1427,23 @@ public class NodeTransformer {
     }
 
     /**
+     * Whether a reference to a let/const binding reads a register, which does not check its
+     * temporal dead zone: a binding of a function without scope objects.
+     */
+    private static boolean inRegister(Node reference, Scope scope, boolean createScopeObjects) {
+        return !createScopeObjects && scope.getDefiningScope(reference.getString()) != null;
+    }
+
+    /** A read of name that throws the ReferenceError while it is uninitialized. */
+    private static Node checkedRead(String name) {
+        Node read = Node.newString(Token.NAME, name);
+        read.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+        Node check = Node.newString(Token.CHECK_TDZ, name);
+        check.addChildToBack(read);
+        return check;
+    }
+
+    /**
      * An expression that throws the ReferenceError for name, see ScriptRuntime#checkInitialized.
      */
     private static Node tdzError(String name) {
@@ -1366,20 +1465,42 @@ public class NodeTransformer {
         switch (node.getType()) {
             case Token.NAME:
             case Token.TYPEOFNAME:
-                // a read: a runtime check is done by the name lookup itself
-                if (classifyTdz(tree, node, scope, createScopeObjects) == TDZ_THROW) {
-                    return replaceCurrent(parent, previous, node, tdzError(node.getString()));
+                {
+                    // a read: a runtime check is done by the name lookup itself, but not by a
+                    // register
+                    int kind = classifyTdz(tree, node, scope, createScopeObjects);
+                    if (kind == TDZ_THROW) {
+                        return replaceCurrent(parent, previous, node, tdzError(node.getString()));
+                    }
+                    if (kind == TDZ_RUNTIME && inRegister(node, scope, createScopeObjects)) {
+                        Node check = checkedRead(node.getString());
+                        if (node.getType() == Token.TYPEOFNAME) {
+                            check = new Node(Token.TYPEOF, check);
+                        }
+                        return replaceCurrent(parent, previous, node, check);
+                    }
+                    return node;
                 }
-                return node;
             case Token.INC:
             case Token.DEC:
                 {
                     Node target = node.getFirstChild();
-                    if (target.getType() == Token.NAME
-                            && classifyTdz(tree, target, scope, createScopeObjects) == TDZ_THROW) {
+                    if (target.getType() != Token.NAME) {
+                        return node;
+                    }
+                    int kind = classifyTdz(tree, target, scope, createScopeObjects);
+                    if (kind == TDZ_THROW) {
                         return replaceCurrent(parent, previous, node, tdzError(target.getString()));
                     }
                     target.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+                    if (kind == TDZ_RUNTIME && inRegister(target, scope, createScopeObjects)) {
+                        // the binding is checked, then incremented
+                        node.putIntProp(Node.TDZ_CHECKED_PROP, 1);
+                        Node comma = new Node(Token.COMMA, checkedRead(target.getString()));
+                        replaceCurrent(parent, previous, node, comma);
+                        comma.addChildToBack(node);
+                        return comma;
+                    }
                     return node;
                 }
             case Token.SETNAME:

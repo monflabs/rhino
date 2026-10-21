@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### The temporal dead zone of the bindings of switch clauses (2026-10-22)
+
+- Fix (`VERSION_ECMASCRIPT`, both modes, `BACKWARD_COMPATIBILITY.md` 1.91): a let/const declared in a clause
+  of a `switch` is uninitialized in the clauses entered past its declaration: a read, `typeof`, an assignment
+  or an increment there throws a ReferenceError. In a function it read `undefined` (or `0` in compiled mode, and
+  the value of a previous execution in a loop) and was written. The check recognized the switch by the
+  `SwitchStatement` node, which IRFactory moves out of the scope holding the bindings; the previous entry
+  therefore also put such bindings in registers in functions with closures, where reads had thrown. Bindings
+  in registers are made uninitialized when the switch is entered, and checked by the references outside their
+  clause; references in their clause, after the declaration, are not checked.
+
 ### let and const in registers in functions with closures (2026-10-22)
 
 - Performance (plan M16, 16.11; `VERSION_ECMASCRIPT`, both modes): in a function with an activation object, the

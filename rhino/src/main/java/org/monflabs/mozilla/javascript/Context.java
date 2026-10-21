@@ -277,6 +277,9 @@ public class Context implements Closeable {
      *       no longer call an overridden {@code toString} or {@code valueOf}.
      *   <li>In compiled mode, arithmetic on two parameters of a top-level function ({@code x * y})
      *       accepts BigInts instead of throwing a TypeError.
+     *   <li>A {@code let} or {@code const} declared in a clause of a {@code switch} is in its
+     *       temporal dead zone in the clauses entered past its declaration: reading or writing it
+     *       there throws a ReferenceError.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

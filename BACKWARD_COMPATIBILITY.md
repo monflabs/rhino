@@ -103,6 +103,8 @@ changes.
 | 1.87 | Iterator results define own data properties | `VERSION_ECMASCRIPT` |
 | 1.88 | Code evaluated at runtime no longer sees the locals of functions with closures | `VERSION_ECMASCRIPT` |
 | 1.89 | Methods called on a primitive string receive the string as `this` | `VERSION_ECMASCRIPT` |
+| 1.90 | Arithmetic on BigInt parameters in compiled top-level functions | `VERSION_ECMASCRIPT` |
+| 1.91 | A `let`/`const` of a `switch` clause is uninitialized in the clauses entered past it | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1481,6 +1483,27 @@ mul(2n, 3n);   // compiled, before: TypeError "Cannot convert BigInt to a number
   unknown type) is the generic one. A parameter and a number still use double arithmetic: a BigInt there throws
   a TypeError either way. The interpreter was not affected.
 - **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator: two BigInts use the BigInt operation).
+
+### 1.91 A `let`/`const` of a `switch` clause is uninitialized in the clauses entered past it
+
+```js
+function f(k) {
+  switch (k) {
+    case 0: let s = 5;
+    case 1: return s;   // f(1): before: undefined (interpreted) or 0 (compiled)   now: ReferenceError
+  }
+}
+```
+
+- The let/const bindings of the clauses of a `switch` belong to its whole case block, and stay uninitialized
+  until their declaration runs: a clause entered past the declaration of an earlier one (by the switch, or
+  `default`) is in their temporal dead zone. A read, `typeof`, an assignment or an increment there threw only
+  from a closure or at the top level; in a function, it read `undefined` (or, in compiled mode, `0` for a binding
+  holding numbers, and the value of a previous execution of the `switch` in a loop) or wrote the binding. It now
+  throws a ReferenceError in both modes. References in the clause of the declaration, after it, are not checked.
+- **Why:** ECMA-262 2026, §14.12.4 (the case block is one declarative environment, its bindings instantiated
+  uninitialized by BlockDeclarationInstantiation) and §9.1.1.1.6 (GetBindingValue of an uninitialized binding
+  throws a ReferenceError).
 
 ---
 
