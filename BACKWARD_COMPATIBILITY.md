@@ -108,6 +108,7 @@ changes.
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
+| 2.4 | A script that compiled mode falls back to interpreting is logged | all |
 
 ---
 
@@ -1536,3 +1537,13 @@ function f(k) {
 - **Migration:** call `cx.setLanguageVersion(Context.VERSION_ES6)` (for example in `ContextFactory.onContextCreated`),
   run the shell with `-version 200`, or put `ScriptEngine.LANGUAGE_VERSION` = `200` in the engine scope of
   the `javax.script` engine.
+
+### 2.4 A script that compiled mode falls back to interpreting is logged
+
+- When the class compiler fails on a script with generators, the script still runs, in the interpreter (much
+  slower). The compilation now reports it: a warning to its error reporter (`msg.compile.fallback`), and a
+  `WARNING` of the JDK platform logger `org.monflabs.mozilla.javascript` (`System.Logger`), with the exception,
+  since the default error reporter ignores warnings. Such a failure is a compiler bug worth reporting. A script
+  too large for a class file still falls back silently, as before.
+- **Migration:** none; to silence the log, set the level of the `org.monflabs.mozilla.javascript` logger (for
+  example with `java.util.logging` or the bridge of the application's logging framework).

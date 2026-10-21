@@ -66,6 +66,10 @@ import org.monflabs.mozilla.javascript.xml.XMLLib;
  * @author Brendan Eich
  */
 public class Context implements Closeable {
+
+    /** Where the engine logs what an embedding should hear about without asking (JDK logging). */
+    private static final System.Logger LOGGER = System.getLogger("org.monflabs.mozilla.javascript");
+
     /**
      * Language versions.
      *
@@ -3032,6 +3036,16 @@ public class Context implements Closeable {
                 throw e;
             }
             // we hit some class file limit, fall back to interpreter or report
+            if (!(e instanceof ClassSizeException)) {
+                // a compiler bug: the script still runs, much slower; also logged, since the
+                // default error reporter ignores warnings
+                String message = ScriptRuntime.getMessageById("msg.compile.fallback", e.toString());
+                if (compilationErrorReporter != null) {
+                    compilationErrorReporter.warning(message, sourceName, lineno, null, 0);
+                }
+                LOGGER.log(
+                        System.Logger.Level.WARNING, sourceName + ":" + lineno + ": " + message, e);
+            }
 
             // we have to recreate the tree because the compile call might have changed the tree
             // already

@@ -6,6 +6,14 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### A fallback to the interpreter is reported (2026-10-22)
+
+- Diagnostics (all versions, `BACKWARD_COMPATIBILITY.md` 2.4): when the class compiler fails on a script with
+  generators and the script is interpreted instead, the compilation reports a warning to its error reporter and
+  logs it at `WARNING` with the JDK platform logger `org.monflabs.mozilla.javascript`, with the exception. The
+  previous entry's bug went unnoticed for that reason. Scripts too large for a class file still fall back
+  silently.
+
 ### Compiled increment of an element indexed by an element read (2026-10-22)
 
 - Fix (all versions, compiled mode): `r[d[1]]++` failed to compile ("Stack underflow"): the code generator took
