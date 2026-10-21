@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled increment of an element indexed by an element read (2026-10-22)
+
+- Fix (all versions, compiled mode): `r[d[1]]++` failed to compile ("Stack underflow"): the code generator took
+  the index `d[1]`, an element read whose own index is a number (`ISNUMBER_PROP` `RIGHT`), for a double, and
+  called the variant of `elemIncrDecr` that takes a double index. It now requires a number result (`BOTH`), for
+  `super` elements too. Upstream bug (Rhino 1.8.0 fails the same way). A script with generators compiles them in
+  the interpreter when the class compiler fails, so the error went unnoticed there: since the previous entries
+  (let/const in registers), the JavaScriptPerformance benchmark `generator_iterable_collection` hit it and ran
+  interpreted, 2.5 times slower (181 → 410 ms in the harness; 2.5 s → 6.5 s for 20 runs alone, back to 2.5 s).
+
 ### The temporal dead zone of the bindings of switch clauses (2026-10-22)
 
 - Fix (`VERSION_ECMASCRIPT`, both modes, `BACKWARD_COMPATIBILITY.md` 1.91): a let/const declared in a clause

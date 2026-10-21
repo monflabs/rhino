@@ -4611,7 +4611,8 @@ class BodyCodegen {
                     cfw.addALoad(contextLocal);
                     cfw.addALoad(variableObjectLocal);
                     cfw.addPush(incrDecrMask);
-                    if (elemChild.getNext().getIntProp(Node.ISNUMBER_PROP, -1) != -1) {
+                    // a double index: an element access marked RIGHT only has a number index
+                    if (elemChild.getNext().getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
                         addOptRuntimeInvoke(
                                 "elemIncrDecr",
                                 "(Ljava/lang/Object;"
@@ -4664,7 +4665,7 @@ class BodyCodegen {
                 cfw.addPush(index.getString());
             } else {
                 generateExpression(index, node);
-                if (index.getIntProp(Node.ISNUMBER_PROP, -1) != -1) {
+                if (index.getIntProp(Node.ISNUMBER_PROP, -1) == Node.BOTH) {
                     addDoubleWrap();
                 }
             }
