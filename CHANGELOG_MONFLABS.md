@@ -6,6 +6,16 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled generators with a return through nested try statements (2026-10-22)
+
+- Fix (all versions, compiled mode): a generator or an async function returning out of nested try statements,
+  such as a for-of or for-await-of loop whose head is a `var` destructuring pattern (its iterator guard is a try
+  around the loop), failed to compile ("bad local variable type") and ran in the interpreter. A finally block of
+  a generator returns to its callers through one table, so the verifier merges their locals; the scope saved by
+  an inner try, which an exception thrown before it skips, was then unset where its handler reads it. The locals
+  of the try statements and local blocks of a generator are now reserved and set to null on entry. The 52
+  test262 scripts that fell back for that reason compile.
+
 ### A fallback to the interpreter is reported (2026-10-22)
 
 - Diagnostics (all versions, `BACKWARD_COMPATIBILITY.md` 2.4): when the class compiler fails on a script with

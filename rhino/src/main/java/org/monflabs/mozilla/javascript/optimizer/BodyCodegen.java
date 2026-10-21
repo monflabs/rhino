@@ -247,6 +247,7 @@ class BodyCodegen {
     private String nameNamespace = "NAME";
 
     private void initBodyGeneration() {
+        generatorLocals = null;
         varRegisters = null;
         argDoubleLocals = new int[0];
         argDoubleLocalsInUse = 0;
@@ -383,6 +384,8 @@ class BodyCodegen {
             if (epilogueLabel == -1) {
                 epilogueLabel = cfw.acquireLabel();
             }
+
+            reserveGeneratorLocals(scriptOrFn.getLastChild());
 
             List<Node> targets = ((FunctionNode) scriptOrFn).getResumptionPoints();
             if (targets != null) {
@@ -881,7 +884,8 @@ class BodyCodegen {
                 {
                     boolean prevLocal = inLocalBlock;
                     inLocalBlock = true;
-                    int local = getNewWordLocal();
+                    short reserved = reservedLocal(node);
+                    int local = reserved >= 0 ? reserved : getNewWordLocal();
                     if (isGenerator) {
                         cfw.add(ByteCode.ACONST_NULL);
                         cfw.addAStore(local);
@@ -891,7 +895,9 @@ class BodyCodegen {
                         generateStatement(child);
                         child = child.getNext();
                     }
-                    releaseWordLocal((short) local);
+                    if (reserved < 0) {
+                        releaseWordLocal((short) local);
+                    }
                     node.removeProp(Node.LOCAL_PROP);
                     inLocalBlock = prevLocal;
                     break;
@@ -1221,6 +1227,35 @@ class BodyCodegen {
             default:
                 throw Codegen.badTree();
         }
+    }
+
+    /**
+     * Reserves the locals of the try statements and local blocks of a generator, set to null on
+     * entry, before the dispatch to the resumption point. A finally block of a generator returns to
+     * its callers through one table, so the verifier merges the locals of all of them: a local that
+     * a try or a local block sets, and that an exception thrown before it can skip, would be unset
+     * where a handler reads it.
+     */
+    private void reserveGeneratorLocals(Node node) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            int type = child.getType();
+            if (type == Token.TRY || type == Token.LOCAL_BLOCK) {
+                short local = getNewWordLocal();
+                cfw.add(ByteCode.ACONST_NULL);
+                cfw.addAStore(local);
+                if (generatorLocals == null) {
+                    generatorLocals = new IdentityHashMap<>();
+                }
+                generatorLocals.put(child, local);
+            }
+            reserveGeneratorLocals(child);
+        }
+    }
+
+    /** The local reserved for a try statement or a local block of a generator, or -1. */
+    private short reservedLocal(Node node) {
+        Short local = generatorLocals == null ? null : generatorLocals.get(node);
+        return local == null ? -1 : local;
     }
 
     private void generateIntegerWrap() {
@@ -3851,7 +3886,8 @@ class BodyCodegen {
         // XXX OPT Maybe instead do syntactic transforms to associate
         // each 'with' with a try/finally block that does the exitwith.
 
-        short savedVariableObject = getNewWordLocal();
+        short reserved = reservedLocal(node);
+        short savedVariableObject = reserved >= 0 ? reserved : getNewWordLocal();
         cfw.addALoad(variableObjectLocal);
         cfw.addAStore(savedVariableObject);
 
@@ -3995,7 +4031,9 @@ class BodyCodegen {
                         startLabel, finallyLabel, finallyHandler, null); // catch any
             }
         }
-        releaseWordLocal(savedVariableObject);
+        if (reserved < 0) {
+            releaseWordLocal(savedVariableObject);
+        }
         cfw.markLabel(realEnd);
 
         // also in a generator: the catch of an enclosing try finds its own handlers on top
@@ -5828,6 +5866,10 @@ class BodyCodegen {
     private OptFunctionNode fnCurrent;
 
     private static final int MAX_LOCALS = 1024;
+
+    /** The locals reserved for the try statements and local blocks of a generator. */
+    private Map<Node, Short> generatorLocals;
+
     private int[] locals;
     private int firstFreeLocal;
     private int localsMax;
