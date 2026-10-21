@@ -10,6 +10,8 @@ import static org.monflabs.mozilla.javascript.ClassDescriptor.Builder.value;
 import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.PROTO;
 import static org.monflabs.mozilla.javascript.Symbol.Kind.REGULAR;
 
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serial;
 import java.util.EnumSet;
 import org.monflabs.mozilla.javascript.xml.XMLObject;
@@ -95,6 +97,33 @@ public class BaseFunction extends ScriptableObject implements Function {
                     BaseFunction::prototypeSetter,
                     BaseFunction::prototypeAttrSetter,
                     BaseFunction::prototypeDescSetter);
+
+    private static final SlotMapDescriptor<BaseFunction> PROTOTYPE_MAP =
+            SlotMapDescriptor.Builder.extending(BASIC_MAP)
+                    .withSlot(PROTOTYPE_DESCRIPTOR, PERMANENT | DONTENUM)
+                    .hashed()
+                    .build();
+
+    /**
+     * The properties of a function in VERSION_ES6 code that is not strict, see
+     * setStandardPropertyAttributes.
+     */
+    private static final SlotMapDescriptor<BaseFunction> ES6_MAP =
+            SlotMapDescriptor.Builder.extending(BASIC_MAP)
+                    .withSlot(ARITY_DESCRIPTOR, DONTENUM | READONLY)
+                    .build();
+
+    private static final SlotMapDescriptor<BaseFunction> ES6_PROTOTYPE_MAP =
+            SlotMapDescriptor.Builder.extending(ES6_MAP)
+                    .withSlot(PROTOTYPE_DESCRIPTOR, PERMANENT | DONTENUM)
+                    .hashed()
+                    .build();
+
+    private static final SlotMapDescriptor<BaseFunction> SLOPPY_PROTOTYPE_MAP =
+            SlotMapDescriptor.Builder.extending(SLOPPY_MAP)
+                    .withSlot(PROTOTYPE_DESCRIPTOR, PERMANENT | DONTENUM)
+                    .hashed()
+                    .build();
 
     static {
         var builder =
@@ -311,6 +340,38 @@ public class BaseFunction extends ScriptableObject implements Function {
     public BaseFunction(VarScope scope) {
         declarationScope = scope;
         createProperties();
+    }
+
+    /**
+     * A function created with its own properties already laid out: the map that {@link
+     * #createProperties}, the standard attributes, the properties of a sloppy function and the
+     * prototype property would give it under VERSION_ECMASCRIPT, in that order. Null properties
+     * take {@link #createProperties}.
+     */
+    BaseFunction(VarScope scope, SlotMapDescriptor<BaseFunction> properties, Context cx) {
+        declarationScope = scope;
+        if (properties == null) {
+            createProperties();
+        } else {
+            properties.installMap(this, cx);
+        }
+    }
+
+    /** The own properties of a function under VERSION_ECMASCRIPT, see the constructor above. */
+    static SlotMapDescriptor<BaseFunction> functionProperties(boolean sloppy, boolean prototype) {
+        if (sloppy) {
+            return prototype ? SLOPPY_PROTOTYPE_MAP : SLOPPY_MAP;
+        }
+        return prototype ? PROTOTYPE_MAP : BASIC_MAP;
+    }
+
+    /**
+     * The own properties of a function created by code that is not strict under VERSION_ES6: {@link
+     * #createProperties} gives it an arity, whose attributes setStandardPropertyAttributes then
+     * sets.
+     */
+    static SlotMapDescriptor<BaseFunction> es6FunctionProperties(boolean prototype) {
+        return prototype ? ES6_PROTOTYPE_MAP : ES6_MAP;
     }
 
     public BaseFunction(VarScope scope, Scriptable prototype) {
@@ -945,6 +1006,9 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     public Object getPrototypeProperty() {
         Object result = prototypeProperty;
+        if (result == DEFAULT_PROTOTYPE) {
+            result = createDefaultPrototype();
+        }
         if (result == null || result == UniqueTag.NOT_FOUND) {
             result = Undefined.instance;
         } else if (result == UniqueTag.NULL_VALUE) {
@@ -960,6 +1024,44 @@ public class BaseFunction extends ScriptableObject implements Function {
         } else {
             prototypeProperty = UniqueTag.NOT_FOUND;
         }
+    }
+
+    /**
+     * The prototype property of a function whose default prototype object is created on first use:
+     * an ordinary object inheriting from %Object.prototype%, with a constructor property.
+     */
+    private static final Object DEFAULT_PROTOTYPE = new Object();
+
+    /**
+     * Gives the function the default prototype object of {@link #setupDefaultPrototype}, created
+     * when it is first read. Only for a function that is not a generator, in a scope with the
+     * intrinsic %Object.prototype%, so that the object is the same whenever it is created. The
+     * prototype property is created as by setupDefaultPrototype unless the slot map already has it.
+     */
+    void setupLazyDefaultPrototype(boolean laidOut) {
+        if (!laidOut && !has(PROTOTYPE_PROPERTY_NAME, this)) {
+            createPrototypeProperty();
+        }
+        prototypeProperty = DEFAULT_PROTOTYPE;
+    }
+
+    private synchronized Object createDefaultPrototype() {
+        if (prototypeProperty == DEFAULT_PROTOTYPE) {
+            NativeObject obj = new NativeObject();
+            obj.setParentScope(getParentScope());
+            prototypeProperty = obj;
+            obj.setPrototype(getObjectPrototype(getDeclarationScope()));
+            obj.defineProperty("constructor", this, DONTENUM);
+        }
+        return prototypeProperty;
+    }
+
+    @Serial
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        if (prototypeProperty == DEFAULT_PROTOTYPE) {
+            createDefaultPrototype();
+        }
+        out.defaultWriteObject();
     }
 
     protected synchronized Object setupDefaultPrototype(VarScope scope) {

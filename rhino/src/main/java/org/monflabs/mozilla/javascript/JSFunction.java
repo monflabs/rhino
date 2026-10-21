@@ -21,11 +21,33 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
             Object lexicalThis,
             Object lexicalNewTarget,
             Scriptable homeObject) {
-        super(scope);
+        this(
+                cx,
+                scope,
+                descriptor,
+                lexicalThis,
+                lexicalNewTarget,
+                homeObject,
+                laidOut(cx, descriptor));
+    }
+
+    private JSFunction(
+            Context cx,
+            VarScope scope,
+            JSDescriptor<JSFunction> descriptor,
+            Object lexicalThis,
+            Object lexicalNewTarget,
+            Scriptable homeObject,
+            SlotMapDescriptor<BaseFunction> properties) {
+        super(scope, properties, cx);
         this.descriptor = descriptor;
         this.lexicalThis = lexicalThis;
         this.lexicalNewTarget = lexicalNewTarget;
         this.homeObject = homeObject;
+        if (properties != null) {
+            initLaidOut(cx, scope);
+            return;
+        }
         if (descriptor.isAsync()) {
             initAsyncFunction(cx, scope);
             return;
@@ -41,8 +63,68 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
                 && !isBuiltIn()) {
             installSloppyFunctionProperties();
         }
-        if (!descriptor.isShorthand()
-                || (descriptor.isES6Generator() && cx != null && cx.isLatestEcmaScript())) {
+        if (hasDefaultPrototype(cx, descriptor)) {
+            setupDefaultPrototype(ScriptableObject.getTopLevelScope(scope), scope, false);
+        }
+    }
+
+    /**
+     * The own properties of the function, laid out at once (see {@link
+     * BaseFunction#functionProperties}), or null where they are installed one by one: async
+     * functions, the versions before VERSION_ES6, and functions created by strict code before
+     * VERSION_ECMASCRIPT.
+     */
+    private static SlotMapDescriptor<BaseFunction> laidOut(
+            Context cx, JSDescriptor<JSFunction> descriptor) {
+        if (cx == null || descriptor.isAsync()) {
+            return null;
+        }
+        boolean prototype = hasDefaultPrototype(cx, descriptor) && descriptor.hasPrototype();
+        if (!cx.isLatestEcmaScript()) {
+            return cx.getLanguageVersion() >= Context.VERSION_ES6 && !cx.isStrictMode()
+                    ? es6FunctionProperties(prototype)
+                    : null;
+        }
+        boolean sloppy =
+                !descriptor.isStrict()
+                        && !descriptor.isShorthand()
+                        && !descriptor.isES6Generator()
+                        && !descriptor.hasLexicalThis()
+                        && !descriptor.isClassConstructor()
+                        && !(descriptor.getSourceProvider() instanceof BuiltInSourceCodeProvider);
+        return functionProperties(sloppy, prototype);
+    }
+
+    /** Whether the function gets a prototype object (setupDefaultPrototype). */
+    private static boolean hasDefaultPrototype(Context cx, JSDescriptor<JSFunction> descriptor) {
+        return !descriptor.isShorthand()
+                || (descriptor.isES6Generator() && cx != null && cx.isLatestEcmaScript());
+    }
+
+    /** The rest of the creation of a function whose own properties are laid out. */
+    private void initLaidOut(Context cx, VarScope scope) {
+        setParentScope(scope);
+        TopLevel top = ScriptableObject.getTopLevelScope(scope);
+        setPrototype(
+                TopLevel.getBuiltinPrototype(
+                        top,
+                        descriptor.isES6Generator()
+                                ? TopLevel.Builtins.GeneratorFunction
+                                : TopLevel.Builtins.Function));
+        if (hasDefaultPrototype(cx, descriptor)) {
+            setupDefaultPrototype(top, scope, true);
+        }
+    }
+
+    /**
+     * The default prototype object, created when it is first read where it is the same object
+     * whenever it is created (see {@link #setupLazyDefaultPrototype}).
+     */
+    private void setupDefaultPrototype(TopLevel top, VarScope scope, boolean laidOut) {
+        if (generatorPrototypeTag() == null
+                && top.getBuiltinPrototype(TopLevel.Builtins.Object) != null) {
+            setupLazyDefaultPrototype(laidOut);
+        } else {
             setupDefaultPrototype(scope);
         }
     }

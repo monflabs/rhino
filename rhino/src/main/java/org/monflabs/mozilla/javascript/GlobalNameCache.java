@@ -176,64 +176,72 @@ public final class GlobalNameCache {
     }
 
     /**
-     * The top scope that a lookup of the name from this scope reaches: the scopes on the way are
-     * activations and block scopes that do not have the name. Null if one has it, or if another
-     * kind of scope is on the way.
+     * The scopes that a lookup by name walks without a prototype chain, see {@link #nestedName}.
      */
-    private VarScope topOf(VarScope scope) {
-        for (; ; ) {
-            Class<?> type = scope.getClass();
-            if (type != NativeCall.class && type != LocalScope.class && type != CatchScope.class) {
-                return scope instanceof TopLevel ? scope : null;
-            }
-            if (((ScopeObject) scope).getMap().query(name, 0) != null) {
-                return null;
-            }
-            scope = scope.getParentScope();
-        }
+    private static boolean isDeclarative(VarScope scope) {
+        Class<?> type = scope.getClass();
+        return type == NativeCall.class || type == LocalScope.class || type == CatchScope.class;
     }
 
-    /** {@link ScriptRuntime#name(Context, VarScope, String)} from a scope inside the top scope. */
+    /**
+     * {@link ScriptRuntime#name(Context, VarScope, String)} from a scope inside the top scope. The
+     * activations and block scopes on the way ({@code NativeCall}, {@code LocalScope}, {@code
+     * CatchScope}) are looked up as the lookup does; past them, the top scope is read through the
+     * cache. Another kind of scope on the way takes the lookup.
+     */
     public Object nestedName(Context cx, VarScope scope) {
-        VarScope top = disabled ? null : topOf(scope);
-        if (top != null) {
-            Entry e = entry;
-            Slot slot = slot(e, cx, top);
+        VarScope top = scope;
+        while (isDeclarative(top)) {
+            Slot slot = ((ScopeObject) top).getMap().query(name, 0);
             if (slot != null) {
-                Object value = value(e, slot, top);
-                if (value != MISS) {
-                    return value;
-                }
+                return ScriptRuntime.checkInitialized(slot.getValue(top), name);
+            }
+            top = top.getParentScope();
+        }
+        if (!(top instanceof TopLevel)) {
+            return ScriptRuntime.name(cx, scope, name);
+        }
+        Entry e = entry;
+        Slot slot = slot(e, cx, top);
+        if (slot != null) {
+            Object value = value(e, slot, top);
+            if (value != MISS) {
+                return value;
             }
         }
-        Object result = ScriptRuntime.name(cx, scope, name);
-        if (top != null) {
-            update(cx, top);
-        }
+        // the scopes on the way do not have the name: the lookup goes on from the top scope
+        Object result = ScriptRuntime.name(cx, top, name);
+        update(cx, top);
         return result;
     }
 
     /**
      * {@link ScriptRuntime#getNameAndThis(String, Context, VarScope)} from a scope inside the top
-     * scope.
+     * scope, as {@link #nestedName}.
      */
     public ScriptRuntime.LookupResult nestedNameAndThis(Context cx, VarScope scope) {
-        VarScope top = disabled ? null : topOf(scope);
-        if (top != null) {
-            Entry e = entry;
-            Slot slot = slot(e, cx, top);
+        VarScope top = scope;
+        while (isDeclarative(top)) {
+            Slot slot = ((ScopeObject) top).getMap().query(name, 0);
             if (slot != null) {
-                Object value = value(e, slot, top);
-                if (value != MISS) {
-                    return new ScriptRuntime.LookupResult(
-                            value, Undefined.SCRIPTABLE_UNDEFINED, name);
-                }
+                Object value = ScriptRuntime.checkInitialized(slot.getValue(top), name);
+                return new ScriptRuntime.LookupResult(value, Undefined.SCRIPTABLE_UNDEFINED, name);
+            }
+            top = top.getParentScope();
+        }
+        if (!(top instanceof TopLevel)) {
+            return ScriptRuntime.getNameAndThis(name, cx, scope);
+        }
+        Entry e = entry;
+        Slot slot = slot(e, cx, top);
+        if (slot != null) {
+            Object value = value(e, slot, top);
+            if (value != MISS) {
+                return new ScriptRuntime.LookupResult(value, Undefined.SCRIPTABLE_UNDEFINED, name);
             }
         }
-        ScriptRuntime.LookupResult result = ScriptRuntime.getNameAndThis(name, cx, scope);
-        if (top != null) {
-            update(cx, top);
-        }
+        ScriptRuntime.LookupResult result = ScriptRuntime.getNameAndThis(name, cx, top);
+        update(cx, top);
         return result;
     }
 

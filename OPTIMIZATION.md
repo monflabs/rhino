@@ -74,14 +74,48 @@ on, and what it gained. It also records the experiments that measured no gain, s
   the scope chain by name, then looked the name up in the top scope and the global object. They now get a cache
   too: `GlobalNameCache.nestedName` walks up the activations and block scopes (`NativeCall`, `LocalScope`,
   `CatchScope`) and checks that none of them has the name, one query of a small map each, then reads the cached
-  slot of the top scope. Any other scope on the way (`with`, a scope of the embedding) takes the lookup. Since
-  every scope on the way is still checked, a name that `eval` or code run in the caller's scope adds to an
-  activation is found as before. Gain: a function nested in a wrapper reading `Math.abs` 3 million times, 205 →
+  slot of the top scope; a name that one of them has is read from its slot, as the lookup does. Any other scope
+  on the way (`with`, a scope of the embedding) takes the lookup. Since every scope on the way is still checked,
+  a name that `eval` or code run in the caller's scope adds to an activation is found as before. (The first
+  version looked a name found in an activation up again: the variables that functions with closures read by
+  name before `VERSION_ECMASCRIPT` cost 452 → 610 ms compiled for 6 million reads, back to 480 ms since.) Gain: a function nested in a wrapper reading `Math.abs` 3 million times, 205 →
   88 ms compiled (`VERSION_ECMASCRIPT`, the other name captured), 266 → 209 ms when it also reads a global
   (`VERSION_ES6` 268 → 232 ms), interpreted 5–10%; SunSpider in one JVM, compiled (every file wrapped in a
   function): 21,744 → 20,939 ms, `access-nbody` 3,151 → 2,632 ms, `math-partial-sums` 1,710 → 1,506 ms,
   `string-validate-input` 490 → 417 ms; `access-fannkuch` 397 → 463 ms in that sequence, which reads no name in
   its loops (the profile of the files before it changes how C2 compiles its array writes). All versions.
+
+### Function objects created with their properties laid out
+
+- **What** (M16, 16.12). Creating a function installed its own properties step by step: a map with `length` and
+  `name` (`BaseFunction.createProperties`), their attributes set again by name (`setStandardPropertyAttributes`),
+  a second map with `arguments` and `caller` for a sloppy function under `VERSION_ECMASCRIPT`, then the
+  `prototype` property through a compound operation that copied the small map into a hash table, and the
+  prototype object with its `constructor` property. A `JSFunction` now gets its final map at once
+  (`BaseFunction.functionProperties`, `es6FunctionProperties`): the same properties, attributes and order, built
+  with the `Context` the constructor gets instead of looking it up. A layout with a `prototype` property is
+  built as a hash table sized for it (`SlotMapDescriptor.Builder.hashed`), the kind of map these functions had.
+  The prototype object is created when the `prototype` property is first read
+  (`BaseFunction.createDefaultPrototype`).
+- **When it applies.** The layout at once: functions created under `VERSION_ECMASCRIPT`, and by code that is not
+  strict under `VERSION_ES6`; async functions and the other cases install their properties as before (strict
+  code before `VERSION_ECMASCRIPT` gives a function an `arity` property of its own kind). The lazy prototype
+  object: every `JSFunction` that is not a generator, in a scope with the intrinsic %Object.prototype%.
+- **Correctness.** The prototype object is the one that would have been created: an ordinary object whose
+  prototype is the intrinsic %Object.prototype% of the function's scope and whose `constructor` is the function,
+  created once (under the function's lock) whoever reads it first. A function serialized before its prototype is
+  read gets it first (`writeObject`). The own properties of functions of every kind, in every version, are the
+  same as before (`FunctionObjectsTest`).
+- **Map kind.** A first version kept the five slots of a sloppy function in an `ImmutableSmallSlotMap` extended
+  to five: creation 167 → 124 ms, but `instanceof` became 15–20% slower in the full gate run (the function is
+  looked up for `Symbol.hasInstance`, then `prototype`, and the property reads saw one more kind of map), also with
+  the hash of each slot kept in the map. As a hash table, `instanceof` is level.
+- **Gain.** 1 million closures created, compiled: `VERSION_ECMASCRIPT` 355 → 167 ms (Rhino 1.8.0: 113 ms),
+  `VERSION_ES6` 505 → 187 ms; a callback passed to `map` 553 → 257 ms and 729 → 295 ms (Rhino 1.8.0: 232 ms); a
+  nested declaration returned by each call 569 → 349 ms and 522 → 306 ms. Interpreted: 467 → 344 ms and 751 →
+  393 ms. Gate: `closures` −28% compiled, −11% interpreted; `arraymap` −11% to −13% compiled. Under `VERSION_1_8`, which keeps the
+  old layout, the micro-benchmarks move by −14% to +12%: the interpreter loop and the escape analysis of the JIT
+  come out differently.
 
 ### Lazily loaded built-ins stay lazy
 

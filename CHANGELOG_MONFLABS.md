@@ -6,6 +6,18 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Function objects created with their properties laid out (2026-10-21)
+
+- Performance (plan M16, 16.12; all versions, both modes, no observable change): a function created under
+  `VERSION_ECMASCRIPT`, or by code that is not strict under `VERSION_ES6`, gets its own properties (`length`,
+  `name`, `arguments` and `caller` of a sloppy function, `arity`, `prototype`) in one map at once, with the same
+  attributes and order. The prototype object of a function that is not a generator is created when `prototype`
+  is first read. 1 million closures, compiled: 355 → 167 ms (`VERSION_ECMASCRIPT`), 505 → 187 ms
+  (`VERSION_ES6`).
+- Fix of the previous entry: a name that an activation or block scope on the way has is read from the slot found,
+  not looked up again (6 million reads of the variables of a function with a closure under `VERSION_ES6`: 610 →
+  480 ms compiled).
+
 ### Global names read from nested functions through the name cache (2026-10-21)
 
 - Performance (plan M16, 16.14; all versions, both modes, no observable change): a name read from code whose scope
