@@ -3317,6 +3317,12 @@ class BodyCodegen {
         // that's what ECMAScript requires
         generateCallArgArray(node, firstArgChild, false);
         cfw.addAStore(argsLocal);
+        if (isGenerator) {
+            // a yield in the arguments restores the stack as untyped values
+            cfw.add(
+                    ByteCode.CHECKCAST,
+                    "org/monflabs/mozilla/javascript/ScriptRuntime$LookupResult");
+        }
 
         if (node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1) {
             // Extract the function but ignore the "this" that comes back

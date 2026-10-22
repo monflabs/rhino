@@ -6,6 +6,17 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled generators with a yield in the arguments of a call (2026-10-22)
+
+- Fix (all versions, compiled mode): a call with a yield or an await in its arguments, such as
+  `r.push(await x)`, `Math.max(1, await p)` or `print(yield 1)`, made the class fail JVM verification, so the
+  whole script ran in the interpreter, silently until the previous entry. The function and `this` lookup of a
+  call is evaluated before its arguments (since upstream's "Adjust order of evaluation of function arguments to
+  match the spec", after 1.8.0) and stays on the operand stack, which a yield restores as untyped values; a
+  generator now casts it back after the arguments. The 103 test262 scripts that fell back for that reason
+  compile. Performance: a loop of `s = o.add(s, await i)` runs 2.8x faster; unrelated code in a script with
+  such a call (`fib(27)` next to `log.push(await p)`) runs 29x faster, compiled instead of interpreted.
+
 ### Compiled generators with a yield in an object spread (2026-10-22)
 
 - Fix (all versions, compiled mode): a yield or an await in the source of a spread in an object literal
