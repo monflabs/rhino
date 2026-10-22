@@ -4,6 +4,7 @@
 
 package org.monflabs.mozilla.javascript.optimizer;
 
+import java.math.BigInteger;
 import java.util.List;
 import org.monflabs.mozilla.javascript.Callable;
 import org.monflabs.mozilla.javascript.Context;
@@ -194,6 +195,25 @@ public final class OptRuntime extends ScriptRuntime {
             Scriptable callerThis,
             int callType) {
         return ScriptRuntime.newSpecial(cx, fun, args, scope, callType);
+    }
+
+    /**
+     * A relational comparison {@code num op value} (Token.LT, LE, GT, GE) of a number with a value
+     * of any type: a BigInt, a string or an object compares as ScriptRuntime#compare does.
+     */
+    public static boolean compareNumberWith(double num, Object value, int op) {
+        if (value instanceof Number && !(value instanceof BigInteger)) {
+            return ScriptRuntime.compareTo(num, ((Number) value).doubleValue(), op);
+        }
+        return ScriptRuntime.compare(wrapDouble(num), value, op);
+    }
+
+    /** A relational comparison {@code value op num}, see #compareNumberWith. */
+    public static boolean compareWithNumber(Object value, double num, int op) {
+        if (value instanceof Number && !(value instanceof BigInteger)) {
+            return ScriptRuntime.compareTo(((Number) value).doubleValue(), num, op);
+        }
+        return ScriptRuntime.compare(value, wrapDouble(num), op);
     }
 
     public static Double wrapDouble(double num) {

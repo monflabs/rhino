@@ -24,10 +24,12 @@ class OptTransformer extends NodeTransformer {
     OptTransformer(
             ScriptNode root,
             Map<ScriptNode, Map<String, OptFunctionNode>> declarations,
-            List<OptFunctionNode> directCallTargets) {
+            List<OptFunctionNode> directCallTargets,
+            boolean latestEcmaScript) {
         this.root = root;
         this.declarations = declarations;
         this.directCallTargets = directCallTargets;
+        this.latestEcmaScript = latestEcmaScript;
     }
 
     @Override
@@ -87,7 +89,9 @@ class OptTransformer extends NodeTransformer {
                             && node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 0
                             && argCount == ofn.fnode.getParamCount()
                             && !ofn.fnode.requiresActivation()
-                            && !ofn.fnode.requiresArgumentObject()) {
+                            && !ofn.fnode.requiresArgumentObject()
+                            // a direct call passes the arguments as they are: no rest array
+                            && !(latestEcmaScript && ofn.fnode.hasRestParameter())) {
                         // Refuse to directCall any function with more
                         // than 32 parameters - prevent code explosion
                         // for wacky test cases
@@ -123,6 +127,7 @@ class OptTransformer extends NodeTransformer {
     }
 
     private final ScriptNode root;
+    private final boolean latestEcmaScript;
     private Map<ScriptNode, Map<String, OptFunctionNode>> declarations;
     private List<OptFunctionNode> directCallTargets;
 }

@@ -105,6 +105,8 @@ changes.
 | 1.89 | Methods called on a primitive string receive the string as `this` | `VERSION_ECMASCRIPT` |
 | 1.90 | Arithmetic on BigInt parameters in compiled top-level functions | `VERSION_ECMASCRIPT` |
 | 1.91 | A `let`/`const` of a `switch` clause is uninitialized in the clauses entered past it | `VERSION_ECMASCRIPT` |
+| 1.92 | A rest parameter of a function called directly in compiled code | `VERSION_ECMASCRIPT` |
+| 1.93 | A BigInt compared with a number in a compiled function | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1505,6 +1507,36 @@ function f(k) {
 - **Why:** ECMA-262 2026, §14.12.4 (the case block is one declarative environment, its bindings instantiated
   uninitialized by BlockDeclarationInstantiation) and §9.1.1.1.6 (GetBindingValue of an uninitialized binding
   throws a ReferenceError).
+
+### 1.92 A rest parameter of a function called directly in compiled code
+
+```js
+function rest(...a) { return a; }
+function f() { return rest('xy'); }
+f();   // compiled, before: 'xy'   now: ['xy']
+```
+
+- In compiled mode, a call of a function declaration by its name from another function is a direct call of its
+  method, which passed the arguments as they are: a rest parameter got the first argument instead of an array of
+  the remaining ones. A function with a rest parameter is no longer called directly. Rhino 1.8.0 has the same bug;
+  the interpreter was not affected.
+- **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation: a rest parameter is bound to an array of
+  the remaining arguments).
+
+### 1.93 A BigInt compared with a number in a compiled function
+
+```js
+function f(x) { return x < 2; }
+f(1n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: true
+```
+
+- In compiled mode, a relational comparison (`<`, `<=`, `>`, `>=`) of an operand typed as a number with another
+  one converted the other with ToNumber, which throws for a BigInt, and before evaluating the right operand when
+  it was the left one. It now compares as the generic comparison does, after evaluating both operands, through
+  `OptRuntime.compareNumberWith`, with the double comparison kept for a number. The interpreter was not
+  affected.
+- **Why:** ECMA-262 2026, §13.10.1 (RelationalExpression evaluation: both operands evaluated, then
+  IsLessThan), §7.2.13 (IsLessThan compares a BigInt with a number by their mathematical values).
 
 ---
 

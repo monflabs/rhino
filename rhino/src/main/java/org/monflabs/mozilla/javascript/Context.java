@@ -284,6 +284,11 @@ public class Context implements Closeable {
      *   <li>A {@code let} or {@code const} declared in a clause of a {@code switch} is in its
      *       temporal dead zone in the clauses entered past its declaration: reading or writing it
      *       there throws a ReferenceError.
+     *   <li>In compiled mode, a function with a rest parameter called directly ({@code f(1, 2)} in
+     *       another function) gets its rest array, instead of the arguments as they are.
+     *   <li>In compiled mode, a BigInt compared with a number in a function ({@code x < 2})
+     *       compares as one instead of throwing a TypeError, and the left operand is converted
+     *       after the right one is evaluated.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

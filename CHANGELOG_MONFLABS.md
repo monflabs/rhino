@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Three fixes of compiled functions (2026-10-23)
+
+- Fix (`VERSION_ECMASCRIPT`, compiled mode; `BACKWARD_COMPATIBILITY.md` 1.92): a function with a rest parameter
+  called directly (by its name, from another function) got the arguments as they are instead of its rest array;
+  it is no longer a direct-call target. Rhino 1.8.0 has the same bug.
+- Fix (`VERSION_ECMASCRIPT`, compiled mode; 1.93): a BigInt compared with a number in a function (`x < 2`)
+  threw a TypeError, and a left operand compared with a number was converted before the right one was evaluated.
+  The comparisons with one number operand go through `OptRuntime.compareNumberWith`/`compareWithNumber`, which
+  keep the double comparison for a number; a parameter of a direct call that holds a number still compares as a
+  double, without a call.
+- Fix (all versions, compiled mode): `{__proto__: 1}` assigned to a variable in a function created an own
+  `__proto__` property: the optimizer wrapped the number in a conversion that lost the mark of the `__proto__`
+  setter. Regression of the fork (Rhino 1.8.0 and the upstream base are correct).
+- Found by the forced splitting of M17 (`-Drhino.splitWeight`), which moves top-level code into functions.
+
 ### Top-level code too large for a class file is split (2026-10-22)
 
 - Performance (all versions, compiled mode; plan M17, 17.2): the top-level code of a script too large for a class

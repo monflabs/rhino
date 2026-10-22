@@ -929,9 +929,21 @@ class Optimizer {
     private static void wrapAsObject(Node parent, Node child) {
         Node next = child.getNext();
         parent.removeChild(child);
-        Node nuChild = new Node(Token.TO_OBJECT, child);
+        Node nuChild = toObject(child);
         if (next == null) parent.addChildToBack(nuChild);
         else parent.addChildBefore(nuChild, next);
+    }
+
+    /**
+     * A number converted to an object, in place of the node; the value of a __proto__ property of
+     * an object literal stays one (BodyCodegen#getStoreMethodNameForLiteralProperty).
+     */
+    private static Node toObject(Node child) {
+        Node nuChild = new Node(Token.TO_OBJECT, child);
+        if (child.getIntProp(Node.PROTO_SETTER_PROP, 0) == 1) {
+            nuChild.putIntProp(Node.PROTO_SETTER_PROP, 1);
+        }
+        return nuChild;
     }
 
     private void rewriteAsObjectChildren(Node n, Node child) {
@@ -942,7 +954,7 @@ class Optimizer {
             if (type == NumberType) {
                 if (!convertParameter(child)) {
                     n.removeChild(child);
-                    Node nuChild = new Node(Token.TO_OBJECT, child);
+                    Node nuChild = toObject(child);
                     if (nextChild == null) n.addChildToBack(nuChild);
                     else n.addChildBefore(nuChild, nextChild);
                 }

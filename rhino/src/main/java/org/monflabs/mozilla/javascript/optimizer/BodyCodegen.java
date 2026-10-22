@@ -5050,6 +5050,22 @@ class BodyCodegen {
         if (falseGOTO != -1) cfw.add(ByteCode.GOTO, falseGOTO);
     }
 
+    /** The operator that compares the operands the other way round: a < b is b > a. */
+    private static int reversedRelOp(int type) {
+        switch (type) {
+            case Token.LT:
+                return Token.GT;
+            case Token.GT:
+                return Token.LT;
+            case Token.LE:
+                return Token.GE;
+            case Token.GE:
+                return Token.LE;
+            default:
+                throw Codegen.badTree();
+        }
+    }
+
     private void visitIfJumpRelOp(Node node, Node child, int trueGOTO, int falseGOTO) {
         if (trueGOTO == -1 || falseGOTO == -1) throw Codegen.badTree();
         int type = node.getType();
@@ -5071,7 +5087,7 @@ class BodyCodegen {
         int childNumberFlag = node.getIntProp(Node.ISNUMBER_PROP, -1);
         int left_dcp_register = nodeIsDirectCallParameter(child);
         int right_dcp_register = nodeIsDirectCallParameter(rChild);
-        if (childNumberFlag != -1) {
+        if (childNumberFlag != -1 && !compilerEnv.isLatestEcmaScript()) {
             // Force numeric context on both parameters and optimize
             // direct call case as Optimizer currently does not handle it
 
@@ -5097,6 +5113,44 @@ class BodyCodegen {
 
             genSimpleCompare(type, trueGOTO, falseGOTO);
 
+        } else if (childNumberFlag == Node.BOTH) {
+            generateExpression(child, node);
+            generateExpression(rChild, node);
+            genSimpleCompare(type, trueGOTO, falseGOTO);
+
+        } else if (childNumberFlag != -1) {
+            // one operand is a number: the other compares as a number unless it is not one (a
+            // BigInt, a string, an object), see OptRuntime#compareNumberWith
+            boolean numberLeft = childNumberFlag == Node.LEFT;
+            int dcpRegister = numberLeft ? right_dcp_register : left_dcp_register;
+            if (dcpRegister != -1) {
+                // a parameter of a direct call, read without side effects: the number first
+                generateExpression(numberLeft ? child : rChild, node);
+                int compareOp = numberLeft ? type : reversedRelOp(type);
+                int notNumber = cfw.acquireLabel();
+                int stack = cfw.getStackTop();
+                cfw.addALoad(dcpRegister);
+                cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
+                cfw.add(ByteCode.IF_ACMPNE, notNumber);
+                cfw.addDLoad(dcpRegister + 1);
+                genSimpleCompare(compareOp, trueGOTO, falseGOTO);
+                cfw.markLabel(notNumber, stack);
+                cfw.addALoad(dcpRegister);
+                cfw.addPush(compareOp);
+                addOptRuntimeInvoke("compareNumberWith", "(DLjava/lang/Object;I)Z");
+            } else {
+                generateExpression(child, node);
+                generateExpression(rChild, node);
+                cfw.addPush(type);
+                if (numberLeft) {
+                    addOptRuntimeInvoke("compareNumberWith", "(DLjava/lang/Object;I)Z");
+                } else {
+                    addOptRuntimeInvoke("compareWithNumber", "(Ljava/lang/Object;DI)Z");
+                }
+            }
+            cfw.add(ByteCode.IFNE, trueGOTO);
+            cfw.add(ByteCode.GOTO, falseGOTO);
+
         } else {
             if (left_dcp_register != -1 && right_dcp_register != -1) {
                 // Generate code to dynamically check for number content
@@ -5106,9 +5160,27 @@ class BodyCodegen {
                 cfw.addALoad(left_dcp_register);
                 cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
                 cfw.add(ByteCode.IF_ACMPNE, leftIsNotNumber);
+                boolean latest = compilerEnv.isLatestEcmaScript();
                 cfw.addDLoad(left_dcp_register + 1);
-                dcpLoadAsNumber(right_dcp_register);
-                genSimpleCompare(type, trueGOTO, falseGOTO);
+                if (latest) {
+                    // a parameter that holds a BigInt compares as one
+                    int leftNumberStack = cfw.getStackTop();
+                    int rightIsObject = cfw.acquireLabel();
+                    cfw.addALoad(right_dcp_register);
+                    cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
+                    cfw.add(ByteCode.IF_ACMPNE, rightIsObject);
+                    cfw.addDLoad(right_dcp_register + 1);
+                    genSimpleCompare(type, trueGOTO, falseGOTO);
+                    cfw.markLabel(rightIsObject, leftNumberStack);
+                    cfw.addALoad(right_dcp_register);
+                    cfw.addPush(type);
+                    addOptRuntimeInvoke("compareNumberWith", "(DLjava/lang/Object;I)Z");
+                    cfw.add(ByteCode.IFNE, trueGOTO);
+                    cfw.add(ByteCode.GOTO, falseGOTO);
+                } else {
+                    dcpLoadAsNumber(right_dcp_register);
+                    genSimpleCompare(type, trueGOTO, falseGOTO);
+                }
                 if (stack != cfw.getStackTop()) throw Codegen.badTree();
 
                 cfw.markLabel(leftIsNotNumber);
@@ -5117,9 +5189,17 @@ class BodyCodegen {
                 cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
                 cfw.add(ByteCode.IF_ACMPNE, rightIsNotNumber);
                 cfw.addALoad(left_dcp_register);
-                addObjectToDouble();
-                cfw.addDLoad(right_dcp_register + 1);
-                genSimpleCompare(type, trueGOTO, falseGOTO);
+                if (latest) {
+                    cfw.addDLoad(right_dcp_register + 1);
+                    cfw.addPush(type);
+                    addOptRuntimeInvoke("compareWithNumber", "(Ljava/lang/Object;DI)Z");
+                    cfw.add(ByteCode.IFNE, trueGOTO);
+                    cfw.add(ByteCode.GOTO, falseGOTO);
+                } else {
+                    addObjectToDouble();
+                    cfw.addDLoad(right_dcp_register + 1);
+                    genSimpleCompare(type, trueGOTO, falseGOTO);
+                }
                 if (stack != cfw.getStackTop()) throw Codegen.badTree();
 
                 cfw.markLabel(rightIsNotNumber);

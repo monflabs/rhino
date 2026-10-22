@@ -882,7 +882,7 @@ with the completion value passed through the chunks: the 12 test262 shift tests 
 14 test262 Unicode identifier tests stay interpreted (a class declaration with thousands of members), as does
 `mandreel` (constant pool, 17.3). The forced split found three bugs of compiled functions that predate it: a
 BigInt compared with a number throws a TypeError, `{__proto__: 1}` creates an own property, and a direct call of
-a function with a rest parameter does not collect it.
+a function with a rest parameter does not collect it (fixed separately, 2026-10-23).
 
 ---
 
