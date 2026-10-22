@@ -96,17 +96,29 @@ class ClassFileLimitsTest {
 
     /**
      * More invokedynamic sites than HotSpot can number in a class (65,535): a site got the linkage
-     * of another one, or the JVM crashed. A script split into small methods reaches it.
+     * of another one, or the JVM crashed. The script is split, then spread over several classes.
      */
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
-    void tooManyCallSitesAreReported(int version) {
+    void tooManyCallSitesAreSpreadOverClasses(int version) {
         StringBuilder sb = new StringBuilder("var x = 0;\n");
         for (int i = 0; i < 70000; i++) {
             sb.append("x++;\n");
         }
         List<String> warnings = run(version, sb.append("x;").toString(), 70000);
-        assertEquals(1, warnings.size(), warnings.toString());
-        assertTrue(warnings.get(0).contains("invokedynamic"), warnings.get(0));
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
+    /** More constants than a constant pool can hold (65,535 entries, a string takes two). */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void tooManyConstantsAreSpreadOverClasses(int version) {
+        StringBuilder sb = new StringBuilder("var n = 0;\n");
+        for (int i = 0; i < 40000; i++) {
+            sb.append("n += 'k").append(i).append("'.length;\n");
+        }
+        // 'k0' to 'k9' are 2 long, 'k10' to 'k99' 3...
+        List<String> warnings = run(version, sb.append("n;").toString(), 228890);
+        assertTrue(warnings.isEmpty(), warnings.toString());
     }
 }

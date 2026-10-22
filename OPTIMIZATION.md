@@ -636,6 +636,34 @@ on, and what it gained. It also records the experiments that measured no gain, s
   position), ran interpreted: score 460 → 606 (`VERSION_ES6`), 455 → about 570 (`VERSION_ECMASCRIPT`); upstream's
   base 525, Rhino 1.8.0 538. Chunks of 300 or 1,200 nodes score the same.
 
+### Scripts spread over several classes (M17, 17.3)
+
+- **What.** A script whose class exceeds a limit of the class itself, its constant pool (65,535 entries) or its
+  invokedynamic sites (HotSpot numbers them with a u2 index), ran in the interpreter. The class compiler now
+  reports how many of the functions it had generated (`ClassTooLargeException`), and `Context.compileImpl`
+  compiles again with the functions spread over twice the estimated number of classes (`_u<n>` after the name of
+  the main class), round robin by function index, the script itself in the main class; then twice as many on each
+  new failure, up to 256.
+- **How it stays correct.** Each class has its own constant pool, lookup accessor, `_descriptors` field (the
+  same array), regexp and template literal fields and initializers, and number constants; the code of a function
+  refers to its own class, and a direct call to the class of its target (`Codegen.classNameOf`). A class limit
+  reached in a method over 16 KB splits the method first (Splitter), once. `-Drhino.classUnits=3` spreads every
+  script over 3 classes, for testing: with `-Drhino.splitWeight=3`, test262 and the Mozilla tests pass as with the
+  split alone.
+- **Gain.** Octane `mandreel` (asm.js code, 22,657 integer and 13,143 double constants) compiles over 16
+  classes: score 628 → 826.
+
+### Literals of data compiled as data
+
+- **What.** A literal of more than 1,000 constants (numbers, strings, booleans, `null`, arrays and objects of
+  them, with no computed key, accessor, method, spread, hole or `__proto__`) is compiled as text: string constants
+  of at most 20,000 characters, which `OptRuntime.parseConstantLiteral` parses once into a template cached in a
+  static field of the class; each evaluation makes new objects from it with `ScriptRuntime.newArrayLiteral` and
+  `fillObjectLiteral`, as the code of the literal does. Numbers are boxed as `Codegen.pushNumberAsObject` does
+  (`-0` a Double).
+- **Gain.** Octane `pdfjs` (`CIDToUnicodeMaps`, 500 KB of nested arrays and objects of numbers) compiles under
+  `VERSION_ECMASCRIPT` instead of exceeding the constant pool: score 2,100 → 4,505.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the

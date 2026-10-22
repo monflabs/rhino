@@ -12,6 +12,7 @@ import org.monflabs.mozilla.javascript.ContextFactory;
 import org.monflabs.mozilla.javascript.ES6Generator;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.JavaScriptException;
+import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.NativeGenerator;
 import org.monflabs.mozilla.javascript.NativeIterator;
 import org.monflabs.mozilla.javascript.NewLiteralStorage;
@@ -195,6 +196,125 @@ public final class OptRuntime extends ScriptRuntime {
             Scriptable callerThis,
             int callType) {
         return ScriptRuntime.newSpecial(cx, fun, args, scope, callType);
+    }
+
+    /** The template of an array literal of constants (BodyCodegen#visitConstantLiteral). */
+    private static final class ConstantArray {
+        final Object[] elements;
+
+        ConstantArray(Object[] elements) {
+            this.elements = elements;
+        }
+    }
+
+    /** The template of an object literal of constants: its keys (String or Integer) and values. */
+    private static final class ConstantObject {
+        final Object[] ids;
+        final Object[] values;
+
+        ConstantObject(Object[] ids, Object[] values) {
+            this.ids = ids;
+            this.values = values;
+        }
+    }
+
+    /**
+     * Parses a literal of constants that the class compiler encoded as text (too large for the code
+     * and constant pool of a class): {@code [n,e...}, <code>{n,k v...</code>, {@code s<len>:},
+     * {@code i<int>;}, {@code d<double>;}, {@code t}, {@code f}, {@code n}.
+     */
+    public static Object parseConstantLiteral(String[] chunks) {
+        String text = chunks.length == 1 ? chunks[0] : String.join("", chunks);
+        int[] pos = {0};
+        Object result = parseConstant(text, pos);
+        if (pos[0] != text.length()) {
+            throw Kit.codeBug();
+        }
+        return result;
+    }
+
+    private static Object parseConstant(String text, int[] pos) {
+        char c = text.charAt(pos[0]++);
+        switch (c) {
+            case '[':
+                {
+                    Object[] elements = new Object[parseCount(text, pos, ',')];
+                    for (int i = 0; i < elements.length; i++) {
+                        elements[i] = parseConstant(text, pos);
+                    }
+                    return new ConstantArray(elements);
+                }
+            case '{':
+                {
+                    int count = parseCount(text, pos, ',');
+                    Object[] ids = new Object[count];
+                    Object[] values = new Object[count];
+                    for (int i = 0; i < count; i++) {
+                        ids[i] = parseConstant(text, pos);
+                        values[i] = parseConstant(text, pos);
+                    }
+                    return new ConstantObject(ids, values);
+                }
+            case 's':
+                {
+                    int length = parseCount(text, pos, ':');
+                    String value = text.substring(pos[0], pos[0] + length);
+                    pos[0] += length;
+                    return value;
+                }
+            case 'i':
+                return Integer.valueOf(parseCount(text, pos, ';'));
+            case 'd':
+                {
+                    int end = text.indexOf(';', pos[0]);
+                    double value = Double.parseDouble(text.substring(pos[0], end));
+                    pos[0] = end + 1;
+                    return Double.valueOf(value);
+                }
+            case 't':
+                return Boolean.TRUE;
+            case 'f':
+                return Boolean.FALSE;
+            case 'n':
+                return null;
+            default:
+                throw Kit.codeBug();
+        }
+    }
+
+    private static int parseCount(String text, int[] pos, char end) {
+        int stop = text.indexOf(end, pos[0]);
+        int value = Integer.parseInt(text.substring(pos[0], stop));
+        pos[0] = stop + 1;
+        return value;
+    }
+
+    /** A new object or array from the template of a literal of constants, as its code makes it. */
+    public static Scriptable newConstantLiteral(Object template, Context cx, VarScope scope) {
+        return (Scriptable) instantiate(template, cx, scope);
+    }
+
+    private static Object instantiate(Object template, Context cx, VarScope scope) {
+        if (template instanceof ConstantArray) {
+            Object[] elements = ((ConstantArray) template).elements;
+            Object[] values = new Object[elements.length];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = instantiate(elements[i], cx, scope);
+            }
+            return ScriptRuntime.newArrayLiteral(values, null, cx, scope);
+        }
+        if (template instanceof ConstantObject) {
+            ConstantObject object = (ConstantObject) template;
+            Object[] values = new Object[object.values.length];
+            for (int i = 0; i < values.length; i++) {
+                values[i] = instantiate(object.values[i], cx, scope);
+            }
+            Scriptable result = cx.newObject(scope);
+            ScriptRuntime.fillObjectLiteral(
+                    result, object.ids, values, new int[values.length], cx, scope);
+            return result;
+        }
+        return template;
     }
 
     /**

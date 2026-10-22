@@ -113,7 +113,7 @@ class BodyCodegen {
         cfw.addALoad(local);
         cfw.addInvoke(
                 ByteCode.INVOKESTATIC,
-                codegen.mainClassName,
+                cfw.getClassName(),
                 codegen.getNumberBodyMethodName(scriptOrFn),
                 codegen.getNumberBodyMethodSignature(scriptOrFn));
         addDoubleWrap();
@@ -1548,7 +1548,7 @@ class BodyCodegen {
                     int i = node.getExistingIntProp(Node.REGEXP_PROP);
                     cfw.add(
                             ByteCode.GETSTATIC,
-                            codegen.mainClassName,
+                            cfw.getClassName(),
                             codegen.getCompiledRegexpName(scriptOrFn, i),
                             "Ljava/lang/Object;");
                     cfw.addInvoke(
@@ -2492,7 +2492,7 @@ class BodyCodegen {
         cfw.addALoad(variableObjectLocal);
         cfw.add(
                 ByteCode.GETSTATIC,
-                codegen.mainClassName,
+                cfw.getClassName(),
                 codegen.getTemplateLiteralName(scriptOrFn),
                 "[Ljava/lang/Object;");
         cfw.addPush(index);
@@ -2725,6 +2725,9 @@ class BodyCodegen {
     }
 
     private void visitArrayLiteral(Node node, Node child, boolean topLevel) {
+        if (visitConstantLiteral(node)) {
+            return;
+        }
         int numberOfSpread = node.getIntProp(Node.NUMBER_OF_SPREAD, 0);
         if (numberOfSpread > 0) {
             visitArrayLiteralWithSpread(node, child, numberOfSpread);
@@ -2755,7 +2758,7 @@ class BodyCodegen {
             cfw.addALoad(argsLocal);
             cfw.addInvoke(
                     ByteCode.INVOKESTATIC,
-                    codegen.mainClassName,
+                    cfw.getClassName(),
                     methodName,
                     "(Lorg/monflabs/mozilla/javascript/Context;"
                             + scriptOrFnType
@@ -3101,7 +3104,182 @@ class BodyCodegen {
         }
     }
 
+    /** The number of constants from which a literal of constants is compiled as data. */
+    private static final int CONSTANT_LITERAL_MIN = 1000;
+
+    /**
+     * A large literal of constants (a table of data), compiled as text that OptRuntime parses once
+     * into a template, from which each evaluation makes its objects: its code and its constants
+     * would outgrow the method and the constant pool of a class (pdfjs: 500 KB of data).
+     */
+    private boolean visitConstantLiteral(Node node) {
+        int count = constantCount(node);
+        if (count < CONSTANT_LITERAL_MIN) {
+            return false;
+        }
+        StringBuilder text = new StringBuilder();
+        encodeConstant(node, text);
+        String field = codegen.newConstantLiteralField(cfw);
+        cfw.add(ByteCode.GETSTATIC, cfw.getClassName(), field, "Ljava/lang/Object;");
+        cfw.add(ByteCode.DUP);
+        int parsed = cfw.acquireLabel();
+        cfw.add(ByteCode.IFNONNULL, parsed);
+        cfw.add(ByteCode.POP);
+        // modified UTF-8 takes up to 3 bytes a char, and a constant 65535 bytes
+        int chunk = 20000;
+        int chunks = (text.length() + chunk - 1) / chunk;
+        cfw.addPush(chunks);
+        cfw.add(ByteCode.ANEWARRAY, "java/lang/String");
+        for (int i = 0; i < chunks; i++) {
+            cfw.add(ByteCode.DUP);
+            cfw.addPush(i);
+            cfw.addPush(text.substring(i * chunk, Math.min(text.length(), (i + 1) * chunk)));
+            cfw.add(ByteCode.AASTORE);
+        }
+        addOptRuntimeInvoke("parseConstantLiteral", "([Ljava/lang/String;)Ljava/lang/Object;");
+        cfw.add(ByteCode.DUP);
+        cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), field, "Ljava/lang/Object;");
+        cfw.markLabel(parsed);
+        cfw.addALoad(contextLocal);
+        cfw.addALoad(variableObjectLocal);
+        addOptRuntimeInvoke(
+                "newConstantLiteral",
+                "(Ljava/lang/Object;"
+                        + "Lorg/monflabs/mozilla/javascript/Context;"
+                        + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                        + ")Lorg/monflabs/mozilla/javascript/Scriptable;");
+        return true;
+    }
+
+    /**
+     * The number of constants of a literal made only of constants (numbers, strings, booleans,
+     * null, and such literals, with no computed key, accessor, method, spread, hole or __proto__),
+     * or -1 if it is not one.
+     */
+    private static int constantCount(Node node) {
+        switch (node.getType()) {
+            case Token.NUMBER:
+            case Token.STRING:
+            case Token.TRUE:
+            case Token.FALSE:
+            case Token.NULL:
+                return 1;
+            case Token.NEG:
+            case Token.TO_OBJECT:
+                return node.getFirstChild().getType() == Token.NUMBER ? 1 : -1;
+            case Token.ARRAYLIT:
+                if (node.getIntProp(Node.NUMBER_OF_SPREAD, 0) != 0
+                        || node.getProp(Node.SKIP_INDEXES_PROP) != null) {
+                    return -1;
+                }
+                break;
+            case Token.OBJECTLIT:
+                {
+                    Object[] ids = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
+                    if (node.getIntProp(Node.NUMBER_OF_SPREAD, 0) != 0) {
+                        return -1;
+                    }
+                    if (ids != null) {
+                        for (Object id : ids) {
+                            if (!(id instanceof String || id instanceof Integer)
+                                    || "__proto__".equals(id)) {
+                                return -1;
+                            }
+                        }
+                    }
+                    break;
+                }
+            default:
+                return -1;
+        }
+        int count = 1;
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            if (child.getIntProp(Node.PROTO_SETTER_PROP, 0) == 1) {
+                return -1;
+            }
+            int c = constantCount(child);
+            if (c < 0) {
+                return -1;
+            }
+            count += c;
+        }
+        return count;
+    }
+
+    /** The text of a literal of constants, see OptRuntime#parseConstantLiteral. */
+    private static void encodeConstant(Node node, StringBuilder text) {
+        switch (node.getType()) {
+            case Token.NUMBER:
+                encodeNumber(node.getDouble(), text);
+                return;
+            case Token.NEG:
+                encodeNumber(-node.getFirstChild().getDouble(), text);
+                return;
+            case Token.TO_OBJECT:
+                encodeConstant(node.getFirstChild(), text);
+                return;
+            case Token.STRING:
+                encodeString(node.getString(), text);
+                return;
+            case Token.TRUE:
+                text.append('t');
+                return;
+            case Token.FALSE:
+                text.append('f');
+                return;
+            case Token.NULL:
+                text.append('n');
+                return;
+            case Token.ARRAYLIT:
+                {
+                    text.append('[').append(countArguments(node.getFirstChild())).append(',');
+                    for (Node child = node.getFirstChild();
+                            child != null;
+                            child = child.getNext()) {
+                        encodeConstant(child, text);
+                    }
+                    return;
+                }
+            case Token.OBJECTLIT:
+                {
+                    Object[] ids = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
+                    int count = ids == null ? 0 : ids.length;
+                    text.append('{').append(count).append(',');
+                    Node child = node.getFirstChild();
+                    for (int i = 0; i < count; i++) {
+                        if (ids[i] instanceof Integer) {
+                            text.append('i').append((int) (Integer) ids[i]).append(';');
+                        } else {
+                            encodeString((String) ids[i], text);
+                        }
+                        encodeConstant(child, text);
+                        child = child.getNext();
+                    }
+                    return;
+                }
+            default:
+                throw Kit.codeBug();
+        }
+    }
+
+    /** A number boxed as Codegen#pushNumberAsObject does: an Integer if it is one, but not -0. */
+    private static void encodeNumber(double num, StringBuilder text) {
+        int inum = (int) num;
+        if (inum == num && (num != 0 || 1 / num > 0)) {
+            text.append('i').append(inum).append(';');
+        } else {
+            text.append('d').append(Double.toString(num)).append(';');
+        }
+    }
+
+    private static void encodeString(String value, StringBuilder text) {
+        text.append('s').append(value.length()).append(':').append(value);
+    }
+
     private void visitObjectLiteral(Node node, Node child, boolean topLevel) {
+        if (visitConstantLiteral(node)) {
+            return;
+        }
         Object[] properties = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
         int count = properties == null ? 0 : properties.length;
 
@@ -3127,7 +3305,7 @@ class BodyCodegen {
             cfw.addALoad(argsLocal);
             cfw.addInvoke(
                     ByteCode.INVOKESTATIC,
-                    codegen.mainClassName,
+                    cfw.getClassName(),
                     methodName,
                     "(Lorg/monflabs/mozilla/javascript/Context;"
                             + scriptOrFnType
@@ -3548,13 +3726,13 @@ class BodyCodegen {
         if (numberResult) {
             cfw.addInvoke(
                     ByteCode.INVOKESTATIC,
-                    codegen.mainClassName,
+                    codegen.classNameOf(target.fnode),
                     codegen.getNumberBodyMethodName(target.fnode),
                     codegen.getNumberBodyMethodSignature(target.fnode));
         } else {
             cfw.addInvoke(
                     ByteCode.INVOKESTATIC,
-                    codegen.mainClassName,
+                    codegen.classNameOf(target.fnode),
                     (type == Token.NEW)
                             ? codegen.getDirectCtorName(target.fnode)
                             : codegen.getBodyMethodName(target.fnode),

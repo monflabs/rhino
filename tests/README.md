@@ -124,7 +124,8 @@ the tests with every function split into chunks of a few statements, pass a chun
 ```
 RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test -Drhino.splitWeight=3 -DupdateTest262properties
 ```
-then compare `test262.properties` with git: a test that fails only split is a splitting bug.
+then compare `test262.properties` with git: a test that fails only split is a splitting bug. Add
+`-Drhino.classUnits=3` to also spread the functions of every script over 3 classes.
 
 ## Running specific tests from the official ECMAScript Test Suite (test262)
 The default setup for running the test262 test suite is defined in [test262.properties](test262.properties).

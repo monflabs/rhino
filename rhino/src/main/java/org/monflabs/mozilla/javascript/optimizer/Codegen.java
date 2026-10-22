@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 import org.monflabs.mozilla.classfile.ByteCode;
 import org.monflabs.mozilla.classfile.ClassFileWriter;
 import org.monflabs.mozilla.classfile.ClassFileWriter.ClassSizeException;
+import org.monflabs.mozilla.javascript.ClassTooLargeException;
 import org.monflabs.mozilla.javascript.CodeGenUtils;
 import org.monflabs.mozilla.javascript.CompilationResult;
 import org.monflabs.mozilla.javascript.CompilerEnvirons;
@@ -80,16 +81,23 @@ public class Codegen implements Evaluator {
         final String className;
         final byte[] bytecode;
         final MHJSCode.BuilderEnv builderEnv;
+        // the other classes the functions are spread over, after a class file limit
+        final MHJSCode.BuilderEnv[] unitEnvs;
+        final byte[][] unitBytecode;
 
         CodegenCompilationResult(
                 JSDescriptor.Builder<T> builder,
                 String className,
                 byte[] bytecode,
-                MHJSCode.BuilderEnv builderEnv) {
+                MHJSCode.BuilderEnv builderEnv,
+                MHJSCode.BuilderEnv[] unitEnvs,
+                byte[][] unitBytecode) {
             this.builder = builder;
             this.className = className;
             this.bytecode = bytecode;
             this.builderEnv = builderEnv;
+            this.unitEnvs = unitEnvs;
+            this.unitBytecode = unitBytecode;
         }
 
         @Override
@@ -147,6 +155,8 @@ public class Codegen implements Evaluator {
         JSDescriptor.Builder<T> builder = new JSDescriptor.Builder<>();
         builder.languageVersion = compilerEnv.getLanguageVersion();
         MHJSCode.BuilderEnv builderEnv = new MHJSCode.BuilderEnv(mainClassName);
+        // ClassCompiler writes a single class
+        requestedUnits = compilerEnv.getClassUnits();
         byte[] mainClassBytes =
                 compileToClassFile(
                         compilerEnv,
@@ -157,7 +167,8 @@ public class Codegen implements Evaluator {
                         rawSource,
                         returnFunction);
 
-        return new CodegenCompilationResult<>(builder, mainClassName, mainClassBytes, builderEnv);
+        return new CodegenCompilationResult<>(
+                builder, mainClassName, mainClassBytes, builderEnv, unitEnvs, unitBytes);
     }
 
     @Override
@@ -191,15 +202,30 @@ public class Codegen implements Evaluator {
             Class<?> cl = loader.defineClass(compiled.className, compiled.bytecode);
             loader.linkClass(cl);
             compiled.builderEnv.compiledClass = cl;
+            List<Class<?>> classes = new ArrayList<>();
+            classes.add(cl);
+            for (int u = 1; u < compiled.unitEnvs.length; u++) {
+                Class<?> unit =
+                        loader.defineClass(
+                                compiled.unitEnvs[u].className, compiled.unitBytecode[u]);
+                loader.linkClass(unit);
+                compiled.unitEnvs[u].compiledClass = unit;
+                classes.add(unit);
+            }
             var descs = new ArrayList<JSDescriptor<?>>();
             JSDescriptor<T> desc = compiled.builder.build(d -> descs.add(d));
-            cl.getField(DESCRIPTORS_FIELD_NAME).set(null, descs.toArray(new JSDescriptor[0]));
-            if (compiled.builderEnv.hasRegExpLiterals) {
-                cl.getMethod(REGEXP_INIT_METHOD_NAME, Context.class)
-                        .invoke(null, Context.getCurrentContext());
-            }
-            if (compiled.builderEnv.hasTemplateLiterals) {
-                cl.getMethod(TEMPLATE_LITERAL_INIT_METHOD_NAME).invoke(null);
+            JSDescriptor<?>[] descriptors = descs.toArray(new JSDescriptor[0]);
+            for (int u = 0; u < classes.size(); u++) {
+                Class<?> c = classes.get(u);
+                MHJSCode.BuilderEnv env = u == 0 ? compiled.builderEnv : compiled.unitEnvs[u];
+                c.getField(DESCRIPTORS_FIELD_NAME).set(null, descriptors);
+                if (env.hasRegExpLiterals) {
+                    c.getMethod(REGEXP_INIT_METHOD_NAME, Context.class)
+                            .invoke(null, Context.getCurrentContext());
+                }
+                if (env.hasTemplateLiterals) {
+                    c.getMethod(TEMPLATE_LITERAL_INIT_METHOD_NAME).invoke(null);
+                }
             }
             return desc;
         } catch (InvocationTargetException x) {
@@ -245,6 +271,12 @@ public class Codegen implements Evaluator {
         this.mainClassName = mainClassName;
         this.mainClassSignature = ClassFileWriter.classNameToSignature(mainClassName);
 
+        unitCount = requestedUnits;
+        unitEnvs = new MHJSCode.BuilderEnv[unitCount];
+        unitEnvs[0] = builderEnv;
+        for (int u = 1; u < unitCount; u++) {
+            unitEnvs[u] = new MHJSCode.BuilderEnv(mainClassName + "_u" + u);
+        }
         initScriptNodesData(scriptOrFn, builder, builderEnv);
 
         return generateCode(rawSource);
@@ -325,12 +357,14 @@ public class Codegen implements Evaluator {
             List<ScriptNode> x,
             List<JSDescriptor.Builder<?>> b) {
 
+        // the functions spread over the classes of the script, round robin
+        MHJSCode.BuilderEnv env = unitEnvs[unitOf(x.size())];
         @SuppressWarnings("unchecked")
         MHJSCode.Builder<U> code =
                 (MHJSCode.Builder<U>)
                         ((n instanceof FunctionNode)
-                                ? new MHJSFunctionCode.Builder(builderEnv)
-                                : new MHJSScriptCode.Builder(builderEnv));
+                                ? new MHJSFunctionCode.Builder(env)
+                                : new MHJSScriptCode.Builder(env));
         code.index = x.size();
         code.methodName = getBodyMethodName(n, x.size());
         code.methodType = getNonDirectBodyMethodSIgnature(n);
@@ -339,8 +373,8 @@ public class Codegen implements Evaluator {
             code.resumeType = GENERATOR_METHOD_SIGNATURE;
         }
         builder.setCode(code);
-        builderEnv.hasRegExpLiterals |= (n.getRegexpCount() > 0);
-        builderEnv.hasTemplateLiterals |= (n.getTemplateLiteralCount() > 0);
+        env.hasRegExpLiterals |= (n.getRegexpCount() > 0);
+        env.hasTemplateLiterals |= (n.getTemplateLiteralCount() > 0);
         CodeGenUtils.setConstructor(builder, n);
 
         x.add(n);
@@ -425,69 +459,117 @@ public class Codegen implements Evaluator {
     }
 
     private byte[] generateCode(String rawSource) {
-        boolean hasScript = (scriptOrFnNodes[0].getType() == Token.SCRIPT);
-        boolean hasFunctions = (scriptOrFnNodes.length > 1 || !hasScript);
-        boolean isStrictMode = scriptOrFnNodes[0].isInStrictMode();
+        unitBytes = new byte[unitCount][];
+        int generated = 0;
+        for (int u = 0; u < unitCount; u++) {
+            ClassFileWriter cfw = startClass(u == 0 ? mainClassName : unitEnvs[u].className);
+            itsConstantList = null;
+            itsConstantListSize = 0;
+            int count = scriptOrFnNodes.length;
+            for (int i = 0; i != count; ++i) {
+                if (unitOf(i) != u) {
+                    continue;
+                }
+                try {
+                    generateFunction(cfw, i);
+                } catch (ClassSizeException e) {
+                    if (e.isMethodLimit()) {
+                        throw e;
+                    }
+                    throw new ClassTooLargeException(e.getMessage(), generated, count);
+                }
+                generated++;
+            }
+            emitRegExpInit(cfw, u);
+            emitTemplateLiteralInit(cfw, u);
+            emitConstantDudeInitializers(cfw);
+            try {
+                unitBytes[u] = cfw.toByteArray();
+            } catch (ClassSizeException e) {
+                throw new ClassTooLargeException(e.getMessage(), generated, count);
+            }
+        }
+        return unitBytes[0];
+    }
 
+    private ClassFileWriter startClass(String className) {
         String sourceFile = scriptOrFnNodes[0].getSourceName();
-        ClassFileWriter cfw = new ClassFileWriter(mainClassName, SUPER_CLASS_NAME, sourceFile);
+        ClassFileWriter cfw = new ClassFileWriter(className, SUPER_CLASS_NAME, sourceFile);
         cfw.setKeepLiveExceptionRanges(compilerEnv.isLatestEcmaScript());
         cfw.addField(ID_FIELD_NAME, "I", ACC_PRIVATE);
         cfw.addField(
                 DESCRIPTORS_FIELD_NAME,
                 "[Lorg/monflabs/mozilla/javascript/JSDescriptor;",
                 (short) (ACC_PUBLIC | ACC_STATIC));
-
         generateLookupAccessor(cfw);
+        return cfw;
+    }
 
-        int count = scriptOrFnNodes.length;
-        for (int i = 0; i != count; ++i) {
-            ScriptNode n = scriptOrFnNodes[i];
+    private void generateFunction(ClassFileWriter cfw, int i) {
+        ScriptNode n = scriptOrFnNodes[i];
 
-            BodyCodegen bodygen = new BodyCodegen();
-            bodygen.cfw = cfw;
-            bodygen.codegen = this;
-            bodygen.compilerEnv = compilerEnv;
-            bodygen.scriptOrFn = n;
-            bodygen.scriptOrFnIndex = i;
-            if (n instanceof FunctionNode) {
-                bodygen.scriptOrFnType = "Lorg/monflabs/mozilla/javascript/JSFunction;";
-                bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSFunction";
-            } else {
-                bodygen.scriptOrFnType = "Lorg/monflabs/mozilla/javascript/JSScript;";
-                bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSScript";
+        BodyCodegen bodygen = new BodyCodegen();
+        bodygen.cfw = cfw;
+        bodygen.codegen = this;
+        bodygen.compilerEnv = compilerEnv;
+        bodygen.scriptOrFn = n;
+        bodygen.scriptOrFnIndex = i;
+        if (n instanceof FunctionNode) {
+            bodygen.scriptOrFnType = "Lorg/monflabs/mozilla/javascript/JSFunction;";
+            bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSFunction";
+        } else {
+            bodygen.scriptOrFnType = "Lorg/monflabs/mozilla/javascript/JSScript;";
+            bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSScript";
+        }
+
+        try {
+            bodygen.generateBodyCode();
+        } catch (ClassSizeException e) {
+            int key =
+                    n instanceof FunctionNode
+                            ? ((FunctionNode) n).getSplitKey()
+                            : FunctionTooLargeException.SCRIPT;
+            // a class limit reached in a large method: splitting the method helps first, once
+            boolean large =
+                    e.isMethodLimit()
+                            || (cfw.getCurrentCodeOffset() > 16 * 1024
+                                    && compilerEnv.getSplitLevel(key) == 0);
+            if (large && key != -1) {
+                throw new FunctionTooLargeException(e.getMessage(), key);
             }
+            throw e;
+        }
 
-            try {
-                bodygen.generateBodyCode();
-            } catch (ClassSizeException e) {
-                int key =
-                        n instanceof FunctionNode
-                                ? ((FunctionNode) n).getSplitKey()
-                                : FunctionTooLargeException.SCRIPT;
-                if (e.isMethodLimit() && key != -1) {
-                    throw new FunctionTooLargeException(e.getMessage(), key);
-                }
-                throw e;
-            }
-
-            if (n.getType() == Token.FUNCTION) {
-                OptFunctionNode ofn = OptFunctionNode.get(n);
-                if (ofn.isTargetOfDirectCall()) {
-                    emitDirectConstructor(cfw, ofn);
-                    int pcount = ofn.fnode.getParamCount();
-                    if (pcount != 0) {
-                        emitNonDirectCall(cfw, ofn);
-                    }
+        if (n.getType() == Token.FUNCTION) {
+            OptFunctionNode ofn = OptFunctionNode.get(n);
+            if (ofn.isTargetOfDirectCall()) {
+                emitDirectConstructor(cfw, ofn);
+                int pcount = ofn.fnode.getParamCount();
+                if (pcount != 0) {
+                    emitNonDirectCall(cfw, ofn);
                 }
             }
         }
+    }
 
-        emitRegExpInit(cfw);
-        emitTemplateLiteralInit(cfw);
-        emitConstantDudeInitializers(cfw);
+    /** A new field of the class for the template of a literal of constants (BodyCodegen). */
+    String newConstantLiteralField(ClassFileWriter cfw) {
+        String name = "_lit" + constantLiteralCount++;
+        cfw.addField(name, "Ljava/lang/Object;", (short) (ACC_STATIC | ACC_PRIVATE));
+        return name;
+    }
 
-        return cfw.toByteArray();
+    private int constantLiteralCount;
+
+    /** The class of the script that holds the code of a function (see CompilerEnvirons). */
+    int unitOf(int index) {
+        return index == 0 ? 0 : index % unitCount;
+    }
+
+    /** The name of the class that holds the code of a function. */
+    String classNameOf(ScriptNode n) {
+        int u = unitOf(getIndex(n));
+        return u == 0 ? mainClassName : unitEnvs[u].className;
     }
 
     private void emitNonDirectCall(ClassFileWriter cfw, OptFunctionNode ofn) {
@@ -533,7 +615,7 @@ public class Codegen implements Evaluator {
 
         cfw.addInvoke(
                 ByteCode.INVOKESTATIC,
-                mainClassName,
+                cfw.getClassName(),
                 getBodyMethodName(ofn.fnode),
                 getBodyMethodSignature(ofn.fnode));
         cfw.add(ByteCode.ARETURN);
@@ -589,7 +671,7 @@ public class Codegen implements Evaluator {
         cfw.addALoad(5 + argCount * 3);
         cfw.addInvoke(
                 ByteCode.INVOKESTATIC,
-                mainClassName,
+                cfw.getClassName(),
                 getBodyMethodName(ofn.fnode),
                 getBodyMethodSignature(ofn.fnode));
         int exitLabel = cfw.acquireLabel();
@@ -637,12 +719,14 @@ public class Codegen implements Evaluator {
         cfw.stopMethod(0);
     }
 
-    private void emitRegExpInit(ClassFileWriter cfw) {
-        // precompile all regexp literals
+    private void emitRegExpInit(ClassFileWriter cfw, int unit) {
+        // precompile all regexp literals of the functions of the class
 
         int totalRegCount = 0;
         for (int i = 0; i != scriptOrFnNodes.length; ++i) {
-            totalRegCount += scriptOrFnNodes[i].getRegexpCount();
+            if (unitOf(i) == unit) {
+                totalRegCount += scriptOrFnNodes[i].getRegexpCount();
+            }
         }
         if (totalRegCount == 0) {
             return;
@@ -653,7 +737,7 @@ public class Codegen implements Evaluator {
                 REGEXP_INIT_METHOD_SIGNATURE,
                 (short) (ACC_STATIC | ACC_PUBLIC));
         cfw.addField("_reInitDone", "Z", (short) (ACC_STATIC | ACC_PRIVATE | ACC_VOLATILE));
-        cfw.add(ByteCode.GETSTATIC, mainClassName, "_reInitDone", "Z");
+        cfw.add(ByteCode.GETSTATIC, cfw.getClassName(), "_reInitDone", "Z");
         int doInit = cfw.acquireLabel();
         cfw.add(ByteCode.IFEQ, doInit);
         cfw.add(ByteCode.RETURN);
@@ -672,6 +756,9 @@ public class Codegen implements Evaluator {
         // We could apply double-checked locking here but concurrency
         // shouldn't be a problem in practice
         for (int i = 0; i != scriptOrFnNodes.length; ++i) {
+            if (unitOf(i) != unit) {
+                continue;
+            }
             ScriptNode n = scriptOrFnNodes[i];
             int regCount = n.getRegexpCount();
             for (int j = 0; j != regCount; ++j) {
@@ -695,12 +782,12 @@ public class Codegen implements Evaluator {
                         "(Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Ljava/lang/String;Ljava/lang/String;"
                                 + ")Ljava/lang/Object;");
-                cfw.add(ByteCode.PUTSTATIC, mainClassName, reFieldName, reFieldType);
+                cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), reFieldName, reFieldType);
             }
         }
 
         cfw.addPush(1);
-        cfw.add(ByteCode.PUTSTATIC, mainClassName, "_reInitDone", "Z");
+        cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), "_reInitDone", "Z");
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod(2);
     }
@@ -719,7 +806,7 @@ public class Codegen implements Evaluator {
      * end
      * </pre>
      */
-    private void emitTemplateLiteralInit(ClassFileWriter cfw) {
+    private void emitTemplateLiteralInit(ClassFileWriter cfw, int unit) {
         // emit all template literals
 
         int totalTemplateLiteralCount = 0;
@@ -733,7 +820,7 @@ public class Codegen implements Evaluator {
                 (short) (ACC_STATIC | ACC_PUBLIC));
         cfw.addField("_qInitDone", "Z", (short) (ACC_STATIC | ACC_PRIVATE | ACC_VOLATILE));
 
-        cfw.add(ByteCode.GETSTATIC, mainClassName, "_qInitDone", "Z");
+        cfw.add(ByteCode.GETSTATIC, cfw.getClassName(), "_qInitDone", "Z");
         int doInit = cfw.acquireLabel();
         cfw.add(ByteCode.IFEQ, doInit);
         cfw.add(ByteCode.RETURN);
@@ -741,7 +828,11 @@ public class Codegen implements Evaluator {
 
         // We could apply double-checked locking here but concurrency
         // shouldn't be a problem in practice
-        for (ScriptNode n : scriptOrFnNodes) {
+        for (int i = 0; i != scriptOrFnNodes.length; ++i) {
+            if (unitOf(i) != unit) {
+                continue;
+            }
+            ScriptNode n = scriptOrFnNodes[i];
             int qCount = n.getTemplateLiteralCount();
             if (qCount == 0) continue;
             String qFieldName = getTemplateLiteralName(n);
@@ -774,11 +865,11 @@ public class Codegen implements Evaluator {
                 }
                 cfw.add(ByteCode.AASTORE);
             }
-            cfw.add(ByteCode.PUTSTATIC, mainClassName, qFieldName, qFieldType);
+            cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), qFieldName, qFieldType);
         }
 
         cfw.addPush(true);
-        cfw.add(ByteCode.PUTSTATIC, mainClassName, "_qInitDone", "Z");
+        cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), "_qInitDone", "Z");
         cfw.add(ByteCode.RETURN);
         cfw.stopMethod(0);
     }
@@ -807,7 +898,7 @@ public class Codegen implements Evaluator {
                 cfw.addPush(num);
                 addDoubleWrap(cfw);
             }
-            cfw.add(ByteCode.PUTSTATIC, mainClassName, constantName, constantType);
+            cfw.add(ByteCode.PUTSTATIC, cfw.getClassName(), constantName, constantType);
         }
 
         cfw.add(ByteCode.RETURN);
@@ -880,7 +971,7 @@ public class Codegen implements Evaluator {
             }
             String constantName = "_k" + index;
             String constantType = getStaticConstantWrapperType(num);
-            cfw.add(ByteCode.GETSTATIC, mainClassName, constantName, constantType);
+            cfw.add(ByteCode.GETSTATIC, cfw.getClassName(), constantName, constantType);
         }
     }
 
@@ -1095,6 +1186,11 @@ public class Codegen implements Evaluator {
     private String mainMethodClass = DEFAULT_MAIN_METHOD_CLASS;
 
     String mainClassName;
+    // the classes the functions of the script are spread over: the main one, then the others
+    private int unitCount = 1;
+    private int requestedUnits = 1;
+    private MHJSCode.BuilderEnv[] unitEnvs;
+    private byte[][] unitBytes;
     String mainClassSignature;
 
     private double[] itsConstantList;

@@ -6,6 +6,25 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Scripts beyond one class, and literals of data (2026-10-23)
+
+- Performance (all versions, compiled mode; plan M17, 17.3): a script whose class exceeds a class file limit of
+  its own (its constant pool, its 65,535 invokedynamic sites) has its functions spread over several classes,
+  round robin, each with its own pool, call sites, literal fields and initializers; a direct call to a function
+  of another class calls it there. The class compiler reports how many functions it generated before the limit,
+  and `Context.compileImpl` compiles again with twice the estimated number of classes, then twice as many on each
+  new failure (up to 256). A class limit reached in a large method splits the method first, once.
+  `-Drhino.classUnits=N` spreads every script over N classes, for testing.
+- Performance (all versions, compiled mode): a literal of more than 1,000 constants (numbers, strings, booleans,
+  null, nested arrays and objects of them) is compiled as text in string constants, which `OptRuntime` parses once
+  into a template, from which each evaluation makes its objects with the same `newArrayLiteral` and
+  `fillObjectLiteral` as the code of a literal.
+- Fix (all versions, compiled mode): a backward jump of more than 32 KB (the end of a large loop) wrapped its
+  offset instead of reporting a class file limit: the method failed its stack map with a codeBug (Octane
+  `mandreel`). Upstream bug.
+- Octane `mandreel` compiles (16 classes): score 628 → 826; `pdfjs` compiles under `VERSION_ECMASCRIPT` (its
+  500 KB of font tables as data): score 2,100 → 4,505. The 2 Mozilla tests beyond the constant pool compile.
+
 ### Three fixes of compiled functions (2026-10-23)
 
 - Fix (`VERSION_ECMASCRIPT`, compiled mode; `BACKWARD_COMPATIBILITY.md` 1.92): a function with a rest parameter

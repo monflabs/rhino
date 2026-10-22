@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
 import org.monflabs.mozilla.javascript.ast.ErrorCollector;
+import org.monflabs.mozilla.javascript.config.RhinoConfig;
 import org.monflabs.mozilla.javascript.sourcemap.SourceMapper;
 
 public class CompilerEnvirons {
@@ -382,7 +383,7 @@ public class CompilerEnvirons {
      * The number of times the function at that source position has been split into smaller methods
      * (Splitter), after the class compiler found it too large: 0 if never.
      */
-    int getSplitLevel(int functionKey) {
+    public int getSplitLevel(int functionKey) {
         return splitLevels == null ? 0 : splitLevels.getOrDefault(functionKey, 0);
     }
 
@@ -402,6 +403,35 @@ public class CompilerEnvirons {
         splitLevels.put(functionKey, level + 1);
         return true;
     }
+
+    /**
+     * The number of classes the class compiler spreads the functions of a script over, after a
+     * class exceeded a class file limit: 1 unless it did.
+     */
+    public int getClassUnits() {
+        return classUnits;
+    }
+
+    /**
+     * Asks for the functions of the script to be spread over more classes, after the class compiler
+     * exceeded a class file limit having generated that many of them; false when it cannot help.
+     */
+    boolean spreadOverMoreClasses(ClassTooLargeException e) {
+        int total = e.getTotal();
+        int next =
+                classUnits == 1
+                        // twice the estimate from the share of the functions that fitted
+                        ? (int) Math.ceil(2.0 * total / Math.max(e.getGenerated(), 1))
+                        : classUnits * 2;
+        next = Math.max(next, classUnits + 1);
+        if (classUnits >= total || next > MAX_CLASS_UNITS) {
+            return false;
+        }
+        classUnits = Math.min(next, total);
+        return true;
+    }
+
+    private static final int MAX_CLASS_UNITS = 256;
 
     /** Forgets the functions to split: the script is interpreted. */
     void clearSplits() {
@@ -455,4 +485,13 @@ public class CompilerEnvirons {
     private Map<Integer, Integer> splitLevels;
     private Set<Integer> unsplittable;
     private boolean noSplit;
+
+    private int classUnits = FORCED_CLASS_UNITS;
+
+    /**
+     * For testing: the number of classes compiled mode spreads every script over (1: only after a
+     * class exceeded a class file limit).
+     */
+    private static final int FORCED_CLASS_UNITS =
+            Math.max(1, RhinoConfig.get("rhino.classUnits", 1));
 }

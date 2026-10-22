@@ -3073,9 +3073,13 @@ public class Context implements Closeable {
                             spec.compilationFunction()
                                     .compile(compiler, compilerEnv, tree, sourceString);
                     break;
-                } catch (FunctionTooLargeException e) {
-                    // split the function into smaller methods (Splitter), or more if it was
-                    if (!compilerEnv.splitFurther(e.getFunctionKey())) {
+                } catch (FunctionTooLargeException | ClassTooLargeException e) {
+                    // split the function into smaller methods (Splitter), or more if it was;
+                    // spread the functions of the script over more classes
+                    if (e instanceof FunctionTooLargeException
+                            ? !compilerEnv.splitFurther(
+                                    ((FunctionTooLargeException) e).getFunctionKey())
+                            : !compilerEnv.spreadOverMoreClasses((ClassTooLargeException) e)) {
                         throw e;
                     }
                     tree =

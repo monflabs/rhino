@@ -55,6 +55,7 @@ existing code and without slowing the engine down.
 | 2026-10-19 | **M15: `VERSION_ECMASCRIPT` becomes the default, without removing anything** (user decision, rather than dropping the JavaScript 1.x versions as Nashorn did or keeping only a legacy 1.x mode): every version and every `isLatestEcmaScript()` gate stay; removing the gates and the 1.x decision are recorded as future work (M15 status). |
 | 2026-10-19 | **M16: second performance pass** (user decision): the 16 items of a code analysis, the small ones first; every optimization documented in `OPTIMIZATION.md`. |
 | 2026-10-22 | **M17: method splitting** (user decision, rather than a compact retry without the fork's larger code forms, smaller forms everywhere or long jumps in the class writer): a function too large for a class file is split into nested arrow functions, as Nashorn's `SplitIntoFunctions`, only after the class writer rejects it; P0 (the 64 KB check, the class-size fallback reported) first. |
+| 2026-10-23 | **M17, 17.3: several classes per script** (user decision, rather than loading the numbers and strings of a class from static tables, which would fit the measured scripts but not lift the invokedynamic limit): the functions of a script spread over more classes on a class limit, as Nashorn's compile units; literals of data compiled as data. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -882,7 +883,11 @@ with the completion value passed through the chunks: the 12 test262 shift tests 
 14 test262 Unicode identifier tests stay interpreted (a class declaration with thousands of members), as does
 `mandreel` (constant pool, 17.3). The forced split found three bugs of compiled functions that predate it: a
 BigInt compared with a number throws a TypeError, `{__proto__: 1}` creates an own property, and a direct call of
-a function with a rest parameter does not collect it (fixed separately, 2026-10-23).
+a function with a rest parameter does not collect it (fixed separately, 2026-10-23). **17.3 (done)** the
+functions of a script spread over several classes on a class limit (user decision, rather than literal tables:
+it lifts the invokedynamic limit too), and literals of more than 1,000 constants compiled as data: `mandreel`
+compiles over 16 classes (score 628 → 826), `pdfjs` under `VERSION_ECMASCRIPT` (2,100 → 4,505), the 2 Mozilla
+tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upstream bug).
 
 ---
 
@@ -922,4 +927,4 @@ a function with a rest parameter does not collect it (fixed separately, 2026-10-
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped)         | (this) |
-| 17   | Method splitting                                | in progress | 99.1% (17.0–17.2)            | (this) |
+| 17   | Method splitting                                | in progress | 99.1% (17.0–17.3)            | (this) |

@@ -108,6 +108,9 @@ test {
     if (System.getProperty('rhino.splitWeight') != null) {
         systemProperty 'rhino.splitWeight', System.getProperty('rhino.splitWeight')
     }
+    if (System.getProperty('rhino.classUnits') != null) {
+        systemProperty 'rhino.classUnits', System.getProperty('rhino.classUnits')
+    }
     if (System.getProperty('runTest262Debug') != null) {
         systemProperty 'runTest262Debug', System.getProperty('runTest262Debug')
     }

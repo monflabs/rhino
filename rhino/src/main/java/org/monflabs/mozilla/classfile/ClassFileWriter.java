@@ -554,6 +554,11 @@ public class ClassFileWriter {
                         }
                         if (targetPC != -1) {
                             int offset = targetPC - branchPC;
+                            if ((short) offset != offset) {
+                                // a backward jump: its offset wrapped
+                                throw new ClassSizeException(
+                                        "Program too complex: too big jump offset", true);
+                            }
                             addToCodeInt16(offset);
                             addSuperBlockStart(targetPC);
                             itsJumpFroms.put(targetPC, branchPC);
