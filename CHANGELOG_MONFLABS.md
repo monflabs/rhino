@@ -6,6 +6,20 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Compiled generators with a yield in an object spread (2026-10-22)
+
+- Fix (all versions, compiled mode): a yield or an await in the source of a spread in an object literal
+  (`{ ...yield }`, `{ a: 1, ...await p }`) failed to compile and ran in the interpreter. The spread node is
+  both a child of the literal and one of its property ids, and `NodeTransformer` visited it under both, so its
+  yield was registered twice as a resumption point ("FAILED ASSERTION", or an `ArrayIndexOutOfBoundsException`
+  in the nested case). Once that was fixed, the class failed JVM verification: the spread pushed the context and
+  the scope before its source, and a yield saves the operand stack as untyped values; the source is now
+  evaluated first. Upstream bugs, from the object spread of upstream Rhino 2.0 (1.8.0 has no object spread). The 33 remaining test262 scripts that fell
+  back compile.
+- Diagnostics (`BACKWARD_COMPATIBILITY.md` 2.4): a fallback after a `VerifyError`, when the class is loaded, is
+  reported like a compiler failure; it was silent. The full check shows 103 test262 scripts in that case, all
+  with a call that has a yield or an await in its arguments.
+
 ### Compiled generators with a direct construction in a yield or await (2026-10-22)
 
 - Fix (all versions, compiled mode): `yield new C()` or `await new C()`, where `C` is a function declaration of

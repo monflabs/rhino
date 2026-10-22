@@ -2918,6 +2918,7 @@ public class Context implements Closeable {
             if (!compiled.fallsBackToInterpreter()) {
                 throw e;
             }
+            reportCompileFallback(spec, e);
             compiled = compileImpl(spec, true);
             return compiled.evaluator.createScriptObject(compiled.result, spec.getSecurityDomain());
         }
@@ -2932,10 +2933,34 @@ public class Context implements Closeable {
             if (!compiled.fallsBackToInterpreter()) {
                 throw e;
             }
+            reportCompileFallback(spec, e);
             compiled = compileImpl(spec, true);
             return compiled.evaluator.createFunctionObject(
                     this, spec.getScope(), compiled.result, spec.getSecurityDomain());
         }
+    }
+
+    private void reportCompileFallback(CompileSpec<?> spec, Throwable e) {
+        ErrorReporter reporter = spec.getCompilationErrorReporter();
+        String sourceName = spec.getSourceName();
+        reportCompileFallback(
+                reporter == null ? getErrorReporter() : reporter,
+                sourceName == null ? "unnamed script" : sourceName,
+                spec.getLineno(),
+                e);
+    }
+
+    /**
+     * A compiler bug: the script still runs, much slower; also logged, since the default error
+     * reporter ignores warnings.
+     */
+    private static void reportCompileFallback(
+            ErrorReporter reporter, String sourceName, int lineno, Throwable e) {
+        String message = ScriptRuntime.getMessageById("msg.compile.fallback", e.toString());
+        if (reporter != null) {
+            reporter.warning(message, sourceName, lineno, null, 0);
+        }
+        LOGGER.log(System.Logger.Level.WARNING, sourceName + ":" + lineno + ": " + message, e);
     }
 
     private static final class Compiled<T extends ScriptOrFn<T>> {
@@ -3037,14 +3062,7 @@ public class Context implements Closeable {
             }
             // we hit some class file limit, fall back to interpreter or report
             if (!(e instanceof ClassSizeException)) {
-                // a compiler bug: the script still runs, much slower; also logged, since the
-                // default error reporter ignores warnings
-                String message = ScriptRuntime.getMessageById("msg.compile.fallback", e.toString());
-                if (compilationErrorReporter != null) {
-                    compilationErrorReporter.warning(message, sourceName, lineno, null, 0);
-                }
-                LOGGER.log(
-                        System.Logger.Level.WARNING, sourceName + ":" + lineno + ": " + message, e);
+                reportCompileFallback(compilationErrorReporter, sourceName, lineno, e);
             }
 
             // we have to recreate the tree because the compile call might have changed the tree

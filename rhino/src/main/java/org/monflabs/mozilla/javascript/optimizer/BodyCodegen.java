@@ -2962,10 +2962,11 @@ class BodyCodegen {
 
             for (int i = 0; i < count; ++i) {
                 if (child.getType() == Token.DOTDOTDOT) {
-                    cfw.addALoad(contextLocal); // stack: [context]
-                    cfw.addALoad(variableObjectLocal); // stack: [context, scope]
-                    generateExpression(
-                            child.getFirstChild(), node); // stack: [context, scope, sourceObj]
+                    generateExpression(child.getFirstChild(), node); // stack: [sourceObj]
+                    cfw.addALoad(contextLocal);
+                    cfw.add(ByteCode.SWAP); // stack: [context, sourceObj]
+                    cfw.addALoad(variableObjectLocal);
+                    cfw.add(ByteCode.SWAP); // stack: [context, scope, sourceObj]
                     cfw.addALoad(local); // stack: [context, scope, sourceObj, store]
                     cfw.add(
                             ByteCode.CHECKCAST,

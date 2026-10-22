@@ -1540,8 +1540,8 @@ function f(k) {
 
 ### 2.4 A script that compiled mode falls back to interpreting is logged
 
-- When the class compiler fails on a script with generators, the script still runs, in the interpreter (much
-  slower). The compilation now reports it: a warning to its error reporter (`msg.compile.fallback`), and a
+- When the class compiler fails on a script with generators, or generates a class the JVM rejects
+  (`VerifyError`), the script still runs, in the interpreter (much slower). The compilation now reports it: a warning to its error reporter (`msg.compile.fallback`), and a
   `WARNING` of the JDK platform logger `org.monflabs.mozilla.javascript` (`System.Logger`), with the exception,
   since the default error reporter ignores warnings. Such a failure is a compiler bug worth reporting. A script
   too large for a class file still falls back silently, as before.

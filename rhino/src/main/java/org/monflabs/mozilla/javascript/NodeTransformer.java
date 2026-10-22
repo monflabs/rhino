@@ -589,7 +589,11 @@ public class NodeTransformer {
                         Object[] propertyIds = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
                         if (propertyIds != null) {
                             for (Object propertyId : propertyIds) {
-                                if (!(propertyId instanceof Node)) continue;
+                                // a spread is also a child of the literal
+                                if (!(propertyId instanceof Node)
+                                        || ((Node) propertyId).getType() == Token.DOTDOTDOT) {
+                                    continue;
+                                }
                                 transformCompilationUnit_r(
                                         tree,
                                         (Node) propertyId,

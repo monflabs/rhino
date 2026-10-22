@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.monflabs.mozilla.javascript.CompilationResult;
 import org.monflabs.mozilla.javascript.CompilerEnvirons;
 import org.monflabs.mozilla.javascript.Context;
@@ -37,6 +38,15 @@ class CompilerFallbackTest {
         }
     }
 
+    /** A class compiler that generates a class the JVM rejects. */
+    private static final class UnverifiableCodegen extends Codegen {
+        @Override
+        public Script createScriptObject(
+                CompilationResult<JSScript> compiled, Object staticSecurityDomain) {
+            throw new VerifyError("broken");
+        }
+    }
+
     private static final class RecordingReporter implements ErrorReporter {
         final List<String> warnings = new ArrayList<>();
 
@@ -59,8 +69,9 @@ class CompilerFallbackTest {
         }
     }
 
-    @Test
-    void fallbackToTheInterpreterIsReported() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void fallbackToTheInterpreterIsReported(boolean verifyError) {
         try (Context cx = Context.enter()) {
             cx.setInterpretedMode(false);
             TopLevel scope = cx.initStandardObjects();
@@ -72,7 +83,10 @@ class CompilerFallbackTest {
                                                     + " var s = 0; for (var v of g()) s += v; s")
                                     .sourceName("gen.js")
                                     .lineno(1)
-                                    .compiler(new FailingCodegen())
+                                    .compiler(
+                                            verifyError
+                                                    ? new UnverifiableCodegen()
+                                                    : new FailingCodegen())
                                     .compilationErrorReporter(reporter));
             assertEquals(3, ((Number) script.exec(cx, scope, scope)).intValue());
             assertEquals(1, reporter.warnings.size());
