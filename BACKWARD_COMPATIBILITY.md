@@ -1544,6 +1544,8 @@ function f(k) {
   (`VerifyError`), the script still runs, in the interpreter (much slower). The compilation now reports it: a warning to its error reporter (`msg.compile.fallback`), and a
   `WARNING` of the JDK platform logger `org.monflabs.mozilla.javascript` (`System.Logger`), with the exception,
   since the default error reporter ignores warnings. Such a failure is a compiler bug worth reporting. A script
-  too large for a class file still falls back silently, as before.
+  beyond a class file limit (a method over 64 KB of bytecode, a jump over 32 KB, a constant pool over 65,535
+  entries) falls back to the interpreter for any script, as before, and is now reported too, with its own
+  message (`msg.compile.too.large`).
 - **Migration:** none; to silence the log, set the level of the `org.monflabs.mozilla.javascript` logger (for
   example with `java.util.logging` or the bridge of the application's logging framework).

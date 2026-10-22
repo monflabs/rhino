@@ -6,6 +6,15 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Class file limits (2026-10-22)
+
+- Fix (all versions, compiled mode): the 64 KB limit of a method applied to its whole `Code` attribute, line
+  number and stack map tables included, while the JVM only limits its bytecode (JVMS 4.7.3); a method of 23 KB
+  of bytecode with a 42 KB stack map table (Octane `regexp.js`, `runBlock9`) ran the whole script in the
+  interpreter. Upstream bug (Rhino 1.8.0 checks the same way). Plan M17, 17.0.
+- Diagnostics (`BACKWARD_COMPATIBILITY.md` 2.4): a script beyond a class file limit, which runs in the
+  interpreter, is reported to the error reporter and logged at `WARNING`, with its own message; it was silent.
+
 ### Compiled generators with a yield in the arguments of a call (2026-10-22)
 
 - Fix (all versions, compiled mode): a call with a yield or an await in its arguments, such as

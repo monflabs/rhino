@@ -2951,12 +2951,17 @@ public class Context implements Closeable {
     }
 
     /**
-     * A compiler bug: the script still runs, much slower; also logged, since the default error
-     * reporter ignores warnings.
+     * A compiler bug or a class file limit: the script still runs, much slower; also logged, since
+     * the default error reporter ignores warnings.
      */
     private static void reportCompileFallback(
             ErrorReporter reporter, String sourceName, int lineno, Throwable e) {
-        String message = ScriptRuntime.getMessageById("msg.compile.fallback", e.toString());
+        String message =
+                ScriptRuntime.getMessageById(
+                        e instanceof ClassSizeException
+                                ? "msg.compile.too.large"
+                                : "msg.compile.fallback",
+                        e.toString());
         if (reporter != null) {
             reporter.warning(message, sourceName, lineno, null, 0);
         }
@@ -3060,10 +3065,8 @@ public class Context implements Closeable {
                 // a compiler bug outside generators is reported
                 throw e;
             }
-            // we hit some class file limit, fall back to interpreter or report
-            if (!(e instanceof ClassSizeException)) {
-                reportCompileFallback(compilationErrorReporter, sourceName, lineno, e);
-            }
+            // we hit some class file limit or a compiler bug: fall back to the interpreter
+            reportCompileFallback(compilationErrorReporter, sourceName, lineno, e);
 
             // we have to recreate the tree because the compile call might have changed the tree
             // already

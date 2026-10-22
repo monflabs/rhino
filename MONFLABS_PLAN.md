@@ -54,6 +54,7 @@ existing code and without slowing the engine down.
 | 2026-10-19 | **M14 closed** (user decision, rather than hidden classes for own-property access or reworking the interpreter dispatch): the last profile found no cheap hotspot left; next is M15. |
 | 2026-10-19 | **M15: `VERSION_ECMASCRIPT` becomes the default, without removing anything** (user decision, rather than dropping the JavaScript 1.x versions as Nashorn did or keeping only a legacy 1.x mode): every version and every `isLatestEcmaScript()` gate stay; removing the gates and the 1.x decision are recorded as future work (M15 status). |
 | 2026-10-19 | **M16: second performance pass** (user decision): the 16 items of a code analysis, the small ones first; every optimization documented in `OPTIMIZATION.md`. |
+| 2026-10-22 | **M17: method splitting** (user decision, rather than a compact retry without the fork's larger code forms, smaller forms everywhere or long jumps in the class writer): a function too large for a class file is split into nested arrow functions, as Nashorn's `SplitIntoFunctions`, only after the class writer rejects it; P0 (the 64 KB check, the class-size fallback reported) first. |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -835,6 +836,42 @@ Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their 
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math
 methods (level), double-valued keys, a per-site own-property cache (needs shared shapes), `Map`/`Set` hash mixing.
 
+### M17 — Method splitting
+
+Octane `regexp.js` runs entirely in the interpreter (2026-10-22): its `runBlock` functions, about 500 lines each,
+outgrow the class file limits with the fork's larger code (direct calls to nested declarations, +46 bytes a call;
+under `VERSION_ECMASCRIPT`, reads of captured variables at their activation position, 7 → 41 bytes), and a
+`ClassSizeException` sends the whole script to the interpreter, silently. Upstream compiles it (27 KB for
+`runBlock11`, against 35 KB in `VERSION_ES6` and 54 KB in `VERSION_ECMASCRIPT` in the fork). Any script with a very
+large function, such as generated code, has the same cliff; `mandreel` and `pdfjs` fail upstream too.
+
+Design, after Nashorn (`Splitter`, `SplitIntoFunctions`):
+
+- **Split on failure.** The `ClassSizeException` names the function that failed; `Context.compileImpl` parses
+  again with it marked and compiles again, with smaller chunks if a split function still fails, and falls back
+  to the interpreter after a few tries. No size estimate (Nashorn's `WeighNodes`): the class writer reports the
+  real failure, and code that compiles today is unchanged.
+- **Split the AST before `IRFactory`.** A chunk of statements becomes an arrow function called in place, which
+  shares `this`, `arguments`, `new.target` and `super`; its names resolve to the bindings the parser recorded in
+  the enclosing scopes, so a `var` moved into a chunk stays the function's. Blocks too large on their own (a loop
+  body) are split recursively. A `return` stores its value in a hidden variable of the function and returns a
+  state; `break` and `continue` to a target outside the chunk return their own states, which the call site
+  replays. Not split: generators and async functions, direct `eval`, `with`, blocks with block-level function
+  declarations.
+- **Invisible.** Chunk methods have a recognizable name that script stack traces skip.
+- **Validation.** A property forces splitting at a tiny threshold, for one run of test262 and the Mozilla tests
+  with every function split.
+
+| #    | Change                                                                                   | Effort | Versions |
+|------|------------------------------------------------------------------------------------------|--------|----------|
+| 17.0 | The 64 KB limit checks the bytecode only; a class-size fallback is reported               | S      | both     |
+| 17.1 | Function splitting on failure, retry, stack traces, forced-split validation              | L      | both     |
+| 17.2 | Splitting the top-level code of a script (`mandreel`)                                    | S      | both     |
+| 17.3 | Huge literals (`pdfjs`); scripts beyond one class (constant pool)                        | M–L    | both     |
+| 17.4 | Generators and async functions: the chunks without `yield` or `await`                    | S–M    | both     |
+
+Order: 17.0, then 17.1; 17.2 to 17.4 on demand.
+
 ---
 
 ## Status tracker
@@ -873,3 +910,4 @@ methods (level), double-valued keys, a per-site own-property cache (needs shared
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped)         | (this) |
+| 17   | Method splitting                                | in progress | 99.1% (17.0)                 | (this) |
