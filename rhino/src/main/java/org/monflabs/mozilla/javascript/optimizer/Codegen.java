@@ -20,12 +20,14 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import org.monflabs.mozilla.classfile.ByteCode;
 import org.monflabs.mozilla.classfile.ClassFileWriter;
+import org.monflabs.mozilla.classfile.ClassFileWriter.ClassSizeException;
 import org.monflabs.mozilla.javascript.CodeGenUtils;
 import org.monflabs.mozilla.javascript.CompilationResult;
 import org.monflabs.mozilla.javascript.CompilerEnvirons;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.Evaluator;
 import org.monflabs.mozilla.javascript.Function;
+import org.monflabs.mozilla.javascript.FunctionTooLargeException;
 import org.monflabs.mozilla.javascript.GeneratedClassLoader;
 import org.monflabs.mozilla.javascript.InstrumentEmitter;
 import org.monflabs.mozilla.javascript.InstrumentEmitter.Type;
@@ -453,7 +455,17 @@ public class Codegen implements Evaluator {
                 bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSScript";
             }
 
-            bodygen.generateBodyCode();
+            try {
+                bodygen.generateBodyCode();
+            } catch (ClassSizeException e) {
+                if (e.isMethodLimit()
+                        && n instanceof FunctionNode
+                        && ((FunctionNode) n).getSplitKey() >= 0) {
+                    throw new FunctionTooLargeException(
+                            e.getMessage(), ((FunctionNode) n).getSplitKey());
+                }
+                throw e;
+            }
 
             if (n.getType() == Token.FUNCTION) {
                 OptFunctionNode ofn = OptFunctionNode.get(n);
@@ -905,6 +917,14 @@ public class Codegen implements Evaluator {
     }
 
     String getBodyMethodName(ScriptNode n, int index) {
+        if (n instanceof FunctionNode && ((FunctionNode) n).getSplitOwner() != null) {
+            // a chunk of a split function: its frames show as the function's (RhinoException)
+            return "_c_"
+                    + cleanName(((FunctionNode) n).getSplitOwner())
+                    + "_"
+                    + index
+                    + FunctionNode.SPLIT_METHOD_SUFFIX;
+        }
         return "_c_" + cleanName(n) + "_" + index;
     }
 

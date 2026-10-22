@@ -118,6 +118,14 @@ and this will run the tests in all modes
 ./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest -DrunTest262Debug -DrunTest262NonDebug
 ```
 
+## Testing the splitting of large functions
+Compiled mode splits a function too large for a class file into smaller methods (see `OPTIMIZATION.md`). To run
+the tests with every function split into chunks of a few statements, pass a chunk weight:
+```
+RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test -Drhino.splitWeight=3 -DupdateTest262properties
+```
+then compare `test262.properties` with git: a test that fails only split is a splitting bug.
+
 ## Running specific tests from the official ECMAScript Test Suite (test262)
 The default setup for running the test262 test suite is defined in [test262.properties](test262.properties).
 

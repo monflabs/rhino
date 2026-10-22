@@ -3040,6 +3040,15 @@ public class Context implements Closeable {
         int lineno = spec.getLineno();
         SourceMapper sourceMapper = spec.getSourceMapper();
 
+        Evaluator compiler = forceInterpreter ? createInterpreter() : spec.getCompiler();
+        if (compiler == null) {
+            compiler = createCompiler();
+        }
+        if (compiler instanceof Interpreter) {
+            // only the class compiler splits functions too large for a class file
+            compilerEnv.clearSplits();
+        }
+
         ScriptNode tree =
                 parse(
                         sourceString,
@@ -3049,16 +3058,31 @@ public class Context implements Closeable {
                         compilationErrorReporter,
                         returnFunction);
 
-        Evaluator compiler = forceInterpreter ? createInterpreter() : spec.getCompiler();
         // under VERSION_ECMASCRIPT, generators the class compiler cannot handle are interpreted
         boolean hasGenerators = compilerEnv.isLatestEcmaScript() && containsGenerators(tree);
         CompilationResult<T> result;
         try {
-            if (compiler == null) {
-                compiler = createCompiler();
+            while (true) {
+                try {
+                    result =
+                            spec.compilationFunction()
+                                    .compile(compiler, compilerEnv, tree, sourceString);
+                    break;
+                } catch (FunctionTooLargeException e) {
+                    // split the function into smaller methods (Splitter), or more if it was
+                    if (!compilerEnv.splitFurther(e.getFunctionKey())) {
+                        throw e;
+                    }
+                    tree =
+                            parse(
+                                    sourceString,
+                                    sourceName,
+                                    lineno,
+                                    compilerEnv,
+                                    compilationErrorReporter,
+                                    returnFunction);
+                }
             }
-
-            result = spec.compilationFunction().compile(compiler, compilerEnv, tree, sourceString);
         } catch (ClassFileFormatException | IllegalStateException | IndexOutOfBoundsException e) {
             if (!(e instanceof ClassSizeException)
                     && !(hasGenerators && !(compiler instanceof Interpreter))) {
@@ -3070,6 +3094,7 @@ public class Context implements Closeable {
 
             // we have to recreate the tree because the compile call might have changed the tree
             // already
+            compilerEnv.clearSplits();
             tree =
                     parse(
                             sourceString,

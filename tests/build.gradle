@@ -105,6 +105,9 @@ test {
     jvmArgs += ['--add-opens', 'java.base/java.lang=ALL-UNNAMED']
 
     systemProperty 'test262properties', System.getProperty('test262properties')
+    if (System.getProperty('rhino.splitWeight') != null) {
+        systemProperty 'rhino.splitWeight', System.getProperty('rhino.splitWeight')
+    }
     if (System.getProperty('runTest262Debug') != null) {
         systemProperty 'runTest262Debug', System.getProperty('runTest262Debug')
     }

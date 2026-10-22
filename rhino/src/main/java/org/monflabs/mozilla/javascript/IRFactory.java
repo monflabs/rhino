@@ -869,6 +869,9 @@ public final class IRFactory {
             }
 
             int lineno = fn.getBody().getLineno(), column = fn.getBody().getColumn();
+            if (fn.getSplitOwner() == null) {
+                splitIfTooLarge(fn);
+            }
             ++parser.nestingOfFunction; // only for body, not params
             Node body = transform(fn.getBody());
 
@@ -985,6 +988,27 @@ public final class IRFactory {
             --parser.nestingOfFunction;
             savedVars.restore();
             outerScopeIsStrict = savedStrict;
+        }
+    }
+
+    /**
+     * Splits the body of a function that the class compiler found too large into chunks (Splitter),
+     * before it is transformed.
+     */
+    private void splitIfTooLarge(FunctionNode fn) {
+        CompilerEnvirons env = parser.compilerEnv;
+        int key = fn.getAbsolutePosition();
+        fn.setSplitKey(key);
+        if (!env.canSplit()) {
+            return;
+        }
+        int level = env.getSplitLevel(key);
+        if (level > 0) {
+            if (!Splitter.split(fn, Splitter.chunkWeight(level))) {
+                env.markUnsplittable(key);
+            }
+        } else if (Splitter.FORCED_WEIGHT > 0) {
+            Splitter.split(fn, Splitter.FORCED_WEIGHT);
         }
     }
 

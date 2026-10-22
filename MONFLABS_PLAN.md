@@ -872,6 +872,13 @@ Design, after Nashorn (`Splitter`, `SplitIntoFunctions`):
 
 Order: 17.0, then 17.1; 17.2 to 17.4 on demand.
 
+Status: **17.0 (done)** the 64 KB limit checks the bytecode only, and class-size fallbacks are reported: 26 test262
+scripts and 14 Mozilla tests in that case. **17.1 (done)** functions split on failure, Octane `regexp.js` compiled
+again, score 460 → 606 (`VERSION_ES6`); with every function split (`-Drhino.splitWeight=3`), test262 and the Mozilla
+tests pass except one test of `f.arguments` (any function with an activation) and two bytecode tests. Still
+interpreted: the 26 test262 scripts and 7 of the Mozilla tests (top-level code, 17.2), 2 Mozilla tests (constant
+pool, 17.3), and a `switch` with 3,010 cases (its cases cannot be split).
+
 ---
 
 ## Status tracker
@@ -910,4 +917,4 @@ Order: 17.0, then 17.1; 17.2 to 17.4 on demand.
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped)         | (this) |
-| 17   | Method splitting                                | in progress | 99.1% (17.0)                 | (this) |
+| 17   | Method splitting                                | in progress | 99.1% (17.0–17.1)            | (this) |

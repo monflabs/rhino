@@ -6,6 +6,19 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Functions too large for a class file are split (2026-10-22)
+
+- Performance (all versions, compiled mode; plan M17, 17.1): a function whose method exceeds a class file limit no
+  longer sends the whole script to the interpreter. The class compiler reports the function, and the script is
+  parsed again with it split into arrow functions called in place (`Splitter`, after Nashorn's
+  `SplitIntoFunctions`), smaller on each new failure. Returns, breaks and continues across the chunks are replayed
+  at their call sites; stack traces show the function. Not split: generators, async functions, derived
+  constructors, functions with a direct `eval` or a `with`. Octane `regexp.js` is compiled again: score 460 → 606
+  (`VERSION_ECMASCRIPT`), above Rhino 1.8.0 (538). Of the 14 Mozilla tests of the previous entry, 4 compile; the
+  others are top-level code (17.2), a `switch` with 3,010 cases, or beyond the constant pool (17.3), as are the 26
+  test262 scripts (top-level code). `-Drhino.splitWeight=N` splits every function it can, for testing.
+- Fix: `CatchClause.visit` failed on a catch clause without a binding (`catch {}`).
+
 ### Class file limits (2026-10-22)
 
 - Fix (all versions, compiled mode): the 64 KB limit of a method applied to its whole `Code` attribute, line

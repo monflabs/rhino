@@ -4211,6 +4211,16 @@ public class Parser {
     }
 
     void defineSymbol(Symbol.Type declType, String name, boolean ignoreNotInBlock) {
+        if ((declType == Symbol.Type.VAR || declType == Symbol.Type.FUNCTION_VAR)
+                && currentScriptOrFn instanceof FunctionNode
+                && ((FunctionNode) currentScriptOrFn).getSplitOwner() != null) {
+            // a var that IRFactory declares in a chunk of a split function is the function's
+            FunctionNode owner = ((FunctionNode) currentScriptOrFn).getSplitOwner();
+            if (owner.getSymbol(name) == null) {
+                owner.putSymbol(new Symbol(declType, name));
+            }
+            return;
+        }
         boolean isES6 = compilerEnv.getLanguageVersion() >= Context.VERSION_ES6;
 
         if (isES6) {

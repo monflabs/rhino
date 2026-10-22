@@ -48,11 +48,15 @@ class ClassFileLimitsTest {
 
     /** A function of one {@code if} per line: about 25 bytes of bytecode per statement. */
     private static String branches(int count) {
-        StringBuilder sb = new StringBuilder("function f(x) {\n  var s = 0;\n");
+        return body("function f(x) {\n", count) + "f(1000);";
+    }
+
+    private static String body(String header, int count) {
+        StringBuilder sb = new StringBuilder(header).append("  var s = 0;\n");
         for (int i = 0; i < count; i++) {
             sb.append("  if (x > ").append(i).append(") s++;\n");
         }
-        return sb.append("  return s;\n}\nf(1000);").toString();
+        return sb.append("  return s;\n}\n").toString();
     }
 
     private static List<String> run(int version, String source, int expected) {
@@ -83,7 +87,9 @@ class ClassFileLimitsTest {
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
     void scriptBeyondALimitIsReported(int version) {
-        List<String> warnings = run(version, branches(3000), 1000);
+        // a function too large is split into smaller methods, but not a generator
+        List<String> warnings =
+                run(version, body("function* f(x) {\n", 3000) + "f(1000).next().value;", 1000);
         assertEquals(1, warnings.size(), warnings.toString());
         assertTrue(warnings.get(0).contains("class file limit"), warnings.get(0));
     }

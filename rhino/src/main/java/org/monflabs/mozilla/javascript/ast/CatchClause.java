@@ -166,7 +166,9 @@ public class CatchClause extends AstNode {
     @Override
     public void visit(NodeVisitor v) {
         if (v.visit(this)) {
-            varName.visit(v);
+            if (varName != null) {
+                varName.visit(v);
+            }
             if (catchCondition != null) {
                 catchCondition.visit(v);
             }

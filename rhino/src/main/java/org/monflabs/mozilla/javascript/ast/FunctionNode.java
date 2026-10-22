@@ -84,6 +84,8 @@ public class FunctionNode extends ScriptNode {
     private boolean hasRestParameter;
     private boolean isShorthand;
     private boolean namedByLiteral;
+    private int splitKey = -1;
+    private FunctionNode splitOwner;
     private boolean classConstructor;
     private boolean derivedConstructor;
     private boolean selfNameBinding;
@@ -560,6 +562,30 @@ public class FunctionNode extends ScriptNode {
 
     public boolean isNamedByLiteral() {
         return namedByLiteral;
+    }
+
+    /**
+     * The source position that identifies this function when the class compiler finds it too large
+     * and the script is parsed again to split it (-1: none). A chunk has the key of its owner.
+     */
+    public int getSplitKey() {
+        return splitKey;
+    }
+
+    public void setSplitKey(int splitKey) {
+        this.splitKey = splitKey;
+    }
+
+    /** The suffix of the method names of chunks, whose frames show as their owner's. */
+    public static final String SPLIT_METHOD_SUFFIX = "-split";
+
+    /** The function a chunk was split from, or null if this function is not a chunk. */
+    public FunctionNode getSplitOwner() {
+        return splitOwner;
+    }
+
+    public void setSplitOwner(FunctionNode splitOwner) {
+        this.splitOwner = splitOwner;
     }
 
     public void addResumptionPoint(Node target) {

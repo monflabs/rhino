@@ -5879,7 +5879,7 @@ class BodyCodegen {
     private static final int MAX_LOCALS = 1024;
 
     /** The locals reserved for the try statements and local blocks of a generator. */
-    private Map<Node, Short> generatorLocals;
+    private IdentityHashMap<Node, Short> generatorLocals;
 
     private int[] locals;
     private int firstFreeLocal;

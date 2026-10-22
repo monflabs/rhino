@@ -6,6 +6,9 @@
 
 package org.monflabs.mozilla.javascript;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.monflabs.mozilla.javascript.Context.EvaluationMethod;
@@ -375,6 +378,49 @@ public class CompilerEnvirons {
         return env;
     }
 
+    /**
+     * The number of times the function at that source position has been split into smaller methods
+     * (Splitter), after the class compiler found it too large: 0 if never.
+     */
+    int getSplitLevel(int functionKey) {
+        return splitLevels == null ? 0 : splitLevels.getOrDefault(functionKey, 0);
+    }
+
+    /**
+     * Asks for the function at that source position to be split once more, after the class compiler
+     * found it too large; false when it cannot be split further.
+     */
+    boolean splitFurther(int functionKey) {
+        int level = getSplitLevel(functionKey);
+        if (level >= Splitter.MAX_LEVEL
+                || (unsplittable != null && unsplittable.contains(functionKey))) {
+            return false;
+        }
+        if (splitLevels == null) {
+            splitLevels = new HashMap<>();
+        }
+        splitLevels.put(functionKey, level + 1);
+        return true;
+    }
+
+    /** Forgets the functions to split: the script is interpreted. */
+    void clearSplits() {
+        splitLevels = null;
+        noSplit = true;
+    }
+
+    /** Whether the functions of the script may be split (not when it is interpreted). */
+    boolean canSplit() {
+        return !noSplit && !isInterpretedMode();
+    }
+
+    void markUnsplittable(int functionKey) {
+        if (unsplittable == null) {
+            unsplittable = new HashSet<>();
+        }
+        unsplittable.add(functionKey);
+    }
+
     private ErrorReporter errorReporter;
     private SourceMapper sourceMapper;
     private SourceCodeProvider sourceCodeProvider;
@@ -406,4 +452,7 @@ public class CompilerEnvirons {
     private Scriptable homeObjecgt;
     private SecurityController securityController;
     private Object securityDomain;
+    private Map<Integer, Integer> splitLevels;
+    private Set<Integer> unsplittable;
+    private boolean noSplit;
 }

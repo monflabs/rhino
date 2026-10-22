@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
 
 /** The class of exceptions thrown by the JavaScript engine. */
@@ -273,12 +274,21 @@ public abstract class RhinoException extends RuntimeException {
         // Pattern to recover function name from java method name -
         // see Codegen.getBodyMethodName()
         // kudos to Marc Guillemot for coming up with this
+        // after the frame of a chunk of a split function, the frames that called it, up to the
+        // function's own, are at the call of the chunk
+        boolean inSplit = false;
         for (StackTraceElement e : stack) {
             String fileName = e.getFileName();
             if (e.getMethodName().startsWith("_c_")
                     && e.getLineNumber() > -1
                     && (fileName == null || !fileName.endsWith(".java"))) {
                 String methodName = e.getMethodName();
+                boolean split = methodName.contains(FunctionNode.SPLIT_METHOD_SUFFIX);
+                if (inSplit) {
+                    inSplit = split;
+                    continue;
+                }
+                inSplit = split;
                 Matcher match = JAVA_STACK_PATTERN.matcher(methodName);
                 // the method representing the main script is always "_c_script_0" -
                 // at least we hope so
