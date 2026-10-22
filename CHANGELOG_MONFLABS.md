@@ -6,6 +6,21 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### Top-level code too large for a class file is split (2026-10-22)
+
+- Performance (all versions, compiled mode; plan M17, 17.2): the top-level code of a script too large for a class
+  file is split as functions are, into arrow functions called in place, which keep the completion value of the
+  script: a chunk takes the current value as its parameter (read from the script's result at the call site) and
+  returns the new one, and the statements that set the value assign the parameter instead (`IRFactory`). A
+  statement with a break or continue to a statement outside of it stays in place; module and eval code are not
+  split. The test262 shift tests (`S11.7.*_A4_*`) and 4 more Mozilla tests compile; the test262 Unicode identifier
+  tests do not (a class declaration stays in place), nor Octane `mandreel` (its constant pool, 17.3).
+- Fix (all versions, compiled mode): a class with more than 65,535 `invokedynamic` sites, which a large split
+  script reaches (as could a large script with many functions before), got a site linked as another one, or
+  crashed the JVM: HotSpot numbers the sites of a class with a u2 index. `ClassFileWriter` now rejects such a
+  class, and a constant pool over 65,535 entries, as class file limits: the script runs in the interpreter, with
+  the warning.
+
 ### Functions too large for a class file are split (2026-10-22)
 
 - Performance (all versions, compiled mode; plan M17, 17.1): a function whose method exceeds a class file limit no

@@ -93,4 +93,20 @@ class ClassFileLimitsTest {
         assertEquals(1, warnings.size(), warnings.toString());
         assertTrue(warnings.get(0).contains("class file limit"), warnings.get(0));
     }
+
+    /**
+     * More invokedynamic sites than HotSpot can number in a class (65,535): a site got the linkage
+     * of another one, or the JVM crashed. A script split into small methods reaches it.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void tooManyCallSitesAreReported(int version) {
+        StringBuilder sb = new StringBuilder("var x = 0;\n");
+        for (int i = 0; i < 70000; i++) {
+            sb.append("x++;\n");
+        }
+        List<String> warnings = run(version, sb.append("x;").toString(), 70000);
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.get(0).contains("invokedynamic"), warnings.get(0));
+    }
 }

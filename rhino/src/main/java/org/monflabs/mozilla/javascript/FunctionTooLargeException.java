@@ -13,6 +13,9 @@ import org.monflabs.mozilla.classfile.ClassFileWriter.ClassSizeException;
 public class FunctionTooLargeException extends ClassSizeException {
     private static final long serialVersionUID = 1L;
 
+    /** The key of the top-level code of a script. */
+    public static final int SCRIPT = Splitter.SCRIPT_KEY;
+
     private final int functionKey;
 
     public FunctionTooLargeException(String message, int functionKey) {

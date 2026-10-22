@@ -1306,7 +1306,12 @@ class BodyCodegen {
                 break;
 
             case Token.NAME:
-                if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
+                if (fnCurrent == null
+                        && popvLocal >= 0
+                        && FunctionNode.SPLIT_COMPLETION.equals(node.getString())) {
+                    // the completion value of the script, passed to a chunk of it (Splitter)
+                    cfw.addALoad(popvLocal);
+                } else if (node.getIntProp(Node.ACTIVATION_VAR_PROP, -1) != -1) {
                     cfw.addALoad(activationLocal);
                     cfw.addPush(node.getIntProp(Node.ACTIVATION_VAR_PROP, -1));
                     addScriptRuntimeInvoke(

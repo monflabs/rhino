@@ -1545,7 +1545,8 @@ function f(k) {
   `WARNING` of the JDK platform logger `org.monflabs.mozilla.javascript` (`System.Logger`), with the exception,
   since the default error reporter ignores warnings. Such a failure is a compiler bug worth reporting. A script
   beyond a class file limit falls back to the interpreter for any script, as before, and is now reported too,
-  with its own message (`msg.compile.too.large`): a constant pool over 65,535 entries, or a method over 64 KB of
+  with its own message (`msg.compile.too.large`): a constant pool over 65,535 entries, more than 65,535
+  `invokedynamic` sites in the class of the script (a HotSpot limit), or a method over 64 KB of
   bytecode or with a jump over 32 KB that cannot be split into smaller methods (a generator, an async function, a
   derived constructor, a function with a direct `eval` or a `with`; the others are split, see `OPTIMIZATION.md`).
 - **Migration:** none; to silence the log, set the level of the `org.monflabs.mozilla.javascript` logger (for

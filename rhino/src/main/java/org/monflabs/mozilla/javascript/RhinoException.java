@@ -293,7 +293,12 @@ public abstract class RhinoException extends RuntimeException {
                 // the method representing the main script is always "_c_script_0" -
                 // at least we hope so
                 methodName =
-                        !"_c_script_0".equals(methodName) && match.find() ? match.group(1) : null;
+                        !"_c_script_0".equals(methodName)
+                                        && !methodName.startsWith(
+                                                FunctionNode.SCRIPT_SPLIT_METHOD_PREFIX)
+                                        && match.find()
+                                ? match.group(1)
+                                : null;
 
                 if (!printStarted && hideFunction.equals(methodName)) {
                     printStarted = true;

@@ -172,6 +172,34 @@ class MethodSplittingTest {
         assertRuns(version, "3000,024,,ReferenceError", source);
     }
 
+    /** The top-level code of a script, with its completion value. */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void scriptBeyondTheMethodLimit(int version) {
+        String source =
+                "var n = 5000, t = 0, log = [];\n"
+                        + filler(1500)
+                        + "function g() { return t; }\n"
+                        + "var self = this;\n"
+                        + filler(1500)
+                        + "for (var k = 0; k < 2; k++) {\n"
+                        + filler(1500)
+                        + "  if (k == 1) break;\n"
+                        + "  log.push(k);\n"
+                        + "}\n"
+                        + "[g(), log.join(), self === this, typeof n].join();\n"
+                        + "var unused = 1;";
+        assertRuns(version, "6000,0,true,number", source);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void completionValueOfASplitScript(int version) {
+        String source = "var n = 5000, t = 0;\n" + filler(3000) + "t;\nif (false) t = 1;";
+        // UpdateEmpty: the if statement completes with undefined under VERSION_ECMASCRIPT
+        assertRuns(version, version == Context.VERSION_ECMASCRIPT ? "undefined" : "3000", source);
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
     void stackTraceShowsTheFunction(int version) {

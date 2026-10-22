@@ -458,11 +458,12 @@ public class Codegen implements Evaluator {
             try {
                 bodygen.generateBodyCode();
             } catch (ClassSizeException e) {
-                if (e.isMethodLimit()
-                        && n instanceof FunctionNode
-                        && ((FunctionNode) n).getSplitKey() >= 0) {
-                    throw new FunctionTooLargeException(
-                            e.getMessage(), ((FunctionNode) n).getSplitKey());
+                int key =
+                        n instanceof FunctionNode
+                                ? ((FunctionNode) n).getSplitKey()
+                                : FunctionTooLargeException.SCRIPT;
+                if (e.isMethodLimit() && key != -1) {
+                    throw new FunctionTooLargeException(e.getMessage(), key);
                 }
                 throw e;
             }
@@ -919,6 +920,12 @@ public class Codegen implements Evaluator {
     String getBodyMethodName(ScriptNode n, int index) {
         if (n instanceof FunctionNode && ((FunctionNode) n).getSplitOwner() != null) {
             // a chunk of a split function: its frames show as the function's (RhinoException)
+            if (!(((FunctionNode) n).getSplitOwner() instanceof FunctionNode)) {
+                return FunctionNode.SCRIPT_SPLIT_METHOD_PREFIX
+                        + "_"
+                        + index
+                        + FunctionNode.SPLIT_METHOD_SUFFIX;
+            }
             return "_c_"
                     + cleanName(((FunctionNode) n).getSplitOwner())
                     + "_"

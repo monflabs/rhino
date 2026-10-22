@@ -877,7 +877,12 @@ scripts and 14 Mozilla tests in that case. **17.1 (done)** functions split on fa
 again, score 460 → 606 (`VERSION_ES6`); with every function split (`-Drhino.splitWeight=3`), test262 and the Mozilla
 tests pass except one test of `f.arguments` (any function with an activation) and two bytecode tests. Still
 interpreted: the 26 test262 scripts and 7 of the Mozilla tests (top-level code, 17.2), 2 Mozilla tests (constant
-pool, 17.3), and a `switch` with 3,010 cases (its cases cannot be split).
+pool, 17.3), and a `switch` with 3,010 cases (its cases cannot be split). **17.2 (done)** top-level code split,
+with the completion value passed through the chunks: the 12 test262 shift tests and 4 Mozilla tests compile; the
+14 test262 Unicode identifier tests stay interpreted (a class declaration with thousands of members), as does
+`mandreel` (constant pool, 17.3). The forced split found three bugs of compiled functions that predate it: a
+BigInt compared with a number throws a TypeError, `{__proto__: 1}` creates an own property, and a direct call of
+a function with a rest parameter does not collect it.
 
 ---
 
@@ -917,4 +922,4 @@ pool, 17.3), and a `switch` with 3,010 cases (its cases cannot be split).
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped)         | (this) |
-| 17   | Method splitting                                | in progress | 99.1% (17.0–17.1)            | (this) |
+| 17   | Method splitting                                | in progress | 99.1% (17.0–17.2)            | (this) |

@@ -85,7 +85,7 @@ public class FunctionNode extends ScriptNode {
     private boolean isShorthand;
     private boolean namedByLiteral;
     private int splitKey = -1;
-    private FunctionNode splitOwner;
+    private ScriptNode splitOwner;
     private boolean classConstructor;
     private boolean derivedConstructor;
     private boolean selfNameBinding;
@@ -579,12 +579,21 @@ public class FunctionNode extends ScriptNode {
     /** The suffix of the method names of chunks, whose frames show as their owner's. */
     public static final String SPLIT_METHOD_SUFFIX = "-split";
 
-    /** The function a chunk was split from, or null if this function is not a chunk. */
-    public FunctionNode getSplitOwner() {
+    /** The method name of the chunks of a script, before their index. */
+    public static final String SCRIPT_SPLIT_METHOD_PREFIX = "_c_script_split";
+
+    /**
+     * The parameter of a chunk of a script that holds the completion value of the script; at the
+     * top level of the script, the name reads its current completion value.
+     */
+    public static final String SPLIT_COMPLETION = "%completion";
+
+    /** The function or script a chunk was split from, or null if this function is not a chunk. */
+    public ScriptNode getSplitOwner() {
         return splitOwner;
     }
 
-    public void setSplitOwner(FunctionNode splitOwner) {
+    public void setSplitOwner(ScriptNode splitOwner) {
         this.splitOwner = splitOwner;
     }
 

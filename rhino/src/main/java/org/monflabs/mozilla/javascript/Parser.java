@@ -4215,7 +4215,7 @@ public class Parser {
                 && currentScriptOrFn instanceof FunctionNode
                 && ((FunctionNode) currentScriptOrFn).getSplitOwner() != null) {
             // a var that IRFactory declares in a chunk of a split function is the function's
-            FunctionNode owner = ((FunctionNode) currentScriptOrFn).getSplitOwner();
+            ScriptNode owner = ((FunctionNode) currentScriptOrFn).getSplitOwner();
             if (owner.getSymbol(name) == null) {
                 owner.putSymbol(new Symbol(declType, name));
             }

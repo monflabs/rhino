@@ -39,18 +39,24 @@ import org.monflabs.mozilla.javascript.ast.WithStatement;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
 
 /**
- * Splits a function too large for a class file into chunks, as Nashorn's SplitIntoFunctions: runs
- * of statements of its body, or of a block too large on its own, become arrow functions called in
- * place, which share this, arguments, new.target and super with the function. The names of a chunk
- * resolve to the bindings that the parser recorded in the enclosing scopes. A return in a chunk
- * stores its value in a variable of the function and returns a state; a break or continue to a
- * statement outside of the chunk returns a state of its own; the call site replays them.
+ * Splits a function or a script too large for a class file into chunks, as Nashorn's
+ * SplitIntoFunctions: runs of statements of its body, or of a block too large on its own, become
+ * arrow functions called in place, which share this, arguments, new.target and super with the
+ * function. The names of a chunk resolve to the bindings that the parser recorded in the enclosing
+ * scopes. A return in a chunk stores its value in a variable of the function and returns a state; a
+ * break or continue to a statement outside of the chunk returns a state of its own; the call site
+ * replays them.
  *
  * <p>Runs on the AST, before IRFactory transforms the body, when the class compiler found the
  * function too large (CompilerEnvirons#splitFurther). Lexical declarations and function
  * declarations stay in place. Not split: generators and async functions (a yield cannot cross a
  * function), derived constructors (super()), and functions with a direct eval or a with statement,
  * whose names resolve at run time.
+ *
+ * <p>The chunks of a script keep its completion value: a chunk takes the current value as its
+ * parameter (FunctionNode#SPLIT_COMPLETION, the result of the script at its call site) and returns
+ * the new one, and the statements that set the completion value assign the parameter instead
+ * (IRFactory). A statement with a break or continue to a statement outside of it stays in place.
  */
 final class Splitter {
 
@@ -70,13 +76,22 @@ final class Splitter {
     private static final String STATE = "%state";
     private static final int RETURN_STATE = 1;
 
-    private final FunctionNode fn;
+    /** The key of a script, which has no source position of its own (FunctionNode#getSplitKey). */
+    static final int SCRIPT_KEY = -2;
+
+    private final ScriptNode owner;
+    private final boolean script;
     private final int limit;
     private boolean declared;
 
-    private Splitter(FunctionNode fn, int limit) {
-        this.fn = fn;
+    private Splitter(ScriptNode owner, int limit) {
+        this.owner = owner;
+        this.script = !(owner instanceof FunctionNode);
         this.limit = limit;
+    }
+
+    static int keyOf(ScriptNode node) {
+        return node instanceof FunctionNode ? ((FunctionNode) node).getSplitKey() : SCRIPT_KEY;
     }
 
     /** The weight of a chunk at that split level. */
@@ -84,41 +99,44 @@ final class Splitter {
         return CHUNK_WEIGHT >> (level - 1);
     }
 
-    /** Splits the body of the function; returns whether it could be split. */
-    static boolean split(FunctionNode fn, int weight) {
-        if (!canSplit(fn)) {
+    /** Splits the body of a function or a script; returns whether it could be split. */
+    static boolean split(ScriptNode owner, int weight) {
+        AstNode body = owner instanceof FunctionNode ? ((FunctionNode) owner).getBody() : owner;
+        if (!canSplit(owner, body)) {
             return false;
         }
-        Splitter splitter = new Splitter(fn, Math.max(weight, 1));
+        Splitter splitter = new Splitter(owner, Math.max(weight, 1));
         try {
-            return splitter.splitBlock(fn.getBody());
+            return splitter.splitBlock(body);
         } catch (CannotSplit e) {
             return false;
         }
     }
 
-    private static boolean canSplit(FunctionNode fn) {
-        if (fn.isGenerator()
-                || fn.isES6Generator()
-                || fn.isAsync()
-                || fn.isDerivedConstructor()
-                || fn.getSplitOwner() != null
-                || !(fn.getBody() instanceof Block)) {
-            return false;
+    private static boolean canSplit(ScriptNode owner, AstNode body) {
+        if (owner instanceof FunctionNode) {
+            FunctionNode fn = (FunctionNode) owner;
+            if (fn.isGenerator()
+                    || fn.isES6Generator()
+                    || fn.isAsync()
+                    || fn.isDerivedConstructor()
+                    || fn.getSplitOwner() != null
+                    || !(body instanceof Block)) {
+                return false;
+            }
         }
         boolean[] dynamic = {false};
-        fn.getBody()
-                .visit(
-                        node -> {
-                            if (node instanceof WithStatement || isDirectEval(node)) {
-                                dynamic[0] = true;
-                            }
-                            // an arrow function resolves names in the scope of the function
-                            return !dynamic[0]
-                                    && (!(node instanceof FunctionNode)
-                                            || ((FunctionNode) node).getFunctionType()
-                                                    == FunctionNode.ARROW_FUNCTION);
-                        });
+        body.visit(
+                node -> {
+                    if (node instanceof WithStatement || isDirectEval(node)) {
+                        dynamic[0] = true;
+                    }
+                    // an arrow function resolves names in the scope of the function
+                    return !dynamic[0]
+                            && (!(node instanceof FunctionNode)
+                                    || ((FunctionNode) node).getFunctionType()
+                                            == FunctionNode.ARROW_FUNCTION);
+                });
         return !dynamic[0];
     }
 
@@ -286,7 +304,11 @@ final class Splitter {
      * to the block, nor a statement with a function declared in a block (Annex B.3.3 hoists it to a
      * variable of the function, assigned where the declaration is evaluated).
      */
-    private static boolean isMovable(AstNode statement) {
+    private boolean isMovable(AstNode statement) {
+        if (script && hasJumpOut(statement)) {
+            // the return value of the chunk of a script is its completion value
+            return false;
+        }
         if (statement instanceof FunctionNode
                 || statement instanceof ClassNode
                 || hasBlockFunction(statement)) {
@@ -300,6 +322,26 @@ final class Splitter {
             return !(expression instanceof FunctionNode || expression instanceof ClassNode);
         }
         return true;
+    }
+
+    /** Whether a break or continue in the statement jumps to a statement outside of it. */
+    private static boolean hasJumpOut(AstNode statement) {
+        boolean[] found = {false};
+        statement.visit(
+                n -> {
+                    if (n instanceof FunctionNode) {
+                        return false;
+                    }
+                    AstNode target =
+                            n instanceof BreakStatement
+                                    ? ((BreakStatement) n).getBreakTarget()
+                                    : n instanceof ContinueStatement
+                                            ? ((ContinueStatement) n).getTarget()
+                                            : null;
+                    found[0] |= target != null && !isWithin(target, statement);
+                    return !found[0];
+                });
+        return found[0];
     }
 
     private static boolean hasBlockFunction(AstNode statement) {
@@ -354,15 +396,21 @@ final class Splitter {
 
         FunctionNode chunk = new FunctionNode(start);
         chunk.setFunctionType(FunctionNode.ARROW_FUNCTION);
-        chunk.setInStrictMode(fn.isInStrictMode());
+        chunk.setInStrictMode(owner.isInStrictMode());
         chunk.setBody(body);
         chunk.setLength(end - start);
-        chunk.setSplitOwner(fn);
-        chunk.setSplitKey(fn.getSplitKey());
-        chunk.setSourceName(fn.getSourceName());
+        chunk.setSplitOwner(owner);
+        chunk.setSplitKey(keyOf(owner));
+        chunk.setSourceName(owner.getSourceName());
         chunk.setBaseLineno(lineno);
         chunk.setEndLineno(last.getLineno());
         chunk.setLineColumnNumber(lineno, column);
+        if (script) {
+            // (%completion) => { statements; return %completion; }; the parameter is the first
+            // variable of the chunk
+            chunk.addParam(name(FunctionNode.SPLIT_COMPLETION, start));
+            chunk.putSymbol(new Symbol(Symbol.Type.LP, FunctionNode.SPLIT_COMPLETION));
+        }
         moveScopes(body, chunk);
 
         IdentityHashMap<AstNode, Integer> states = new IdentityHashMap<>();
@@ -373,6 +421,18 @@ final class Splitter {
         call.setTarget(new ParenthesizedExpression(start, end - start, chunk));
         call.setArguments(new ArrayList<>());
         call.setLineColumnNumber(lineno, column);
+        if (script) {
+            ReturnStatement ret = new ReturnStatement(end);
+            ret.setReturnValue(name(FunctionNode.SPLIT_COMPLETION, end));
+            ret.setLineColumnNumber(last.getLineno(), last.getColumn());
+            body.addStatement(ret);
+            call.addArgument(name(FunctionNode.SPLIT_COMPLETION, start));
+            List<AstNode> statements = new ArrayList<>();
+            ExpressionStatement statement = new ExpressionStatement(call, true);
+            statement.setLineColumnNumber(lineno, column);
+            statements.add(statement);
+            return statements;
+        }
 
         List<AstNode> statements = new ArrayList<>();
         if (states.isEmpty()) {
@@ -573,7 +633,7 @@ final class Splitter {
             Scope parent = scope.getParentScope();
             ScriptNode top = scope.getTop();
             if (top == null) {
-                top = parent != null && tops.get(parent) != null ? tops.get(parent) : fn;
+                top = parent != null && tops.get(parent) != null ? tops.get(parent) : owner;
             }
             tops.put(scope, top);
         }
@@ -602,8 +662,8 @@ final class Splitter {
     /** Declares the variables of the function that hold the return value and the state. */
     private void declareVariables() {
         if (!declared) {
-            fn.putSymbol(new Symbol(Symbol.Type.VAR, RETURN_VALUE));
-            fn.putSymbol(new Symbol(Symbol.Type.VAR, STATE));
+            owner.putSymbol(new Symbol(Symbol.Type.VAR, RETURN_VALUE));
+            owner.putSymbol(new Symbol(Symbol.Type.VAR, STATE));
             declared = true;
         }
     }

@@ -193,15 +193,43 @@ public final class IRFactory {
                         || node instanceof WithStatement)
                 && finallyDepth == 0
                 && parser.compilerEnv.isLatestEcmaScript()
-                && node.getEnclosingFunction() == null;
+                && isScriptCode(node);
     }
 
-    private static Node undefinedCompletion(AstNode node) {
-        return new Node(
-                Token.EXPR_RESULT,
-                new Node(Token.VOID, Node.newNumber(0.0)),
-                node.getLineno(),
-                node.getColumn());
+    /**
+     * Whether the node is in code whose completion value is observable (script or eval code): not
+     * in a function, the chunks of a split script aside (Splitter).
+     */
+    private static boolean isScriptCode(AstNode node) {
+        FunctionNode fn = node.getEnclosingFunction();
+        while (fn != null
+                && fn.getSplitOwner() != null
+                && !(fn.getSplitOwner() instanceof FunctionNode)) {
+            fn = fn.getEnclosingFunction();
+        }
+        return fn == null;
+    }
+
+    /**
+     * Sets the completion value of the script: in a chunk of a split script, its parameter that
+     * holds the value (Splitter).
+     */
+    private Node completion(Node value, int lineno, int column) {
+        if (parser.currentScriptOrFn instanceof FunctionNode
+                && ((FunctionNode) parser.currentScriptOrFn).getSplitOwner() != null
+                && !(((FunctionNode) parser.currentScriptOrFn).getSplitOwner()
+                        instanceof FunctionNode)) {
+            Node assign =
+                    createAssignment(
+                            Token.ASSIGN, parser.createName(FunctionNode.SPLIT_COMPLETION), value);
+            return new Node(Token.EXPR_VOID, assign, lineno, column);
+        }
+        return new Node(Token.EXPR_RESULT, value, lineno, column);
+    }
+
+    private Node undefinedCompletion(AstNode node) {
+        return completion(
+                new Node(Token.VOID, Node.newNumber(0.0)), node.getLineno(), node.getColumn());
     }
 
     private Node transformStatement(AstNode node) {
@@ -715,7 +743,7 @@ public final class IRFactory {
             return jump;
         }
         Node block = new Node(Token.BLOCK);
-        block.addChildToBack(new Node(Token.EXPR_RESULT, parser.createName(finallyValueTemp)));
+        block.addChildToBack(completion(parser.createName(finallyValueTemp), -1, -1));
         block.addChildToBack(jump);
         return block;
     }
@@ -801,6 +829,9 @@ public final class IRFactory {
                 expr = createAssignment(Token.ASSIGN, parser.createName(finallyValueTemp), expr);
             }
         }
+        if (type == Token.EXPR_RESULT) {
+            return completion(expr, node.getLineno(), node.getColumn());
+        }
         return new Node(type, expr, node.getLineno(), node.getColumn());
     }
 
@@ -870,7 +901,8 @@ public final class IRFactory {
 
             int lineno = fn.getBody().getLineno(), column = fn.getBody().getColumn();
             if (fn.getSplitOwner() == null) {
-                splitIfTooLarge(fn);
+                fn.setSplitKey(fn.getAbsolutePosition());
+                splitIfTooLarge(fn, fn.getSplitKey());
             }
             ++parser.nestingOfFunction; // only for body, not params
             Node body = transform(fn.getBody());
@@ -995,10 +1027,8 @@ public final class IRFactory {
      * Splits the body of a function that the class compiler found too large into chunks (Splitter),
      * before it is transformed.
      */
-    private void splitIfTooLarge(FunctionNode fn) {
+    private void splitIfTooLarge(ScriptNode fn, int key) {
         CompilerEnvirons env = parser.compilerEnv;
-        int key = fn.getAbsolutePosition();
-        fn.setSplitKey(key);
         if (!env.canSplit()) {
             return;
         }
@@ -1703,6 +1733,9 @@ public final class IRFactory {
         if (parser.currentScope != null) Kit.codeBug();
         parser.currentScope = node;
         outerScopeIsStrict = node.isInStrictMode();
+        if (parser.moduleInfo == null && !parser.compilerEnv.isInEval()) {
+            splitIfTooLarge(node, Splitter.SCRIPT_KEY);
+        }
         Node body = new Node(Token.BLOCK);
         for (Node kid : node) {
             body.addChildToBack(transform((AstNode) kid));
@@ -1922,7 +1955,7 @@ public final class IRFactory {
             Node body = transform(catchBody);
             if (finallyDepth == 0
                     && parser.compilerEnv.isLatestEcmaScript()
-                    && node.getEnclosingFunction() == null) {
+                    && isScriptCode(node)) {
                 // the completion value of a catch block starts as undefined
                 body.addChildToFront(undefinedCompletion(cc));
             }
@@ -1937,7 +1970,7 @@ public final class IRFactory {
             AstNode block = node.getFinallyBlock();
             finallyValueTemp = null;
             if (parser.compilerEnv.isLatestEcmaScript()
-                    && node.getEnclosingFunction() == null
+                    && isScriptCode(node)
                     && block instanceof Scope
                     && hasJumpOut(block)) {
                 // let $temp = undefined, at the start of the finally block

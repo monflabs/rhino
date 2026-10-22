@@ -943,6 +943,11 @@ public class ClassFileWriter {
         int newStack = itsStackTop + stackDiff;
         if (newStack < 0 || Short.MAX_VALUE < newStack) badStack(newStack);
 
+        // HotSpot numbers the invokedynamic sites of a class with a u2 index: beyond, a site gets
+        // the linkage of another one, or the JVM crashes
+        if (++itsInvokeDynamicCount > 0xFFFF) {
+            throw new ClassSizeException("too many invokedynamic call sites");
+        }
         BootstrapEntry bsmEntry = new BootstrapEntry(bsm, bsmArgs);
 
         if (itsBootstrapMethods == null) {
@@ -4666,6 +4671,7 @@ public class ClassFileWriter {
     private long[] itsFixupTable;
     private int itsFixupTableTop;
     private ArrayList<int[]> itsVarDescriptors;
+    private int itsInvokeDynamicCount;
     private ArrayList<BootstrapEntry> itsBootstrapMethods;
     private int itsBootstrapMethodsLength = 0;
 
