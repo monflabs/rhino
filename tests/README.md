@@ -19,6 +19,12 @@ After doing so, the `./gradlew test` command will also execute all tests that ar
 As Rhino isn't 100% compliant with the latest ECMAScript standard, there is a mechanism to define which tests to run/skip,
 through the [test262.properties](test262.properties) file, the format of which is discussed in the [test262.properties format](#test262.properties-format) section
 
+## Compiled code and the interpreter
+In the tests, a compiler bug that makes a script fall back to the interpreter fails the test instead of logging a
+warning (`rhino.failOnCompileFallback=true` in `rhino-test.config`). `CompiledInterpretedTest` runs the scripts of
+[jstests/compiled-interpreted](testsrc/jstests/compiled-interpreted) and the benchmark scripts in both modes and
+compares what they compute: add a script there for a shape the class compiler specializes.
+
 ## Running a specific TestSuite
 ```
 ./gradlew test --tests org.monflabs.mozilla.javascript.tests.Test262SuiteTest

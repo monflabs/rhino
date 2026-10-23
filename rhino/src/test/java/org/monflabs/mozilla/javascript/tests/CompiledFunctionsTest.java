@@ -119,4 +119,15 @@ class CompiledFunctionsTest {
         }
         assertEquals(List.of(), warnings);
     }
+
+    @Test
+    void yieldInASpreadArrayLiteral() {
+        // the class did not verify, and the script ran in the interpreter
+        String script =
+                "function* g() { var r = [1, ...(yield 2), (yield 3), ...[4]]; return r; }"
+                        + "var it = g(); it.next(); it.next([5, 6]);"
+                        + "it.next(7).value.join()";
+        Utils.assertWithAllModes_ES6("1,5,6,7,4", script);
+        Utils.assertWithAllModes_ECMASCRIPT("1,5,6,7,4", script);
+    }
 }

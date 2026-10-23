@@ -39,6 +39,25 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Compiled code checked against the interpreter (2026-10-24)
+
+- Tests: with the Rhino property `rhino.failOnCompileFallback`, set in the `rhino-test.config` of the modules, a
+  compiler bug that made a script fall back to the interpreter throws instead of logging a warning, so the test
+  that compiles it fails (a class file limit still falls back). `CompiledInterpretedTest` runs
+  `tests/testsrc/jstests/compiled-interpreted` (operators on direct-call parameters, `yield` and `await` in every
+  kind of expression, closures, control flow), SunSpider 1.0, the perf scripts and the V8 benchmarks, compiled and
+  interpreted under `VERSION_ECMASCRIPT`, and compares their prints, completion values and globals. Run under
+  `VERSION_ES6`, it reports the `===` bug of 1.94, which stays there.
+- Fix (all versions, compiled mode): a `yield` in an array literal with a spread element
+  (`[1, ...(yield x)]`) generated a class that did not verify, and the script ran in the interpreter: the
+  literal's storage stayed on the stack across the yield. In a generator it is now kept in a local, as object
+  literals do. Rhino 1.9.1 has the same bug, and fails there with a `VerifyError`.
+- Fix (all versions, compiled mode): in a generator, after a `try`/`catch`, a destructuring declaration whose
+  value yields (`var { p } = { p: yield 1 }`) threw `ReferenceError: "$0" is not defined` on resumption. The
+  catch block left its scope twice in the code generator's count of live locals, so the yield did not save the
+  pattern's scope. A regression of 2026-10-19 ("Four compiled-mode fixes"); Rhino 1.9.1 is right.
+- Found by the two checks.
+
 ### Three fixes found by the Rhino playground (2026-10-23)
 
 - Fix (`VERSION_ECMASCRIPT`, compiled mode; `BACKWARD_COMPATIBILITY.md` 1.94): a parameter of a function called

@@ -2866,10 +2866,46 @@ class BodyCodegen {
                     "([I)V");
         }
 
+        // In a generator, an element may yield, and the stack comes back as Object values: the
+        // storage stays in a local, and each element is evaluated with nothing else on the stack.
+        short generatorStorage = -1;
+        if (isGenerator) {
+            generatorStorage = getNewWordLocal();
+            cfw.addAStore(generatorStorage);
+        }
+
         // Process each element
         int childIdx = 0;
         while (child != null) {
-            if (child.getType() == Token.DOTDOTDOT) {
+            if (isGenerator) {
+                boolean spread = child.getType() == Token.DOTDOTDOT;
+                generateExpression(spread ? child.getFirstChild() : child, node);
+                cfw.addALoad(generatorStorage);
+                cfw.add(ByteCode.CHECKCAST, "org/monflabs/mozilla/javascript/NewLiteralStorage");
+                cfw.add(ByteCode.SWAP);
+                if (spread) {
+                    cfw.addALoad(contextLocal);
+                    cfw.add(ByteCode.SWAP);
+                    cfw.addALoad(variableObjectLocal);
+                    cfw.add(ByteCode.SWAP);
+                    cfw.addLoadConstant(skipIndexes != null ? sourcePositions[childIdx] : 0);
+                    cfw.addInvoke(
+                            ByteCode.INVOKEVIRTUAL,
+                            "org/monflabs/mozilla/javascript/NewLiteralStorage",
+                            "spread",
+                            "(Lorg/monflabs/mozilla/javascript/Context;"
+                                    + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                                    + "Ljava/lang/Object;"
+                                    + "I"
+                                    + ")V");
+                } else {
+                    cfw.addInvoke(
+                            ByteCode.INVOKEVIRTUAL,
+                            "org/monflabs/mozilla/javascript/NewLiteralStorage",
+                            "pushValue",
+                            "(Ljava/lang/Object;)V");
+                }
+            } else if (child.getType() == Token.DOTDOTDOT) {
                 // Handle spread element: push the expression and call spread
                 cfw.add(ByteCode.DUP);
                 cfw.addALoad(contextLocal);
@@ -2902,6 +2938,11 @@ class BodyCodegen {
             }
             child = child.getNext();
             childIdx++;
+        }
+        if (isGenerator) {
+            cfw.addALoad(generatorStorage);
+            cfw.add(ByteCode.CHECKCAST, "org/monflabs/mozilla/javascript/NewLiteralStorage");
+            releaseWordLocal(generatorStorage);
         }
 
         // Convert NewLiteralStorage to array

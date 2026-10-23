@@ -2815,7 +2815,10 @@ public final class IRFactory {
                 // but prefix it with LEAVEWITH since try..catch produces
                 // "with"code in order to limit the scope of the exception
                 // object.
-                catchStatement.addChildToBack(new Node(Token.LEAVE_SCOPE));
+                Node leave = new Node(Token.LEAVE_SCOPE);
+                // the code after it, up to the LEAVE_SCOPE below, is still in the catch scope
+                leave.putIntProp(Node.JUMP_EXIT_PROP, 1);
+                catchStatement.addChildToBack(leave);
                 catchStatement.addChildToBack(makeJump(Token.GOTO, endCatch));
 
                 // Create condition "if" when present

@@ -13,7 +13,8 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /**
  * Compiled generators and async functions: a destructuring pattern whose value yields or awaits
- * keeps the scope of its temporaries across the suspension, and a returned null stays null.
+ * keeps the scope of its temporaries across the suspension, also after a catch, and a returned null
+ * stays null.
  */
 class YieldInScopeInitializerTest {
 
@@ -29,6 +30,22 @@ class YieldInScopeInitializerTest {
                         + " run(function* () { var a, b; [a, b] = yield 1; return a + b; }),"
                         + " run(function* () { var { 0: a, 1: b } = yield 1; return a + b; }),"
                         + " run(function* () { const [a] = [yield 1]; return a[0]; })].join()");
+    }
+
+    @Test
+    void afterACatch() {
+        // the catch left the scope twice, so the pattern's scope was not saved at the yield
+        String expected = "1,31,9,8,7 [2,5]";
+        Utils.assertGatedBehavior(
+                expected,
+                expected,
+                "function* g() { try { throw 1; } catch (e) { yield e; }"
+                        + " var { p } = { p: yield 31 };"
+                        + " try { yield 9; } catch (e) {} finally { yield 8; }"
+                        + " var [q] = [yield 7]; return [p, q]; }"
+                        + "var it = g(), s = it.next(), r = [];"
+                        + "while (!s.done) { r.push(s.value); s = it.next(r.length); }"
+                        + "r + ' ' + JSON.stringify(s.value)");
     }
 
     @Test

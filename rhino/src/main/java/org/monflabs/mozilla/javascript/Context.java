@@ -38,6 +38,7 @@ import org.monflabs.mozilla.javascript.InstrumentEmitter.Type;
 import org.monflabs.mozilla.javascript.ast.AstRoot;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.config.RhinoConfig;
 import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 import org.monflabs.mozilla.javascript.debug.Debugger;
 import org.monflabs.mozilla.javascript.lc.type.TypeInfo;
@@ -2962,16 +2963,18 @@ public class Context implements Closeable {
 
     /**
      * A compiler bug or a class file limit: the script still runs, much slower; also logged, since
-     * the default error reporter ignores warnings.
+     * the default error reporter ignores warnings. With the property {@code
+     * rhino.failOnCompileFallback}, set by the test suites, a compiler bug throws instead.
      */
     private static void reportCompileFallback(
             ErrorReporter reporter, String sourceName, int lineno, Throwable e) {
+        boolean tooLarge = e instanceof ClassSizeException;
         String message =
                 ScriptRuntime.getMessageById(
-                        e instanceof ClassSizeException
-                                ? "msg.compile.too.large"
-                                : "msg.compile.fallback",
-                        e.toString());
+                        tooLarge ? "msg.compile.too.large" : "msg.compile.fallback", e.toString());
+        if (!tooLarge && RhinoConfig.get("rhino.failOnCompileFallback", false)) {
+            throw new IllegalStateException(sourceName + ":" + lineno + ": " + message, e);
+        }
         if (reporter != null) {
             reporter.warning(message, sourceName, lineno, null, 0);
         }

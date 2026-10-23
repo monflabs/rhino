@@ -5,6 +5,7 @@
 package org.monflabs.mozilla.javascript.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -25,7 +26,8 @@ import org.monflabs.mozilla.javascript.optimizer.Codegen;
 
 /**
  * A script with generators that the class compiler fails on runs in the interpreter, and the
- * compilation reports a warning that says so.
+ * compilation reports a warning that says so; with {@code rhino.failOnCompileFallback}, which the
+ * test suites set, the compilation fails instead.
  */
 class CompilerFallbackTest {
 
@@ -69,30 +71,51 @@ class CompilerFallbackTest {
         }
     }
 
+    private static Script compile(Context cx, boolean verifyError, ErrorReporter reporter) {
+        return cx.compileScript(
+                ScriptCompileSpec.fromSource(
+                                "function* g() { yield 1; yield 2; }"
+                                        + " var s = 0; for (var v of g()) s += v; s")
+                        .sourceName("gen.js")
+                        .lineno(1)
+                        .compiler(verifyError ? new UnverifiableCodegen() : new FailingCodegen())
+                        .compilationErrorReporter(reporter));
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void fallbackToTheInterpreterIsReported(boolean verifyError) {
+        String failOnFallback = System.setProperty("rhino.failOnCompileFallback", "false");
         try (Context cx = Context.enter()) {
             cx.setInterpretedMode(false);
             TopLevel scope = cx.initStandardObjects();
             RecordingReporter reporter = new RecordingReporter();
-            Script script =
-                    cx.compileScript(
-                            ScriptCompileSpec.fromSource(
-                                            "function* g() { yield 1; yield 2; }"
-                                                    + " var s = 0; for (var v of g()) s += v; s")
-                                    .sourceName("gen.js")
-                                    .lineno(1)
-                                    .compiler(
-                                            verifyError
-                                                    ? new UnverifiableCodegen()
-                                                    : new FailingCodegen())
-                                    .compilationErrorReporter(reporter));
+            Script script = compile(cx, verifyError, reporter);
             assertEquals(3, ((Number) script.exec(cx, scope, scope)).intValue());
             assertEquals(1, reporter.warnings.size());
             String warning = reporter.warnings.get(0);
             assertTrue(warning.startsWith("gen.js:1: "), warning);
             assertTrue(warning.contains("broken") && warning.contains("interpreter"), warning);
+        } finally {
+            if (failOnFallback == null) {
+                System.clearProperty("rhino.failOnCompileFallback");
+            } else {
+                System.setProperty("rhino.failOnCompileFallback", failOnFallback);
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void fallbackFailsInTheTests(boolean verifyError) {
+        try (Context cx = Context.enter()) {
+            cx.setInterpretedMode(false);
+            RecordingReporter reporter = new RecordingReporter();
+            IllegalStateException e =
+                    assertThrows(
+                            IllegalStateException.class, () -> compile(cx, verifyError, reporter));
+            assertTrue(e.getMessage().startsWith("gen.js:1: "), e.getMessage());
+            assertTrue(reporter.warnings.isEmpty(), reporter.warnings.toString());
         }
     }
 }
