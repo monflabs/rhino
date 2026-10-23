@@ -817,6 +817,7 @@ Effort: S small, M medium, L large. The rationale of every optimization in the e
 | 16.14 | Global names read from nested functions through `GlobalNameCache`                      | about 2×                           | M      | both      |
 | 16.15 | `push`/`unshift`: cached check that the array prototypes have no indexed elements      | `push` −17%, `unshift` 2.7×        | M      | ES2026    |
 | 16.16 | Method calls on primitive strings without a wrapper                                    | `indexOf` up to 3×                 | M      | both      |
+| 16.17 | RegExp symbol methods of an ordinary regexp without the property lookups (2026-10-23)  | `split` 1.8×, `replace` 1.5×       | M      | both      |
 
 Status: **16.1 (done)** global `let` writes, 3 million `G++` 140 ms → 12 ms compiled, 325 ms → 135 ms
 interpreted. **16.2 (done)** per-iteration scope copies only where a closure can capture them, a top-level `let`
@@ -831,7 +832,11 @@ from slots cached in the realm: `let [x, y, z] = a` 7 ms → 4 ms compiled, 130 
 (done)** array species from slots cached in the realm, `concat` 41 ms → 24 ms, `slice` 22 ms → 17 ms compiled. **16.15 (done)** `push` and `unshift` check the
 prototypes for indexes from the realm and the prototype cache epoch, `unshift(x)` 400 ms → 150 ms, `push(x, y, z)`
 82 ms → 55 ms compiled. **16.13 (done)** a strict function keeps its unmapped arguments object in a variable without an activation, and functions with an unmapped one keep their variables in registers, a strict sum over `arguments` 818 ms → 200 ms compiled. **16.11 (done)** let/const bindings that no closure refers to live in registers in functions with an activation, blocks and loop heads without them get no scope object, a `let` loop in a function with a closure 84 ms → 6 ms compiled. **16.12 (done)** function objects created with their own properties laid out at once and a lazy prototype object, 1 million closures 355 ms → 167 ms compiled (`VERSION_ES6` 505 → 187 ms). **16.14 (done)** global names read from nested functions through the `GlobalNameCache` slot after a check of the scopes on the way, a nested `Math.abs` 205 ms → 88 ms compiled. **16.16 (done)** method calls on primitive strings pass the string as `this` without a
-String object (also a conformance fix), 598 ms → 425 ms compiled.
+String object (also a conformance fix), 598 ms → 425 ms compiled. **16.17 (done)** added after the harness run of
+2026-10-23 (Octane `regexp.js` 1.17× Rhino 1.8.0 in the sequence, 1.24× at steady state): the flags of an ordinary
+regexp from its compiled pattern, its splitter built once, `lastIndex` read and written directly, and the classes
+of the matcher without boxed lists; `split` 268 ms → 146 ms, `replace` 166 ms → 108 ms, `regexp.js` 16.4 s →
+14.7 s at steady state (Rhino 1.8.0 13.2 s).
 
 Order: the S items first (16.1–16.8), then 16.9 and 16.10 (16.15 shares their check), then 16.11 as a step of its
 own. Ruled out by the analysis: the plain call path (same bytecode in both versions), string, regexp, JSON and Math
@@ -926,5 +931,5 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 | 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
-| 16   | Second performance pass                         | done        | 99.1% (16.5 dropped)         | (this) |
+| 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |
 | 17   | Method splitting                                | in progress | 99.1% (17.0–17.3)            | (this) |

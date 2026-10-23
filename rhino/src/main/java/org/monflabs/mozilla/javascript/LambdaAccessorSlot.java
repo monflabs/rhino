@@ -121,6 +121,11 @@ public class LambdaAccessorSlot extends StandardSlot<Scriptable> {
         return super.setValue(value, start, start, isThrow);
     }
 
+    /** The getter of this accessor, which identifies it, see OriginalProperties. */
+    Object getterObject() {
+        return getter != null ? getter : getterFunction;
+    }
+
     @Override
     public Object getValue(Scriptable owner) {
         if (getter != null) {

@@ -531,6 +531,17 @@ public class TopLevel extends ScopeObject {
 
     transient int indexFreeEpoch;
 
+    private transient OriginalProperties regExpOriginals;
+
+    /** The original properties the RegExp built-ins read, recorded when RegExp was initialized. */
+    public OriginalProperties getRegExpOriginals() {
+        return regExpOriginals;
+    }
+
+    public void setRegExpOriginals(OriginalProperties originals) {
+        regExpOriginals = originals;
+    }
+
     /**
      * Whether this scope holds global lexical declarations: the top-level let/const of scripts
      * compiled for {@link Context#VERSION_ECMASCRIPT}, which live in this scope (the declarative

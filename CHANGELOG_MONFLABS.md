@@ -6,6 +6,26 @@ relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.m
 
 ## Unreleased
 
+### RegExp symbol methods on an ordinary regexp (2026-10-23)
+
+- Performance (all versions): `@@split`, `@@replace`, `@@match` and `@@matchAll` of an ordinary regexp (an
+  instance of the realm's `RegExp` with no own property but `lastIndex`, while `RegExp.prototype` keeps its
+  original `constructor`, `exec`, `@@match`, `flags` and flag getters, and `RegExp` its `@@species`) take their
+  flags from the compiled pattern instead of calling the nine getters of `flags`, and `@@split` reuses a sticky
+  splitter built once per pattern instead of looking up the species and compiling the pattern again on every
+  call. The original properties are recorded when `RegExp` is initialized (`OriginalProperties`, held by the
+  realm); a replaced property sends the methods back to the full algorithm. No observable change.
+- Performance (`VERSION_ECMASCRIPT`): `Set(R, "lastIndex")` and `Get(R, "lastIndex")` of a regexp write and read
+  its own `lastIndex` directly (an own data property that cannot be deleted or made an accessor) instead of the
+  generic `[[Set]]`.
+- Performance (all versions): the class of a regexp matches the characters outside its bitmap (code points and
+  ranges beyond the BMP, property escapes) from `int` arrays built with the bitmap, instead of boxed lists: once
+  other code had used `ArrayList.contains`, its shared profile kept the matcher from inlining it (14% of Octane
+  `regexp.js` after `gbemu`).
+- 200,000 calls, compiled, `VERSION_ECMASCRIPT`: `split` 268 ms → 146 ms, `replace` 166 ms → 108 ms, `exec`
+  119 ms → 96 ms (Rhino 1.8.0: 120, 73, 68 ms). Octane `regexp.js` at steady state 16.4 s → 14.7 s
+  (`VERSION_ES6` 14.2 s, Rhino 1.8.0 13.2 s), after the Octane files before it 17.8 s → 16.7 s.
+
 ### Scripts beyond one class, and literals of data (2026-10-23)
 
 - Performance (all versions, compiled mode; plan M17, 17.3): a script whose class exceeds a class file limit of

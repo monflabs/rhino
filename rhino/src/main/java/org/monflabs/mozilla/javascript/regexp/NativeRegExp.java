@@ -12,6 +12,7 @@ import static org.monflabs.mozilla.javascript.ClassDescriptor.Destination.PROTO;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -34,6 +35,7 @@ import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.Kit;
 import org.monflabs.mozilla.javascript.NativeArray;
 import org.monflabs.mozilla.javascript.NativeObject;
+import org.monflabs.mozilla.javascript.OriginalProperties;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.ScriptRuntimeES6;
 import org.monflabs.mozilla.javascript.Scriptable;
@@ -281,6 +283,7 @@ public class NativeRegExp extends ScriptableObject {
                         defineLegacyAccessors(c, scope, ctor);
                         defineRealmGetters(c, scope, prototype);
                         removeLatestFlags(c, prototype);
+                        recordOriginals(scope, ctor, prototype);
                     });
         }
 
@@ -298,6 +301,7 @@ public class NativeRegExp extends ScriptableObject {
                     if (!c.isLatestEcmaScript()) {
                         ctor.delete("escape");
                     }
+                    recordOriginals(scope, ctor, proto);
                 });
     }
 
@@ -363,6 +367,123 @@ public class NativeRegExp extends ScriptableObject {
     private static void appendHex(StringBuilder sb, String prefix, int c, int width) {
         String hex = Integer.toHexString(c);
         sb.append(prefix).append("0".repeat(width - hex.length())).append(hex);
+    }
+
+    /**
+     * What the property-driven algorithms of RegExp.prototype read: the properties of the
+     * prototype, then the species of the constructor (see isOrdinary).
+     */
+    private static final Object[] ORIGINAL_PROTOTYPE_KEYS = {
+        "constructor",
+        "exec",
+        SymbolKey.MATCH,
+        "flags",
+        "hasIndices",
+        "global",
+        "ignoreCase",
+        "multiline",
+        "dotAll",
+        "unicode",
+        "unicodeSets",
+        "sticky"
+    };
+
+    private static final int ORIGINAL_HAS_INDICES = 4;
+    private static final int ORIGINAL_UNICODE_SETS = 10;
+    private static final int ORIGINAL_SPECIES = ORIGINAL_PROTOTYPE_KEYS.length;
+
+    private static void recordOriginals(
+            VarScope scope, ScriptableObject ctor, ScriptableObject prototype) {
+        int count = ORIGINAL_PROTOTYPE_KEYS.length;
+        ScriptableObject[] owners = new ScriptableObject[count + 1];
+        Object[] keys = Arrays.copyOf(ORIGINAL_PROTOTYPE_KEYS, count + 1);
+        Arrays.fill(owners, prototype);
+        owners[ORIGINAL_SPECIES] = ctor;
+        keys[ORIGINAL_SPECIES] = SymbolKey.SPECIES;
+        ScriptableObject.getTopLevelScope(scope)
+                .setRegExpOriginals(OriginalProperties.of(owners, keys));
+    }
+
+    /**
+     * Whether rx is an ordinary regular expression of the realm of scope: an instance of the
+     * original RegExp with no own property but lastIndex, while RegExp.prototype and RegExp keep
+     * every property recorded by recordOriginals. The property-driven algorithms of
+     * RegExp.prototype then cannot observe anything that a direct match does not do.
+     */
+    private static boolean isOrdinary(Context cx, VarScope scope, Object rx) {
+        if (!(rx instanceof NativeRegExp)) {
+            return false;
+        }
+        NativeRegExp regexp = (NativeRegExp) rx;
+        OriginalProperties originals =
+                ScriptableObject.getTopLevelScope(scope).getRegExpOriginals();
+        return originals != null
+                && regexp.getPrototype() == originals.owner(0)
+                && OriginalProperties.ownPropertyCount(regexp) == 1
+                && (!cx.isLatestEcmaScript()
+                        || (originals.wasPresent(ORIGINAL_HAS_INDICES)
+                                && originals.wasPresent(ORIGINAL_UNICODE_SETS)))
+                && originals.isIntact();
+    }
+
+    /** ToString(Get(rx, "flags")), from the compiled flags of an ordinary regexp. */
+    private static String flagsOf(Context cx, VarScope scope, Scriptable rx) {
+        if (isOrdinary(cx, scope, rx)) {
+            return ordinaryFlags(cx, ((NativeRegExp) rx).re.flags);
+        }
+        return ScriptRuntime.toString(ScriptRuntime.getObjectProp(rx, "flags", cx));
+    }
+
+    /** What get RegExp.prototype.flags returns for an ordinary regexp, see appendFlags. */
+    private static String ordinaryFlags(Context cx, int flags) {
+        if (cx.isLatestEcmaScript()) {
+            return flagsString(flags);
+        }
+        StringBuilder buf = new StringBuilder();
+        if ((flags & JSREG_GLOB) != 0) buf.append('g');
+        if ((flags & JSREG_FOLD) != 0) buf.append('i');
+        if ((flags & JSREG_MULTILINE) != 0) buf.append('m');
+        if ((flags & JSREG_DOTALL) != 0) buf.append('s');
+        if ((flags & JSREG_STICKY) != 0) buf.append('y');
+        if ((flags & JSREG_UNICODE) != 0) buf.append('u');
+        return buf.toString();
+    }
+
+    /**
+     * The splitter of an ordinary regexp (22.2.6.14 step 10), constructed by the original RegExp
+     * once for its compiled pattern and flags: nothing can observe it, and the fast split does not
+     * change its lastIndex.
+     */
+    private NativeRegExp splitterOf(Context cx, VarScope scope, String newFlags) {
+        RECompiled compiled = re;
+        Splitter cached = splitter;
+        if (cached == null || cached.pattern != compiled || !cached.flags.equals(newFlags)) {
+            Constructable ctor =
+                    (Constructable)
+                            ScriptableObject.getTopLevelScope(scope)
+                                    .getRegExpOriginals()
+                                    .owner(ORIGINAL_SPECIES);
+            cached =
+                    new Splitter(
+                            compiled,
+                            newFlags,
+                            (NativeRegExp)
+                                    ctor.construct(cx, scope, new Object[] {this, newFlags}));
+            splitter = cached;
+        }
+        return cached.regexp;
+    }
+
+    private static final class Splitter {
+        final RECompiled pattern;
+        final String flags;
+        final NativeRegExp regexp;
+
+        Splitter(RECompiled pattern, String flags, NativeRegExp regexp) {
+            this.pattern = pattern;
+            this.flags = flags;
+            this.regexp = regexp;
+        }
     }
 
     /** The d flag (hasIndices) is a feature of VERSION_ECMASCRIPT. */
@@ -3949,6 +4070,8 @@ public class NativeRegExp extends ScriptableObject {
                 charSet.foldCase && (gData.regexp.flags & JSREG_UNICODE_MODE) != 0;
         byteLength = (charSet.length + 7) / 8;
         charSet.bits = new byte[byteLength];
+        ArrayList<Integer> unicodeProps = new ArrayList<>();
+        ArrayList<Integer> negUnicodeProps = new ArrayList<>();
 
         for (char ch : classContents.chars) {
             addCharacterToCharSet(charSet, ch);
@@ -4007,15 +4130,27 @@ public class NativeRegExp extends ScriptableObject {
                             addCharacterToCharSet(charSet, (char) i);
                     break;
                 case REOP_UPROP:
-                    charSet.unicodeProps.add(escape.unicodeProperty);
+                    unicodeProps.add(escape.unicodeProperty);
                     break;
                 case REOP_UPROP_NOT:
-                    charSet.negUnicodeProps.add(escape.unicodeProperty);
+                    negUnicodeProps.add(escape.unicodeProperty);
                     break;
                 default:
                     Kit.codeBug("classContents contains invalid escape node type");
             }
         }
+        charSet.nonBMPCodepoints = toIntArray(classContents.nonBMPCodepoints);
+        charSet.nonBMPRanges = toIntArray(classContents.nonBMPRanges);
+        charSet.unicodeProps = toIntArray(unicodeProps);
+        charSet.negUnicodeProps = toIntArray(negUnicodeProps);
+    }
+
+    private static int[] toIntArray(List<Integer> list) {
+        int[] array = new int[list.size()];
+        for (int i = 0; i < array.length; i++) {
+            array[i] = list.get(i);
+        }
+        return array;
     }
 
     /**
@@ -4031,13 +4166,15 @@ public class NativeRegExp extends ScriptableObject {
             }
         }
 
-        if (charSet.classContents.nonBMPCodepoints.contains(codePoint)) {
-            return true;
+        for (int nonBMPCodepoint : charSet.nonBMPCodepoints) {
+            if (codePoint == nonBMPCodepoint) {
+                return true;
+            }
         }
 
-        for (int i = 0; i < charSet.classContents.nonBMPRanges.size(); i += 2) {
-            if (codePoint >= charSet.classContents.nonBMPRanges.get(i)
-                    && codePoint <= charSet.classContents.nonBMPRanges.get(i + 1)) {
+        int[] nonBMPRanges = charSet.nonBMPRanges;
+        for (int i = 0; i < nonBMPRanges.length; i += 2) {
+            if (codePoint >= nonBMPRanges[i] && codePoint <= nonBMPRanges[i + 1]) {
                 return true;
             }
         }
@@ -5397,6 +5534,11 @@ public class NativeRegExp extends ScriptableObject {
             ScriptableObject.putProperty(thisObj, "lastIndex", value);
             return;
         }
+        if (thisObj instanceof NativeRegExp) {
+            // an own data property that cannot be deleted or redefined as an accessor
+            ((NativeRegExp) thisObj).setLastIndex(value);
+            return;
+        }
         if (!AbstractEcmaObjectOperations.set(
                 Context.getCurrentContext(), thisObj, "lastIndex", value, thisObj)) {
             throw ScriptRuntime.typeErrorById("msg.modify.readonly", "lastIndex");
@@ -5537,7 +5679,7 @@ public class NativeRegExp extends ScriptableObject {
         var thisObj = ScriptableObject.ensureScriptableObject(thisScriptable);
 
         String string = ScriptRuntime.toString(args.length > 0 ? args[0] : Undefined.instance);
-        String flags = ScriptRuntime.toString(ScriptRuntime.getObjectProp(thisObj, "flags", cx));
+        String flags = flagsOf(cx, scope, thisObj);
         boolean fullUnicode = flags.indexOf('u') != -1 || flags.indexOf('v') != -1;
 
         if (flags.indexOf('g') == -1) return regExpExec(thisObj, string, cx, scope);
@@ -5644,7 +5786,7 @@ public class NativeRegExp extends ScriptableObject {
         Constructable c =
                 AbstractEcmaObjectOperations.speciesConstructor(cx, realThis, defaultConstructor);
 
-        String flags = ScriptRuntime.toString(ScriptRuntime.getObjectProp(realThis, "flags", cx));
+        String flags = flagsOf(cx, scope, realThis);
 
         Scriptable matcher = c.construct(cx, scope, new Object[] {thisObj, flags});
 
@@ -5686,7 +5828,7 @@ public class NativeRegExp extends ScriptableObject {
             replaceFn = (Function) replaceValue;
             replaceOps = List.of();
         }
-        String flags = ScriptRuntime.toString(ScriptRuntime.getObjectProp(thisObj, "flags", cx));
+        String flags = flagsOf(cx, scope, thisObj);
         boolean fullUnicode = flags.indexOf('u') != -1 || flags.indexOf('v') != -1;
 
         List<ExecResult> results = new ArrayList<>();
@@ -5811,7 +5953,7 @@ public class NativeRegExp extends ScriptableObject {
             replaceFn = (Function) replaceValue;
             replaceOps = List.of();
         }
-        String flags = ScriptRuntime.toString(ScriptRuntime.getObjectProp(thisObj, "flags", cx));
+        String flags = flagsOf(cx, scope, thisObj);
         boolean global = flags.indexOf('g') != -1;
         boolean fullUnicode = flags.indexOf('u') != -1 || flags.indexOf('v') != -1;
         if (global) {
@@ -5961,16 +6103,26 @@ public class NativeRegExp extends ScriptableObject {
 
         String s = ScriptRuntime.toString(args.length > 0 ? args[0] : Undefined.instance);
 
-        TopLevel topLevelScope = ScriptableObject.getTopLevelScope(scope);
-        Function defaultConstructor = ScriptRuntime.getExistingCtor(cx, topLevelScope, "RegExp");
-        Constructable c =
-                AbstractEcmaObjectOperations.speciesConstructor(cx, rx, defaultConstructor);
+        boolean ordinary = isOrdinary(cx, scope, rx);
+        Constructable c = null;
+        if (!ordinary) {
+            TopLevel topLevelScope = ScriptableObject.getTopLevelScope(scope);
+            Function defaultConstructor =
+                    ScriptRuntime.getExistingCtor(cx, topLevelScope, "RegExp");
+            c = AbstractEcmaObjectOperations.speciesConstructor(cx, rx, defaultConstructor);
+        }
 
-        String flags = ScriptRuntime.toString(ScriptRuntime.getObjectProp(rx, "flags", cx));
+        String flags =
+                ordinary
+                        ? ordinaryFlags(cx, ((NativeRegExp) rx).re.flags)
+                        : ScriptRuntime.toString(ScriptRuntime.getObjectProp(rx, "flags", cx));
         boolean unicodeMatching = flags.indexOf('u') != -1 || flags.indexOf('v') != -1;
         NativeArray a = (NativeArray) cx.newArray(scope, 0);
         String newFlags = flags.indexOf('y') != -1 ? flags : (flags + "y");
-        Scriptable splitter = c.construct(cx, scope, new Object[] {rx, newFlags});
+        Scriptable splitter =
+                ordinary
+                        ? ((NativeRegExp) rx).splitterOf(cx, scope, newFlags)
+                        : c.construct(cx, scope, new Object[] {rx, newFlags});
 
         Object limit = args.length > 1 ? args[1] : Undefined.instance;
         long lim;
@@ -5983,6 +6135,10 @@ public class NativeRegExp extends ScriptableObject {
             return a;
         }
 
+        if (ordinary) {
+            return js_SymbolSplitFast(
+                    cx, scope, (NativeRegExp) splitter, s, lim, unicodeMatching, a);
+        }
         if (splitter instanceof NativeRegExp) {
             var regexp = (NativeRegExp) splitter;
             var exec = ScriptableObject.getProperty(regexp, "exec");
@@ -6127,6 +6283,9 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private static long getLastIndex(Context cx, Scriptable thisObj) {
+        if (thisObj instanceof NativeRegExp) {
+            return ScriptRuntime.toLength(((NativeRegExp) thisObj).lastIndex);
+        }
         return ScriptRuntime.toLength(ScriptRuntime.getObjectProp(thisObj, "lastIndex", cx));
     }
 
@@ -6168,6 +6327,8 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     private RECompiled re;
+    // the splitter of this regexp while it is ordinary, see splitterOf
+    private transient Splitter splitter;
     private boolean legacyFeaturesDisabled;
     // the realm of the constructor (from ES6), for RegExp.prototype.compile
     private TopLevel realm;
@@ -6375,8 +6536,6 @@ class REGlobalData {
  */
 final class RECharSet implements Serializable {
     @Serial private static final long serialVersionUID = 7931787979395898394L;
-    ArrayList<Integer> unicodeProps = new ArrayList<Integer>();
-    ArrayList<Integer> negUnicodeProps = new ArrayList<Integer>();
 
     RECharSet(NativeRegExp.ClassContents classContents, int length, boolean foldCase) {
         this.length = length;
@@ -6390,4 +6549,9 @@ final class RECharSet implements Serializable {
 
     transient volatile boolean converted;
     transient volatile byte[] bits;
+    // the parts of the class outside of the bitmap, set with it
+    transient int[] nonBMPCodepoints;
+    transient int[] nonBMPRanges;
+    transient int[] unicodeProps;
+    transient int[] negUnicodeProps;
 }

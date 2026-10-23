@@ -664,6 +664,37 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Octane `pdfjs` (`CIDToUnicodeMaps`, 500 KB of nested arrays and objects of numbers) compiles under
   `VERSION_ECMASCRIPT` instead of exceeding the constant pool: score 2,100 → 4,505.
 
+### RegExp symbol methods on an ordinary regexp
+
+- **What.** `RegExp.prototype[@@split]` gets the flags of the regexp (`flags`, which calls nine getters), looks up
+  its species constructor and constructs a sticky splitter, which compiles the pattern again, on every call;
+  `@@replace`, `@@match` and `@@matchAll` read `flags` too. For an ordinary regexp, the flags come from the
+  compiled pattern and the splitter is built once per pattern and flags (`NativeRegExp.splitterOf`), through the
+  original constructor. As in Nashorn (`NativeRegExp.isOrdinary`), a regexp is ordinary when it is a
+  `NativeRegExp` whose prototype is the `RegExp.prototype` of the realm, with no own property but `lastIndex`,
+  and the properties those algorithms read keep their original contents: `constructor`, `exec`, `@@match`,
+  `flags` and the eight flag getters of the prototype, `@@species` of the constructor. Under
+  `VERSION_ECMASCRIPT`, `Set(R, "lastIndex")` and `Get(R, "lastIndex")` of a regexp write and read its field.
+- **Correctness.** `OriginalProperties` records the contents of those properties when `RegExp` is initialized
+  (the value of a data property, the getter of an accessor) and caches their slots: a slot is valid while it is
+  not stale and has the same contents. A stale slot is looked up again, so adding methods to `RegExp.prototype`
+  (which rebuilds its map) keeps the fast path; a property defined again, replaced or deleted turns it off. The
+  original getters return the bits of the compiled flags, in the order of the `flags` getter of the language
+  version (`hasIndices` and `unicodeSets` must exist under `VERSION_ECMASCRIPT`). The splitter is not observable:
+  its constructor is the original one, which reads only `@@match` of the regexp, and the fast split does not
+  change its `lastIndex`; it is built before the limit is converted, as the specification orders, and again
+  after `compile()`. `lastIndex` is an own, non-configurable data property of every regexp. `RegExpOrdinaryTest`
+  checks each property once replaced; the same scripts give the same results before and after the change.
+- **Matcher.** The characters outside the bitmap of a class (code points and ranges beyond the BMP, property
+  escapes) are matched from `int` arrays set with the bitmap, rather than boxed lists. Alone this was level (see
+  "Tried and dropped"), but in the harness sequence `ArrayList.contains` took 14% of Octane `regexp.js` after
+  `gbemu`: its `equals` call site is shared by the whole JVM.
+- **Gain.** 200,000 calls, compiled, `VERSION_ECMASCRIPT`: `split` 268 ms → 146 ms, `replace` 166 ms → 108 ms,
+  `exec` 119 ms → 96 ms (`VERSION_ES6` `split` 238 → 151 ms; Rhino 1.8.0: 120, 73, 68 ms). Octane `regexp.js`
+  at steady state (best of 4 runs after one): 16.4 s → 14.7 s under `VERSION_ECMASCRIPT` (`VERSION_ES6` 14.2 s,
+  Rhino 1.8.0 13.2 s); after the Octane files before it, as in the harness (one run after one), 17.8 s → 16.7 s
+  (Rhino 1.8.0 13.7 s). The rest of the gap is in the matcher, without a single hotspot.
+
 ### Algorithms of built-ins
 
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the
