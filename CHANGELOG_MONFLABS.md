@@ -39,6 +39,19 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The playground and the documentation site join the repository (2026-10-24)
+
+- Build: two modules, not published. `rhino-playground` is the Swing playground (samples of the language and of
+  the Rhino extensions, an editor, a console, the language version and the execution mode to choose), formerly
+  the separate `../rhino-playground` project, with its CheerpJ entry point; `./gradlew :rhino-playground:run`,
+  or `java -jar rhino-playground/build/libs/rhino-playground-all.jar`. Its tests run every sample compiled and
+  interpreted. `rhino-doc` is the docsify documentation site, like the Nashorn one: what Monflabs Rhino is, the
+  features on top of stock Rhino, the changes and incompatibilities, the performance optimizations, and the
+  playground running in the browser with CheerpJ.
+- `buildtools/build-doc.sh` generates the site in `rhino-doc/build/site` (`--serve` serves it locally), and the
+  `Documentation site` workflow publishes it to GitHub Pages on every push to `master`.
+- No engine change.
+
 ### Compiled code checked against the interpreter (2026-10-24)
 
 - Tests: with the Rhino property `rhino.failOnCompileFallback`, set in the `rhino-test.config` of the modules, a

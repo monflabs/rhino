@@ -85,6 +85,8 @@ testing but which are not published to Maven Central:
 * **tests**: The tests that depend on all of Rhino and also the external tests, including the Mozilla legacy test scripts and the test262 tests.
 * **benchmarks**: Runs benchmarks using JMH.
 * **examples**: Surprisingly, this contains example code.
+* **rhino-playground**: A desktop playground: samples, an editor and a console, with the language version and the execution mode to choose (`./gradlew :rhino-playground:run`).
+* **rhino-doc**: The documentation site of the fork, with the playground running in the browser (`buildtools/build-doc.sh --serve`; published to GitHub Pages).
 
 ### Recommendations
 

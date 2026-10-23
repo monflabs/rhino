@@ -1,0 +1,51 @@
+name: Documentation site
+
+# Generates the documentation site (buildtools/build-doc.sh) and publishes it to GitHub Pages
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  GRADLE_OPTS: "--enable-native-access=ALL-UNNAMED"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Rhino
+        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v4.2.2
+      - name: Set up Java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: 25
+          distribution: 'adopt'
+      - name: Generate the site
+        run: buildtools/build-doc.sh
+      - name: Set up Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: rhino-doc/build/site
+          include-hidden-files: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

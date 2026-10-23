@@ -1,0 +1,29 @@
+// The documentation site: the docsify pages of site/, and the browser playground, the
+// rhino-playground jar that CheerpJ runs in site/playground/index.html.
+// ./gradlew :rhino-doc:site builds it in build/site (see buildtools/build-doc.sh).
+
+plugins {
+    id 'base'
+}
+
+configurations {
+    playground {
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    playground project(path: ':rhino-playground', configuration: 'shadowRuntimeElements')
+}
+
+tasks.register('site', Sync) {
+    description = 'Builds the documentation site in build/site'
+    group = 'documentation'
+    from 'site'
+    into(layout.buildDirectory.dir('site'))
+    into('playground') {
+        from configurations.playground
+        // A fixed name, so that the page need not know the version
+        rename { 'rhino-playground.jar' }
+    }
+}

@@ -1,0 +1,41 @@
+plugins {
+    id 'rhino.java-conventions'
+    id 'application'
+    id 'com.gradleup.shadow' version '9.3.2'
+}
+
+application {
+    mainClass = 'org.monflabs.mozilla.playground.Playground'
+}
+
+dependencies {
+    implementation project(':rhino')
+    implementation libs.rsyntaxtextarea
+    // rstaui was built against an older rsyntaxtextarea: keep the direct one only
+    implementation(libs.rstaui) {
+        exclude group: 'com.fifesoft', module: 'rsyntaxtextarea'
+    }
+    implementation libs.flatlaf
+    implementation libs.commonmark
+}
+
+test {
+    systemProperty 'java.awt.headless', 'true'
+}
+
+// build/libs/rhino-playground-all.jar: java -jar it, or the browser playground of the
+// documentation site runs it with CheerpJ (rhino-doc)
+shadowJar {
+    archiveFileName = 'rhino-playground-all.jar'
+    mergeServiceFiles()
+    exclude 'module-info.class', 'META-INF/versions/*/module-info.class'
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    manifest {
+        // FlatLaf loads its native library
+        attributes 'Enable-Native-Access': 'ALL-UNNAMED'
+    }
+}
+
+run {
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+}

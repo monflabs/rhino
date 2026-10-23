@@ -12,6 +12,11 @@ jline-ffm = { group = 'org.jline', name = 'jline-terminal-ffm', version.ref = 'j
 jline-jni = { group = 'org.jline', name = 'jline-terminal-jni', version.ref = 'jline' }
 junit-platform = { group = 'org.junit', name = 'junit-bom', version.ref = 'junit5' }
 junit-jupiter-api = { group = 'org.junit.jupiter', name = 'junit-jupiter-api', version.ref = 'junit5'}
+# The playground (rhino-playground) only
+commonmark = { group = 'org.commonmark', name = 'commonmark', version = '0.27.0' }
+flatlaf = { group = 'com.formdev', name = 'flatlaf', version = '3.6.2' }
+rstaui = { group = 'com.fifesoft', name = 'rstaui', version = '3.3.1' }
+rsyntaxtextarea = { group = 'com.fifesoft', name = 'rsyntaxtextarea', version = '3.6.0' }
 
 [bundles]
 jline-runtime = [ 'jline-ffm', 'jline-jni' ]
