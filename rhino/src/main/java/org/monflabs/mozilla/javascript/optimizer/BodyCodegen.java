@@ -1396,7 +1396,9 @@ class BodyCodegen {
                         OptFunctionNode target;
                         target = (OptFunctionNode) node.getProp(Node.DIRECTCALL_PROP);
 
-                        if (target != null) {
+                        // in a generator, a direct call evaluates its arguments in each of its two
+                        // paths, which a yield cannot be
+                        if (target != null && !(isGenerator && hasYield(child.getNext()))) {
                             visitOptimizedCall(node, target, type, child);
                         } else if (type == Token.CALL) {
                             visitStandardCall(node, child);
@@ -3573,6 +3575,20 @@ class BodyCodegen {
                         + ")Lorg/monflabs/mozilla/javascript/Scriptable;");
     }
 
+    /** Whether a yield (or an await) is in these nodes or their siblings that follow. */
+    private static boolean hasYield(Node node) {
+        for (Node n = node; n != null; n = n.getNext()) {
+            int type = n.getType();
+            if (type == Token.YIELD
+                    || type == Token.YIELD_STAR
+                    || type == Token.AWAIT
+                    || hasYield(n.getFirstChild())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void visitOptimizedCall(Node node, OptFunctionNode target, int type, Node child) {
         // Only calls to top-level functions (i.e. non member functions) can be optimized, so they
         // cannot be a super.foo() call
@@ -5446,7 +5462,11 @@ class BodyCodegen {
                     cfw.addDLoad(child_dcp_register + 1);
                     cfw.addPush(convertChild.getDouble());
                     cfw.add(ByteCode.DCMPL);
-                    if (type == Token.EQ) cfw.add(ByteCode.IFEQ, trueGOTO);
+                    // === jumped on a difference, as !== does, before VERSION_ECMASCRIPT
+                    boolean equality =
+                            type == Token.EQ
+                                    || (type == Token.SHEQ && compilerEnv.isLatestEcmaScript());
+                    if (equality) cfw.add(ByteCode.IFEQ, trueGOTO);
                     else cfw.add(ByteCode.IFNE, trueGOTO);
                     cfw.add(ByteCode.GOTO, falseGOTO);
                     cfw.markLabel(notNumbersLabel);

@@ -239,6 +239,11 @@ public class NativeConsole extends ScriptableObject {
             return Undefined.SCRIPTABLE_UNDEFINED.toString();
         }
 
+        if (arg instanceof Number && !(arg instanceof BigInteger) && cx.isLatestEcmaScript()) {
+            // JSON would print Infinity and NaN as null
+            return ScriptRuntime.toString(arg);
+        }
+
         if (arg instanceof NativeError) {
             NativeError err = (NativeError) arg;
             String msg = err.toString();

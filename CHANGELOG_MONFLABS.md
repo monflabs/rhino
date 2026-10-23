@@ -39,6 +39,22 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Three fixes found by the Rhino playground (2026-10-23)
+
+- Fix (`VERSION_ECMASCRIPT`, compiled mode; `BACKWARD_COMPATIBILITY.md` 1.94): a parameter of a function called
+  directly, compared with a number literal by `===` (`if (n === 0)`), gave the result of `!==` when the caller
+  passed a number, so `function f(n) { if (n === 0) return 0; return 1 + f(n - 1); }` returned 1 for `f(10)`.
+  The fast path of `BodyCodegen.visitIfJumpEqOp` for such a parameter tested `==` alone as an equality. Rhino
+  1.7.14 and 1.8.0 have the same bug.
+- Fix (all versions, compiled mode): a `yield` or an `await` in the arguments of a direct call (`log(await x)`,
+  `log` a function declaration) failed to compile ("Can only mark label once"), and the script ran in the
+  interpreter: in a generator, a direct call evaluates its arguments in each of its two paths. Such a call is now
+  a regular call. A bug of the fork, which accepts a `yield` there (stock Rhino requires parentheses); the
+  results were right, the code slower.
+- Fix (`VERSION_ECMASCRIPT`; 1.95): `console.log(Infinity, NaN)` printed `null null`, numbers being formatted as
+  JSON. Rhino 1.8.0 has the same behavior.
+- Found by running the samples of the new Rhino playground (`../rhino-playground`) in both modes.
+
 ### RegExp symbol methods on an ordinary regexp (2026-10-23)
 
 - Performance (all versions): `@@split`, `@@replace`, `@@match` and `@@matchAll` of an ordinary regexp (an

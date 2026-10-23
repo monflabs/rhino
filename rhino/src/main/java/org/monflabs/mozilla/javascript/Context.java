@@ -289,6 +289,11 @@ public class Context implements Closeable {
      *   <li>In compiled mode, a BigInt compared with a number in a function ({@code x < 2})
      *       compares as one instead of throwing a TypeError, and the left operand is converted
      *       after the right one is evaluated.
+     *   <li>In compiled mode, a parameter of a function called directly compared with a number by
+     *       {@code ===} ({@code n === 0}) gives the result of {@code ===}, instead of the one of
+     *       {@code !==} when a number was passed.
+     *   <li>{@code console.log} prints {@code Infinity}, {@code -Infinity} and {@code NaN}, instead
+     *       of {@code null}.
      * </ul>
      *
      * <p>As of version 1.8, the Rhino community has no plans to continue adding new language

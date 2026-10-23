@@ -107,6 +107,8 @@ changes.
 | 1.91 | A `let`/`const` of a `switch` clause is uninitialized in the clauses entered past it | `VERSION_ECMASCRIPT` |
 | 1.92 | A rest parameter of a function called directly in compiled code | `VERSION_ECMASCRIPT` |
 | 1.93 | A BigInt compared with a number in a compiled function | `VERSION_ECMASCRIPT` |
+| 1.94 | `===` of a parameter of a direct call with a number in compiled code | `VERSION_ECMASCRIPT` |
+| 1.95 | `console.log` of `Infinity` and `NaN` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1537,6 +1539,33 @@ f(1n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   no
   affected.
 - **Why:** ECMA-262 2026, §13.10.1 (RelationalExpression evaluation: both operands evaluated, then
   IsLessThan), §7.2.13 (IsLessThan compares a BigInt with a number by their mathematical values).
+
+### 1.94 `===` of a parameter of a direct call with a number in compiled code
+
+```js
+function f(n) { if (n === 0) return 0; return 1 + f(n - 1); }
+f(10);   // compiled, before: 1   now: 10
+```
+
+- In compiled mode, when a function declaration is called directly (by its name from another function, or
+  from itself) with a number, a strict comparison of that parameter with a number literal (`n === 0`,
+  `n !== 0` is not affected) jumped when the two differed: `===` gave the result of `!==`. Rhino 1.7.14 and
+  1.8.0 have the same bug; the interpreter, and `==`, were not affected.
+- **Why:** ECMA-262 2026, §13.11.1 (EqualityExpression `===` evaluates IsStrictlyEqual, which compares two
+  numbers with Number::equal).
+
+### 1.95 `console.log` of `Infinity` and `NaN`
+
+```js
+console.log(Infinity, NaN, -Infinity);   // before: null null null   now: Infinity NaN -Infinity
+console.log('%o', NaN);                  // before: null             now: NaN
+```
+
+- `console.log` and its family formatted a value other than a string as JSON, which writes the numbers that are
+  not finite as `null`. A number is now formatted as `String(number)`. Inside an object or an array the format
+  is still JSON (`console.log([Infinity])` prints `[null]`). Rhino 1.8.0 has the same behavior.
+- **Why:** WHATWG Console Standard (Logger and Formatter: an argument without a format specifier is printed
+  in a generic form), which for a number every console implementation prints as its string value.
 
 ---
 

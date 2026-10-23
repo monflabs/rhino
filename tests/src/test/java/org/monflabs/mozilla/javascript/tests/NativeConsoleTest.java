@@ -339,6 +339,22 @@ public class NativeConsoleTest {
     }
 
     @Test
+    public void printNonFiniteNumbers() {
+        String js = "console.log(Infinity, NaN, -Infinity, 1.5); console.log('%o', NaN)";
+        assertPrintMsg(Context.VERSION_ES6, js, "null");
+        assertPrintMsg(Context.VERSION_ECMASCRIPT, js, "NaN");
+        DummyConsolePrinter printer = new DummyConsolePrinter();
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+            TopLevel scope = cx.initStandardObjects();
+            NativeConsole.init(scope, false, printer);
+            cx.evaluateString(
+                    scope, "console.log(Infinity, NaN, -Infinity, 1.5)", "source", 1, null);
+            printer.assertMsf("Infinity NaN -Infinity 1.5");
+        }
+    }
+
+    @Test
     public void print() {
         assertPrintCalls(
                 "console.log('abc', 123)",
@@ -578,6 +594,18 @@ public class NativeConsoleTest {
             NativeConsole.init(scope, false, printer);
             cx.evaluateString(scope, source, "source", 1, null);
             printer.assertCalls(expectedCalls);
+        }
+    }
+
+    private static void assertPrintMsg(int version, String source, String expectedMsg) {
+        DummyConsolePrinter printer = new DummyConsolePrinter();
+
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(version);
+            TopLevel scope = cx.initStandardObjects();
+            NativeConsole.init(scope, false, printer);
+            cx.evaluateString(scope, source, "source", 1, null);
+            printer.assertMsf(expectedMsg);
         }
     }
 
