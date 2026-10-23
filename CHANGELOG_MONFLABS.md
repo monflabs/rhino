@@ -4,7 +4,38 @@ Changes made in the `org.monflabs.mozilla` fork of Rhino, newest first. Each ent
 test262 slice moved, which behavior is gated by `Context.VERSION_ECMASCRIPT`, and the performance impact when
 relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
-## Unreleased
+## Potential future changes
+
+Candidates identified but not scheduled. Nothing here is implemented.
+
+### Performance: the object model
+
+The largest remaining gap with Nashorn is in property access. In the JavascriptPerformance run of 2026-10-23,
+Nashorn ran `richards` in 5.7 s against 47 s for this fork, `deltablue` in 6.0 s against 33 s and `raytrace` in
+4.8 s against 39 s; the fork is level with Rhino 1.8.0 on these three. Own-property lookups are the largest
+compiled cost left (about 15%). Each object has its own slot map, so a call site cannot cache where a property is:
+the attempts to make the lookup itself cheaper are in the "Tried and dropped" table of
+[OPTIMIZATION.md](OPTIMIZATION.md): 16.5 and the direct slot-map calls gained alone and regressed `v8-richards` in
+the full run, and a per-site cache of own slots only hits for a single object.
+
+Nashorn shares a property map among the objects that have the same properties added in the same order, and its
+call sites link against the map, so a property read is a map check and a field load. An investigation would:
+
+- profile `richards`, `deltablue`, `raytrace` and the ubench property tests in compiled mode to measure the share
+  of slot lookups, slot-map growth and prototype walks;
+- prototype shared shapes for `NativeObject` and the objects built by constructors, with a per-site cache keyed by
+  shape, and measure it on those files and in the full perf gate;
+- list what it constrains: the public `ScriptableObject` and `SlotMap` API, embedders that subclass
+  `ScriptableObject`, the thread-safe slot map, and both backends.
+
+Effort: large, a rewrite of the object model. It is not observable, so it would not be gated.
+
+### Language versions
+
+Removing the `isLatestEcmaScript()` gates and deciding what remains of the JavaScript 1.x versions are recorded as
+future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
+
+## 2026.0
 
 ### RegExp symbol methods on an ordinary regexp (2026-10-23)
 
