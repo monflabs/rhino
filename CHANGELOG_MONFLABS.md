@@ -49,7 +49,8 @@ The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
   features on top of stock Rhino, the changes and incompatibilities, the performance optimizations, and the
   playground running in the browser with CheerpJ.
 - `buildtools/build-doc.sh` generates the site in `rhino-doc/build/site` (`--serve` serves it locally), and the
-  `Documentation site` workflow publishes it to GitHub Pages on every push to `master`.
+  `Documentation site` workflow publishes it to GitHub Pages (https://monflabs.github.io/rhino/) on every push to
+  `monflabs_enhancements`.
 - No engine change.
 
 ### Compiled code checked against the interpreter (2026-10-24)

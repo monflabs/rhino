@@ -2,7 +2,7 @@
 
 The documentation of the fork, a [docsify](https://docsify.js.org) site like the Nashorn one
 (`../nashorn/doc/nashorn`), published to GitHub Pages by `.github/workflows/doc.yml` on every push
-to `master`.
+to `monflabs_enhancements`: https://monflabs.github.io/rhino/
 
 ```sh
 buildtools/build-doc.sh            # generates the site in rhino-doc/build/site

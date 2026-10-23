@@ -3,7 +3,7 @@ name: Documentation site
 # Generates the documentation site (buildtools/build-doc.sh) and publishes it to GitHub Pages
 on:
   push:
-    branches: [ master ]
+    branches: [ monflabs_enhancements ]
   workflow_dispatch:
 
 permissions: read-all
