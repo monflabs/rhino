@@ -13,7 +13,7 @@ optimizations in [Performance optimizations](performance.md).
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
 |---|---|---|
 | Language | ES2015 and later, partially | ES2026 |
-| test262 (in-scope tests) | 56.9% | 99.1% (42,223 of 42,616) |
+| test262 (in-scope tests) | 56.9% | 99.1% (42,248 of 42,616) |
 | Classes, async functions, ES modules | no | yes |
 | Default language version | `VERSION_ES6` (200) | `VERSION_ECMASCRIPT` (250) |
 | Maven group / Java packages | `org.mozilla` | `org.monflabs.mozilla` |
@@ -315,7 +315,7 @@ an array literal with a spread element, which fails with a `VerifyError` in Rhin
 
 ### Remaining test262 gaps
 
-Of the 42,616 in-scope tests, 42,223 pass. The rest are documented limits:
+Of the 42,616 in-scope tests, 42,248 pass. The rest are documented limits:
 
 | Area | Tests | Reason |
 |---|---|---|
@@ -323,5 +323,5 @@ Of the 42,616 in-scope tests, 42,223 pass. The rest are documented limits:
 | RegExp `v` flag, properties of strings | 39 | no emoji sequence data in the JDK |
 | Identifiers | 12 | Unicode 17 identifier characters |
 | Cross-realm | about 10 | errors are created in the realm of the code that catches them |
-| `IsHTMLDDA`, U+180E | skipped | a browser-only host hook; a pre-Unicode 6.3 behavior |
+| `IsHTMLDDA` | 35, skipped | a browser-only host hook (`document.all`) |
 | `Atomics.wait` on a main thread that cannot block | 2, skipped | written for hosts whose main thread cannot block |

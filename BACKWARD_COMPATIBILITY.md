@@ -109,6 +109,7 @@ changes.
 | 1.93 | A BigInt compared with a number in a compiled function | `VERSION_ECMASCRIPT` |
 | 1.94 | `===` of a parameter of a direct call with a number in compiled code | `VERSION_ECMASCRIPT` |
 | 1.95 | `console.log` of `Infinity` and `NaN` | `VERSION_ECMASCRIPT` |
+| 1.96 | Format characters outside literals and comments | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -383,7 +384,7 @@ var a‌b = 1; typeof ab;   // (a raw U+200C between a and b) VERSION_ES6: "numb
 
 - A raw ZERO WIDTH NON-JOINER or ZERO WIDTH JOINER in an identifier is one of its characters, as its `\u200C` or
   `\u200D` escape is; before, the lexer stripped it like any other format character (an ES3 rule), so `a‌b` was
-  the identifier `ab`. The other format characters are still stripped.
+  the identifier `ab`. The other format characters are not identifier parts (1.96).
 - **Why:** ECMA-262 2026, §12.7 (Names and Keywords: `IdentifierPartChar` includes ZWNJ and ZWJ).
 
 ### 1.17 `const` in a loop body takes each iteration's value
@@ -1566,6 +1567,22 @@ console.log('%o', NaN);                  // before: null             now: NaN
   is still JSON (`console.log([Infinity])` prints `[null]`). Rhino 1.8.0 has the same behavior.
 - **Why:** WHATWG Console Standard (Logger and Formatter: an argument without a format specifier is printed
   in a generic form), which for a number every console implementation prints as its string value.
+
+
+### 1.96 Format characters outside literals and comments
+
+```js
+eval("var\u180Ex = 1");   // VERSION_ES6: declares varx   VERSION_ECMASCRIPT: SyntaxError
+eval("1\u200B2");         // VERSION_ES6: 12              VERSION_ECMASCRIPT: SyntaxError
+```
+
+- The lexer no longer strips the format-control characters (general category Cf) from the source, an ES3 rule:
+  the MONGOLIAN VOWEL SEPARATOR (U+180E), ZERO WIDTH SPACE (U+200B), WORD JOINER (U+2060), SOFT HYPHEN (U+00AD) and
+  the others are not white space, so one between two tokens or inside an identifier or a number is a SyntaxError.
+  They stay part of string, template and regexp literals and of comments, ZWNJ and ZWJ are identifier parts (1.16),
+  and the BYTE ORDER MARK (U+FEFF) is still white space. A script pasted from a web page or a word processor can
+  carry such characters: remove them.
+- **Why:** ECMA-262 2026, §12.1 (Unicode Format-Control Characters) and §12.2 (White Space: U+180E is Cf, not Zs).
 
 ---
 

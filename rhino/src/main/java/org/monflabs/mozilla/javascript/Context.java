@@ -179,6 +179,9 @@ public class Context implements Closeable {
      *   <li>{@code for (async of ...)} is a SyntaxError.
      *   <li>ZWNJ (U+200C) and ZWJ (U+200D) in an identifier are part of it, instead of being
      *       stripped as format characters.
+     *   <li>The other format characters (U+180E, U+200B, U+2060, U+00AD, ...) are kept in the
+     *       source: part of the literals and comments, a SyntaxError anywhere else, instead of
+     *       being stripped.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

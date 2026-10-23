@@ -714,7 +714,8 @@ decisions. Each remaining exception gets a recorded reason in a `doc/CONFORMANCE
 Status (2026-10-15, done): 99.1% of the in-scope tests pass (42,223 of 42,616). The remaining failures are the
 documented limits of `doc/CONFORMANCE_MONFLABS.md`: Unicode data from the JDK (decision 4.3), agents that can block
 (decision 3.4) and a single realm per error. The stricter expectations are already in place: a test listed as failing
-that passes fails the run (0.3).
+that passes fails the run (0.3). 2026-10-24: the format-control characters of the source (the 25 `u180e` tests, no
+longer skipped): 42,248.
 
 ### M15 — A single language version
 
@@ -928,7 +929,7 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 | 10.x | ES2024 (resizable buffers, v flag)              | done        | 96.4% → 96.9% (10.2–10.3)    | 6ee110658 |
 | 11.x | ES2025 (iterator helpers, Set methods, …)       | done        | 96.9% → 98.1% (11.1–11.6)    | 89c3ca0a7 |
 | 12.x | ES2026                                          | done        | 98.1% → 98.8% (12.1–12.8)    | a05746ba7 |
-| 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,223)       | 6a5e3ecae |
+| 13   | Long tail to zero                               | done        | 98.8% → 99.1% (42,248)       | 6a5e3ecae |
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |

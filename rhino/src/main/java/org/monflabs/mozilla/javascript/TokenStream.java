@@ -39,6 +39,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
     TokenStream(Parser parser, Reader sourceReader, String sourceString, int lineno) {
         this.parser = parser;
+        this.keepFormatChars = parser.compilerEnv.isLatestEcmaScript();
         this.lineno = lineno;
         if (sourceReader != null) {
             if (sourceString != null) Kit.codeBug();
@@ -766,11 +767,10 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         addToString(escapeVal);
                         isUnicodeEscapeStart = false;
                     } else {
-                        // ZWNJ and ZWJ are identifier parts, not stripped format characters
-                        boolean keepJoiners = parser.compilerEnv.isLatestEcmaScript();
-                        c = getChar(!keepJoiners);
-                        if (keepJoiners && isJSFormatChar(c) && c != 0x200C && c != 0x200D) {
-                            continue;
+                        c = getChar();
+                        // ZWNJ and ZWJ are identifier parts, the other format characters are not
+                        if (keepFormatChars && isJSFormatChar(c) && c != 0x200C && c != 0x200D) {
+                            break;
                         }
                         if (c == '\\') {
                             c = getChar();
@@ -1380,9 +1380,8 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
                 case '/':
                     markCommentStart();
-                    // is it a // comment? (a format-control character after / starts a regexp)
-                    boolean keepFormat = parser.compilerEnv.isLatestEcmaScript();
-                    if (keepFormat ? matchCharKeepFormat('/') : matchChar('/')) {
+                    // is it a // comment?
+                    if (matchChar('/')) {
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
                         tokenBeg = cursor - 2;
@@ -1391,7 +1390,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         return Token.COMMENT;
                     }
                     // is it a /* or /** comment?
-                    if (keepFormat ? matchCharKeepFormat('*') : matchChar('*')) {
+                    if (matchChar('*')) {
                         boolean lookForSlash = false;
                         tokenStartLastLineEnd = lastLineEnd;
                         tokenStartLineno = lineno;
@@ -1613,9 +1612,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
         boolean inCharSet = false; // true if inside a '['..']' pair
         int c;
-        // the format-control characters (Cf) belong to the literal (ES5 7.1)
-        boolean skipFormat = !parser.compilerEnv.isLatestEcmaScript();
-        while ((c = getChar(skipFormat)) != '/' || inCharSet) {
+        while ((c = getChar()) != '/' || inCharSet) {
             if (c == '\n' || c == EOF_CHAR) {
                 ungetChar(c);
                 tokenEnd = cursor - 1;
@@ -1625,7 +1622,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
             }
             if (c == '\\') {
                 addToString(c);
-                c = getChar(skipFormat);
+                c = getChar();
                 if (c == '\n' || c == EOF_CHAR) {
                     ungetChar(c);
                     tokenEnd = cursor - 1;
@@ -2256,16 +2253,6 @@ class TokenStream implements Parser.CurrentPositionReporter {
         return false;
     }
 
-    private boolean matchCharKeepFormat(int test) throws IOException {
-        int c = getCharIgnoreLineEnd(false);
-        if (c == test) {
-            tokenEnd = cursor;
-            return true;
-        }
-        ungetCharIgnoreLineEnd(c);
-        return false;
-    }
-
     private int peekChar() throws IOException {
         int c = getChar();
         ungetChar(c);
@@ -2325,7 +2312,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 }
             } else {
                 if (c == BYTE_ORDER_MARK) return c; // BOM is considered whitespace
-                if (skipFormattingChars && isJSFormatChar(c)) {
+                if (skipFormattingChars && !keepFormatChars && isJSFormatChar(c)) {
                     continue;
                 }
                 if (ScriptRuntime.isJSLineTerminator(c)) {
@@ -2726,6 +2713,13 @@ class TokenStream implements Parser.CurrentPositionReporter {
     private int xmlOpenTagsCount;
 
     private Parser parser;
+
+    /**
+     * The format-control characters (Cf) are stripped from the source, as in ES3, unless the latest
+     * ECMAScript: they then belong to the literals and the comments, and are a SyntaxError anywhere
+     * else (ES5 7.1).
+     */
+    private final boolean keepFormatChars;
 
     private String commentPrefix = "";
     private int commentCursor = -1;

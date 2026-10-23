@@ -39,6 +39,17 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Format characters in the source (2026-10-24)
+
+- Gated: under `VERSION_ECMASCRIPT` the lexer no longer strips the format-control characters (Cf) from the
+  source, an ES3 rule. U+180E (MONGOLIAN VOWEL SEPARATOR), U+200B, U+2060, U+00AD and the others are a SyntaxError
+  between two tokens or in an identifier or a number (`var\u180Ex`, `1\u200B2`), and stay part of the string,
+  template and regexp literals and of the comments; ZWNJ and ZWJ stay identifier parts and U+FEFF white space.
+  The lexer reads them in one place, `getChar`, instead of the special cases of the regexp literal, the comment
+  start and the identifiers. BACKWARD_COMPATIBILITY.md 1.96.
+- test262: the `u180e` feature is no longer skipped; its 25 tests pass. 42,223 → 42,248 of 42,616 (99.1%).
+- Perf gate: no regression (the lexer only).
+
 ### The playground and the documentation site join the repository (2026-10-24)
 
 - Build: two modules, not published. `rhino-playground` is the Swing playground (samples of the language and of

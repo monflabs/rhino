@@ -172,8 +172,7 @@ public class Test262SuiteTest {
                             "tail-call-optimization",
                             "import-text",
                             "import-bytes",
-                            "Temporal",
-                            "u180e"));
+                            "Temporal"));
 
     static {
         // For portability on all platforms, find the location of the test262 tree
