@@ -130,7 +130,7 @@ To just run the Rhino shell, you can do this from the top-level directory:
 Alternately, you can build an all-in-one JAR and run that:
 
     ./gradlew shadowJar
-    java -jar rhino-all/build/libs/rhino-all-2.0.0-SNAPSHOT.jar
+    java -jar rhino-all/build/libs/rhino-all-2026.0.jar
 
 And finally, you can extract the classpath and use it in a variety of ways:
 

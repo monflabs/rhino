@@ -37,6 +37,8 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 ## 2026.0
 
+The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
+
 ### RegExp symbol methods on an ordinary regexp (2026-10-23)
 
 - Performance (all versions): `@@split`, `@@replace`, `@@match` and `@@matchAll` of an ordinary regexp (an
