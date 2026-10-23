@@ -39,6 +39,14 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The browser playground runs interpreted (2026-10-24)
+
+- The playground of the documentation site, which CheerpJ runs, failed every script in compiled mode with
+  `IllegalStateException: uninitialized call site`: CheerpJ cannot link the call sites (`invokedynamic`, through
+  Dynalink) of the classes the compiler generates. It now runs the interpreter only, the mode choice disabled; the
+  desktop playground keeps both modes. The site's sidebar lists the playground first.
+- No engine change.
+
 ### Format characters in the source (2026-10-24)
 
 - Gated: under `VERSION_ECMASCRIPT` the lexer no longer strips the format-control characters (Cf) from the

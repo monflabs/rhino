@@ -9,7 +9,9 @@ import org.monflabs.mozilla.playground.Playground;
 
 /**
  * The playground as CheerpJ runs it in a web page: the desktop application, undecorated and
- * maximized so that it fills the page. The page passes {@code --dark} or {@code --light}.
+ * maximized so that it fills the page, and interpreted: the call sites of the compiled classes
+ * (invokedynamic, linked by Dynalink) fail there with "uninitialized call site". The page passes
+ * {@code --dark} or {@code --light}.
  */
 public final class PlaygroundCheerpJ {
     private PlaygroundCheerpJ() {}
@@ -24,6 +26,9 @@ public final class PlaygroundCheerpJ {
                 args,
                 frame -> {
                     frame.setUndecorated(true);
+                    frame.interpretedOnly(
+                            "Interpreted only in the browser: CheerpJ cannot link the call sites"
+                                    + " (invokedynamic) of the compiled classes");
                     frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
                 });
     }

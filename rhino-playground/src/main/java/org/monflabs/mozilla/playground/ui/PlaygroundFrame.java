@@ -290,6 +290,18 @@ public final class PlaygroundFrame extends JFrame {
 
     // -- running ------------------------------------------------------------------
 
+    /**
+     * Runs every script in the interpreter, the mode choice disabled: for a runtime that cannot run
+     * the classes of the compiler.
+     *
+     * @param why the tooltip of the disabled choice
+     */
+    public void interpretedOnly(String why) {
+        mode.setSelectedItem(INTERPRETED);
+        mode.setEnabled(false);
+        mode.setToolTipText(why);
+    }
+
     private ScriptRunner.Settings settings() {
         return new ScriptRunner.Settings(
                 (ScriptRunner.Version) version.getSelectedItem(),

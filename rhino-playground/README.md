@@ -12,7 +12,9 @@ java -jar rhino-playground/build/libs/rhino-playground-all.jar   # --dark or --l
 The same jar runs in the browser, on the Java 21 runtime of [CheerpJ](https://cheerpj.com): the
 "Playground in the browser" page of the documentation site (`../rhino-doc`) starts its
 `cheerpj.PlaygroundCheerpJ` entry point, the playground undecorated and maximized to fill the
-page, in the dark or light mode of the site.
+page, in the dark or light mode of the site, and interpreted: the call sites of the compiled
+classes (`invokedynamic`, linked by Dynalink) fail in CheerpJ with "uninitialized call site", so the
+mode choice is disabled there.
 
 ## The window
 

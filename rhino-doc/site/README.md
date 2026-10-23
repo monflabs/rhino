@@ -28,7 +28,7 @@ a checkout of [monflabs/rhino](https://github.com/monflabs/rhino) (branch
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
 |---|---|---|
 | Language | ES6 and parts of later editions | ES2026, measured by test262 |
-| test262 (in scope) | 56.9% (where the fork started) | 99.1% (42,223 of 42,616 tests) |
+| test262 (in scope) | 56.9% (where the fork started) | 99.1% (42,248 of 42,616 tests) |
 | Default language version | `VERSION_ES6` (200) | `VERSION_ECMASCRIPT` (250) |
 | Stock behavior | — | `VERSION_ES6`, selected explicitly |
 | Java packages | `org.mozilla.javascript` | `org.monflabs.mozilla.javascript` |
@@ -92,15 +92,16 @@ JavaScript.
 
 ## In this documentation
 
+- [The playground in the browser](playground/index.html ':ignore'): the Rhino playground, a
+  Swing application, running in this page with [CheerpJ](https://cheerpj.com), with no Java to
+  install. It has samples of the language and of the Rhino extensions, and lets you switch between
+  ES2026 and ES6. It runs the interpreter only: CheerpJ cannot link the call sites of the classes
+  the compiler generates. The desktop playground has both modes.
 - [Features on top of stock Rhino](features.md): what the fork adds, the language and the API
   for embedders.
 - [Changes and incompatibilities](changes.md): what behaves differently, and how to migrate.
 - [Performance optimizations](performance.md): what was made faster, and how performance is
   guarded.
-- [The playground in the browser](playground/index.html ':ignore'): the Rhino playground, a
-  Swing application, running in this page with [CheerpJ](https://cheerpj.com), with no Java to
-  install. It has samples of the language and of the Rhino extensions, and lets you switch between
-  ES2026 and ES6 and between compiled and interpreted code.
 
 The detailed records are in the fork's repository:
 [CHANGELOG_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/CHANGELOG_MONFLABS.md)
