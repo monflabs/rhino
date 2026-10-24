@@ -55,4 +55,15 @@ class GeneratorCompletionTest {
                         + "var n = 0; for (var v in g2()) n += v; r.push(n);"
                         + "r.join(' ')");
     }
+
+    @Test
+    void manyYieldStarsOfDelegatesDoneAtOnce() {
+        // the generator resumed itself through a Java call for each: a stack overflow
+        Utils.assertWithAllModes_ES6(
+                "200000",
+                "function* empty() { return 1; }"
+                        + "function* loop(n) { var s = 0; for (var i = 0; i < n; i++) s += yield* empty();"
+                        + "  return s; }"
+                        + "String(loop(200000).next().value)");
+    }
 }

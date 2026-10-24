@@ -313,6 +313,18 @@ class ConstLetScopingTest {
     }
 
     @Test
+    void letInACatchBlockOrASwitchOfASingleStatementBody() {
+        // the catch block and the clauses are blocks of their own
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "1,2",
+                "var r = [];"
+                        + " try { eval('if (r) try { throw 1; } catch (e) { const t = e; r.push(t); }"
+                        + " else 0; if (r) switch (r.length) { case 1: let x = 2; r.push(x); }');"
+                        + " r.join() } catch (e) { e.name }");
+    }
+
+    @Test
     void destructuringDeclarationInASwitchClause() {
         Utils.assertGatedBehavior(
                 "ReferenceError",

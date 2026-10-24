@@ -10,6 +10,7 @@ import org.monflabs.mozilla.javascript.Callable;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.ContextFactory;
 import org.monflabs.mozilla.javascript.ES6Generator;
+import org.monflabs.mozilla.javascript.JSDescriptor;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.JavaScriptException;
 import org.monflabs.mozilla.javascript.Kit;
@@ -23,6 +24,7 @@ import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.TopLevel;
 import org.monflabs.mozilla.javascript.Undefined;
 import org.monflabs.mozilla.javascript.VarScope;
+import org.monflabs.mozilla.javascript.ast.FunctionNode;
 
 public final class OptRuntime extends ScriptRuntime {
     public static final Integer oneObj = Integer.valueOf(1);
@@ -161,6 +163,31 @@ public final class OptRuntime extends ScriptRuntime {
                 scope = scope.getParentScope();
             }
             scope.put(fn.getFunctionName(), scope, fn);
+        }
+    }
+
+    /**
+     * Creates function declarations of a function or a script with many of them, as
+     * BodyCodegen#visitFunction does for each: their entries are the indexes of their descriptors,
+     * shifted left once, with whether they are hoisted (Annex B) in the low bit.
+     */
+    @SuppressWarnings("unchecked")
+    public static void initFunctions(
+            Context cx,
+            VarScope scope,
+            JSDescriptor<?>[] descriptors,
+            String encodedEntries,
+            int count) {
+        for (int entry : decodeIntArray(encodedEntries, count)) {
+            JSFunction fn =
+                    new JSFunction(
+                            cx,
+                            scope,
+                            (JSDescriptor<JSFunction>) descriptors[entry >>> 1],
+                            null,
+                            Undefined.instance,
+                            null);
+            initFunction(fn, FunctionNode.FUNCTION_STATEMENT, (entry & 1) != 0, scope, cx);
         }
     }
 
@@ -334,6 +361,21 @@ public final class OptRuntime extends ScriptRuntime {
             return ScriptRuntime.compareTo(((Number) value).doubleValue(), num, op);
         }
         return ScriptRuntime.compare(value, wrapDouble(num), op);
+    }
+
+    /** ToNumeric of the value of a variable that a ++ or -- updates. */
+    public static Number toNumericValue(Object value) {
+        return value instanceof Number ? (Number) value : ScriptRuntime.toNumeric(value);
+    }
+
+    /** The value of an increment or a decrement: a BigInt gives a BigInt. */
+    public static Number incrDecr(Number value, boolean decrement) {
+        if (value instanceof BigInteger) {
+            return decrement
+                    ? ((BigInteger) value).subtract(BigInteger.ONE)
+                    : ((BigInteger) value).add(BigInteger.ONE);
+        }
+        return wrapDouble(value.doubleValue() + (decrement ? -1.0 : 1.0));
     }
 
     public static Double wrapDouble(double num) {

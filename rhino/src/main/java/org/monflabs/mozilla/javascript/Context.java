@@ -190,6 +190,14 @@ public class Context implements Closeable {
      *   <li>The names of a destructuring {@code let} or {@code const} are uninitialized until the
      *       declaration, as those of a plain one: reading them before it is a ReferenceError,
      *       instead of {@code undefined}.
+     *   <li>A {@code let} or {@code const} in a {@code catch} block or a {@code switch} clause is
+     *       allowed when the statement is the body of an {@code if} or a loop without braces.
+     *   <li>With the {@code u} flag, a {@code -} after a class escape at the end of a character
+     *       class is a character ({@code [\p{L}-]}), instead of a SyntaxError.
+     *   <li>A case-insensitive character class whose range holds characters with case variants past
+     *       its end matches them, instead of throwing a SyntaxError.
+     *   <li>In compiled mode, BigInt arithmetic stored in a variable keeps the BigInt, instead of a
+     *       TypeError.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

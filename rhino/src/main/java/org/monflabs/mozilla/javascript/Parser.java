@@ -3017,6 +3017,13 @@ public class Parser {
             AstNode discriminant = expr(false);
             pn.setExpression(discriminant);
             enterSwitch(pn);
+            boolean savedInSingleStatementContext = inSingleStatementContext;
+            boolean savedInSingleStatementDeclContext = inSingleStatementDeclContext;
+            if (compilerEnv.isLatestEcmaScript()) {
+                // the clauses are in a block, even when the switch is the body of an if
+                inSingleStatementContext = false;
+                inSingleStatementDeclContext = false;
+            }
 
             try {
                 if (mustMatchToken(Token.RP, "msg.no.paren.after.switch", true))
@@ -3085,6 +3092,8 @@ public class Parser {
                 }
             } finally {
                 exitSwitch();
+                inSingleStatementContext = savedInSingleStatementContext;
+                inSingleStatementDeclContext = savedInSingleStatementDeclContext;
             }
             // the discriminant is evaluated before the block of the cases (14.12.4)
             hideBlockBindings(pn, pn.getExpression(), Collections.emptySet());
@@ -3539,10 +3548,19 @@ public class Parser {
                     catchScope.setCatchPatternNames(names);
                 }
                 pushScope(catchScope);
+                boolean savedInSingleStatementContext = inSingleStatementContext;
+                boolean savedInSingleStatementDeclContext = inSingleStatementDeclContext;
+                if (compilerEnv.isLatestEcmaScript()) {
+                    // the catch block is a block, even when the try statement is the body of an if
+                    inSingleStatementContext = false;
+                    inSingleStatementDeclContext = false;
+                }
                 try {
                     statements(catchScope);
                 } finally {
                     hasUndefinedBeenRedefined = previous;
+                    inSingleStatementContext = savedInSingleStatementContext;
+                    inSingleStatementDeclContext = savedInSingleStatementDeclContext;
                     popScope();
                 }
                 if (varName != null && compilerEnv.isLatestEcmaScript()) {

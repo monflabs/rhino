@@ -130,4 +130,81 @@ class CompiledFunctionsTest {
         Utils.assertWithAllModes_ES6("1,5,6,7,4", script);
         Utils.assertWithAllModes_ECMASCRIPT("1,5,6,7,4", script);
     }
+
+    @Test
+    void bigIntArithmeticInLocalVariables() {
+        // the variables of the result of a BigInt operation were numbers: ToNumber threw a
+        // TypeError; a top-level function keeps it before VERSION_ECMASCRIPT, as stock Rhino
+        String script =
+                "function t(f) { try { return String(f()); } catch (e) { return e.name; } }"
+                        + "function top(a, b) { var r = a % b; return r; }"
+                        + "function outer() {"
+                        + "  function nested(a, b) { const r = a - b; return r; }"
+                        + "  return [t(() => top(9n, 7n)), t(() => nested(9n, 7n)),"
+                        + "    t(() => { var a = 5n; var b = -a; var c = ~a; return [b, c]; }),"
+                        + "    t(() => { var a = 5n; var x = a++; ++a; return [x, a]; }),"
+                        + "    t(() => { var s = 0; for (var i = 0; i < 4; i++) { var d = i * 2; s = s + d; }"
+                        + "      return s; }),"
+                        + "    t(() => { var a = 5n; var b = a * 2; return b; })].join(' ');"
+                        + "}"
+                        + "outer()";
+        Utils.assertWithAllModes_ECMASCRIPT("2 2 -5,-6 5,7 12 TypeError", script);
+        // and a ++ of a variable in a register, in compiled mode
+        Utils.assertWithAllModes_ES6(
+                "2 2 -5,-6 5,7 12 TypeError",
+                script.replace("top(9n, 7n)", "2")
+                        .replace("var x = a++; ++a;", "var x = 5n; a = 7n;"));
+    }
+
+    @Test
+    void yieldInAReturnThatLeavesALoop() {
+        // the resumption point of the await was not recorded: the compiler failed, and the
+        // script ran in the interpreter
+        assertCompiles(
+                "3,2",
+                "var r = [];"
+                        + "async function f(e) { { const n = []; for (const t of [1]) n.push(t);"
+                        + "  return await e; } }"
+                        + "function* g() { for (const x of [1]) { try { return yield 3; } finally {} } }"
+                        + "f(2).then(v => r.push(v)); r.push(g().next().value);",
+                "r.join()");
+    }
+
+    /**
+     * Runs a script compiled to classes, without falling back to the interpreter, and its jobs;
+     * then evaluates result.
+     */
+    private static void assertCompiles(Object expected, String script, String result) {
+        List<String> warnings = new ArrayList<>();
+        try (Context cx = Context.enter()) {
+            cx.setLanguageVersion(Context.VERSION_ECMASCRIPT);
+            cx.setInterpretedMode(false);
+            cx.setErrorReporter(
+                    new ErrorReporter() {
+                        @Override
+                        public void warning(
+                                String message, String name, int line, String src, int offset) {
+                            warnings.add(message);
+                        }
+
+                        @Override
+                        public void error(
+                                String message, String name, int line, String src, int offset) {
+                            throw runtimeError(message, name, line, src, offset);
+                        }
+
+                        @Override
+                        public EvaluatorException runtimeError(
+                                String message, String name, int line, String src, int offset) {
+                            return new EvaluatorException(message, name, line, src, offset);
+                        }
+                    });
+            TopLevel scope = cx.initStandardObjects();
+            Script compiled = cx.compileString(script, "test", 1, null);
+            compiled.exec(cx, scope, scope.getGlobalThis());
+            cx.processMicrotasks();
+            assertEquals(expected, cx.evaluateString(scope, result, "result", 1, null));
+        }
+        assertEquals(List.of(), warnings);
+    }
 }

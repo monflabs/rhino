@@ -113,6 +113,10 @@ changes.
 | 1.97 | `let` in a function of a single-statement body | `VERSION_ECMASCRIPT` |
 | 1.98 | Destructuring declarations in a `switch` clause | `VERSION_ECMASCRIPT` |
 | 1.99 | The temporal dead zone of a destructuring declaration | `VERSION_ECMASCRIPT` |
+| 1.100 | `let` and `const` in a `catch` block or a `switch` that is the body of an `if` or a loop | `VERSION_ECMASCRIPT` |
+| 1.101 | A `-` after a class escape at the end of a character class with the `u` flag | `VERSION_ECMASCRIPT` |
+| 1.102 | A case-insensitive class range whose characters have case variants past its end | `VERSION_ECMASCRIPT` |
+| 1.103 | BigInt arithmetic stored in a variable of a compiled function | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1633,6 +1637,61 @@ let [x = x] = [];   // VERSION_ES6: x is undefined   VERSION_ECMASCRIPT: Referen
 - **Why:** ECMA-262 2026, §14.3.1 (Let and Const Declarations: the bindings are created uninitialized and "may
   not be accessed in any way until the variable's LexicalBinding is evaluated"), §14.7.5.6 (ForIn/OfHeadEvaluation:
   the bindings are uninitialized while the expression is evaluated).
+
+### 1.100 `let` and `const` in a `catch` block or a `switch` that is the body of an `if` or a loop
+
+```js
+if (ok) try { run(); } catch (e) { const message = e.message; log(message); }
+// VERSION_ES6: SyntaxError "const declarations may only appear at the top level or within a block"
+// VERSION_ECMASCRIPT: runs
+```
+
+- The parser rejects a `let` or `const` directly in the body of an `if`, `else` or loop without braces. The block
+  of a `catch` and the clauses of a `switch` in that position were taken for that body, unlike the block of a
+  `try` or a plain block. Babylon.js, Vue and TypeScript (JetStream 3) have such code.
+- **Why:** ECMA-262 2026, §14.15 (the *Block* of a *Catch*) and §14.12 (*CaseBlock*): they are blocks, whose
+  *StatementList* may hold declarations.
+
+### 1.101 A `-` after a class escape at the end of a character class with the `u` flag
+
+```js
+/[\p{L}-]/u    // VERSION_ES6: SyntaxError "Invalid character class"   VERSION_ECMASCRIPT: the letters and '-'
+```
+
+- With the `u` flag, a class escape (`\d`, `\w`, `\p{...}`) followed by `-` was an error, as a range of it would
+  be (`[\w-z]`); a `-` that ends the class is a character. js-tokens (JetStream 3) has `[$_\p{ID_Continue}-]`.
+- **Why:** ECMA-262 2026, §22.2.1 (*NonemptyClassRangesNoDash*: a *ClassAtom* may be `-`; the early error is for a
+  range one of whose ends is a class escape).
+
+### 1.102 A case-insensitive class range whose characters have case variants past its end
+
+```js
+/[\u0391-\u03c9]/i.test('\u03b1')   // VERSION_ES6: SyntaxError "invalid range in character class"   VERSION_ECMASCRIPT: true
+```
+
+- The bitmap of a class with the `i` flag was sized from the ends of its ranges and their case variants, but a
+  character inside a range can have a variant past both: U+03AA, in the Greek range above, has the lower case
+  U+03CA. Matching then threw a SyntaxError. validator.js (JetStream 3) has this range.
+- **Why:** ECMA-262 2026, §22.2.2.9 (*CharacterRange* is the set of all the characters of the range;
+  Canonicalize applies to each).
+
+### 1.103 BigInt arithmetic stored in a variable of a compiled function
+
+```js
+function mod(a, b) { const r = a % b; return r >= 0n ? r : b + r; }
+mod(-9n, 7n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: 5n
+```
+
+- In compiled mode, the optimizer typed the result of `-`, `*`, `/`, `%`, `**`, the bitwise operators, `-x`, `~x`
+  and `++`/`--` as a number, and kept a variable assigned only such results in a double register: a BigInt result
+  threw when it was stored. The result is now a number only when an operand is one (two BigInts give a BigInt;
+  a BigInt with a number throws either way), `-x`, `~x` and `++`/`--` take the type of their operand, and `++`
+  and `--` of a variable in a register that is not a number keep a BigInt. `+x` and `>>>` are still numbers
+  (they throw for a BigInt). Under `VERSION_ES6`, a nested function, which stock Rhino did not optimize, has the
+  new typing too, but `++` and `--` still convert. The interpreter was not affected. noble-ed25519 (JetStream 3)
+  failed on it.
+- **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator), §13.5.4 and §13.5.6 (unary `-` and `~`
+  of a BigInt), §13.4.4 (postfix increment: BigInt::add).
 
 ---
 

@@ -157,6 +157,29 @@ public final class ES6Generator extends ScriptableObject {
     }
 
     private Scriptable resumeDelegee(Context cx, VarScope scope, Object value) {
+        Object result = delegeeNext(cx, scope, value);
+        if (result instanceof DelegeeDone) {
+            // Return a result to the original generator
+            return resumeLocal(cx, scope, ((DelegeeDone) result).value);
+        }
+        return (Scriptable) result;
+    }
+
+    /** The value of a yield* whose delegee is done, with which the generator resumes. */
+    private static final class DelegeeDone {
+        final Object value;
+
+        DelegeeDone(Object value) {
+            this.value = value;
+        }
+    }
+
+    /**
+     * Calls the next method of the delegee: its result, or a DelegeeDone when it is done, which
+     * resumes the generator (in a loop of resumeLocal: a yield* whose delegee completes at once,
+     * thousands of times, would otherwise use as many stack frames).
+     */
+    private Object delegeeNext(Context cx, VarScope scope, Object value) {
         try {
             // yield* calls next with the received value, also undefined (ECMA-262 15.5.5);
             // without an argument for undefined before VERSION_ECMASCRIPT
@@ -172,10 +195,7 @@ public final class ES6Generator extends ScriptableObject {
             if (ScriptRuntime.isIteratorDone(cx, nextResult)) {
                 // Iterator is "done".
                 delegee = null;
-                // Return a result to the original generator
-                return resumeLocal(
-                        cx,
-                        scope,
+                return new DelegeeDone(
                         ScriptableObject.getProperty(nextResult, ES6Iterator.VALUE_PROPERTY));
             }
             // Otherwise, we have a normal result and should continue
@@ -269,13 +289,23 @@ public final class ES6Generator extends ScriptableObject {
     }
 
     Scriptable resumeLocal(Context cx, VarScope scope, Object value) {
-        if (state == State.COMPLETED) {
-            return ES6Iterator.makeIteratorResult(cx, scope, Boolean.TRUE);
+        for (; ; ) {
+            if (state == State.COMPLETED) {
+                return ES6Iterator.makeIteratorResult(cx, scope, Boolean.TRUE);
+            }
+            if (state == State.EXECUTING) {
+                throw ScriptRuntime.typeErrorById("msg.generator.executing");
+            }
+            Object resumed = resumeLocalOnce(cx, scope, value);
+            if (!(resumed instanceof DelegeeDone)) {
+                return (Scriptable) resumed;
+            }
+            value = ((DelegeeDone) resumed).value;
         }
-        if (state == State.EXECUTING) {
-            throw ScriptRuntime.typeErrorById("msg.generator.executing");
-        }
+    }
 
+    /** One resumption of the generator: its result, or a DelegeeDone to resume it again. */
+    private Object resumeLocalOnce(Context cx, VarScope scope, Object value) {
         Scriptable result = ES6Iterator.makeIteratorResult(cx, scope, Boolean.FALSE);
         state = State.EXECUTING;
 
@@ -293,13 +323,18 @@ public final class ES6Generator extends ScriptableObject {
                     return resumeAbruptLocal(cx, scope, NativeGenerator.GENERATOR_THROW, re);
                 }
 
-                Scriptable delResult;
+                Object delResult;
                 try {
                     // Re-execute but update state in case we end up back here
                     // Value shall be Undefined based on the very complex spec!
-                    delResult = resumeDelegee(cx, scope, Undefined.instance);
+                    delResult = delegeeNext(cx, scope, Undefined.instance);
                 } finally {
                     state = State.EXECUTING;
+                }
+                if (delResult instanceof DelegeeDone) {
+                    // resumed by resumeLocal
+                    state = State.SUSPENDED_YIELD;
+                    return delResult;
                 }
                 if (ScriptRuntime.isIteratorDone(cx, delResult)) {
                     state = State.COMPLETED;

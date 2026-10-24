@@ -39,6 +39,40 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Bugs found by JetStream 3 (2026-10-25)
+
+JetStream 3, added to JavascriptPerformance as the `jetstream3` suite, runs 39 JavaScript workloads that the
+other suites do not have. Its first run in compiled mode failed 10 of them on engine bugs:
+
+- Gated: a `let` or `const` in a `catch` block or a `switch` clause, when the `try` or the `switch` is the body of
+  an `if` or a loop without braces, was a SyntaxError (Babylon.js, Vue, TypeScript). BACKWARD_COMPATIBILITY.md
+  1.100.
+- Gated: with the `u` flag, `[\p{ID_Continue}-]`, a class escape before a `-` that ends the class, was a
+  SyntaxError (js-tokens). 1.101.
+- Gated: `/[\u0391-\u03c9]/i` threw a SyntaxError when it matched: its bitmap was sized from the ends of the range,
+  whose case variants do not reach that of U+03AA (validator.js). 1.102.
+- Gated, compiled mode: BigInt arithmetic stored in a variable threw a TypeError, the optimizer having typed the
+  variable as a number (noble-ed25519). In all versions for a nested function, which stock Rhino did not
+  optimize (a regression of the fork); before `VERSION_ECMASCRIPT`, a top-level function keeps it, and `++` of
+  a BigInt in a register still throws. 1.103.
+- Compiled mode: a `return` with an `await` or a `yield` in a generator or an async function, leaving a
+  `for-of` or a block with a scope object, did not record its resumption point; the compiler failed, and the
+  script ran in the interpreter (Babylon.js). Not gated: the result is the interpreter's.
+- Compiled mode: a function of thousands of function declarations did not fit in a method, however split, and
+  ran in the interpreter (TypeScript's compiler, 3,560): they are now created in a loop. OPTIMIZATION.md
+  "Functions too large for a class file are split". Not gated: not observable.
+- A `yield*` whose delegate completes at once resumed the generator with a Java call: a loop of thousands of
+  them overflowed the stack (ARES-6 Basic). The generator now resumes in a loop. Not gated: not observable,
+  except that the stack overflow is gone.
+- Known gaps, unchanged:
+  - in a generator or an async function, the value of a `return` that leaves a `for-of` loop or a block with
+    a scope object is evaluated after leaving it: `for (const x of xs) { return x; }` is a ReferenceError, in
+    both modes; and, with a `finally` block, after it. A function evaluates it first. Fixing it needs a value
+    kept across the yields of the unwinding;
+  - Babylon.js's scene workload still has functions too large after splitting (thousands of `let`, `const`
+    and classes in a bundle's function, which the Splitter keeps in place): it runs in the interpreter.
+- test262: no change.
+
 ### Javadoc references (2026-10-25)
 
 - Six Javadoc links named classes or methods that were renamed or not imported (`FunctionCompileSpec`'s

@@ -235,13 +235,53 @@ class BodyCodegen {
 
     private void generateNestedFunctionInits() {
         int functionCount = scriptOrFn.getFunctionCount();
+        List<OptFunctionNode> declarations = new ArrayList<>();
         for (int i = 0; i != functionCount; i++) {
             OptFunctionNode ofn = OptFunctionNode.get(scriptOrFn, i);
             if (ofn.fnode.getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
-                visitFunction(ofn, FunctionNode.FUNCTION_STATEMENT);
+                declarations.add(ofn);
             }
         }
+        if (declarations.size() <= MAX_INLINE_FUNCTION_INITS) {
+            for (OptFunctionNode ofn : declarations) {
+                visitFunction(ofn, FunctionNode.FUNCTION_STATEMENT);
+            }
+            return;
+        }
+        // about 30 bytes of code each: thousands of them would not fit in a method
+        for (int start = 0; start < declarations.size(); start += FUNCTION_INITS_PER_CALL) {
+            int end = Math.min(start + FUNCTION_INITS_PER_CALL, declarations.size());
+            int[] entries = new int[end - start];
+            for (int i = start; i < end; i++) {
+                FunctionNode fnode = declarations.get(i).fnode;
+                entries[i - start] =
+                        (codegen.getIndex(fnode) << 1) | (fnode.isAnnexBHoisted() ? 1 : 0);
+            }
+            cfw.addALoad(contextLocal);
+            cfw.addALoad(variableObjectLocal);
+            cfw.add(
+                    ByteCode.GETSTATIC,
+                    cfw.getClassName(),
+                    Codegen.DESCRIPTORS_FIELD_NAME,
+                    Codegen.DESCRIPTORS_FIELD_SIGNATURE);
+            cfw.addPush(OptRuntime.encodeIntArray(entries));
+            cfw.addPush(entries.length);
+            addOptRuntimeInvoke(
+                    "initFunctions",
+                    "(Lorg/monflabs/mozilla/javascript/Context;"
+                            + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                            + Codegen.DESCRIPTORS_FIELD_SIGNATURE
+                            + "Ljava/lang/String;"
+                            + "I"
+                            + ")V");
+        }
     }
+
+    /** The function declarations a method creates one by one, beyond which a runtime loop does. */
+    private static final int MAX_INLINE_FUNCTION_INITS = 64;
+
+    /** Two chars per entry: the string stays below the 64 KB of a class file constant. */
+    private static final int FUNCTION_INITS_PER_CALL = 4096;
 
     /** The namespace of the dynamic name operations: GNAME where they can be cached. */
     private String nameNamespace = "NAME";
@@ -4839,6 +4879,23 @@ class BodyCodegen {
                         cfw.add(ByteCode.DUP2);
                     }
                     cfw.addDStore(reg + offset);
+                } else if (compilerEnv.isLatestEcmaScript()) {
+                    // a BigInt stays a BigInt
+                    if (varIsDirectCallParameter(varIndex)) {
+                        dcpLoadAsObject(reg);
+                    } else {
+                        cfw.addALoad(reg);
+                    }
+                    addOptRuntimeInvoke("toNumericValue", "(Ljava/lang/Object;)Ljava/lang/Number;");
+                    if (post) {
+                        cfw.add(ByteCode.DUP);
+                    }
+                    cfw.addPush((incrDecrMask & Node.DECR_FLAG) != 0);
+                    addOptRuntimeInvoke("incrDecr", "(Ljava/lang/Number;Z)Ljava/lang/Number;");
+                    if (!post) {
+                        cfw.add(ByteCode.DUP);
+                    }
+                    cfw.addAStore(reg);
                 } else {
                     if (varIsDirectCallParameter(varIndex)) {
                         dcpLoadAsObject(reg);

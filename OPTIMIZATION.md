@@ -663,6 +663,11 @@ on, and what it gained. It also records the experiments that measured no gain, s
     object is the literal) and `__proto__` stay. TypeScript's table of diagnostics has thousands;
   - a `?:`: an operand heavier than half a chunk moves to a chunk returning its value, `(() => operand)()`, a value
     evaluated with the same `this`, `arguments` and bindings: Prettier's lexer tables are trees of them.
+- **Many function declarations (2026-10-25).** The declarations of a function are created on entry, about 30
+  bytes of code each: TypeScript's compiler, a function of 3,560 of them, did not fit in a method however split.
+  Beyond 64, a call of `OptRuntime.initFunctions` creates them in a loop, from their descriptor indexes encoded in
+  a string constant (4,096 per call), with the same constructor arguments and `initFunction` as each inline
+  creation. The JetStream 3 `typescript-lib` workload runs compiled: 16 s per run, 30 s interpreted.
 - **All the functions too large at once (2026-10-24).** After the first function too large, the class compiler
   goes on with the others (into a class it drops) and reports them all, so the script is parsed again once for
   them, not once per function: Prettier took 14 compilations.

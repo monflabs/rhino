@@ -304,6 +304,16 @@ public class NodeTransformer {
                             node = replaceCurrent(parent, previous, node, unwindBlock);
                             if (returnExpr == null || isGenerator) {
                                 unwindBlock.addChildToBack(returnNode);
+                                if (returnExpr != null) {
+                                    // the yields of a generator's return expression are its
+                                    // resumption points
+                                    transformCompilationUnit_r(
+                                            tree,
+                                            returnNode,
+                                            scope,
+                                            createScopeObjects,
+                                            inStrictMode);
+                                }
                             } else {
                                 Node store = new Node(Token.EXPR_RESULT, returnExpr);
                                 unwindBlock.addChildToFront(store);

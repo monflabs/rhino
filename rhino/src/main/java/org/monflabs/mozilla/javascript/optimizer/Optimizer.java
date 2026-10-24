@@ -44,7 +44,7 @@ class Optimizer {
         Set<OptFunctionNode> done = new HashSet<>();
         for (OptFunctionNode f : functions.keySet()) {
             if (!calls.containsKey(f)) {
-                analyzeFunction(f);
+                analyzeFunction(f, functions.get(f));
                 done.add(f);
             }
         }
@@ -61,7 +61,7 @@ class Optimizer {
                 }
                 if (ready) {
                     f.setNumberArguments(numberArguments(f, e.getValue(), callers));
-                    analyzeFunction(f);
+                    analyzeFunction(f, functions.get(f));
                     done.add(f);
                     progress = true;
                 }
@@ -80,7 +80,7 @@ class Optimizer {
         recursiveNumberArguments(pending, calls, callers, returnValues);
         for (Map.Entry<OptFunctionNode, boolean[]> e : pending.entrySet()) {
             e.getKey().setNumberArguments(e.getValue());
-            analyzeFunction(e.getKey());
+            analyzeFunction(e.getKey(), functions.get(e.getKey()));
         }
 
         numberReturns(returnValues);
@@ -469,7 +469,7 @@ class Optimizer {
     }
 
     /** Finds the variables of a function that only hold numbers. */
-    private void analyzeFunction(OptFunctionNode theFunction) {
+    private void analyzeFunction(OptFunctionNode theFunction, boolean nested) {
         if (!hasRegisterVars(theFunction)) return;
 
         ArrayList<Node> statementsArray = new ArrayList<>();
@@ -477,7 +477,11 @@ class Optimizer {
         Node[] theStatementNodes = new Node[statementsArray.size()];
         statementsArray.toArray(theStatementNodes);
 
-        Block.runFlowAnalyzes(theFunction, theStatementNodes);
+        // an arithmetic operation on two BigInts gives a BigInt: before VERSION_ECMASCRIPT,
+        // top-level
+        // functions keep the legacy typing (their result as a number)
+        Block.runFlowAnalyzes(
+                theFunction, theStatementNodes, nested || compilerEnv.isLatestEcmaScript());
         statements.put(theFunction, theStatementNodes);
     }
 

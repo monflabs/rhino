@@ -343,4 +343,16 @@ class MethodSplittingTest {
         sb.append(";\n  return [a0, a400, a799, typeof a800].join();\n}\nvar a800;\nf(7);");
         assertSame(version, sb.toString());
     }
+
+    /** Thousands of function declarations in a function: their creation alone exceeded a method. */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void functionOfManyFunctionDeclarations(int version) {
+        StringBuilder sb = new StringBuilder("function f(n) {\n");
+        for (int i = 0; i < 4000; i++) {
+            sb.append("function g").append(i).append("() { return ").append(i).append("; }\n");
+        }
+        sb.append("return g0() + g3999() + eval('g' + n)() + (typeof g17) + g17.name; }\nf(2000);");
+        assertRuns(version, "5999functiong17", sb.toString());
+    }
 }

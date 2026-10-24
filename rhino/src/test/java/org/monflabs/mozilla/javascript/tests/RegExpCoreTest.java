@@ -78,4 +78,30 @@ class RegExpCoreTest {
     void propertyEscapeWithoutUnicodeFlag() {
         Utils.assertGatedBehavior(true, false, "/\\p{L}/.test('a')");
     }
+
+    @Test
+    void dashAfterAClassEscapeAtTheEndOfAClass() {
+        // [\p{L}-] is the letters and '-', only a range from a class escape is an error
+        Utils.assertGatedBehavior(
+                "SyntaxError|SyntaxError|SyntaxError",
+                "true,true,false|true|SyntaxError",
+                "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
+                        + " t(() => { var re = new RegExp('^[\\\\p{L}-]+$', 'u');"
+                        + "   return [re.test('a-b'), re.test('-'), re.test('1')]; });"
+                        + " t(() => new RegExp('[a\\\\w-]', 'u').test('-'));"
+                        + " t(() => new RegExp('[\\\\w-z]', 'u'));"
+                        + " r.join('|')");
+    }
+
+    @Test
+    void caseInsensitiveRangeWithCaseVariantsBeyondItsEnd() {
+        // U+03AA in the range has the lower case U+03CA, past its end: the class matched with
+        // a bitmap too small for it
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "true,true,true",
+                "try { [/^[0-9\\u0391-\\u03c9]+$/i.test('\\u03b1\\u03b2\\u03b3'),"
+                        + " /[\\u0391-\\u03c9]/i.test('\\u03ca'), /[\\u03aa]/i.test('\\u03ca')].join()"
+                        + " } catch (e) { e.name }");
+    }
 }

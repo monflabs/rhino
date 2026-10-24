@@ -1843,7 +1843,7 @@ public class NativeRegExp extends ScriptableObject {
 
     /* calculate the total size of the bitmap required for a class expression */
     private static boolean calculateBitmapSize(
-            int flags, ClassContents classContents, RENode target) {
+            int flags, ClassContents classContents, RENode target, boolean latestEcmaScript) {
         int max = 0;
 
         for (char ch : classContents.chars) {
@@ -1865,7 +1865,16 @@ public class NativeRegExp extends ScriptableObject {
             if (rangeEnd > max) {
                 max = rangeEnd;
             }
-            if ((flags & JSREG_FOLD) != 0) {
+            if ((flags & JSREG_FOLD) != 0 && latestEcmaScript) {
+                // a character of the range may have a case variant above those of its end:
+                // [\u0391-\u03c9] holds U+03AA, whose lower case is U+03CA
+                for (char ch = classContents.bmpRanges.get(i - 1); ; ch++) {
+                    max = Math.max(max, Math.max(upcase(ch), downcase(ch)));
+                    if (ch == rangeEnd) {
+                        break;
+                    }
+                }
+            } else if ((flags & JSREG_FOLD) != 0) {
                 char cu = upcase(rangeEnd);
                 char cd = downcase(rangeEnd);
                 int n = (cu >= cd) ? cu : cd;
@@ -2611,10 +2620,14 @@ public class NativeRegExp extends ScriptableObject {
                                     reportError("msg.invalid.class", "");
                                 }
                             } else {
-                                // if we have a '-' after this and we're in unicode mode, we fail
+                                // if we have a '-' after this and we're in unicode mode, we fail,
+                                // unless it is the last character of the class ([\p{L}-])
                                 if (state.cp < state.cpend
                                         && src[state.cp] == '-'
-                                        && params.unicodeMode) {
+                                        && params.unicodeMode
+                                        && !(state.cx.isLatestEcmaScript()
+                                                && state.cp + 1 < state.cpend
+                                                && src[state.cp + 1] == ']')) {
                                     reportError("msg.invalid.class", "");
                                 }
                             }
@@ -3413,7 +3426,9 @@ public class NativeRegExp extends ScriptableObject {
                  * Call calculateBitmapSize now as we want any errors it finds
                  * to be reported during the parse phase, not at execution.
                  */
-                if (!calculateBitmapSize(state.flags, classContents, state.result)) return false;
+                if (!calculateBitmapSize(
+                        state.flags, classContents, state.result, state.cx.isLatestEcmaScript()))
+                    return false;
                 state.progLength += 3; /* CLASS, <index> */
                 break;
 

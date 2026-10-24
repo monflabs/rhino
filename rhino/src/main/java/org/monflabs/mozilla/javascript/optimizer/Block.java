@@ -61,7 +61,7 @@ class Block {
         itsEndNodeIndex = endNodeIndex;
     }
 
-    static void runFlowAnalyzes(OptFunctionNode fn, Node[] statementNodes) {
+    static void runFlowAnalyzes(OptFunctionNode fn, Node[] statementNodes, boolean bigIntSafe) {
         int paramCount = fn.fnode.getParamCount();
         int varCount = fn.fnode.getParamAndVarCount();
         int[] varTypes = new int[varCount];
@@ -91,7 +91,7 @@ class Block {
         }
 
         reachingDefDataFlow(fn, statementNodes, theBlocks, varTypes);
-        typeFlow(fn, statementNodes, theBlocks, varTypes);
+        typeFlow(fn, statementNodes, theBlocks, varTypes, bigIntSafe);
 
         if (DEBUG) {
             for (Block theBlock : theBlocks) {
@@ -302,7 +302,11 @@ class Block {
     }
 
     private static void typeFlow(
-            OptFunctionNode fn, Node[] statementNodes, Block[] theBlocks, int[] varTypes) {
+            OptFunctionNode fn,
+            Node[] statementNodes,
+            Block[] theBlocks,
+            int[] varTypes,
+            boolean bigIntSafe) {
         boolean[] visit = new boolean[theBlocks.length];
         boolean[] doneOnce = new boolean[theBlocks.length];
         int vIndex = 0;
@@ -312,7 +316,7 @@ class Block {
             if (visit[vIndex] || !doneOnce[vIndex]) {
                 doneOnce[vIndex] = true;
                 visit[vIndex] = false;
-                if (theBlocks[vIndex].doTypeFlow(fn, statementNodes, varTypes)) {
+                if (theBlocks[vIndex].doTypeFlow(fn, statementNodes, varTypes, bigIntSafe)) {
                     Block[] succ = theBlocks[vIndex].itsSuccessors;
                     if (succ != null) {
                         for (Block block : succ) {
@@ -459,7 +463,8 @@ class Block {
             Literals,
             Arithmetic operations - always return a Number
     */
-    private static int findExpressionType(OptFunctionNode fn, Node n, int[] varTypes) {
+    private static int findExpressionType(
+            OptFunctionNode fn, Node n, int[] varTypes, boolean bigIntSafe) {
         switch (n.getType()) {
             case Token.NUMBER:
                 return Optimizer.NumberType;
@@ -480,6 +485,14 @@ class Block {
 
             case Token.INC:
             case Token.DEC:
+            case Token.BITNOT:
+            case Token.NEG:
+                if (bigIntSafe) {
+                    // the operand's type: a BigInt gives a BigInt
+                    return findExpressionType(fn, n.getFirstChild(), varTypes, true);
+                }
+                return Optimizer.NumberType;
+
             case Token.MUL:
             case Token.DIV:
             case Token.MOD:
@@ -487,13 +500,24 @@ class Block {
             case Token.BITOR:
             case Token.BITXOR:
             case Token.BITAND:
-            case Token.BITNOT:
             case Token.LSH:
             case Token.RSH:
-            case Token.URSH:
             case Token.SUB:
+                if (bigIntSafe) {
+                    // a number when an operand is one: two BigInts give a BigInt, and a BigInt
+                    // with a number throws (an operand of no type yet leaves it to a later pass)
+                    Node child = n.getFirstChild();
+                    int lType = findExpressionType(fn, child, varTypes, true);
+                    int rType = findExpressionType(fn, child.getNext(), varTypes, true);
+                    if (lType != Optimizer.NumberType && rType != Optimizer.NumberType) {
+                        return lType & rType;
+                    }
+                }
+                return Optimizer.NumberType;
+
+            case Token.URSH:
             case Token.POS:
-            case Token.NEG:
+                // a BigInt throws
                 return Optimizer.NumberType;
 
             case Token.VOID:
@@ -540,8 +564,8 @@ class Block {
                     // if the lhs & rhs are known to be numbers, we can be sure that's
                     // the result, otherwise it could be a string.
                     Node child = n.getFirstChild();
-                    int lType = findExpressionType(fn, child, varTypes);
-                    int rType = findExpressionType(fn, child.getNext(), varTypes);
+                    int lType = findExpressionType(fn, child, varTypes, bigIntSafe);
+                    int rType = findExpressionType(fn, child.getNext(), varTypes, bigIntSafe);
                     return lType | rType; // we're not distinguishing strings yet
                 }
 
@@ -549,8 +573,8 @@ class Block {
                 {
                     Node ifTrue = n.getFirstChild().getNext();
                     Node ifFalse = ifTrue.getNext();
-                    int ifTrueType = findExpressionType(fn, ifTrue, varTypes);
-                    int ifFalseType = findExpressionType(fn, ifFalse, varTypes);
+                    int ifTrueType = findExpressionType(fn, ifTrue, varTypes, bigIntSafe);
+                    int ifFalseType = findExpressionType(fn, ifFalse, varTypes, bigIntSafe);
                     return ifTrueType | ifFalseType;
                 }
 
@@ -560,14 +584,14 @@ class Block {
             case Token.SETNAME:
             case Token.SETPROP:
             case Token.SETELEM:
-                return findExpressionType(fn, n.getLastChild(), varTypes);
+                return findExpressionType(fn, n.getLastChild(), varTypes, bigIntSafe);
 
             case Token.AND:
             case Token.OR:
                 {
                     Node child = n.getFirstChild();
-                    int lType = findExpressionType(fn, child, varTypes);
-                    int rType = findExpressionType(fn, child.getNext(), varTypes);
+                    int lType = findExpressionType(fn, child, varTypes, bigIntSafe);
+                    int rType = findExpressionType(fn, child.getNext(), varTypes, bigIntSafe);
                     return lType | rType;
                 }
         }
@@ -575,16 +599,18 @@ class Block {
         return Optimizer.AnyType;
     }
 
-    private static boolean findDefPoints(OptFunctionNode fn, Node n, int[] varTypes) {
+    private static boolean findDefPoints(
+            OptFunctionNode fn, Node n, int[] varTypes, boolean bigIntSafe) {
         boolean result = false;
         Node first = n.getFirstChild();
         for (Node next = first; next != null; next = next.getNext()) {
-            result |= findDefPoints(fn, next, varTypes);
+            result |= findDefPoints(fn, next, varTypes, bigIntSafe);
         }
         switch (n.getType()) {
             case Token.DEC:
             case Token.INC:
-                if (first.getType() == Token.GETVAR) {
+                // a BigInt stays a BigInt: the variable keeps the type of its other definitions
+                if (first.getType() == Token.GETVAR && !bigIntSafe) {
                     // theVar is a Number now
                     int i = fn.getVarIndex(first);
                     if (!fn.fnode.getParamAndVarConst()[i]) {
@@ -596,7 +622,7 @@ class Block {
             case Token.SETCONSTVAR:
                 {
                     Node rValue = first.getNext();
-                    int theType = findExpressionType(fn, rValue, varTypes);
+                    int theType = findExpressionType(fn, rValue, varTypes, bigIntSafe);
                     int i = fn.getVarIndex(n);
                     if (!(n.getType() == Token.SETVAR && fn.fnode.getParamAndVarConst()[i])) {
                         result |= assignType(varTypes, i, theType);
@@ -607,13 +633,14 @@ class Block {
         return result;
     }
 
-    private boolean doTypeFlow(OptFunctionNode fn, Node[] statementNodes, int[] varTypes) {
+    private boolean doTypeFlow(
+            OptFunctionNode fn, Node[] statementNodes, int[] varTypes, boolean bigIntSafe) {
         boolean changed = false;
 
         for (int i = itsStartNodeIndex; i <= itsEndNodeIndex; i++) {
             Node n = statementNodes[i];
             if (n != null) {
-                changed |= findDefPoints(fn, n, varTypes);
+                changed |= findDefPoints(fn, n, varTypes, bigIntSafe);
             }
         }
 
