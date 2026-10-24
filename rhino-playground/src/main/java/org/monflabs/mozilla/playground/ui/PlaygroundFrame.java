@@ -132,6 +132,13 @@ public final class PlaygroundFrame extends JFrame {
                         } else {
                             readmeSplit.setDividerLocation(0.72);
                         }
+                        // the first run, with the settings made before the window was shown
+                        if (!tree.select(prefs.get("sample", ""))) {
+                            List<Sample> samples = library.samples();
+                            if (!samples.isEmpty()) {
+                                tree.select(samples.get(0).id());
+                            }
+                        }
                     }
 
                     @Override
@@ -146,12 +153,6 @@ public final class PlaygroundFrame extends JFrame {
                         System.exit(0);
                     }
                 });
-        if (!tree.select(prefs.get("sample", ""))) {
-            List<Sample> samples = library.samples();
-            if (!samples.isEmpty()) {
-                tree.select(samples.get(0).id());
-            }
-        }
     }
 
     private JComponent toolbar() {

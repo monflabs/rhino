@@ -45,6 +45,8 @@ The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
   `IllegalStateException: uninitialized call site`: CheerpJ cannot link the call sites (`invokedynamic`, through
   Dynalink) of the classes the compiler generates. It now runs the interpreter only, the mode choice disabled; the
   desktop playground keeps both modes. The site's sidebar lists the playground first.
+- The first run, of the sample selected at start, now happens when the window opens: it ran while the window
+  was built, before the browser build switched to the interpreter, and failed the same way.
 - No engine change.
 
 ### Format characters in the source (2026-10-24)
