@@ -8,7 +8,7 @@ import java.util.function.Supplier;
  *
  * <p>It is expected that this is implemented externally, from Rhino users.
  *
- * @see CompileRequest.Builder#sourceSupplier(ISourceCodeSupplier)
+ * @see CompileSpec.Builder#sourceCodeSupplier(SourceCodeSupplier)
  */
 @FunctionalInterface
 public interface SourceCodeSupplier extends Supplier<String>, Serializable {}

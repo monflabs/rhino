@@ -10,7 +10,7 @@ import org.monflabs.mozilla.javascript.JSCodeExec;
 import org.monflabs.mozilla.javascript.JSScript;
 import org.monflabs.mozilla.javascript.VarScope;
 
-/** Subclass of {@link JSCode} for compiled Java methods. */
+/** Subclass of {@link org.monflabs.mozilla.javascript.JSCode} for compiled Java methods. */
 public class MHJSScriptCode extends MHJSCode<JSScript> {
     private final JSCodeExec<JSScript> exec;
 

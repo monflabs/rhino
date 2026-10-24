@@ -39,6 +39,12 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Javadoc references (2026-10-25)
+
+- Six Javadoc links named classes or methods that were renamed or not imported (`FunctionCompileSpec`'s
+  factories, `CompileSpec.Builder#sourceCodeSupplier`, `DebugFrame`, `JSCode`, the module record's `init`): the
+  `javadoc` task reported them as errors. Documentation only.
+
 ### The temporal dead zone of destructuring declarations, and rest parameters in split scripts (2026-10-25)
 
 - Gated: the names of a destructuring `let` or `const` are uninitialized until the declaration runs, like those

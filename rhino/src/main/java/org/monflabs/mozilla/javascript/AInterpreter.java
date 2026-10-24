@@ -155,11 +155,12 @@ public abstract class AInterpreter<T extends ACallFrame<T, U>, U extends ACompil
     }
 
     /**
-     * This class is intended as proxy to give {@link DebugFrame} access to the contents of local
-     * variables. We take this approach rather than forcing the interpreter to introduce activation
-     * frames because it is faster (assuming local variable manipulation by the interpreter is more
-     * common than inspection by the debugger) and it reduces the chance that programs might
-     * evexcute differently in debug mode.
+     * This class is intended as proxy to give {@link
+     * org.monflabs.mozilla.javascript.debug.DebugFrame} access to the contents of local variables.
+     * We take this approach rather than forcing the interpreter to introduce activation frames
+     * because it is faster (assuming local variable manipulation by the interpreter is more common
+     * than inspection by the debugger) and it reduces the chance that programs might evexcute
+     * differently in debug mode.
      */
     protected static class DebugScope implements VarScope {
         private final ACallFrame<?, ?> frame;

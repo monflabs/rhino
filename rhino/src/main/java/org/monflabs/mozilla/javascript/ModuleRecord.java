@@ -27,7 +27,7 @@ import org.monflabs.mozilla.javascript.modules.PathModuleLoader;
  * <p>A source module runs as a generator function compiled from its rewritten source (see {@link
  * ModuleInfo#generatorSource()}), whose scope is a {@link ModuleScope}: the first {@code next()}
  * instantiates the module (its functions are hoisted and the getters of its exported bindings are
- * handed to {@link #init}), the second evaluates its body.
+ * handed to its {@code init}), the second evaluates its body.
  */
 public final class ModuleRecord {
     private static final Object REGISTRY_KEY = ModuleRecord.class;
