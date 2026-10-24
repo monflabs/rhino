@@ -328,6 +328,21 @@ class ConstLetScopingTest {
     }
 
     @Test
+    void destructuringDeclarationTemporalDeadZone() {
+        Utils.assertGatedBehavior(
+                "undefined,undefined,undefined,TypeError,ReferenceError,3",
+                "ReferenceError,ReferenceError,ReferenceError,ReferenceError,ReferenceError,3",
+                "function t(f) { try { return String(f()); } catch (e) { return e.name; } }"
+                        + " [t(function () { var r = a; let {a} = {a: 1}; return r; }),"
+                        + " t(function () { function g() { return b; } var r = g();"
+                        + " const [b] = [1]; return r; }),"
+                        + " t(function () { let {c = c} = {}; return c; }),"
+                        + " t(function () { for (let [d] of [d]) return d; }),"
+                        + " t(function () { switch (1) { case 0: let [e] = [1]; case 1: return e; } }),"
+                        + " t(function () { let [f, {g}] = [1, {g: 2}]; return f + g; })].join()");
+    }
+
+    @Test
     void constInSingleStatementIfBodyIsError() {
         Utils.assertEvaluatorExceptionES6(
                 "const declarations may only appear at the top level or within a block",

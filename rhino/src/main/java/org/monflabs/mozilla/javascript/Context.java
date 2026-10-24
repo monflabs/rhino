@@ -187,6 +187,9 @@ public class Context implements Closeable {
      *       block".
      *   <li>A destructuring {@code let} or {@code const} in a {@code switch} clause binds its
      *       names, instead of a ReferenceError when they are read.
+     *   <li>The names of a destructuring {@code let} or {@code const} are uninitialized until the
+     *       declaration, as those of a plain one: reading them before it is a ReferenceError,
+     *       instead of {@code undefined}.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

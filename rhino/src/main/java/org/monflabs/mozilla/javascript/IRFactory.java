@@ -843,24 +843,22 @@ public final class IRFactory {
             AstNode iter = loop.getIterator();
             if (iter instanceof VariableDeclaration) {
                 declType = iter.getType();
-                if (declType == Token.LET || declType == Token.CONST) {
-                    // the binding is in its temporal dead zone while the iterated object is
-                    // evaluated: for (let x of x) is a ReferenceError
-                    for (VariableInitializer vi : ((VariableDeclaration) iter).getVariables()) {
-                        if (vi.getTarget() instanceof Name) {
-                            Symbol symbol = loop.getSymbol(((Name) vi.getTarget()).getIdentifier());
-                            if (symbol != null) {
-                                symbol.setNode(loop.getIteratedObject());
-                            }
-                        }
-                    }
-                }
             }
             Node lhs = transform(iter);
             Node obj = transform(loop.getIteratedObject());
             Node body = transform(loop.getBody());
-            return createForIn(
-                    declType, loop, lhs, obj, body, loop, loop.isForEach(), loop.isForOf());
+            Node result =
+                    createForIn(
+                            declType, loop, lhs, obj, body, loop, loop.isForEach(), loop.isForOf());
+            if (declType == Token.LET || declType == Token.CONST) {
+                // the bindings are in their temporal dead zone while the iterated object is
+                // evaluated: for (let x of x) is a ReferenceError (those of a pattern are defined
+                // by createForIn)
+                for (VariableInitializer vi : ((VariableDeclaration) iter).getVariables()) {
+                    recordDeclaration(loop, vi.getTarget(), loop.getIteratedObject());
+                }
+            }
+            return result;
         } finally {
             parser.popScope();
         }
@@ -2058,6 +2056,10 @@ public final class IRFactory {
                                 parser.createDestructuringAssignment(
                                         node.getType(), left, right, this::transform);
                         node.addChildToBack(d);
+                        if (node.getType() == Token.LET || node.getType() == Token.CONST) {
+                            // the temporal dead zone of the bindings ends with the initializer
+                            recordDeclaration(parser.currentScope, target, var);
+                        }
                     } finally {
                         astNodePos.pop();
                     }
@@ -2071,6 +2073,19 @@ public final class IRFactory {
             }
         }
         return node;
+    }
+
+    /** Records on the symbols of the names bound by target where their temporal dead zone ends. */
+    private static void recordDeclaration(Scope scope, AstNode target, AstNode end) {
+        List<String> names = new ArrayList<>();
+        Parser.collectBoundNames(target, names);
+        for (String name : names) {
+            Scope defining = scope.getDefiningScope(name);
+            Symbol symbol = defining == null ? null : defining.getSymbol(name);
+            if (symbol != null) {
+                symbol.setNode(end);
+            }
+        }
     }
 
     private Node transformWhileLoop(WhileLoop loop) {

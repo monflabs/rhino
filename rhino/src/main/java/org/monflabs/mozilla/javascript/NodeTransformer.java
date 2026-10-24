@@ -130,7 +130,7 @@ public class NodeTransformer {
                 // for the clauses entered past their declarations (see classifyTdz)
                 for (Symbol symbol : ((Scope) node).getSymbolTable().values()) {
                     if (isLexical(symbol)
-                            && isSingleNameDeclaration(symbol.getNode())
+                            && isDeclaration(symbol.getNode())
                             && hasOtherClauseReference(
                                     node,
                                     symbol.getName(),
@@ -1115,6 +1115,16 @@ public class NodeTransformer {
                 && registerLexicals != null
                 && ((Scope) node).getSymbolTable() != null
                 && registerLexicals.containsAll(((Scope) node).getSymbolTable().values());
+    }
+
+    /**
+     * Whether the declaration of a binding is a let/const declaration, of a name or a pattern (not
+     * a class declaration, whose binding the class definition handles).
+     */
+    private static boolean isDeclaration(Node node) {
+        return node instanceof VariableInitializer
+                && isInSyntaxTree((VariableInitializer) node)
+                && !(((VariableInitializer) node).getInitializer() instanceof ClassNode);
     }
 
     /**

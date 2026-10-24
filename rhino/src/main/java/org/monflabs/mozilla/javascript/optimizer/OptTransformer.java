@@ -93,7 +93,8 @@ class OptTransformer extends NodeTransformer {
                             && !ofn.fnode.requiresActivation()
                             && !ofn.fnode.requiresArgumentObject()
                             // a direct call passes the arguments as they are: no rest array
-                            && !(latestEcmaScript && ofn.fnode.hasRestParameter())) {
+                            && !(ofn.fnode.hasRestParameter()
+                                    && (latestEcmaScript || isChunkOfScript(tree)))) {
                         // Refuse to directCall any function with more
                         // than 32 parameters - prevent code explosion
                         // for wacky test cases
@@ -123,6 +124,13 @@ class OptTransformer extends NodeTransformer {
      * nearest declaration in the enclosing functions. The call checks at run time that it got that
      * function.
      */
+    /** Top-level code moved to a function by the Splitter, which made no direct calls. */
+    private static boolean isChunkOfScript(ScriptNode tree) {
+        return tree instanceof FunctionNode
+                && ((FunctionNode) tree).getSplitOwner() != null
+                && !(((FunctionNode) tree).getSplitOwner() instanceof FunctionNode);
+    }
+
     private OptFunctionNode findDeclaration(ScriptNode tree, String name) {
         for (ScriptNode s = tree; ; ) {
             Map<String, OptFunctionNode> names = declarations.get(s);

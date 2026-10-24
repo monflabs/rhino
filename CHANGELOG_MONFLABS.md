@@ -39,6 +39,20 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The temporal dead zone of destructuring declarations, and rest parameters in split scripts (2026-10-25)
+
+- Gated: the names of a destructuring `let` or `const` are uninitialized until the declaration runs, like those
+  of a plain one: `var r = a; let {a} = o;`, a closure reading them early, `let {x = x} = {}` and
+  `for (let [x] of x)` throw a ReferenceError instead of reading `undefined`. IRFactory records the declaration
+  on the symbols of the names it defines from the pattern (`Symbol.setNode`), which the temporal dead zone of a
+  plain declaration already used. BACKWARD_COMPATIBILITY.md 1.99; this closes the gap noted with 1.98.
+- Compiled mode, `VERSION_ES6`: a call of a function with a rest parameter from the top-level code of a script
+  large enough to be split passed the arguments as they are, the call becoming a direct call in the chunk
+  function (BACKWARD_COMPATIBILITY.md 1.92 keeps that bug for calls from a function under `VERSION_ES6`). A
+  chunk of a script makes no such direct call, as the top-level code it comes from. Not gated: the result is
+  the one of the script unsplit.
+- test262: no change.
+
 ### Empty arrays stay dense (2026-10-24)
 
 - `shift` and `pop` on an empty array, and `a.length = 0` on one, set its length to 0 again, which made the
@@ -80,7 +94,7 @@ The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
   assignment to an undeclared name in strict code). Prepack, in the Web Tooling Benchmark, failed on it; it now
   passes. BACKWARD_COMPATIBILITY.md 1.98.
 - Known gap, unchanged: the bindings of a destructuring declaration have no temporal dead zone (read before the
-  declaration, they are `undefined`), in a block as in a clause.
+  declaration, they are `undefined`), in a block as in a clause. Fixed on 2026-10-25 (1.99).
 - test262: no change.
 
 ### Three bugs found by the Web Tooling Benchmark (2026-10-24)

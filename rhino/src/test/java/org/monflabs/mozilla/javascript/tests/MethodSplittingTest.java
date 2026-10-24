@@ -192,6 +192,19 @@ class MethodSplittingTest {
         assertRuns(version, "6000,0,true,number", source);
     }
 
+    /** Top-level code calls a function directly in no version, split or not. */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void restParameterCalledFromASplitScript(int version) {
+        String source =
+                "var n = 5000, t = 0;\n"
+                        + "function rest(...a) { return a; }\n"
+                        + filler(3000)
+                        + "var r = rest('xy');\n"
+                        + "Array.isArray(r) + '-' + r.length;";
+        assertRuns(version, "true-1", source);
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
     void completionValueOfASplitScript(int version) {

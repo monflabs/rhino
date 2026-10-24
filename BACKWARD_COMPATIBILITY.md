@@ -110,6 +110,9 @@ changes.
 | 1.94 | `===` of a parameter of a direct call with a number in compiled code | `VERSION_ECMASCRIPT` |
 | 1.95 | `console.log` of `Infinity` and `NaN` | `VERSION_ECMASCRIPT` |
 | 1.96 | Format characters outside literals and comments | `VERSION_ECMASCRIPT` |
+| 1.97 | `let` in a function of a single-statement body | `VERSION_ECMASCRIPT` |
+| 1.98 | Destructuring declarations in a `switch` clause | `VERSION_ECMASCRIPT` |
+| 1.99 | The temporal dead zone of a destructuring declaration | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1611,6 +1614,25 @@ switch (kind) {
   reading them failed. They are bound in the scope of the `switch` block, like those of a plain declaration.
 - **Why:** ECMA-262 2026, §14.12.4 (`switch` Statement: Runtime Semantics: Evaluation): the declarations of the
   *CaseBlock* are instantiated in one block environment (BlockDeclarationInstantiation).
+
+### 1.99 The temporal dead zone of a destructuring declaration
+
+```js
+function f() {
+  var r = a;        // VERSION_ES6: undefined   VERSION_ECMASCRIPT: ReferenceError: "a" is not initialized
+  let { a } = o;
+}
+let [x = x] = [];   // VERSION_ES6: x is undefined   VERSION_ECMASCRIPT: ReferenceError
+```
+
+- The names of a destructuring `let` or `const` (`let [a, {b}] = ...`, also in a `for` head and a `switch` clause)
+  were `undefined` until the declaration, read from the same function, a closure or the pattern's own defaults,
+  and could be assigned. They are uninitialized until the declaration runs, like the names of a plain
+  declaration: reading or assigning them throws a ReferenceError. `for (let [x] of x)` throws it while evaluating
+  `x`.
+- **Why:** ECMA-262 2026, §14.3.1 (Let and Const Declarations: the bindings are created uninitialized and "may
+  not be accessed in any way until the variable's LexicalBinding is evaluated"), §14.7.5.6 (ForIn/OfHeadEvaluation:
+  the bindings are uninitialized while the expression is evaluated).
 
 ---
 

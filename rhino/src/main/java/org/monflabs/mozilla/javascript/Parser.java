@@ -2583,7 +2583,7 @@ public class Parser {
         }
     }
 
-    private static void collectBoundNames(AstNode pattern, List<String> names) {
+    static void collectBoundNames(AstNode pattern, List<String> names) {
         if (pattern instanceof Name) {
             names.add(((Name) pattern).getIdentifier());
         } else if (pattern instanceof ArrayLiteral) {
