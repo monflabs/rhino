@@ -881,7 +881,10 @@ public class NativeArray extends ScriptableObject implements List {
         }
 
         if (denseOnly) {
-            if (longVal < length) {
+            if (longVal == length) {
+                // the length of an empty array set to 0 again (shift, pop): it stays dense
+                return true;
+            } else if (longVal < length) {
                 // downcast okay because denseOnly
                 Arrays.fill(dense, (int) longVal, dense.length, NOT_FOUND);
                 length = longVal;

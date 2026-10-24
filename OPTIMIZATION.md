@@ -345,6 +345,13 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `hasOwnProperty` are false, and enumeration skips it, as before. Cost: up to 4 KB of holes per array.
 - **Gain.** `v8-crypto` 46–52 ms → 36 ms compiled, −3% interpreted; a 300-element array filled downward 26 ms →
   13 ms compiled. All versions.
+- **An empty array whose length is set to 0** (2026-10-24). `shift` and `pop` on an empty array set its length to
+  0 (Set(O, "length", 0)), as does `a.length = 0` to clear it; the dense case of `setLength` only took a smaller
+  length or a larger one below 1.5 times the current one, which is 0, so the array lost `denseOnly`. A queue
+  that is often empty (`next = queue.shift() || read()`) then lived in the slot map, and each `shift` of its
+  elements went through it. An unchanged length now leaves the array as it is. Gain: JSHint, in the Web
+  Tooling Benchmark, whose lookahead queue of tokens is such a queue: about 9,000 → 450 ms per run, compiled
+  and interpreted alike. All versions.
 
 ### Array patterns without temporaries and guards
 

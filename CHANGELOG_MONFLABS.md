@@ -39,6 +39,15 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Empty arrays stay dense (2026-10-24)
+
+- `shift` and `pop` on an empty array, and `a.length = 0` on one, set its length to 0 again, which made the
+  array sparse for good: every element then lived in the slot map. An unchanged length now leaves it dense.
+  JSHint, in the Web Tooling Benchmark, whose lookahead queue is shifted while empty for almost every token,
+  went from about 9 s to 0.45 s per run. OPTIMIZATION.md "Arrays stay dense across small gaps". Not gated: not
+  observable.
+- test262: no change.
+
 ### Compiled mode for large scripts, and direct calls that reach another function (2026-10-24)
 
 - Compiled mode: a function whose jumps exceed the 16-bit offsets of the branches, and that cannot be split
