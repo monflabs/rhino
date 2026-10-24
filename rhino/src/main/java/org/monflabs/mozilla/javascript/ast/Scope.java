@@ -121,6 +121,14 @@ public class Scope extends Jump {
 
     /** Returns current script or function scope */
     public ScriptNode getTop() {
+        if (top == null) {
+            // a scope given its children before it was attached to the tree
+            for (Scope s = parentScope; s != null; s = s.parentScope) {
+                if (s.top != null) {
+                    return s.top;
+                }
+            }
+        }
         return top;
     }
 

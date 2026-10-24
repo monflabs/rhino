@@ -40,11 +40,15 @@ final class ConstantPool {
     }
 
     int getWriteSize() {
-        // JVMS 4.1: constant_pool_count is a u2; beyond it, the indexes in the code would wrap
+        checkIndexes();
+        return 2 + itsTop;
+    }
+
+    /** JVMS 4.1: constant_pool_count is a u2; beyond it, the indexes in the code wrap. */
+    void checkIndexes() {
         if (itsTopIndex > 0xFFFF) {
             throw new ClassFileWriter.ClassSizeException("too many constants");
         }
-        return 2 + itsTop;
     }
 
     int addConstant(int k) {

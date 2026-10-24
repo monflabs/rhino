@@ -1584,6 +1584,19 @@ eval("1\u200B2");         // VERSION_ES6: 12              VERSION_ECMASCRIPT: Sy
   carry such characters: remove them.
 - **Why:** ECMA-262 2026, §12.1 (Unicode Format-Control Characters) and §12.2 (White Space: U+180E is Cf, not Zs).
 
+### 1.97 `let` in a function of a single-statement body
+
+```js
+if (ok) run(function () { let x = 1; return x; });
+// VERSION_ES6: SyntaxError: let declaration not directly within block   VERSION_ECMASCRIPT: runs
+```
+
+- A lexical declaration is not allowed as the body of an `if` or a loop without braces, but the parser applied the
+  rule to the whole statement, including the bodies of the functions, arrows and class elements inside it. Only the
+  statement itself is checked now. Code that was rejected now runs; nothing that ran changes.
+- **Why:** ECMA-262 2026, §14.6 (The `if` Statement) and §14.7 (Iteration Statements): the body is a *Statement*, and
+  a *FunctionBody* (§15.2) is a list of *StatementListItem*s, which may be declarations.
+
 ---
 
 ## 2. Platform and embedding

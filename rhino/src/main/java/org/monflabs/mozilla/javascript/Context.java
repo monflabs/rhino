@@ -182,6 +182,9 @@ public class Context implements Closeable {
      *   <li>The other format characters (U+180E, U+200B, U+2060, U+00AD, ...) are kept in the
      *       source: part of the literals and comments, a SyntaxError anywhere else, instead of
      *       being stripped.
+     *   <li>A function in the body of an {@code if} or a loop without braces may declare {@code
+     *       let} and {@code const}, instead of the SyntaxError "let declaration not directly within
+     *       block".
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

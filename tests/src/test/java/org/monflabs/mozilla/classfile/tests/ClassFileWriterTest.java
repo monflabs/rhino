@@ -13,6 +13,33 @@ import org.monflabs.mozilla.classfile.ClassFileWriter;
 import org.monflabs.mozilla.javascript.DefiningClassLoader;
 
 public class ClassFileWriterTest {
+    /**
+     * A method that refers to a method past the 65,535 entries of the constant pool: its index
+     * wrapped, and the stack map read another constant (a NullPointerException) before the class
+     * was written.
+     */
+    @Test
+    public void constantPoolOverflowIsAClassSizeLimit() {
+        ClassFileWriter cfw =
+                new ClassFileWriter("TestConstantPool", "java/lang/Object", "ClassFileWriterTest");
+        for (int m = 0; m < 16; m++) {
+            // 2 entries per string
+            cfw.startMethod("strings" + m, "()V", (short) (ACC_PUBLIC | ACC_STATIC));
+            for (int i = 0; i < 2000; i++) {
+                cfw.addLoadConstant("k" + (m * 2000 + i));
+                cfw.add(ByteCode.POP);
+            }
+            cfw.add(ByteCode.RETURN);
+            cfw.stopMethod((short) 0);
+        }
+        cfw.startMethod("calls", "()V", (short) (ACC_PUBLIC | ACC_STATIC));
+        for (int i = 0; i < 1000; i++) {
+            cfw.addInvoke(ByteCode.INVOKESTATIC, "TestConstantPool", "m" + i, "()V");
+        }
+        cfw.add(ByteCode.RETURN);
+        assertThrows(ClassFileWriter.ClassSizeException.class, () -> cfw.stopMethod((short) 0));
+    }
+
     @Test
     public void stackMapTable() throws Exception {
         final String CLASS_NAME = "TestStackMapTable";

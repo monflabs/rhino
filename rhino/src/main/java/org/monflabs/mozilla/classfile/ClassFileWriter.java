@@ -297,6 +297,8 @@ public class ClassFileWriter {
         if (itsCurrentMethod == null) throw new IllegalStateException("No method to stop");
 
         fixLabelGotos();
+        // the stack map reads the constants of the code by their (wrapped) indexes
+        itsConstantPool.checkIndexes();
 
         itsMaxLocals = maxLocals;
 
@@ -2783,7 +2785,7 @@ public class ClassFileWriter {
         // constructor, aka the method is <init>, then the type of "this"
         // should be StackMapTable.UNINITIALIZED_THIS
         if ((itsCurrentMethod.getFlags() & ACC_STATIC) == 0) {
-            if ("<init>".equals(itsCurrentMethod.getName())) {
+            if ("<init>".equals(itsCurrentMethod)) {
                 initialLocals[localsTop++] = TypeInfo.UNINITIALIZED_THIS;
             } else {
                 initialLocals[localsTop++] = TypeInfo.OBJECT(itsThisClassIndex);

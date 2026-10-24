@@ -57,6 +57,23 @@ class ClassSyntaxTest {
                         + " r.join('|')");
     }
 
+    /** The name of a class expression over a binding of the same name in the function. */
+    @Test
+    void nameShadowsAnOuterBinding() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "true|function,undefined|5|function|function,1",
+                "var r = [];"
+                        + " r.push((function () { var L; L = class L { m() { return L; } };"
+                        + " return new L().m() === L; })());"
+                        + " r.push((function () { var L; var M = class L { get g() { return 1; } };"
+                        + " return [typeof M, typeof L]; })());"
+                        + " r.push((function () { var L = 5; (class L { x = 1 }); return L; })());"
+                        + " r.push((function (L) { L = class L { m() {} }; return typeof L; })());"
+                        + " r.push((function () { let L; L = class L { static s = 1 };"
+                        + " return [typeof L, (() => L.s)()]; })());"
+                        + " r.join('|')");
+    }
+
     @Test
     void earlyErrors() {
         assertBoth(

@@ -300,6 +300,19 @@ class ConstLetScopingTest {
     }
 
     @Test
+    void letInAFunctionOfASingleStatementBody() {
+        // the body of the function is not in the statement position of the if
+        Utils.assertGatedBehavior(
+                "SyntaxError",
+                "3,4,5",
+                "var r = []; function f(g) { return g(3); }"
+                        + " try { eval('if (true) r.push(f(function (a) { let x = a; return x; }));"
+                        + " if (true) r.push(f(a => { let x = a + 1; return x; }));"
+                        + " while (r.length < 3) r.push(f(a => { const x = a + 2; return x; }));');"
+                        + " r.join() } catch (e) { e.name }");
+    }
+
+    @Test
     void constInSingleStatementIfBodyIsError() {
         Utils.assertEvaluatorExceptionES6(
                 "const declarations may only appear at the top level or within a block",

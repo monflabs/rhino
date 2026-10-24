@@ -1367,6 +1367,15 @@ public class Parser {
         boolean inDirectivePrologue = true;
         legacyEscapeInPrologue = false;
         boolean savedStrictMode = inUseStrictDirective;
+        boolean savedInSingleStatementContext = inSingleStatementContext;
+        boolean savedInSingleStatementDeclContext = inSingleStatementDeclContext;
+        boolean savedLetInSingleStatement = letInSingleStatement;
+        if (compilerEnv.isLatestEcmaScript()) {
+            // if (a) f(function () { let x; }): the body is not in the if's statement position
+            inSingleStatementContext = false;
+            inSingleStatementDeclContext = false;
+            letInSingleStatement = false;
+        }
 
         pn.setLineColumnNumber(lineNumber(), columnNumber());
         try {
@@ -1447,6 +1456,9 @@ public class Parser {
         } finally {
             --nestingOfFunction;
             inUseStrictDirective = savedStrictMode;
+            inSingleStatementContext = savedInSingleStatementContext;
+            inSingleStatementDeclContext = savedInSingleStatementDeclContext;
+            letInSingleStatement = savedLetInSingleStatement;
         }
 
         getAndResetJsDoc();

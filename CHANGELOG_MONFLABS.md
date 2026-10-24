@@ -39,6 +39,31 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Three bugs found by the Web Tooling Benchmark (2026-10-24)
+
+The Web Tooling Benchmark, added to JavascriptPerformance as the `web-tooling` suite, runs 18 libraries (Babel,
+TypeScript, Prettier, ...) on real inputs and checks their results against V8. Three of its failures were engine
+bugs:
+
+- Gated: a function in the body of an `if` or a loop without braces may declare `let` and `const`
+  (`if (ok) run(function () { let x; })`): the parser flagged the declaration as the body of the `if`, its
+  single-statement state not reset in a function body. Prepack failed to parse. BACKWARD_COMPATIBILITY.md 1.97.
+- The name of a class expression over a variable or parameter of the same name in the function (`var L; L = class L
+  { m() {} }`): the class body resolved the name to the function's variable when the class has members, and its
+  scope is a scope object. In the interpreter, the class definition threw "redeclaration of var L" or bound
+  nothing, and in compiled mode, the class compiler crashed (`StackMapTable`: "bad local variable type",
+  "bad merge attempt"). CoffeeScript defines its classes this way. The body of a block lowered to a scope object
+  now stays in its `Scope` node (`NodeTransformer.visitLet`), under `VERSION_ECMASCRIPT` only; classes are only
+  available under that version. `Scope.getTop` finds the function or script of a scope that was given its child
+  scopes before being attached to the tree (the block of the declarations of eval code, a class in a destructuring
+  default), whose `top` was left null.
+- Compiled mode: a class with more than 65,535 constants failed with a `NullPointerException` in
+  `ClassFileWriter$StackMapTable` instead of being spread over several classes: the limit was checked when the
+  class was written, but the stack map of a method, verified when the method ends, already read the wrapped index
+  of a method reference. `stopMethod` now checks it, so the compiler spreads the functions over more classes as
+  for the other class limits. Babel failed in compiled mode; it now runs compiled. Not gated: a crash.
+- test262: no change.
+
 ### The browser playground runs interpreted (2026-10-24)
 
 - The playground of the documentation site, which CheerpJ runs, failed every script in compiled mode with

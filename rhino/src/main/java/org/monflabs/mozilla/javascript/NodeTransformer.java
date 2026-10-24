@@ -745,7 +745,15 @@ public class NodeTransformer {
             }
             newVars.putProp(Node.OBJECT_IDS_PROP, list.toArray());
             result.addChildToBack(newVars);
-            result.addChildToBack(new Node(Token.SCOPE_BLOCK, body));
+            if (tdz && scopeNode instanceof Scope) {
+                // the body still resolves its names against the scope (e.g. the name of a class
+                // over a variable of the same name in a register)
+                scopeNode.setType(Token.SCOPE_BLOCK);
+                scopeNode.addChildToBack(body);
+                result.addChildToBack(scopeNode);
+            } else {
+                result.addChildToBack(new Node(Token.SCOPE_BLOCK, body));
+            }
             result.addChildToBack(new Node(Token.LEAVE_SCOPE));
         } else {
             result = new Node(isExpression ? Token.COMMA : Token.BLOCK);
