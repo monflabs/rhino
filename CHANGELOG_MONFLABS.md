@@ -39,6 +39,17 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Destructuring declarations in a switch clause (2026-10-24)
+
+- Gated: a destructuring `let` or `const` in a `switch` clause (`default: let { a, b } = f(); return a;`) binds
+  its names. IRFactory defines them while transforming the clause, in the table of the switch node, whose
+  bindings had already moved to the block that holds the clauses; reading them was a ReferenceError (an
+  assignment to an undeclared name in strict code). Prepack, in the Web Tooling Benchmark, failed on it; it now
+  passes. BACKWARD_COMPATIBILITY.md 1.98.
+- Known gap, unchanged: the bindings of a destructuring declaration have no temporal dead zone (read before the
+  declaration, they are `undefined`), in a block as in a clause.
+- test262: no change.
+
 ### Three bugs found by the Web Tooling Benchmark (2026-10-24)
 
 The Web Tooling Benchmark, added to JavascriptPerformance as the `web-tooling` suite, runs 18 libraries (Babel,

@@ -1878,6 +1878,13 @@ public final class IRFactory {
                 }
                 addSwitchCase(block, caseExpr, body);
             }
+            if (node.getSymbolTable() != null && parser.compilerEnv.isLatestEcmaScript()) {
+                // the names of a destructuring declaration, defined as it is transformed: the
+                // clauses follow the switch, in the block
+                for (String name : new ArrayList<>(node.getSymbolTable().keySet())) {
+                    node.moveSymbol(name, block);
+                }
+            }
             closeSwitch(block);
             return block;
         } finally {

@@ -313,6 +313,21 @@ class ConstLetScopingTest {
     }
 
     @Test
+    void destructuringDeclarationInASwitchClause() {
+        Utils.assertGatedBehavior(
+                "ReferenceError",
+                "3|1|4",
+                "function m() { return { a: 1, c: 2 }; } var r = [];"
+                        + " try { r.push((function (k) { switch (k) { default: let { a, c: d } = m();"
+                        + " return a + d; } })());"
+                        + " r.push((function (k) { switch (k) { case 0: let [a] = [1]; case 1:"
+                        + " return (() => a)(); } })(0));"
+                        + " r.push((function (k) { 'use strict'; var p = 1; switch (k) { default:"
+                        + " const { a, c } = m(); return a + c + p; } })());"
+                        + " r.join('|') } catch (e) { e.name }");
+    }
+
+    @Test
     void constInSingleStatementIfBodyIsError() {
         Utils.assertEvaluatorExceptionES6(
                 "const declarations may only appear at the top level or within a block",

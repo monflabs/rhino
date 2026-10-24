@@ -185,6 +185,8 @@ public class Context implements Closeable {
      *   <li>A function in the body of an {@code if} or a loop without braces may declare {@code
      *       let} and {@code const}, instead of the SyntaxError "let declaration not directly within
      *       block".
+     *   <li>A destructuring {@code let} or {@code const} in a {@code switch} clause binds its
+     *       names, instead of a ReferenceError when they are read.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

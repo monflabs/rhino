@@ -1597,6 +1597,21 @@ if (ok) run(function () { let x = 1; return x; });
 - **Why:** ECMA-262 2026, §14.6 (The `if` Statement) and §14.7 (Iteration Statements): the body is a *Statement*, and
   a *FunctionBody* (§15.2) is a list of *StatementListItem*s, which may be declarations.
 
+### 1.98 Destructuring declarations in a `switch` clause
+
+```js
+switch (kind) {
+  default:
+    let { a, b } = f();
+    return a + b;   // VERSION_ES6: ReferenceError: "a" is not defined   VERSION_ECMASCRIPT: a + b
+}
+```
+
+- The names of a destructuring `let` or `const` in a clause were bound in a scope that the clauses are not in, so
+  reading them failed. They are bound in the scope of the `switch` block, like those of a plain declaration.
+- **Why:** ECMA-262 2026, §14.12.4 (`switch` Statement: Runtime Semantics: Evaluation): the declarations of the
+  *CaseBlock* are instantiated in one block environment (BlockDeclarationInstantiation).
+
 ---
 
 ## 2. Platform and embedding
