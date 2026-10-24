@@ -39,6 +39,30 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Compiled mode for large scripts, and direct calls that reach another function (2026-10-24)
+
+- Compiled mode: a function whose jumps exceed the 16-bit offsets of the branches, and that cannot be split
+  further (a `switch` of hundreds of clauses, which the Splitter keeps whole), is compiled again with wide jumps
+  (`goto_w`) instead of running the whole script in the interpreter. `-Drhino.wideJumps=true` makes every branch
+  wide, for testing. OPTIMIZATION.md "Long jumps with `goto_w`". Not gated: not observable.
+- Compiled mode: a call named like a nested function declaration that reaches another function (a method of the
+  same name, `sm.getScope()` in `function getScope() { return sm.getScope(); }`, or a parameter of that name) made
+  the declaration count as returning a number, and the call returned `NaN`. The number analyses only take a
+  function whose calls all reach its declaration (`Node.DIRECT_TARGET_PROP`). Stock Rhino has no number returns,
+  and gets it right: not gated, compiled mode now computes what the interpreter does.
+- Lebab, in the Web Tooling Benchmark, runs compiled: it ran interpreted (the jumps of Recast's printer), and
+  compiled with wide jumps, failed on the second bug.
+- Compiled mode: the Splitter also splits a statement too heavy for a chunk: a `var` statement of many
+  declarators into several, a `switch` of many clauses into a switch per run of clauses (after a first one that
+  finds the clause), the data properties of an object literal into chunks it spreads, and the heavy operands of
+  a `?:` into chunks returning them. The class compiler reports all the functions too large at once, so the
+  script is parsed again once for them. CoffeeScript, Prettier and TypeScript, in the Web Tooling Benchmark,
+  now run compiled; all 18 libraries do. OPTIMIZATION.md "Functions too large for a class file are split".
+- Compiled mode: the variables of enclosing functions that a nested function reads at their position are
+  shared by reference, not copied into every nested function: Prettier's bundle copied 19 million entries
+  (900 MB) at each compilation, and ran out of memory with a 1 GB heap.
+- test262: no change.
+
 ### Destructuring declarations in a switch clause (2026-10-24)
 
 - Gated: a destructuring `let` or `const` in a `switch` clause (`default: let { a, b } = f(); return a;`) binds

@@ -40,6 +40,45 @@ public class ClassFileWriterTest {
         assertThrows(ClassFileWriter.ClassSizeException.class, () -> cfw.stopMethod((short) 0));
     }
 
+    /**
+     * Jumps over 32 KB of code: a conditional branch, a forward goto and a backward one, as goto_w.
+     */
+    @Test
+    public void wideJumps() throws Exception {
+        ClassFileWriter cfw =
+                new ClassFileWriter("TestWideJumps", "java/lang/Object", "ClassFileWriterTest");
+        cfw.setWideJumps(true);
+        // public static int count(int n) { int r = 0; while (n > 0) { r++; n--; } return r; }
+        cfw.startMethod("count", "(I)I", (short) (ACC_PUBLIC | ACC_STATIC));
+        cfw.addPush(0);
+        cfw.addIStore(1);
+        int top = cfw.acquireLabel();
+        int end = cfw.acquireLabel();
+        int body = cfw.acquireLabel();
+        cfw.markLabel(top);
+        cfw.addILoad(0);
+        cfw.add(ByteCode.IFGT, body);
+        cfw.add(ByteCode.GOTO, end);
+        cfw.markLabel(body);
+        for (int i = 0; i < 40000; i++) {
+            cfw.add(ByteCode.NOP);
+        }
+        cfw.add(ByteCode.IINC, 1, 1);
+        cfw.addILoad(0);
+        cfw.addPush(1);
+        cfw.add(ByteCode.ISUB);
+        cfw.addIStore(0);
+        cfw.add(ByteCode.GOTO, top);
+        cfw.markLabel(end);
+        cfw.addILoad(1);
+        cfw.add(ByteCode.IRETURN);
+        cfw.stopMethod((short) 2);
+
+        Class<?> cl = new DefiningClassLoader().defineClass("TestWideJumps", cfw.toByteArray());
+        assertEquals(5, cl.getMethod("count", int.class).invoke(null, 5));
+        assertEquals(0, cl.getMethod("count", int.class).invoke(null, -1));
+    }
+
     @Test
     public void stackMapTable() throws Exception {
         final String CLASS_NAME = "TestStackMapTable";

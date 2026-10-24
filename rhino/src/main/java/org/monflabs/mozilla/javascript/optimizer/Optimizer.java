@@ -355,7 +355,8 @@ class Optimizer {
                             && !fnode.requiresActivation()
                             && !fnode.hasRestParameter()
                             && !fnode.hasDestructuredParams()
-                            && names.getOrDefault(fnode.getName(), 0) == calleeNames(fCalls)) {
+                            && names.getOrDefault(fnode.getName(), 0) == calleeNames(fCalls)
+                            && reachDeclaration(fCalls)) {
                         calls.put(f, fCalls);
                     }
                 }
@@ -413,6 +414,20 @@ class Optimizer {
     }
 
     /** The uses of the name of the target that are the callee of its direct calls. */
+    /**
+     * Whether every call reaches the declaration of its target when it is not assigned: not a
+     * method call of the same name (o.f()), nor a call of a binding of the name in between (a
+     * parameter f). Another callee would return anything.
+     */
+    private static boolean reachDeclaration(List<Node> calls) {
+        for (Node call : calls) {
+            if (call.getIntProp(Node.DIRECT_TARGET_PROP, 0) == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static int calleeNames(List<Node> calls) {
         int count = 0;
         for (Node call : calls) {

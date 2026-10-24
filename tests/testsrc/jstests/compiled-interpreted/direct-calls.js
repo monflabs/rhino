@@ -37,4 +37,15 @@ for (var i = 0; i < values.length; i++) {
 out.push(eq(10), eq(0), eq(2.5), rel(10), arith(3), bits(-7), unary(0), incdec(1.5));
 out.push(two(10, 10), two(1, 2), two(NaN, NaN), two(0, -0), branch(10), branch(0), branch(1));
 out.push(loop(10), rec(20), swi(10), swi(0), swi(1));
+// a call named like a declaration that reaches another function: a method of the same name, a
+// parameter that shadows it
+(function () {
+    var sm = { getScope: function () { return { tag: "scope" }; } };
+    function getScope() { return sm.getScope(); }
+    function Holder(s) { this.s = s; }
+    function use() { return new Holder(getScope()); }
+    function num() { return 1; }
+    function shadow(num) { return num(); }
+    out.push(typeof getScope(), use().s.tag, num(), shadow(function () { return "param"; }));
+})();
 out.join("\n");

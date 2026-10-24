@@ -42,6 +42,7 @@ public class ClassFileWriter {
     public static class ClassSizeException extends ClassFileFormatException {
 
         private final boolean methodLimit;
+        private final boolean jumpOffset;
 
         public ClassSizeException(String message) {
             this(message, false);
@@ -52,12 +53,25 @@ public class ClassFileWriter {
          *     rather than a limit of the class (its constant pool)
          */
         public ClassSizeException(String message, boolean methodLimit) {
+            this(message, methodLimit, false);
+        }
+
+        /**
+         * @param jumpOffset whether a jump exceeds the 16-bit offset of a branch (see {@link
+         *     #setWideJumps})
+         */
+        public ClassSizeException(String message, boolean methodLimit, boolean jumpOffset) {
             super(message);
             this.methodLimit = methodLimit;
+            this.jumpOffset = jumpOffset;
         }
 
         public boolean isMethodLimit() {
             return methodLimit;
+        }
+
+        public boolean isJumpOffset() {
+            return jumpOffset;
         }
     }
 
@@ -135,6 +149,14 @@ public class ClassFileWriter {
      */
     public void setKeepLiveExceptionRanges(boolean keepLiveExceptionRanges) {
         this.keepLiveExceptionRanges = keepLiveExceptionRanges;
+    }
+
+    /**
+     * Branch to a label with a 32-bit offset: goto_w, and a conditional branch as the inverted
+     * condition over a goto_w. For a method whose jumps exceed the 16-bit offsets of the branches.
+     */
+    public void setWideJumps(boolean wideJumps) {
+        this.wideJumps = wideJumps;
     }
 
     static String getSlashedForm(String name) {
@@ -507,6 +529,11 @@ public class ClassFileWriter {
 
         switch (theOpCode) {
             case ByteCode.GOTO:
+                if (wideJumps && (theOperand & 0x80000000) == 0x80000000) {
+                    addWideJump(theOperand);
+                    addSuperBlockStart(itsCodeBufferTop);
+                    break;
+                }
                 // This is necessary because dead code is seemingly being
                 // generated and Sun's verifier is expecting type state to be
                 // placed even at dead blocks of code.
@@ -535,6 +562,18 @@ public class ClassFileWriter {
                             throw new IllegalArgumentException("Bad label for branch");
                     }
                     int branchPC = itsCodeBufferTop;
+                    if (wideJumps
+                            && theOpCode != ByteCode.GOTO
+                            && theOpCode != ByteCode.JSR
+                            && (theOperand & 0x80000000) == 0x80000000) {
+                        // the inverted condition skips the goto_w: 3 bytes, and 5 of the goto_w
+                        addToCodeBuffer(invertedBranch(theOpCode));
+                        addToCodeInt16(8);
+                        addSuperBlockStart(branchPC + 8);
+                        itsJumpFroms.put(branchPC + 8, branchPC);
+                        addWideJump(theOperand);
+                        break;
+                    }
                     addToCodeBuffer(theOpCode);
                     if ((theOperand & 0x80000000) != 0x80000000) {
                         // hard displacement
@@ -559,7 +598,7 @@ public class ClassFileWriter {
                             if ((short) offset != offset) {
                                 // a backward jump: its offset wrapped
                                 throw new ClassSizeException(
-                                        "Program too complex: too big jump offset", true);
+                                        "Program too complex: too big jump offset", true, true);
                             }
                             addToCodeInt16(offset);
                             addSuperBlockStart(targetPC);
@@ -1368,12 +1407,38 @@ public class ClassFileWriter {
         itsFixupTable[top] = ((long) label << 32) | fixupSite;
     }
 
+    /** A goto_w to a label. */
+    private void addWideJump(int label) {
+        int gotoPC = itsCodeBufferTop;
+        addToCodeBuffer(ByteCode.GOTO_W);
+        int targetPC = getLabelPC(label);
+        if (targetPC != -1) {
+            int n = addReservedCodeSpace(4);
+            putInt32(targetPC - gotoPC, itsCodeBuffer, n);
+            addSuperBlockStart(targetPC);
+            itsJumpFroms.put(targetPC, gotoPC);
+        } else {
+            addLabelFixup(label, (gotoPC + 1) | WIDE_FIXUP);
+            addReservedCodeSpace(4);
+        }
+    }
+
+    /** The branch on the opposite condition: ifeq and ifne, iflt and ifge, ... */
+    private static int invertedBranch(int opcode) {
+        if (opcode == ByteCode.IFNULL || opcode == ByteCode.IFNONNULL) {
+            return ((opcode - ByteCode.IFNULL) ^ 1) + ByteCode.IFNULL;
+        }
+        return ((opcode - ByteCode.IFEQ) ^ 1) + ByteCode.IFEQ;
+    }
+
     private void fixLabelGotos() {
         byte[] codeBuffer = itsCodeBuffer;
         for (int i = 0; i < itsFixupTableTop; i++) {
             long fixup = itsFixupTable[i];
             int label = (int) (fixup >> 32);
             int fixupSite = (int) fixup;
+            boolean wide = (fixupSite & WIDE_FIXUP) != 0;
+            fixupSite &= ~WIDE_FIXUP;
             int pc = itsLabelTable[label];
             if (pc == -1) {
                 // Unlocated label
@@ -1383,8 +1448,13 @@ public class ClassFileWriter {
             addSuperBlockStart(pc);
             itsJumpFroms.put(pc, fixupSite - 1);
             int offset = pc - (fixupSite - 1);
+            if (wide) {
+                putInt32(offset, codeBuffer, fixupSite);
+                continue;
+            }
             if ((short) offset != offset) {
-                throw new ClassSizeException("Program too complex: too big jump offset", true);
+                throw new ClassSizeException(
+                        "Program too complex: too big jump offset", true, true);
             }
             codeBuffer[fixupSite] = (byte) (offset >> 8);
             codeBuffer[fixupSite + 1] = (byte) offset;
@@ -4676,6 +4746,9 @@ public class ClassFileWriter {
     // itsFixupTable[i] = (label_index << 32) | fixup_site
     private static final int MIN_FIXUP_TABLE_SIZE = 40;
     private long[] itsFixupTable;
+    // marks the fixup site of a goto_w, whose offset takes 4 bytes
+    private static final int WIDE_FIXUP = 1 << 30;
+    private boolean wideJumps;
     private int itsFixupTableTop;
     private ArrayList<int[]> itsVarDescriptors;
     private int itsInvokeDynamicCount;

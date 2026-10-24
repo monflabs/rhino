@@ -6007,8 +6007,7 @@ class BodyCodegen {
      * whose registers do not survive a yield.
      */
     private void initOuterActivationLocals() {
-        if (!(scriptOrFn instanceof FunctionNode)
-                || ((FunctionNode) scriptOrFn).getOuterVars() == null) {
+        if (!(scriptOrFn instanceof FunctionNode) || !((FunctionNode) scriptOrFn).hasOuterVars()) {
             return;
         }
         BitSet depths = new BitSet();

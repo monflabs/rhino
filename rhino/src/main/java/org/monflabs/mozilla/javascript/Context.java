@@ -2970,6 +2970,19 @@ public class Context implements Closeable {
     }
 
     /**
+     * Whether the function too large is compiled again: split further, or, once it cannot be, with
+     * wide jumps when its jumps were too long (a large switch, which the Splitter keeps whole).
+     */
+    private static boolean retryFunction(CompilerEnvirons env, FunctionTooLargeException e) {
+        boolean retry = false;
+        for (FunctionTooLargeException f : e.getFunctions()) {
+            int key = f.getFunctionKey();
+            retry |= env.splitFurther(key) || (f.isJumpOffset() && env.useWideJumps(key));
+        }
+        return retry;
+    }
+
+    /**
      * A compiler bug or a class file limit: the script still runs, much slower; also logged, since
      * the default error reporter ignores warnings. With the property {@code
      * rhino.failOnCompileFallback}, set by the test suites, a compiler bug throws instead.
@@ -3090,11 +3103,10 @@ public class Context implements Closeable {
                                     .compile(compiler, compilerEnv, tree, sourceString);
                     break;
                 } catch (FunctionTooLargeException | ClassTooLargeException e) {
-                    // split the function into smaller methods (Splitter), or more if it was;
-                    // spread the functions of the script over more classes
+                    // split the function into smaller methods (Splitter), or more if it was, then
+                    // let it jump further; spread the functions of the script over more classes
                     if (e instanceof FunctionTooLargeException
-                            ? !compilerEnv.splitFurther(
-                                    ((FunctionTooLargeException) e).getFunctionKey())
+                            ? !retryFunction(compilerEnv, (FunctionTooLargeException) e)
                             : !compilerEnv.spreadOverMoreClasses((ClassTooLargeException) e)) {
                         throw e;
                     }

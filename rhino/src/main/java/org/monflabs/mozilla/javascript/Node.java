@@ -103,7 +103,10 @@ public class Node implements Iterable<Node> {
             // LEAVE_SCOPE of a jump out of its scope (break, continue, return): the scope is still
             // open in the code that follows
             JUMP_EXIT_PROP = 49,
-            LAST_PROP = JUMP_EXIT_PROP,
+            // a direct call (DIRECTCALL_PROP) whose callee name resolves to the declaration of its
+            // target: no binding of the name in between (OptTransformer)
+            DIRECT_TARGET_PROP = 50,
+            LAST_PROP = DIRECT_TARGET_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -543,6 +546,8 @@ public class Node implements Iterable<Node> {
                 return "unguarded_iterator_prop";
             case JUMP_EXIT_PROP:
                 return "jump_exit_prop";
+            case DIRECT_TARGET_PROP:
+                return "direct_target_prop";
 
             default:
                 Kit.codeBug();

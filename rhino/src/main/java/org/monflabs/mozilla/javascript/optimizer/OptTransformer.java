@@ -11,6 +11,8 @@ import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.NodeTransformer;
 import org.monflabs.mozilla.javascript.Token;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
+import org.monflabs.mozilla.javascript.ast.Name;
+import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
 
 /**
@@ -33,15 +35,15 @@ class OptTransformer extends NodeTransformer {
     }
 
     @Override
-    protected void visitNew(Node node, ScriptNode tree) {
+    protected void visitNew(Node node, ScriptNode tree, Scope scope) {
         detectDirectCall(node, tree);
-        super.visitNew(node, tree);
+        super.visitNew(node, tree, scope);
     }
 
     @Override
-    protected void visitCall(Node node, ScriptNode tree) {
+    protected void visitCall(Node node, ScriptNode tree, Scope scope) {
         detectDirectCall(node, tree);
-        super.visitCall(node, tree);
+        super.visitCall(node, tree, scope);
     }
 
     private void detectDirectCall(Node node, ScriptNode tree) {
@@ -97,6 +99,13 @@ class OptTransformer extends NodeTransformer {
                         // for wacky test cases
                         if (argCount <= 32) {
                             node.putProp(Node.DIRECTCALL_PROP, ofn);
+                            if (left instanceof Name
+                                    && left.getType() == Token.NAME
+                                    && enclosingDefiningScope((Name) left, targetName)
+                                            == ofn.fnode.getEnclosingScope()) {
+                                // the call reaches the declaration, unless the binding changes
+                                node.putIntProp(Node.DIRECT_TARGET_PROP, 1);
+                            }
                             if (!ofn.isTargetOfDirectCall()) {
                                 int index = directCallTargets.size();
                                 directCallTargets.add(ofn);

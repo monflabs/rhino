@@ -436,7 +436,27 @@ public class CompilerEnvirons {
     /** Forgets the functions to split: the script is interpreted. */
     void clearSplits() {
         splitLevels = null;
+        wideJumps = null;
         noSplit = true;
+    }
+
+    /**
+     * Whether the methods of the function at that source position branch with 32-bit offsets: its
+     * jumps exceeded the 16-bit ones once it could not be split further.
+     */
+    public boolean hasWideJumps(int functionKey) {
+        return FORCED_WIDE_JUMPS || (wideJumps != null && wideJumps.contains(functionKey));
+    }
+
+    /** For testing: every function branches with 32-bit offsets. */
+    private static final boolean FORCED_WIDE_JUMPS = RhinoConfig.get("rhino.wideJumps", false);
+
+    /** Asks for the function to branch with 32-bit offsets; false if it already does. */
+    boolean useWideJumps(int functionKey) {
+        if (wideJumps == null) {
+            wideJumps = new HashSet<>();
+        }
+        return wideJumps.add(functionKey);
     }
 
     /** Whether the functions of the script may be split (not when it is interpreted). */
@@ -484,6 +504,7 @@ public class CompilerEnvirons {
     private Object securityDomain;
     private Map<Integer, Integer> splitLevels;
     private Set<Integer> unsplittable;
+    private Set<Integer> wideJumps;
     private boolean noSplit;
 
     private int classUnits = FORCED_CLASS_UNITS;

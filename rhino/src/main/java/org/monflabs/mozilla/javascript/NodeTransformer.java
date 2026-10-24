@@ -373,11 +373,11 @@ public class NodeTransformer {
                     }
 
                 case Token.CALL:
-                    visitCall(node, tree);
+                    visitCall(node, tree, scope);
                     break;
 
                 case Token.NEW:
-                    visitNew(node, tree);
+                    visitNew(node, tree, scope);
                     break;
 
                 case Token.LETEXPR:
@@ -619,7 +619,7 @@ public class NodeTransformer {
      * its activation (Node#OUTER_VAR_PROP); returns whether it did.
      */
     private static boolean markOuterVar(ScriptNode tree, Node node, Scope scope) {
-        if (!(tree instanceof FunctionNode) || ((FunctionNode) tree).getOuterVars() == null) {
+        if (!(tree instanceof FunctionNode) || !((FunctionNode) tree).hasOuterVars()) {
             return false;
         }
         int type = node.getType();
@@ -635,7 +635,7 @@ public class NodeTransformer {
             return false;
         }
         String name = nameSource.getString();
-        Integer var = ((FunctionNode) tree).getOuterVars().get(name);
+        Integer var = ((FunctionNode) tree).getOuterVar(name);
         if (var == null || nameSource.getScope() != null || scope.getDefiningScope(name) != null) {
             return false;
         }
@@ -680,9 +680,9 @@ public class NodeTransformer {
         return close;
     }
 
-    protected void visitNew(Node node, ScriptNode tree) {}
+    protected void visitNew(Node node, ScriptNode tree, Scope scope) {}
 
-    protected void visitCall(Node node, ScriptNode tree) {}
+    protected void visitCall(Node node, ScriptNode tree, Scope scope) {}
 
     protected Node visitLet(boolean createScope, Node parent, Node previous, Node scopeNode) {
         Node vars = scopeNode.getFirstChild();
@@ -1138,9 +1138,7 @@ public class NodeTransformer {
             return;
         }
         for (FunctionNode nested : fn.getFunctions()) {
-            for (Map.Entry<String, Integer> var : vars.entrySet()) {
-                nested.addOuterVar(var.getKey(), (depth << 24) | var.getValue());
-            }
+            nested.addOuterVars(vars, depth);
             addOuterVars(nested, vars, depth + 1);
         }
     }
@@ -1426,7 +1424,10 @@ public class NodeTransformer {
         return n instanceof ScriptNode && node.getPosition() >= 0;
     }
 
-    private static Scope enclosingDefiningScope(Name reference, String name) {
+    /**
+     * The innermost scope that defines name around reference, in its function or an enclosing one.
+     */
+    protected static Scope enclosingDefiningScope(Name reference, String name) {
         for (AstNode node = reference.getParent(); node != null; node = node.getParent()) {
             if (node instanceof Scope) {
                 Scope found = ((Scope) node).getDefiningScope(name);

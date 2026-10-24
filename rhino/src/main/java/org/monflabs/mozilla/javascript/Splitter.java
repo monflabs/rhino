@@ -9,32 +9,45 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
+import org.monflabs.mozilla.javascript.ast.AbstractObjectProperty;
+import org.monflabs.mozilla.javascript.ast.ArrayComprehension;
 import org.monflabs.mozilla.javascript.ast.AstNode;
 import org.monflabs.mozilla.javascript.ast.Block;
 import org.monflabs.mozilla.javascript.ast.BreakStatement;
 import org.monflabs.mozilla.javascript.ast.CatchClause;
 import org.monflabs.mozilla.javascript.ast.ClassNode;
+import org.monflabs.mozilla.javascript.ast.ConditionalExpression;
 import org.monflabs.mozilla.javascript.ast.ContinueStatement;
 import org.monflabs.mozilla.javascript.ast.ExpressionStatement;
 import org.monflabs.mozilla.javascript.ast.FunctionCall;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
+import org.monflabs.mozilla.javascript.ast.GeneratorExpression;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
+import org.monflabs.mozilla.javascript.ast.Label;
 import org.monflabs.mozilla.javascript.ast.LabeledStatement;
+import org.monflabs.mozilla.javascript.ast.LetNode;
 import org.monflabs.mozilla.javascript.ast.Loop;
 import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.NumberLiteral;
+import org.monflabs.mozilla.javascript.ast.ObjectLiteral;
+import org.monflabs.mozilla.javascript.ast.ObjectProperty;
 import org.monflabs.mozilla.javascript.ast.ParenthesizedExpression;
 import org.monflabs.mozilla.javascript.ast.ReturnStatement;
 import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.ast.Spread;
+import org.monflabs.mozilla.javascript.ast.SpreadObjectProperty;
+import org.monflabs.mozilla.javascript.ast.StringLiteral;
 import org.monflabs.mozilla.javascript.ast.SwitchCase;
 import org.monflabs.mozilla.javascript.ast.SwitchStatement;
 import org.monflabs.mozilla.javascript.ast.Symbol;
 import org.monflabs.mozilla.javascript.ast.TryStatement;
 import org.monflabs.mozilla.javascript.ast.UnaryExpression;
 import org.monflabs.mozilla.javascript.ast.VariableDeclaration;
+import org.monflabs.mozilla.javascript.ast.VariableInitializer;
 import org.monflabs.mozilla.javascript.ast.WithStatement;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
 
@@ -83,6 +96,13 @@ final class Splitter {
     private final boolean script;
     private final int limit;
     private boolean declared;
+
+    /** The switch statements made by #splitClauses, whose clauses are not split again. */
+    private final Set<SwitchStatement> madeSwitches =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /** The number of switch statements whose clauses were split, for the names of their labels. */
+    private int splitSwitches;
 
     private Splitter(ScriptNode owner, int limit) {
         this.owner = owner;
@@ -207,9 +227,24 @@ final class Splitter {
     private List<AstNode> splitStatements(List<AstNode> statements, AstNode block) {
         boolean changed = false;
         int total = 0;
-        for (AstNode statement : statements) {
+        for (int i = 0; i < statements.size(); i++) {
+            AstNode statement = statements.get(i);
             int w = weight(statement);
+            if (w > limit && isSplittableVar(statement)) {
+                // var a = 1, b = 2; is var a = 1; var b = 2;
+                List<AstNode> parts = splitVar((VariableDeclaration) statement);
+                statements.remove(i);
+                statements.addAll(i, parts);
+                statement = parts.get(0);
+                w = weight(statement);
+                changed = true;
+            }
             if (w > limit) {
+                if (statement instanceof SwitchStatement && canSplitClauses(statement)) {
+                    statement = splitClauses((SwitchStatement) statement);
+                    statements.set(i, statement);
+                    changed = true;
+                }
                 changed |= splitInside(statement);
                 w = weight(statement);
             }
@@ -242,24 +277,24 @@ final class Splitter {
 
     /** Splits the blocks of a compound statement; returns whether it did. */
     private boolean splitInside(AstNode statement) {
-        boolean changed = false;
+        boolean changed = splitLiterals(statement);
         if (statement instanceof Block
                 || (statement instanceof Scope && isStatementBlock(statement))) {
-            changed = splitBlock(statement);
+            changed |= splitBlock(statement);
         } else if (statement instanceof Loop) {
-            changed = splitNested(((Loop) statement).getBody());
+            changed |= splitNested(((Loop) statement).getBody());
         } else if (statement instanceof IfStatement) {
-            changed = splitNested(((IfStatement) statement).getThenPart());
+            changed |= splitNested(((IfStatement) statement).getThenPart());
             changed |= splitNested(((IfStatement) statement).getElsePart());
         } else if (statement instanceof TryStatement) {
             TryStatement tryStatement = (TryStatement) statement;
-            changed = splitNested(tryStatement.getTryBlock());
+            changed |= splitNested(tryStatement.getTryBlock());
             for (CatchClause clause : tryStatement.getCatchClauses()) {
                 changed |= splitNested(clause.getBody());
             }
             changed |= splitNested(tryStatement.getFinallyBlock());
         } else if (statement instanceof LabeledStatement) {
-            changed = splitNested(((LabeledStatement) statement).getStatement());
+            changed |= splitNested(((LabeledStatement) statement).getStatement());
         } else if (statement instanceof SwitchStatement) {
             for (SwitchCase switchCase : ((SwitchStatement) statement).getCases()) {
                 if (weight(switchCase) > limit) {
@@ -277,6 +312,9 @@ final class Splitter {
         if (node instanceof Block || (node instanceof Scope && isStatementBlock(node))) {
             return splitBlock(node);
         }
+        if (node instanceof SwitchStatement && canSplitClauses(node)) {
+            node = splitClauses((SwitchStatement) node);
+        }
         boolean changed = splitInside(node);
         if (weight(node) > limit && isMovable(node) && node.getParent() != null) {
             // a statement that is not a block, such as the else part of an else if chain: a chunk
@@ -292,6 +330,441 @@ final class Splitter {
             changed = true;
         }
         return changed;
+    }
+
+    /**
+     * Whether the clauses of a switch can be split into several switch statements: in a function
+     * (the chunks of a script return its completion value, so a statement with a break out of it
+     * stays in place), at least two clauses each light enough, and no declaration of the switch
+     * block, whose bindings all its clauses share.
+     */
+    private boolean canSplitClauses(AstNode node) {
+        SwitchStatement sw = (SwitchStatement) node;
+        if (script
+                || madeSwitches.contains(sw)
+                || sw.getCases().size() < 2
+                || (sw.getSymbolTable() != null && !sw.getSymbolTable().isEmpty())
+                || hasBlockFunction(sw)
+                || sw.getParent() == null) {
+            return false;
+        }
+        for (SwitchCase clause : sw.getCases()) {
+            if (clause.getStatements() != null) {
+                for (AstNode statement : clause.getStatements()) {
+                    if (!isMovable(statement)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Splits a switch whose clauses are too many for one method, which the chunks of its clauses do
+     * not make smaller:
+     *
+     * <pre>
+     * %swN: {
+     *   switch (discriminant) { case e0: %caseN = 0; break; ... default: %caseN = d; }
+     *   if (%caseN &lt; k1) { switch (%caseN) { case 0: ... case k1 - 1: ... } %caseN = k1; }
+     *   if (%caseN &lt; k2) { switch (%caseN) { case k1: ... } %caseN = k2; }
+     *   ...
+     * }
+     * </pre>
+     *
+     * The first switch evaluates the discriminant and the case expressions as the original one, in
+     * order until one matches, and keeps the index of the clause entered; each run of clauses is a
+     * switch of its own, entered at that clause, falling through to the next run; a break to the
+     * switch leaves the labeled block. The block's statements are then chunked as any other.
+     */
+    private LabeledStatement splitClauses(SwitchStatement sw) {
+        int pos = sw.getAbsolutePosition();
+        int lineno = sw.getLineno();
+        int column = sw.getColumn();
+        int n = splitSwitches++;
+        String caseVar = "%case" + n;
+        owner.putSymbol(new Symbol(Symbol.Type.VAR, caseVar));
+        Label label = new Label(pos, 0, "%sw" + n);
+        label.setLineColumnNumber(lineno, column);
+        LabeledStatement labeled = new LabeledStatement(pos, sw.getLength());
+        labeled.setLineColumnNumber(lineno, column);
+        labeled.addLabel(label);
+        Block block = new Block(pos, sw.getLength());
+        block.setLineColumnNumber(lineno, column);
+
+        // the breaks to the switch leave the block
+        List<BreakStatement> breaks = new ArrayList<>();
+        sw.visit(
+                node -> {
+                    if (node instanceof BreakStatement
+                            && ((BreakStatement) node).getBreakTarget() == sw) {
+                        breaks.add((BreakStatement) node);
+                    }
+                    return !(node instanceof FunctionNode);
+                });
+        for (BreakStatement brk : breaks) {
+            BreakStatement leave = new BreakStatement(brk.getAbsolutePosition(), brk.getLength());
+            leave.setBreakLabel(name(label.getName(), brk.getAbsolutePosition()));
+            leave.setBreakTarget(label);
+            leave.setLineColumnNumber(brk.getLineno(), brk.getColumn());
+            replace(brk, leave);
+        }
+
+        Scope parentScope = sw.getParentScope();
+        List<SwitchCase> clauses = new ArrayList<>(sw.getCases());
+        // the clause entered: the default one, unless a case expression matches, in order
+        String discriminantVar = "%disc" + n;
+        owner.putSymbol(new Symbol(Symbol.Type.VAR, discriminantVar));
+        AstNode discriminant = sw.getExpression();
+        discriminant.setParent(null);
+        block.addStatement(
+                statement(assign(name(discriminantVar, pos), discriminant, pos), lineno, column));
+        int defaultIndex = clauses.size();
+        for (int i = 0; i < clauses.size(); i++) {
+            if (clauses.get(i).isDefault()) {
+                defaultIndex = i;
+            }
+        }
+        block.addStatement(
+                statement(
+                        assign(name(caseVar, pos), number(defaultIndex, pos), pos),
+                        lineno,
+                        column));
+        Label found = new Label(pos, 0, "%found" + n);
+        found.setLineColumnNumber(lineno, column);
+        LabeledStatement search = new LabeledStatement(pos, sw.getLength());
+        search.setLineColumnNumber(lineno, column);
+        search.addLabel(found);
+        Block tests = new Block(pos, sw.getLength());
+        tests.setLineColumnNumber(lineno, column);
+        for (int i = 0; i < clauses.size(); i++) {
+            SwitchCase clause = clauses.get(i);
+            if (clause.isDefault()) {
+                continue;
+            }
+            int at = clause.getAbsolutePosition();
+            AstNode expression = clause.getExpression();
+            expression.setParent(null);
+            Block then = new Block(at, 0);
+            then.setLineColumnNumber(clause.getLineno(), clause.getColumn());
+            then.addStatement(
+                    statement(
+                            assign(name(caseVar, at), number(i, at), at),
+                            clause.getLineno(),
+                            clause.getColumn()));
+            BreakStatement leave = new BreakStatement(at);
+            leave.setBreakLabel(name(found.getName(), at));
+            leave.setBreakTarget(found);
+            leave.setLineColumnNumber(clause.getLineno(), clause.getColumn());
+            then.addStatement(leave);
+            IfStatement test = new IfStatement(at);
+            test.setLineColumnNumber(clause.getLineno(), clause.getColumn());
+            test.setCondition(
+                    new InfixExpression(Token.SHEQ, name(discriminantVar, at), expression, at));
+            test.setThenPart(then);
+            tests.addStatement(test);
+        }
+        search.setStatement(tests);
+        block.addStatement(search);
+
+        // runs of clauses about as heavy as a chunk
+        int first = 0;
+        while (first < clauses.size()) {
+            int end = first;
+            int runWeight = 0;
+            while (end < clauses.size()
+                    && (end == first || runWeight + weight(clauses.get(end)) <= limit)) {
+                runWeight += weight(clauses.get(end));
+                end++;
+            }
+            SwitchStatement run = new SwitchStatement(clauses.get(first).getAbsolutePosition());
+            run.setLineColumnNumber(clauses.get(first).getLineno(), clauses.get(first).getColumn());
+            run.setExpression(name(caseVar, pos));
+            for (int i = first; i < end; i++) {
+                SwitchCase clause = clauses.get(i);
+                clause.setParent(null);
+                clause.setExpression(number(i, clause.getAbsolutePosition()));
+                run.addCase(clause);
+            }
+            madeSwitches.add(run);
+            adopt(parentScope, run);
+            // the scopes of the clauses are the run's
+            if (sw.getChildScopes() != null) {
+                for (Scope child : new ArrayList<>(sw.getChildScopes())) {
+                    if (isWithin(child, run)) {
+                        sw.getChildScopes().remove(child);
+                        run.addChildScope(child);
+                    }
+                }
+            }
+            Block then = new Block(run.getAbsolutePosition(), 0);
+            then.setLineColumnNumber(run.getLineno(), run.getColumn());
+            then.addStatement(run);
+            then.addStatement(
+                    statement(assign(name(caseVar, pos), number(end, pos), pos), lineno, column));
+            IfStatement test = new IfStatement(run.getAbsolutePosition());
+            test.setLineColumnNumber(run.getLineno(), run.getColumn());
+            test.setCondition(
+                    new InfixExpression(Token.LT, name(caseVar, pos), number(end, pos), pos));
+            test.setThenPart(then);
+            block.addStatement(test);
+            first = end;
+        }
+        if (sw.getChildScopes() != null) {
+            // the scopes of the discriminant and the case expressions (a class)
+            for (Scope child : new ArrayList<>(sw.getChildScopes())) {
+                sw.getChildScopes().remove(child);
+                adopt(parentScope, child);
+            }
+        }
+        if (parentScope != null && parentScope.getChildScopes() != null) {
+            parentScope.getChildScopes().remove(sw);
+        }
+        labeled.setStatement(block);
+        replace(sw, labeled);
+        return labeled;
+    }
+
+    /**
+     * Splits the object literals of a statement too heavy for a chunk, outside of its blocks and
+     * nested functions, innermost first; returns whether it did.
+     */
+    private boolean splitLiterals(AstNode statement) {
+        List<ObjectLiteral> literals = new ArrayList<>();
+        List<ConditionalExpression> conditionals = new ArrayList<>();
+        statement.visit(
+                node -> {
+                    if (node instanceof FunctionNode
+                            || (node != statement
+                                    && (node instanceof Block
+                                            || (node instanceof Scope
+                                                    && isStatementBlock(node))))) {
+                        return false;
+                    }
+                    if (node instanceof ObjectLiteral
+                            && !((ObjectLiteral) node).isDestructuring()) {
+                        literals.add((ObjectLiteral) node);
+                    } else if (node instanceof ConditionalExpression) {
+                        conditionals.add((ConditionalExpression) node);
+                    }
+                    return true;
+                });
+        boolean changed = false;
+        for (int i = literals.size() - 1; i >= 0; i--) {
+            if (weight(literals.get(i)) > limit) {
+                changed |= splitLiteral(literals.get(i));
+            }
+        }
+        for (int i = conditionals.size() - 1; i >= 0; i--) {
+            ConditionalExpression conditional = conditionals.get(i);
+            if (weight(conditional) > limit) {
+                changed |=
+                        splitOperand(
+                                conditional.getTestExpression(), conditional::setTestExpression);
+                changed |=
+                        splitOperand(
+                                conditional.getTrueExpression(), conditional::setTrueExpression);
+                changed |=
+                        splitOperand(
+                                conditional.getFalseExpression(), conditional::setFalseExpression);
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Moves an operand of a ?: too heavy for half a chunk to a chunk returning its value, (() =>
+     * operand)(): a value, not a reference, which the arrow function evaluates with the same this,
+     * arguments and bindings.
+     */
+    private boolean splitOperand(AstNode operand, Consumer<AstNode> setter) {
+        if (weight(operand) <= limit / 2 || hasLegacyScope(operand)) {
+            return false;
+        }
+        int start = operand.getAbsolutePosition();
+        int end = start + operand.getLength();
+        operand.setParent(null);
+        ReturnStatement ret = new ReturnStatement(start);
+        ret.setReturnValue(operand);
+        ret.setLineColumnNumber(operand.getLineno(), operand.getColumn());
+        Block body = new Block(start, end - start);
+        body.setLineColumnNumber(operand.getLineno(), operand.getColumn());
+        body.addStatement(ret);
+        FunctionNode chunk =
+                newChunk(body, start, end, operand.getLineno(), operand.getColumn(), operand);
+        moveScopes(body, chunk);
+        FunctionCall call = new FunctionCall(start, end - start);
+        call.setTarget(new ParenthesizedExpression(start, end - start, chunk));
+        call.setArguments(new ArrayList<>());
+        call.setLineColumnNumber(operand.getLineno(), operand.getColumn());
+        setter.accept(call);
+        return true;
+    }
+
+    /**
+     * Moves runs of the properties of an object literal to chunks whose literals it spreads, {a: 1,
+     * ...(() => ({b: 2, c: 3}))()}: the spread defines their data properties in the same order, at
+     * the same point. Accessors, methods (their home object is the literal) and __proto__ stay.
+     */
+    private boolean splitLiteral(ObjectLiteral literal) {
+        List<AbstractObjectProperty> elements = literal.getElements();
+        List<AbstractObjectProperty> result = new ArrayList<>();
+        List<AbstractObjectProperty> run = new ArrayList<>();
+        int runWeight = 0;
+        boolean changed = false;
+        for (AbstractObjectProperty element : elements) {
+            if (!isMovableProperty(element)) {
+                changed |= flushProperties(run, result);
+                runWeight = 0;
+                result.add(element);
+                continue;
+            }
+            int w = weight(element);
+            if (!run.isEmpty() && runWeight + w > limit) {
+                changed |= flushProperties(run, result);
+                runWeight = 0;
+            }
+            run.add(element);
+            runWeight += w;
+        }
+        changed |= flushProperties(run, result);
+        if (changed) {
+            for (AbstractObjectProperty element : elements) {
+                element.setParent(null);
+            }
+            literal.setElements(result);
+        }
+        return changed;
+    }
+
+    /**
+     * Whether an expression holds an array comprehension, a generator expression or a let
+     * expression of JavaScript 1.7, whose scopes IRFactory links as it transforms them.
+     */
+    private static boolean hasLegacyScope(AstNode expression) {
+        boolean[] found = {false};
+        expression.visit(
+                node -> {
+                    if (node instanceof ArrayComprehension
+                            || node instanceof GeneratorExpression
+                            || node instanceof LetNode) {
+                        found[0] = true;
+                    }
+                    return !found[0] && !(node instanceof FunctionNode);
+                });
+        return found[0];
+    }
+
+    private static boolean isMovableProperty(AbstractObjectProperty element) {
+        if (element instanceof SpreadObjectProperty) {
+            return true;
+        }
+        if (!(element instanceof ObjectProperty)) {
+            return false;
+        }
+        ObjectProperty property = (ObjectProperty) element;
+        if (property.isMethod() || hasLegacyScope(property)) {
+            return false;
+        }
+        AstNode key = property.getKey();
+        String name =
+                key instanceof Name
+                        ? ((Name) key).getIdentifier()
+                        : key instanceof StringLiteral ? ((StringLiteral) key).getValue() : null;
+        return !"__proto__".equals(name);
+    }
+
+    /** Replaces a run of properties by the spread of a chunk returning them in a literal. */
+    private boolean flushProperties(
+            List<AbstractObjectProperty> run, List<AbstractObjectProperty> result) {
+        if (run.isEmpty()) {
+            return false;
+        }
+        if (run.size() == 1 || weight(run) < Math.min(limit, 16)) {
+            result.addAll(run);
+            run.clear();
+            return false;
+        }
+        AstNode first = run.get(0);
+        AstNode last = run.get(run.size() - 1);
+        int start = first.getAbsolutePosition();
+        int end = last.getAbsolutePosition() + last.getLength();
+        ObjectLiteral part = new ObjectLiteral(start, end - start);
+        part.setLineColumnNumber(first.getLineno(), first.getColumn());
+        for (AbstractObjectProperty element : run) {
+            element.setParent(null);
+            part.addElement(element);
+        }
+        ReturnStatement ret = new ReturnStatement(start);
+        ret.setReturnValue(part);
+        ret.setLineColumnNumber(first.getLineno(), first.getColumn());
+        Block body = new Block(start, end - start);
+        body.setLineColumnNumber(first.getLineno(), first.getColumn());
+        body.addStatement(ret);
+        FunctionNode chunk = newChunk(body, start, end, first.getLineno(), first.getColumn(), last);
+        moveScopes(body, chunk);
+
+        FunctionCall call = new FunctionCall(start, end - start);
+        call.setTarget(new ParenthesizedExpression(start, end - start, chunk));
+        call.setArguments(new ArrayList<>());
+        call.setLineColumnNumber(first.getLineno(), first.getColumn());
+        Spread spread = new Spread(start, end - start);
+        spread.setExpression(call);
+        spread.setLineColumnNumber(first.getLineno(), first.getColumn());
+        SpreadObjectProperty spreadProperty = new SpreadObjectProperty(spread);
+        spreadProperty.setLineColumnNumber(first.getLineno(), first.getColumn());
+        result.add(spreadProperty);
+        run.clear();
+        return true;
+    }
+
+    private static int weight(List<? extends AstNode> nodes) {
+        int total = 0;
+        for (AstNode node : nodes) {
+            total += weight(node);
+        }
+        return total;
+    }
+
+    private static boolean isSplittableVar(AstNode statement) {
+        return statement instanceof VariableDeclaration
+                && statement.getType() == Token.VAR
+                && ((VariableDeclaration) statement).isStatement()
+                && ((VariableDeclaration) statement).getVariables().size() > 1;
+    }
+
+    /** The var statements of runs of the declarators of one, each about as heavy as a chunk. */
+    private List<AstNode> splitVar(VariableDeclaration declaration) {
+        List<AstNode> parts = new ArrayList<>();
+        VariableDeclaration part = null;
+        int partWeight = 0;
+        for (VariableInitializer declarator : declaration.getVariables()) {
+            int w = weight(declarator);
+            if (part == null || partWeight + w > limit) {
+                part = new VariableDeclaration(declarator.getAbsolutePosition());
+                part.setType(Token.VAR);
+                part.setIsStatement(true);
+                part.setLineColumnNumber(declarator.getLineno(), declarator.getColumn());
+                parts.add(part);
+                partWeight = 0;
+            }
+            declarator.setParent(null);
+            part.addVariable(declarator);
+            part.setLength(
+                    declarator.getAbsolutePosition()
+                            + declarator.getLength()
+                            - part.getAbsolutePosition());
+            partWeight += w;
+        }
+        return parts;
+    }
+
+    /** Makes a new scope a child of the scope of the statement it replaces. */
+    private static void adopt(Scope parent, Scope scope) {
+        if (parent != null) {
+            parent.addChildScope(scope);
+        }
     }
 
     /** A Scope used as a block of statements (not a loop or another statement with a scope). */
@@ -394,17 +867,7 @@ final class Splitter {
             body.addStatement(statement);
         }
 
-        FunctionNode chunk = new FunctionNode(start);
-        chunk.setFunctionType(FunctionNode.ARROW_FUNCTION);
-        chunk.setInStrictMode(owner.isInStrictMode());
-        chunk.setBody(body);
-        chunk.setLength(end - start);
-        chunk.setSplitOwner(owner);
-        chunk.setSplitKey(keyOf(owner));
-        chunk.setSourceName(owner.getSourceName());
-        chunk.setBaseLineno(lineno);
-        chunk.setEndLineno(last.getLineno());
-        chunk.setLineColumnNumber(lineno, column);
+        FunctionNode chunk = newChunk(body, start, end, lineno, column, last);
         if (script) {
             // (%completion) => { statements; return %completion; }; the parameter is the first
             // variable of the chunk
@@ -454,6 +917,23 @@ final class Splitter {
             statements.add(test);
         }
         return statements;
+    }
+
+    /** An arrow function of the owner holding body, called in place. */
+    private FunctionNode newChunk(
+            Block body, int start, int end, int lineno, int column, AstNode last) {
+        FunctionNode chunk = new FunctionNode(start);
+        chunk.setFunctionType(FunctionNode.ARROW_FUNCTION);
+        chunk.setInStrictMode(owner.isInStrictMode());
+        chunk.setBody(body);
+        chunk.setLength(end - start);
+        chunk.setSplitOwner(owner);
+        chunk.setSplitKey(keyOf(owner));
+        chunk.setSourceName(owner.getSourceName());
+        chunk.setBaseLineno(lineno);
+        chunk.setEndLineno(last.getLineno());
+        chunk.setLineColumnNumber(lineno, column);
+        return chunk;
     }
 
     /**

@@ -461,6 +461,8 @@ public class Codegen implements Evaluator {
     private byte[] generateCode(String rawSource) {
         unitBytes = new byte[unitCount][];
         int generated = 0;
+        // the functions too large, all found before the script is parsed again to split them
+        FunctionTooLargeException tooLarge = null;
         for (int u = 0; u < unitCount; u++) {
             ClassFileWriter cfw = startClass(u == 0 ? mainClassName : unitEnvs[u].className);
             itsConstantList = null;
@@ -472,7 +474,19 @@ public class Codegen implements Evaluator {
                 }
                 try {
                     generateFunction(cfw, i);
+                } catch (FunctionTooLargeException e) {
+                    if (tooLarge == null) {
+                        tooLarge = e;
+                    } else {
+                        tooLarge.addOther(e);
+                    }
+                    // the class is not used: the other functions go to a new one
+                    cfw = startClass(u == 0 ? mainClassName : unitEnvs[u].className);
+                    continue;
                 } catch (ClassSizeException e) {
+                    if (tooLarge != null) {
+                        throw tooLarge;
+                    }
                     if (e.isMethodLimit()) {
                         throw e;
                     }
@@ -480,14 +494,20 @@ public class Codegen implements Evaluator {
                 }
                 generated++;
             }
-            emitRegExpInit(cfw, u);
-            emitTemplateLiteralInit(cfw, u);
-            emitConstantDudeInitializers(cfw);
+            if (tooLarge != null) {
+                continue;
+            }
             try {
+                emitRegExpInit(cfw, u);
+                emitTemplateLiteralInit(cfw, u);
+                emitConstantDudeInitializers(cfw);
                 unitBytes[u] = cfw.toByteArray();
             } catch (ClassSizeException e) {
                 throw new ClassTooLargeException(e.getMessage(), generated, count);
             }
+        }
+        if (tooLarge != null) {
+            throw tooLarge;
         }
         return unitBytes[0];
     }
@@ -522,20 +542,21 @@ public class Codegen implements Evaluator {
             bodygen.scriptOrFnClass = "org.monflabs.mozilla.javascript.JSScript";
         }
 
+        int key =
+                n instanceof FunctionNode
+                        ? ((FunctionNode) n).getSplitKey()
+                        : FunctionTooLargeException.SCRIPT;
+        cfw.setWideJumps(compilerEnv.hasWideJumps(key));
         try {
             bodygen.generateBodyCode();
         } catch (ClassSizeException e) {
-            int key =
-                    n instanceof FunctionNode
-                            ? ((FunctionNode) n).getSplitKey()
-                            : FunctionTooLargeException.SCRIPT;
             // a class limit reached in a large method: splitting the method helps first, once
             boolean large =
                     e.isMethodLimit()
                             || (cfw.getCurrentCodeOffset() > 16 * 1024
                                     && compilerEnv.getSplitLevel(key) == 0);
             if (large && key != -1) {
-                throw new FunctionTooLargeException(e.getMessage(), key);
+                throw new FunctionTooLargeException(e.getMessage(), key, e.isJumpOffset());
             }
             throw e;
         }

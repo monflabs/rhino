@@ -142,8 +142,11 @@ public class FunctionNode extends ScriptNode {
     /** See {@link #getActivationVars}. */
     private boolean[] activationVars;
 
-    /** See {@link #getOuterVars}. */
-    private Map<String, Integer> outerVars;
+    /** See {@link #getOuterVar}. */
+    private List<OuterVars> outerVars;
+
+    /** The variables of an enclosing function, by name, and how many functions out it is. */
+    private record OuterVars(Map<String, Integer> vars, int depth) {}
 
     private boolean requiresArgumentObject;
     private boolean isGenerator;
@@ -359,20 +362,37 @@ public class FunctionNode extends ScriptNode {
         this.activationVars = activationVars;
     }
 
-    /**
-     * The variables of enclosing functions that this function reads at a fixed position of their
-     * activation, by name: the number of functions out (high byte) and the index of the variable
-     * (null: none).
-     */
-    public Map<String, Integer> getOuterVars() {
-        return outerVars;
+    /** Whether this function may read variables of enclosing functions, see #getOuterVar. */
+    public boolean hasOuterVars() {
+        return outerVars != null;
     }
 
-    public void addOuterVar(String name, int var) {
-        if (outerVars == null) {
-            outerVars = new HashMap<>();
+    /**
+     * A variable of an enclosing function that this function reads at a fixed position of its
+     * activation: the number of functions out (high byte) and the index of the variable (null:
+     * none).
+     */
+    public Integer getOuterVar(String name) {
+        if (outerVars != null) {
+            for (OuterVars outer : outerVars) {
+                Integer index = outer.vars.get(name);
+                if (index != null) {
+                    return (outer.depth << 24) | index;
+                }
+            }
         }
-        outerVars.putIfAbsent(name, var);
+        return null;
+    }
+
+    /**
+     * Adds the variables of an enclosing function, depth functions out, by index: shared by the
+     * functions nested in it, not copied. The first function added that has a name wins.
+     */
+    public void addOuterVars(Map<String, Integer> vars, int depth) {
+        if (outerVars == null) {
+            outerVars = new ArrayList<>(2);
+        }
+        outerVars.add(new OuterVars(vars, depth));
     }
 
     /** With an activation object, the parameters and variables in registers (null: none). */

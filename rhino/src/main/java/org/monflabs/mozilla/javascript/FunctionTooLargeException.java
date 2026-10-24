@@ -4,6 +4,8 @@
 
 package org.monflabs.mozilla.javascript;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.monflabs.mozilla.classfile.ClassFileWriter.ClassSizeException;
 
 /**
@@ -18,13 +20,32 @@ public class FunctionTooLargeException extends ClassSizeException {
 
     private final int functionKey;
 
+    /** The other functions of the script found too large in the same compilation. */
+    private final List<FunctionTooLargeException> others = new ArrayList<>();
+
     public FunctionTooLargeException(String message, int functionKey) {
-        super(message, true);
+        this(message, functionKey, false);
+    }
+
+    public FunctionTooLargeException(String message, int functionKey, boolean jumpOffset) {
+        super(message, true, jumpOffset);
         this.functionKey = functionKey;
     }
 
     /** The source position that identifies the function (FunctionNode#getSplitKey). */
     public int getFunctionKey() {
         return functionKey;
+    }
+
+    /** This function and the others found too large with it. */
+    public List<FunctionTooLargeException> getFunctions() {
+        List<FunctionTooLargeException> all = new ArrayList<>();
+        all.add(this);
+        all.addAll(others);
+        return all;
+    }
+
+    public void addOther(FunctionTooLargeException other) {
+        others.add(other);
     }
 }
