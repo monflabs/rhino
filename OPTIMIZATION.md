@@ -688,6 +688,35 @@ on, and what it gained. It also records the experiments that measured no gain, s
   base 525, Rhino 1.8.0 538. Chunks of 300 or 1,200 nodes score the same. The JetStream 3 `threejs` workload runs compiled: 5.3 s per
   run, 14.2 s interpreted; Babylon.js's scene compiles, at about the speed of the interpreter (780 and 700 ms).
 
+### Functions too large for the JIT (2026-10-25)
+
+- **What.** HotSpot does not compile a method of more than 8,000 bytes of bytecode (`-XX:+DontCompileHugeMethods`,
+  the default): it stays in the bytecode interpreter of the JVM, several times slower than the fork's own
+  interpreter. Under `VERSION_ECMASCRIPT`, the class compiler reports a function whose body method exceeds 8,000
+  bytes as too large (`Codegen.JIT_METHOD_LIMIT`, `CompilerEnvirons.splitsForJit`), and `Context.compileImpl`
+  splits it once, as one too large for a class file; if it does not get smaller, it is compiled as it is. Only
+  when the compilation is retried (`Context.compileImpl`, not `ClassCompiler`), and not for the top-level code of
+  a script, which usually runs once.
+- **Generators and async functions** are split too: no chunk holds a `yield`, an `await` or a `for await`
+  (`Splitter.suspends`). In a generator that is not async, a run of statements that yield becomes a generator
+  called with `yield*` (`Splitter.delegation`), which forwards `next`, `throw` and `return` to it, unless they
+  use the `this`, `arguments`, `new.target` or `super` of the function. A `return()` forwarded to the chunk,
+  whose `finally` block yields and lets it complete later, completes the `yield*` normally: the chunk sets a
+  variable of its own at each of its exits (`%exitN`), and the generator returns the value of the `yield*` when
+  it did not. Gated on `VERSION_ECMASCRIPT`, where a `yield*` in such a block delegates (BACKWARD_COMPATIBILITY.md
+  1.105).
+- **Smaller and faster generators.** A generator compiled an object or array literal, and the arguments of a
+  call, with the code that keeps its stack across a `yield` (values in a local, checkcasts) whether or not one
+  held a `yield`: now only when one does (`BodyCodegen.maySuspend`), 12% of the tokenizer of `js-tokens`. Its
+  nested functions read the variables they share with it at their position in its activation
+  (`NodeTransformer.keepVarsInRegisters`, `getOuterVar`), as those of a function; the generator itself reads them
+  by name, its registers not surviving a `yield`. An exception got its interpreter for the script stack by
+  reflection (`RhinoException`), and the completion of a compiled generator, an exception, looked up the
+  `@@toStringTag` of its value: both once per completion of the chunks of `js-tokens`.
+- **Gain.** `js-tokens` compiled: 5.8 s → 4.75 s per run (interpreted 3.2 s). Its tokenizer is a loop whose body
+  is too heavy for one chunk: each token enters two chunks, generators of their own (3 million per run, about
+  0.55 µs each). Whole and JIT-compiled (`-XX:-DontCompileHugeMethods`), it would take 2.6 s.
+
 ### Scripts spread over several classes (M17, 17.3)
 
 - **What.** A script whose class exceeds a limit of the class itself, its constant pool (65,535 entries) or its

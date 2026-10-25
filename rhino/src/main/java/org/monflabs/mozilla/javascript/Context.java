@@ -200,6 +200,9 @@ public class Context implements Closeable {
      *       TypeError.
      *   <li>The value of a {@code return} of a generator or an async function is evaluated before
      *       the scopes, loops and {@code finally} blocks it leaves, instead of after them.
+     *   <li>A {@code yield*} in the {@code catch} or {@code finally} block that the {@code throw()}
+     *       or {@code return()} of a generator runs delegates, instead of returning an internal
+     *       object.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}
@@ -3094,6 +3097,8 @@ public class Context implements Closeable {
         if (compiler instanceof Interpreter) {
             // only the class compiler splits functions too large for a class file
             compilerEnv.clearSplits();
+        } else {
+            compilerEnv.enableJitSplits();
         }
 
         ScriptNode tree =

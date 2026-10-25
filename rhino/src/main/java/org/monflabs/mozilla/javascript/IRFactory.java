@@ -1032,11 +1032,11 @@ public final class IRFactory {
         }
         int level = env.getSplitLevel(key);
         if (level > 0) {
-            if (!Splitter.split(fn, Splitter.chunkWeight(level))) {
+            if (!Splitter.split(fn, Splitter.chunkWeight(level), env.isLatestEcmaScript())) {
                 env.markUnsplittable(key);
             }
         } else if (Splitter.FORCED_WEIGHT > 0) {
-            Splitter.split(fn, Splitter.FORCED_WEIGHT);
+            Splitter.split(fn, Splitter.FORCED_WEIGHT, env.isLatestEcmaScript());
         }
     }
 

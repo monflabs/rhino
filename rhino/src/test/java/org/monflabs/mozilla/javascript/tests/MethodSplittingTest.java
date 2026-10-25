@@ -414,4 +414,51 @@ class MethodSplittingTest {
                 latest ? "ReferenceError,3001,3,3000,TypeError,101v100,2901v2900" : ",3001,3,3000,",
                 sb.toString());
     }
+
+    /** Statements on one line each that yield now and then. */
+    private static String yieldingFiller(int count, int every) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < count; i++) {
+            sb.append("if (n > ").append(i).append(") { t++; if (t % ").append(every);
+            sb.append(" == 0) yield t; }\n");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * A generator too large for a method: its statements that yield move to generators called with
+     * yield*, which forwards next, throw and return to them, also to a finally block that yields.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ECMASCRIPT})
+    void generatorBeyondTheMethodLimit(int version) {
+        String source =
+                "function* g(n) { var t = 0;\n"
+                        + "outer: for (var round = 0; round < 3; round++) {\n"
+                        + yieldingFiller(1200, 400)
+                        + "  try {\n"
+                        + yieldingFiller(600, 300)
+                        + "    if (round == 1) continue outer;\n"
+                        + "  } finally {\n    t += 1000; yield 'fin' + round;\n  }\n"
+                        + "}\n"
+                        + yieldingFiller(300, 150)
+                        + "return 'end' + t; }\n"
+                        + "function all(it) { var r = [], x;"
+                        + " while (!(x = it.next()).done) r.push(x.value); r.push(x.value);"
+                        + " return r.join(); }\n"
+                        + "function four(it) { it.next(); it.next(); it.next(); return it.next().value; }\n"
+                        + "var it = g(5000);"
+                        + " var r1 = [four(it), JSON.stringify(it.return('R')), JSON.stringify(it.next())];\n"
+                        + "var it2 = g(5000);"
+                        + " var r2 = [four(it2), JSON.stringify(it2.throw(new Error('boom')))];\n"
+                        + "try { it2.next(); } catch (e) { r2.push(e.message); }\n"
+                        + "[all(g(5000)), r1.join(), r2.join()].join(';');";
+        assertRuns(
+                version,
+                "400,800,1200,1500,1800,fin0,3200,3600,4000,4200,4500,fin1,6000,6400,6800,6900,"
+                        + "7200,fin2,8550,8700,end8700;"
+                        + "1500,{\"value\":\"fin0\",\"done\":false},{\"value\":\"R\",\"done\":true};"
+                        + "1500,{\"value\":\"fin0\",\"done\":false},boom",
+                source);
+    }
 }

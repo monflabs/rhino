@@ -314,32 +314,7 @@ public final class ES6Generator extends ScriptableObject {
 
             if (r instanceof YieldStarResult) {
                 // This special result tells us that we are executing a "yield *"
-                state = State.SUSPENDED_YIELD;
-                YieldStarResult ysResult = (YieldStarResult) r;
-                try {
-                    delegee = ScriptRuntime.callIterator(ysResult.getResult(), cx, scope);
-                } catch (RhinoException re) {
-                    // Need to handle exceptions if the iterator cannot be called.
-                    return resumeAbruptLocal(cx, scope, NativeGenerator.GENERATOR_THROW, re);
-                }
-
-                Object delResult;
-                try {
-                    // Re-execute but update state in case we end up back here
-                    // Value shall be Undefined based on the very complex spec!
-                    delResult = delegeeNext(cx, scope, Undefined.instance);
-                } finally {
-                    state = State.EXECUTING;
-                }
-                if (delResult instanceof DelegeeDone) {
-                    // resumed by resumeLocal
-                    state = State.SUSPENDED_YIELD;
-                    return delResult;
-                }
-                if (ScriptRuntime.isIteratorDone(cx, delResult)) {
-                    state = State.COMPLETED;
-                }
-                return delResult;
+                return delegate(cx, scope, (YieldStarResult) r);
             }
 
             ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, r);
@@ -384,6 +359,38 @@ public final class ES6Generator extends ScriptableObject {
         return result;
     }
 
+    /**
+     * Starts the yield* whose operand the generator's body suspended with: the first result of its
+     * iterator, or a DelegeeDone to resume the generator with.
+     */
+    private Object delegate(Context cx, VarScope scope, YieldStarResult ysResult) {
+        state = State.SUSPENDED_YIELD;
+        try {
+            delegee = ScriptRuntime.callIterator(ysResult.getResult(), cx, scope);
+        } catch (RhinoException re) {
+            // Need to handle exceptions if the iterator cannot be called.
+            return resumeAbruptLocal(cx, scope, NativeGenerator.GENERATOR_THROW, re);
+        }
+
+        Object delResult;
+        try {
+            // Re-execute but update state in case we end up back here
+            // Value shall be Undefined based on the very complex spec!
+            delResult = delegeeNext(cx, scope, Undefined.instance);
+        } finally {
+            state = State.EXECUTING;
+        }
+        if (delResult instanceof DelegeeDone) {
+            // resumed by resumeLocal
+            state = State.SUSPENDED_YIELD;
+            return delResult;
+        }
+        if (ScriptRuntime.isIteratorDone(cx, delResult)) {
+            state = State.COMPLETED;
+        }
+        return delResult;
+    }
+
     Scriptable resumeAbruptLocal(Context cx, VarScope scope, int op, Object value) {
         if (state == State.EXECUTING) {
             throw ScriptRuntime.typeErrorById("msg.generator.executing");
@@ -420,6 +427,17 @@ public final class ES6Generator extends ScriptableObject {
 
         try {
             Object r = resume(cx, scope, op, throwValue);
+            if (r instanceof YieldStarResult && cx.isLatestEcmaScript()) {
+                // a yield* in the catch or finally block that the throw or the return ran
+                Object delegated = delegate(cx, scope, (YieldStarResult) r);
+                if (delegated instanceof DelegeeDone) {
+                    return resumeLocal(cx, scope, ((DelegeeDone) delegated).value);
+                }
+                if (state != State.COMPLETED) {
+                    state = State.SUSPENDED_YIELD;
+                }
+                return (Scriptable) delegated;
+            }
             ScriptableObject.putProperty(result, ES6Iterator.VALUE_PROPERTY, r);
             // If we get here without an exception we can still run.
             state = State.SUSPENDED_YIELD;
@@ -439,6 +457,13 @@ public final class ES6Generator extends ScriptableObject {
                 lineSource = jse.lineSource();
                 if (jse.getValue() instanceof RhinoException) {
                     throw (RhinoException) jse.getValue();
+                }
+                if (value instanceof JavaScriptException
+                        && jse.getValue() == throwValue
+                        && cx.isLatestEcmaScript()) {
+                    // the exception of a delegee that the generator did not catch: the original,
+                    // whose script stack shows where it was thrown
+                    throw (JavaScriptException) value;
                 }
                 throw jse;
             }

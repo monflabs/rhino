@@ -22,14 +22,23 @@ import org.monflabs.mozilla.javascript.config.RhinoConfig;
 public abstract class RhinoException extends RuntimeException {
     private static final Pattern JAVA_STACK_PATTERN = Pattern.compile("_c_(.*)_\\d+");
 
+    /**
+     * The interpreter that captures and prints the script stack of an exception: its methods for
+     * that keep no state, and creating one by reflection for each exception showed in the profiles
+     * of compiled generators, which complete with an exception.
+     */
+    private static final class Stacks {
+        static final Evaluator INTERPRETER = Context.createInterpreter();
+    }
+
     RhinoException() {
-        Evaluator e = Context.createInterpreter();
+        Evaluator e = Stacks.INTERPRETER;
         if (e != null) e.captureStackInfo(this);
     }
 
     RhinoException(String details) {
         super(details);
-        Evaluator e = Context.createInterpreter();
+        Evaluator e = Stacks.INTERPRETER;
         if (e != null) e.captureStackInfo(this);
     }
 
@@ -153,7 +162,7 @@ public abstract class RhinoException extends RuntimeException {
         CharArrayWriter writer = new CharArrayWriter();
         super.printStackTrace(new PrintWriter(writer));
         String origStackTrace = writer.toString();
-        Evaluator e = Context.createInterpreter();
+        Evaluator e = Stacks.INTERPRETER;
         if (e != null) return e.getPatchedStack(this, origStackTrace);
         return null;
     }
@@ -261,7 +270,7 @@ public abstract class RhinoException extends RuntimeException {
         List<ScriptStackElement> list = new ArrayList<>();
         ScriptStackElement[][] interpreterStack = null;
         if (interpreterStackInfo != null) {
-            Evaluator eval = Context.createInterpreter();
+            Evaluator eval = Stacks.INTERPRETER;
             if (eval instanceof AInterpreter<?, ?> interpreter)
                 interpreterStack = interpreter.getScriptStackElements(this);
         }
@@ -283,7 +292,11 @@ public abstract class RhinoException extends RuntimeException {
                     && e.getLineNumber() > -1
                     && (fileName == null || !fileName.endsWith(".java"))) {
                 String methodName = e.getMethodName();
-                boolean split = methodName.contains(FunctionNode.SPLIT_METHOD_SUFFIX);
+                // a chunk that yields is a generator resumed by the yield* of its function, whose
+                // frame is not under it
+                boolean split =
+                        methodName.contains(FunctionNode.SPLIT_METHOD_SUFFIX)
+                                && !methodName.endsWith(FunctionNode.SPLIT_METHOD_SUFFIX + "_gen");
                 if (inSplit) {
                     inSplit = split;
                     continue;

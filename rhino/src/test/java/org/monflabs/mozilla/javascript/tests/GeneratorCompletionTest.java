@@ -85,4 +85,28 @@ class GeneratorCompletionTest {
                         + "  try { return x; } finally { yield 9; } } }"
                         + "  var it = g(); return [it.next(), it.next(), it.next()]; })].join(' ')");
     }
+
+    @Test
+    void yieldStarInACatchBlockThatAThrowRuns() {
+        // the result of the yield* was the internal YieldStarResult
+        Utils.assertGatedBehavior(
+                "[{\"value\":1,\"done\":false},{\"done\":false},{\"value\":3,\"done\":false},"
+                        + "{\"done\":true}]",
+                "[{\"value\":1,\"done\":false},{\"value\":\"x!\",\"done\":false},"
+                        + "{\"value\":3,\"done\":false},{\"done\":true}]",
+                "function* g() { try { yield 1; } catch (e) { yield* [e + '!']; } yield 3; }"
+                        + "var it = g();"
+                        + "JSON.stringify([it.next(), it.throw('x'), it.next(), it.next()])");
+    }
+
+    /** Before VERSION_ECMASCRIPT, the value of the yield* was lost (compiled) or a TypeError. */
+    @Test
+    void yieldStarInAFinallyBlockThatAReturnRuns() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "[{\"value\":1,\"done\":false},{\"value\":7,\"done\":false},"
+                        + "{\"value\":8,\"done\":false},{\"value\":5,\"done\":true}]",
+                "function* g() { try { yield 1; } finally { yield* [7, 8]; } }"
+                        + "var it = g();"
+                        + "JSON.stringify([it.next(), it.return(5), it.next(), it.next()])");
+    }
 }

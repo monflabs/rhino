@@ -29,6 +29,9 @@ import org.monflabs.mozilla.javascript.sourcemap.Position;
 import org.monflabs.mozilla.javascript.sourcemap.SourceMapper;
 
 class BodyCodegen {
+    /** The size of the bytecode of the body method, once generated. */
+    int bodyCodeSize;
+
     void generateBodyCode() {
         isGenerator = Codegen.isGenerator(scriptOrFn);
 
@@ -65,6 +68,7 @@ class BodyCodegen {
         generateStatement(treeTop);
         generateEpilogue();
 
+        bodyCodeSize = cfw.getCurrentCodeOffset();
         cfw.stopMethod((short) (localsMax + 1));
 
         if (isGenerator) {
@@ -618,7 +622,7 @@ class BodyCodegen {
             if (varRegisters != null) {
                 initRegisterVars();
             }
-            if (fnCurrent.fnode.getActivationVars() != null) {
+            if (fnCurrent.fnode.getActivationVars() != null && !isGenerator) {
                 activationLocal = getNewWordLocal();
                 cfw.addALoad(variableObjectLocal);
                 cfw.addAStore(activationLocal);
@@ -2813,9 +2817,7 @@ class BodyCodegen {
         }
 
         // load array to store array literal objects
-        if (isGenerator) {
-            // TODO: this is actually only necessary if the yield operation is
-            // a child of this array or its children (bug 757410)
+        if (maySuspend(child)) {
             for (int i = 0; i != count; ++i) {
                 generateExpression(child, node);
                 child = child.getNext();
@@ -2909,7 +2911,8 @@ class BodyCodegen {
         // In a generator, an element may yield, and the stack comes back as Object values: the
         // storage stays in a local, and each element is evaluated with nothing else on the stack.
         short generatorStorage = -1;
-        if (isGenerator) {
+        boolean suspends = maySuspend(child);
+        if (suspends) {
             generatorStorage = getNewWordLocal();
             cfw.addAStore(generatorStorage);
         }
@@ -2917,7 +2920,7 @@ class BodyCodegen {
         // Process each element
         int childIdx = 0;
         while (child != null) {
-            if (isGenerator) {
+            if (suspends) {
                 boolean spread = child.getType() == Token.DOTDOTDOT;
                 generateExpression(spread ? child.getFirstChild() : child, node);
                 cfw.addALoad(generatorStorage);
@@ -2979,7 +2982,7 @@ class BodyCodegen {
             child = child.getNext();
             childIdx++;
         }
-        if (isGenerator) {
+        if (suspends) {
             cfw.addALoad(generatorStorage);
             cfw.add(ByteCode.CHECKCAST, "org/monflabs/mozilla/javascript/NewLiteralStorage");
             releaseWordLocal(generatorStorage);
@@ -3034,7 +3037,7 @@ class BodyCodegen {
             return;
         }
 
-        if (isGenerator) {
+        if (maySuspend(child) || computedKeySuspends(properties)) {
             // Slightly more inefficient code, but necessary for bug 757410.
             // The problem is that, when we have a yield in a key or value,
             // we might actually suspend the function and resume it later.
@@ -3583,7 +3586,7 @@ class BodyCodegen {
         // that's what ECMAScript requires
         generateCallArgArray(node, firstArgChild, false);
         cfw.addAStore(argsLocal);
-        if (isGenerator) {
+        if (maySuspend(firstArgChild)) {
             // a yield in the arguments restores the stack as untyped values
             cfw.add(
                     ByteCode.CHECKCAST,
@@ -3657,6 +3660,25 @@ class BodyCodegen {
     }
 
     /** Whether a yield (or an await) is in these nodes or their siblings that follow. */
+    /**
+     * Whether a generator may suspend while it evaluates these nodes and their next siblings: its
+     * stack then comes back as untyped values, and locals hold no doubles across the yield.
+     */
+    private boolean maySuspend(Node first) {
+        return isGenerator && hasYield(first);
+    }
+
+    private boolean computedKeySuspends(Object[] properties) {
+        if (isGenerator && properties != null) {
+            for (Object id : properties) {
+                if (id instanceof Node && hasYield(((Node) id).getFirstChild())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static boolean hasYield(Node node) {
         for (Node n = node; n != null; n = n.getNext()) {
             int type = n.getType();
@@ -3692,7 +3714,7 @@ class BodyCodegen {
         // The arguments are evaluated once, for both the direct and the regular call (the locals
         // of a generator do not hold doubles across a yield).
         int argCount = countArguments(firstArgChild);
-        short[] argLocals = isGenerator ? null : new short[argCount];
+        short[] argLocals = maySuspend(firstArgChild) ? null : new short[argCount];
         if (argLocals != null) {
             int i = 0;
             for (Node arg = firstArgChild; arg != null; arg = arg.getNext(), i++) {
@@ -3968,6 +3990,7 @@ class BodyCodegen {
             return;
         }
         int argCount = countArguments(argChild);
+        boolean suspends = maySuspend(argChild);
         // load array object to set arguments
         if (argCount == 1 && itsOneArgArray >= 0) {
             cfw.addALoad(itsOneArgArray);
@@ -3979,7 +4002,7 @@ class BodyCodegen {
             // If we are compiling a generator an argument could be the result
             // of a yield. In that case we will have an immediate on the stack
             // which we need to avoid
-            if (!isGenerator) {
+            if (!suspends) {
                 cfw.add(ByteCode.DUP);
                 cfw.addPush(i);
             }
@@ -4007,7 +4030,7 @@ class BodyCodegen {
             // When compiling generators, any argument to a method may be a
             // yield expression. Hence we compile the argument first and then
             // load the argument index and assign the value to the args array.
-            if (isGenerator) {
+            if (suspends) {
                 short tempLocal = getNewWordLocal();
                 cfw.addAStore(tempLocal);
                 cfw.add(ByteCode.CHECKCAST, "[Ljava/lang/Object;");

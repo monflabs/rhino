@@ -39,6 +39,34 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Functions too large for the JIT (2026-10-25)
+
+HotSpot does not compile a method of more than 8,000 bytes of bytecode: it runs in the bytecode interpreter of
+the JVM. The JetStream 3 `js-tokens` workload, a tokenizer that is a generator of 11 KB, ran slower compiled
+(5.8 s per run) than interpreted (3.2 s).
+
+- Compiled mode, under `VERSION_ECMASCRIPT`: a function whose method exceeds 8,000 bytes is split once
+  (Splitter), as one too large for a class file: its code is then JIT-compiled. OPTIMIZATION.md "Functions too
+  large for the JIT".
+- Compiled mode, under `VERSION_ECMASCRIPT`: generators and async functions are split too, with no `yield` or
+  `await` in a chunk; in a generator that is not async, statements that yield move to a generator called with
+  `yield*`. Not gated otherwise: not observable.
+- Compiled mode: generators compile literals and calls with the code that survives a `yield` only when one
+  holds a `yield`; the nested functions of a generator read its variables at their position in its activation;
+  an exception no longer creates an interpreter by reflection, and the completion of a compiled generator no
+  longer looks up `@@toStringTag`.
+- Gated: a `yield*` in the `catch` or `finally` block that a `throw()` or a `return()` runs did not delegate:
+  the generator returned the internal object that asks for it (found by the forced splitting of generators,
+  whose chunks are such blocks). BACKWARD_COMPATIBILITY.md 1.105.
+- Gated: an exception thrown by the delegee of a `yield*` that the generator does not catch keeps its Java and
+  script stack traces (`RhinoException#getScriptStackTrace`), instead of a new exception whose stack starts at
+  the call that resumed the generator. 1.105.
+- `js-tokens` compiled: 5.8 s → 4.75 s per run; interpreted 3.2 s. Each token enters two chunks of the
+  tokenizer's loop, generators of their own (3 million per run, about 0.55 µs each): the gap is the subject of
+  further work, a smaller compiled code that would keep the tokenizer under 8 KB (2.6 s per run when HotSpot
+  compiles it whole, with `-XX:-DontCompileHugeMethods`).
+- test262: no change.
+
 ### The syntax tree of an interpreted script kept alive (2026-10-25)
 
 - Interpreted mode: the keys of an object literal with a computed key kept the node of that key, which the

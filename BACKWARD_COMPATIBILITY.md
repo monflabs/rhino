@@ -118,6 +118,7 @@ changes.
 | 1.102 | A case-insensitive class range whose characters have case variants past its end | `VERSION_ECMASCRIPT` |
 | 1.103 | BigInt arithmetic stored in a variable of a compiled function | `VERSION_ECMASCRIPT` |
 | 1.104 | The value of a `return` of a generator that leaves a scope, a loop or a `try` | `VERSION_ECMASCRIPT` |
+| 1.105 | A `yield*` in the `catch` or `finally` block that a `throw()` or a `return()` runs | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1710,6 +1711,26 @@ function* g() { try { return log('value'); } finally { log('finally'); } }   // 
   `finally` block or the close of a `for await` loop), as a function keeps it.
 - **Why:** ECMA-262 2026, §14.10.1 (ReturnStatement evaluation: the expression is evaluated, then the return
   completion leaves the enclosing statements, running their finally blocks and closing their iterators).
+
+### 1.105 A `yield*` in the `catch` or `finally` block that a `throw()` or a `return()` runs
+
+```js
+function* g() { try { yield 1; } catch (e) { yield* [e + '!']; } }
+const it = g(); it.next();
+it.throw('x');   // before: { value: <a Java YieldStarResult>, done: false }   now: { value: 'x!', done: false }
+function* h() { try { yield 1; } finally { yield* [7, 8]; } }
+const it2 = h(); it2.next();
+it2.return(5);   // before: { done: false } (compiled), a TypeError (interpreted)   now: { value: 7, done: false }, then 8, then { value: 5, done: true }
+```
+
+- When `throw()` or `return()` resumed a generator whose `catch` or `finally` block then reached a `yield*`, the
+  delegation did not start: the generator returned the internal object that asks for it. It now starts as when
+  `next()` resumes the generator.
+- An exception thrown by the delegee of a `yield*`, which the generator does not catch, is rethrown as it is: its
+  `getScriptStackTrace()` shows where it was thrown, instead of starting at the call that resumed the generator
+  (Java embeddings only; the `stack` of an `Error` is set when it is created and does not change).
+- **Why:** ECMA-262 2026, §27.5.3.4 GeneratorResumeAbrupt and §15.5.5 (`yield*` evaluation, whichever completion
+  resumed the generator).
 
 ---
 

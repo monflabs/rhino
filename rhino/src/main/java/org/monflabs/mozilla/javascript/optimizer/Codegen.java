@@ -525,6 +525,12 @@ public class Codegen implements Evaluator {
         return cfw;
     }
 
+    /**
+     * The size of bytecode beyond which HotSpot does not compile a method (HugeMethodLimit, with
+     * DontCompileHugeMethods): its code runs in the bytecode interpreter of the JVM.
+     */
+    static final int JIT_METHOD_LIMIT = 8000;
+
     private void generateFunction(ClassFileWriter cfw, int i) {
         ScriptNode n = scriptOrFnNodes[i];
 
@@ -559,6 +565,13 @@ public class Codegen implements Evaluator {
                 throw new FunctionTooLargeException(e.getMessage(), key, e.isJumpOffset());
             }
             throw e;
+        }
+        if (bodygen.bodyCodeSize > JIT_METHOD_LIMIT
+                && key != FunctionTooLargeException.SCRIPT
+                && key != -1
+                && compilerEnv.splitsForJit(key)) {
+            // HotSpot would only interpret it: split once, a hot function most of all
+            throw new FunctionTooLargeException("method too large for the JIT", key);
         }
 
         if (n.getType() == Token.FUNCTION) {

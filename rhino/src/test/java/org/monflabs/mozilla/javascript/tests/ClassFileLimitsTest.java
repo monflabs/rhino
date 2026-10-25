@@ -87,9 +87,14 @@ class ClassFileLimitsTest {
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
     void scriptBeyondALimitIsReported(int version) {
-        // a function too large is split into smaller methods, but not a generator
+        // a function too large is split into smaller methods, but not a generator before
+        // VERSION_ECMASCRIPT (see Splitter)
         List<String> warnings =
                 run(version, body("function* f(x) {\n", 3000) + "f(1000).next().value;", 1000);
+        if (version == Context.VERSION_ECMASCRIPT) {
+            assertTrue(warnings.isEmpty(), warnings.toString());
+            return;
+        }
         assertEquals(1, warnings.size(), warnings.toString());
         assertTrue(warnings.get(0).contains("class file limit"), warnings.get(0));
     }

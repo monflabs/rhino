@@ -459,6 +459,22 @@ public class CompilerEnvirons {
         return wideJumps.add(functionKey);
     }
 
+    /**
+     * Whether a function whose method is too large for the JIT is split once, as one too large for
+     * a class file (Codegen#JIT_METHOD_LIMIT): under VERSION_ECMASCRIPT, and before it was split.
+     */
+    public boolean splitsForJit(int functionKey) {
+        return jitSplits && canSplit() && isLatestEcmaScript() && getSplitLevel(functionKey) == 0;
+    }
+
+    /**
+     * Lets the class compiler ask for functions too large for the JIT to be split: the compilation
+     * is retried (Context#compileImpl), unlike that of ClassCompiler.
+     */
+    void enableJitSplits() {
+        jitSplits = true;
+    }
+
     /** Whether the functions of the script may be split (not when it is interpreted). */
     boolean canSplit() {
         return !noSplit && !isInterpretedMode();
@@ -506,6 +522,8 @@ public class CompilerEnvirons {
     private Set<Integer> unsplittable;
     private Set<Integer> wideJumps;
     private boolean noSplit;
+
+    private boolean jitSplits;
 
     private int classUnits = FORCED_CLASS_UNITS;
 

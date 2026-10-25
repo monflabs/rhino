@@ -20,12 +20,14 @@ import org.monflabs.mozilla.javascript.ast.ClassNode;
 import org.monflabs.mozilla.javascript.ast.ConditionalExpression;
 import org.monflabs.mozilla.javascript.ast.ContinueStatement;
 import org.monflabs.mozilla.javascript.ast.ExpressionStatement;
+import org.monflabs.mozilla.javascript.ast.ForInLoop;
 import org.monflabs.mozilla.javascript.ast.FunctionCall;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.GeneratorExpression;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
+import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
 import org.monflabs.mozilla.javascript.ast.Label;
 import org.monflabs.mozilla.javascript.ast.LabeledStatement;
 import org.monflabs.mozilla.javascript.ast.LetNode;
@@ -49,6 +51,7 @@ import org.monflabs.mozilla.javascript.ast.UnaryExpression;
 import org.monflabs.mozilla.javascript.ast.VariableDeclaration;
 import org.monflabs.mozilla.javascript.ast.VariableInitializer;
 import org.monflabs.mozilla.javascript.ast.WithStatement;
+import org.monflabs.mozilla.javascript.ast.Yield;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
 
 /**
@@ -63,9 +66,11 @@ import org.monflabs.mozilla.javascript.config.RhinoConfig;
  * <p>Runs on the AST, before IRFactory transforms the body, when the class compiler found the
  * function too large (CompilerEnvirons#splitFurther). Function declarations stay in place, as do
  * lexical declarations, but those of the body of a function, whose bindings are variables of the
- * function. Not split: generators and async functions (a yield cannot cross a function), derived
- * constructors (super()), and functions with a direct eval or a with statement, whose names resolve
- * at run time.
+ * function. In a generator or an async function (under VERSION_ECMASCRIPT), no chunk holds a yield
+ * or an await, but in a generator that is not async, statements that yield become a generator
+ * called with yield*, which forwards next, throw and return to it (#delegation). Not split: derived
+ * constructors (super()), generators of JavaScript 1.7, and functions with a direct eval or a with
+ * statement, whose names resolve at run time.
  *
  * <p>The chunks of a script keep its completion value: a chunk takes the current value as its
  * parameter (FunctionNode#SPLIT_COMPLETION, the result of the script at its call site) and returns
@@ -88,6 +93,7 @@ final class Splitter {
 
     static final String RETURN_VALUE = "%return";
     private static final String STATE = "%state";
+    private static final String EXIT = "%exit";
     private static final int RETURN_STATE = 1;
 
     /** The key of a script, which has no source position of its own (FunctionNode#getSplitKey). */
@@ -95,8 +101,17 @@ final class Splitter {
 
     private final ScriptNode owner;
     private final boolean script;
+
+    /**
+     * Whether the owner is a generator or an async function: no chunk holds a yield or an await.
+     */
+    private final boolean resumable;
+
     private final int limit;
     private boolean declared;
+
+    /** The number of chunks of a generator that yield, for the names of their exit variables. */
+    private int delegations;
 
     /** The switch statements made by #splitClauses, whose clauses are not split again. */
     private final Set<SwitchStatement> madeSwitches =
@@ -108,6 +123,7 @@ final class Splitter {
     private Splitter(ScriptNode owner, int limit) {
         this.owner = owner;
         this.script = !(owner instanceof FunctionNode);
+        this.resumable = isResumable(owner);
         this.limit = limit;
     }
 
@@ -121,9 +137,11 @@ final class Splitter {
     }
 
     /** Splits the body of a function or a script; returns whether it could be split. */
-    static boolean split(ScriptNode owner, int weight) {
+    static boolean split(ScriptNode owner, int weight, boolean latestEcmaScript) {
         AstNode body = owner instanceof FunctionNode ? ((FunctionNode) owner).getBody() : owner;
-        if (!canSplit(owner, body)) {
+        if (!canSplit(owner, body) || (!latestEcmaScript && isResumable(owner))) {
+            // a generator is split under VERSION_ECMASCRIPT, where a yield* in a catch or finally
+            // block that a throw() or return() runs delegates (ES6Generator#resumeAbruptLocal)
             return false;
         }
         Splitter splitter = new Splitter(owner, Math.max(weight, 1));
@@ -134,12 +152,71 @@ final class Splitter {
         }
     }
 
+    /**
+     * Whether statements that yield can move to a generator called with yield*: in a generator that
+     * is not async (an async one awaits what it delegates), statements that do not use the this,
+     * arguments, new.target or super of the function, which a generator has of its own.
+     */
+    private boolean canDelegate(AstNode statement) {
+        if (!(owner instanceof FunctionNode)
+                || !((FunctionNode) owner).isGeneratorFunction()
+                || ((FunctionNode) owner).isAsyncGenerator()) {
+            return false;
+        }
+        boolean[] found = {false};
+        statement.visit(
+                n -> {
+                    if ((n instanceof KeywordLiteral
+                                    && (n.getType() == Token.THIS
+                                            || n.getType() == Token.SUPER
+                                            || n.getType() == Token.NEW_TARGET))
+                            || (n instanceof Name
+                                    && "arguments".equals(((Name) n).getIdentifier()))) {
+                        found[0] = true;
+                    }
+                    // an arrow function uses those of the function
+                    return !found[0]
+                            && (!(n instanceof FunctionNode)
+                                    || ((FunctionNode) n).getFunctionType()
+                                            == FunctionNode.ARROW_FUNCTION);
+                });
+        return !found[0];
+    }
+
+    private static boolean isResumable(ScriptNode owner) {
+        return owner instanceof FunctionNode
+                && (((FunctionNode) owner).isES6Generator() || ((FunctionNode) owner).isAsync());
+    }
+
+    /** A generator of JavaScript 1.7, whose yields IRFactory finds in its body. */
+    private static boolean isLegacyGenerator(FunctionNode fn) {
+        return fn.isGenerator() && !fn.isES6Generator() && !fn.isAsync();
+    }
+
+    /**
+     * Whether a node of a generator or an async function suspends it outside of its nested
+     * functions: a yield, an await, or a for await loop.
+     */
+    private boolean suspends(AstNode node) {
+        if (!resumable) {
+            return false;
+        }
+        boolean[] found = {false};
+        node.visit(
+                n -> {
+                    if (n instanceof Yield
+                            || (n instanceof ForInLoop && ((ForInLoop) n).isForAwait())) {
+                        found[0] = true;
+                    }
+                    return !found[0] && (n == node || !(n instanceof FunctionNode));
+                });
+        return found[0];
+    }
+
     private static boolean canSplit(ScriptNode owner, AstNode body) {
         if (owner instanceof FunctionNode) {
             FunctionNode fn = (FunctionNode) owner;
-            if (fn.isGenerator()
-                    || fn.isES6Generator()
-                    || fn.isAsync()
+            if (isLegacyGenerator(fn)
                     || fn.isDerivedConstructor()
                     || fn.getSplitOwner() != null
                     || !(body instanceof Block)) {
@@ -608,6 +685,12 @@ final class Splitter {
         int runWeight = 0;
         boolean changed = false;
         for (AstNode operand : operands) {
+            if (suspends(operand)) {
+                changed |= flushOperands(run, result);
+                runWeight = 0;
+                result.add(operand);
+                continue;
+            }
             int w = weight(operand);
             if (!run.isEmpty() && runWeight + w > limit) {
                 changed |= flushOperands(run, result);
@@ -682,7 +765,7 @@ final class Splitter {
      * arguments and bindings.
      */
     private boolean splitOperand(AstNode operand, Consumer<AstNode> setter) {
-        if (weight(operand) <= limit / 2 || hasLegacyScope(operand)) {
+        if (weight(operand) <= limit / 2 || hasLegacyScope(operand) || suspends(operand)) {
             return false;
         }
         int start = operand.getAbsolutePosition();
@@ -722,7 +805,7 @@ final class Splitter {
         int runWeight = 0;
         boolean changed = false;
         for (AbstractObjectProperty element : elements) {
-            if (!isMovableProperty(element)) {
+            if (!isMovableProperty(element) || suspends(element)) {
                 changed |= flushProperties(run, result);
                 runWeight = 0;
                 result.add(element);
@@ -873,6 +956,9 @@ final class Splitter {
      * variable of the function, assigned where the declaration is evaluated).
      */
     private boolean isMovable(AstNode statement) {
+        if (suspends(statement) && !canDelegate(statement)) {
+            return false;
+        }
         if (script && hasJumpOut(statement)) {
             // the return value of the chunk of a script is its completion value
             return false;
@@ -980,7 +1066,17 @@ final class Splitter {
             body.addStatement(statement);
         }
 
+        boolean delegates = false;
+        for (AstNode statement : run) {
+            delegates |= suspends(statement);
+        }
         FunctionNode chunk = newChunk(body, start, end, lineno, column, last);
+        if (delegates) {
+            // yield* (function* () { statements })(): the yields of the statements are the
+            // generator's, which yield* forwards next, throw and return to
+            chunk.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
+            chunk.setIsES6Generator();
+        }
         if (script) {
             // (%completion) => { statements; return %completion; }; the parameter is the first
             // variable of the chunk
@@ -1011,12 +1107,91 @@ final class Splitter {
         }
 
         List<AstNode> statements = new ArrayList<>();
+        if (delegates) {
+            return delegation(call, body, states, replays, start, lineno, column);
+        }
         if (states.isEmpty()) {
             statements.add(statement(call, lineno, column));
             return statements;
         }
         declareVariables();
         statements.add(statement(assign(name(STATE, start), call, start), lineno, column));
+        addReplays(statements, states, replays, start, lineno, column);
+        return statements;
+    }
+
+    /**
+     * The statements that call a chunk of a generator that yields:
+     *
+     * <pre>
+     * %exitN = 0;
+     * %state = yield* (function* () { statements; %exitN = 1; })();
+     * if (%exitN === 0) return %state;
+     * replays
+     * </pre>
+     *
+     * The chunk sets %exitN at each of its exits (its returns and jumps set it with the state they
+     * return): when it completes otherwise, a return() of the generator was forwarded to it, and a
+     * finally block that yielded let it complete later with the value of that return, which the
+     * generator returns too, as yield* only does when the chunk completes at once.
+     */
+    private List<AstNode> delegation(
+            FunctionCall call,
+            Block body,
+            IdentityHashMap<AstNode, Integer> states,
+            List<AstNode> replays,
+            int start,
+            int lineno,
+            int column) {
+        declareVariables();
+        // a variable of its own: the chunks it calls set theirs
+        String exit = EXIT + delegations++;
+        owner.putSymbol(new Symbol(Symbol.Type.VAR, exit));
+        List<ReturnStatement> exits = new ArrayList<>();
+        body.visit(
+                n -> {
+                    if (n instanceof ReturnStatement) {
+                        exits.add((ReturnStatement) n);
+                    }
+                    return !(n instanceof FunctionNode);
+                });
+        for (ReturnStatement ret : exits) {
+            int at = ret.getAbsolutePosition();
+            AstNode value = ret.getReturnValue();
+            value.setParent(null);
+            ret.setReturnValue(
+                    new InfixExpression(
+                            Token.COMMA, assign(name(exit, at), number(1, at), at), value, at));
+        }
+        int end = body.getAbsolutePosition() + body.getLength();
+        body.addStatement(statement(assign(name(exit, end), number(1, end), end), lineno, column));
+
+        List<AstNode> statements = new ArrayList<>();
+        statements.add(
+                statement(assign(name(exit, start), number(0, start), start), lineno, column));
+        Yield yield = new Yield(start, call.getLength(), call, true);
+        yield.setLineColumnNumber(lineno, column);
+        statements.add(statement(assign(name(STATE, start), yield, start), lineno, column));
+        IfStatement forwarded = new IfStatement(start);
+        forwarded.setCondition(
+                new InfixExpression(Token.SHEQ, name(exit, start), number(0, start), start));
+        ReturnStatement forward = new ReturnStatement(start);
+        forward.setReturnValue(name(STATE, start));
+        forward.setLineColumnNumber(lineno, column);
+        forwarded.setThenPart(forward);
+        forwarded.setLineColumnNumber(lineno, column);
+        statements.add(forwarded);
+        addReplays(statements, states, replays, start, lineno, column);
+        return statements;
+    }
+
+    private static void addReplays(
+            List<AstNode> statements,
+            IdentityHashMap<AstNode, Integer> states,
+            List<AstNode> replays,
+            int start,
+            int lineno,
+            int column) {
         for (AstNode replay : replays) {
             IfStatement test = new IfStatement(start);
             test.setCondition(
@@ -1029,7 +1204,6 @@ final class Splitter {
             test.setLineColumnNumber(lineno, column);
             statements.add(test);
         }
-        return statements;
     }
 
     /** An arrow function of the owner holding body, called in place. */

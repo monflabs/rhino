@@ -966,18 +966,18 @@ public class NodeTransformer {
      * Keeps in registers the parameters and variables of a function with an activation object that
      * no nested function can refer to: only those need to be properties of the activation object.
      * The function itself reads the others at a fixed position of its activation. Not done when
-     * names can be resolved dynamically (direct eval, with), for generators (their registers do not
-     * survive a yield) and when the arguments object can alias the parameters (a non-strict
-     * function with parameters: an unmapped arguments object only holds the values passed).
+     * names can be resolved dynamically (direct eval, with), and when the arguments object can
+     * alias the parameters (a non-strict function with parameters: an unmapped arguments object
+     * only holds the values passed). A generator keeps no register (they do not survive a yield)
+     * and reads its own variables by name, but its nested functions read them at their position.
      * Function declarations, catch parameters, let/const and class bindings stay names of the
      * activation object.
      */
     private void keepVarsInRegisters(FunctionNode fn) {
-        if (fn.isGenerator()
-                || fn.isES6Generator()
-                || (fn.requiresArgumentObject()
-                        && ((!fn.isInStrictMode() && fn.getParamCount() != 0)
-                                || fn.getSymbol("arguments") != null))) {
+        boolean generator = fn.isGenerator() || fn.isES6Generator();
+        if ((fn.requiresArgumentObject()
+                && ((!fn.isInStrictMode() && fn.getParamCount() != 0)
+                        || fn.getSymbol("arguments") != null))) {
             return;
         }
         Set<String> referenced = new HashSet<>();
@@ -1000,7 +1000,9 @@ public class NodeTransformer {
         // the let/const bindings that only the function refers to: variables of the function, the
         // bindings of its blocks added after its own
         Set<Symbol> lexicals = Collections.newSetFromMap(new IdentityHashMap<>());
-        collectRegisterLexicals(fn, fn, referenced, dynamic, lexicals);
+        if (!generator) {
+            collectRegisterLexicals(fn, fn, referenced, dynamic, lexicals);
+        }
         List<Symbol> blockLexicals = new ArrayList<>();
         for (Symbol symbol : lexicals) {
             if (symbol.getContainingTable() != fn) {
@@ -1041,8 +1043,10 @@ public class NodeTransformer {
                 continue;
             }
             if (!referenced.contains(name)) {
-                inRegister[symbol.getIndex()] = true;
-                registers.add(name);
+                if (!generator) {
+                    inRegister[symbol.getIndex()] = true;
+                    registers.add(name);
+                }
             } else if (!name.equals(fn.getName())) {
                 // not the name of a function expression, which NativeCall binds too
                 inSlot[symbol.getIndex()] = true;
@@ -1065,7 +1069,9 @@ public class NodeTransformer {
         }
         if (!slots.isEmpty()) {
             fn.setActivationVars(inSlot);
-            activationVarNames = slots;
+            if (!generator) {
+                activationVarNames = slots;
+            }
             Map<String, Integer> outer = new HashMap<>();
             for (String name : slots) {
                 int index = fn.getSymbol(name).getIndex();

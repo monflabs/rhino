@@ -96,7 +96,8 @@ public final class NativeIterator extends ScriptableObject {
      * Thrown by a compiled generator when it completes, with a {@link StopIteration}: the generator
      * catches it (an ES6 generator) or rethrows it to the script (a legacy one, which only sees the
      * value). It has no Java stack trace, and its details do not convert the value, which throws
-     * and catches a TypeError: both cost about ten microseconds per completed generator.
+     * and catches a TypeError, nor look up its @@toStringTag: those cost about ten microseconds,
+     * then a tenth of a microsecond, per completed generator.
      */
     public static final class GeneratorCompletion extends JavaScriptException {
         @Serial private static final long serialVersionUID = 1L;
@@ -107,7 +108,8 @@ public final class NativeIterator extends ScriptableObject {
 
         @Override
         public String getDetails() {
-            return ScriptRuntime.defaultObjectToString(getValue());
+            // as Object.prototype.toString, without looking up a @@toStringTag on each completion
+            return "[object " + ((StopIteration) getValue()).getClassName() + "]";
         }
 
         @Override
