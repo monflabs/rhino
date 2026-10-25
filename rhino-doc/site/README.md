@@ -102,6 +102,8 @@ JavaScript.
 - [Changes and incompatibilities](changes.md): what behaves differently, and how to migrate.
 - [Performance optimizations](performance.md): what was made faster, and how performance is
   guarded.
+- [How the engine is validated](validation.md): the harnesses that check the engine, from test262
+  to the JavascriptPerformance project.
 
 The detailed records are in the fork's repository:
 [CHANGELOG_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/CHANGELOG_MONFLABS.md)

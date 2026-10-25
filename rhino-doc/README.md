@@ -11,7 +11,8 @@ buildtools/build-doc.sh --serve    # and serves it on http://localhost:8000/ (--
 
 - `site/README.md` is the home page; `features.md`, `changes.md` and `performance.md` summarize
   the records of the fork: `CHANGELOG_MONFLABS.md`, `BACKWARD_COMPATIBILITY.md` and
-  `OPTIMIZATION.md`. `site/_sidebar.md` is the navigation.
+  `OPTIMIZATION.md`. `validation.md` lists the test harnesses, from `tests/README.md`,
+  `benchmarks/README.md` and the JavascriptPerformance project. `site/_sidebar.md` is the navigation.
 - `site/playground/index.html` runs the playground (`../rhino-playground`) in the browser with
   [CheerpJ](https://cheerpj.com), on its Java 21 runtime: the generated site has the playground's
   jar next to it, as `rhino-playground.jar`. CheerpJ maps `/app/` to the root of the web server,
