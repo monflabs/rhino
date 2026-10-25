@@ -355,4 +355,63 @@ class MethodSplittingTest {
         sb.append("return g0() + g3999() + eval('g' + n)() + (typeof g17) + g17.name; }\nf(2000);");
         assertRuns(version, "5999functiong17", sb.toString());
     }
+
+    /**
+     * Comma expressions too large for a method, as minifiers write them (a return, a condition, an
+     * operand of &&), whose runs of operands the Splitter moves to chunks.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void commaExpressionOfManyOperands(int version) {
+        StringBuilder operands = new StringBuilder();
+        for (int i = 0; i < 1500; i++) {
+            operands.append(
+                    i % 2 == 0 ? "log.push(this.base + " + i + ")" : "t += arguments.length");
+            operands.append(",\n    ");
+        }
+        String source =
+                "function f(n) { var log = [], t = 0;\n"
+                        + "  if (("
+                        + operands
+                        + "n > 2)) t = -t;\n"
+                        + "  n > 1 && ("
+                        + operands
+                        + "t++);\n"
+                        + "  return "
+                        + operands
+                        + "[t, log.length, log[1499]].join();\n}\n"
+                        + "[f.call({ base: 1 }, 3), f.call({ base: 2 }, 1)].join(';');";
+        assertRuns(version, "751,2250,1499;1500,1500,1500", source);
+    }
+
+    /**
+     * A function of thousands of let, const and class declarations, as the module function of a
+     * bundle: the Splitter moves them to chunks, which initialize the bindings of the function.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void functionOfManyLexicalDeclarations(int version) {
+        boolean latest = version == Context.VERSION_ECMASCRIPT;
+        StringBuilder sb = new StringBuilder("function f(n) {\n");
+        sb.append(
+                "  var early = () => v2999; var tdz; try { early(); } catch (e) { tdz = e.name; }\n");
+        sb.append("  let v0 = n;\n");
+        for (int i = 1; i < 3000; i++) {
+            if (latest && i % 100 == 0) {
+                sb.append("  class v").append(i).append(" { static m() { return v");
+                sb.append(i - 1).append(" + v").append(i).append(".name; } }\n");
+            } else {
+                sb.append(i % 2 == 0 ? "  let v" : "  const v").append(i);
+                sb.append(" = [v").append(i - 1).append(", ").append(i).append("].length + ");
+                sb.append(i).append(";\n");
+            }
+        }
+        sb.append("  var assign; try { v2999 = 1; } catch (e) { assign = e.name; }\n");
+        sb.append("  return [tdz, early(), v1, v2998, assign");
+        sb.append(latest ? ", v100.m(), v2900.m()" : "").append("].join();\n}\nf(5);");
+        assertRuns(
+                version,
+                latest ? "ReferenceError,3001,3,3000,TypeError,101v100,2901v2900" : ",3001,3,3000,",
+                sb.toString());
+    }
 }

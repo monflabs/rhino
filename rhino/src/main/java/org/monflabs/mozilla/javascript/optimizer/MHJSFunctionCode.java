@@ -71,22 +71,28 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
             VarScope scope,
             Object thisObj,
             Object[] args) {
-        if (lookup != null) {
-            link();
+        JSCodeExec<JSFunction> e = exec;
+        if (e == null) {
+            e = link();
         }
-        return exec.execute(cx, executableObject, newTarget, scope, thisObj, args);
+        return e.execute(cx, executableObject, newTarget, scope, thisObj, args);
     }
 
     /**
      * Makes the call go through an instance of a class whose method calls the compiled method
      * directly, rather than through the method handle, which the JIT does not inline (it is not a
      * constant). Done on the first call, so that a function that never runs does not get a class.
+     * Another thread may read exec without the lock: it sees null, and comes here, or the instance,
+     * whose fields are final.
      */
     @SuppressWarnings("unchecked")
-    private synchronized void link() {
+    private synchronized JSCodeExec<JSFunction> link() {
         Lookup l = lookup;
         if (l == null) {
-            return;
+            if (exec == null) {
+                exec = handleCall(execMH);
+            }
+            return exec;
         }
         JSCodeExec<JSFunction> direct;
         try {
@@ -115,6 +121,7 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
         }
         exec = direct;
         lookup = null;
+        return direct;
     }
 
     @Override

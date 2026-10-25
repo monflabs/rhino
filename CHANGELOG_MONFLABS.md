@@ -39,6 +39,29 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Babylon.js and three.js compiled (2026-10-25)
+
+- Compiled mode: two JetStream 3 workloads still had functions too large after splitting, and ran in the
+  interpreter. The Splitter now also moves:
+  - the `let`, `const` and class declarations of the body of a function, as it moves a `var`: their bindings stay
+    variables of the function, which the chunk initializes through its scope chain, so they are in their
+    temporal dead zone until then. The module function of a bundle declares thousands of them (Babylon.js 1,494,
+    three.js). Destructuring declarations, and the lexical declarations of blocks and scripts, stay in place;
+  - runs of the operands of a comma expression too heavy for a chunk, to chunks returning the value of their last
+    operand, and an operand of `&&`, `||` or `??` heavier than half a chunk, as one of `?:`: the wasm2js code in
+    Babylon.js has a `return` of a comma expression of 21,000 nodes, and conditions of thousands.
+  OPTIMIZATION.md "Functions too large for a class file are split". Not gated: not observable.
+- three.js runs compiled: 5.3 s per run, 14.2 s interpreted. Babylon.js's scene workload compiles and runs at
+  about the speed of the interpreter (780 and 700 ms per run). This closes the second known gap of the entry
+  below.
+- Compiled mode: a function first called by two threads at once could throw a NullPointerException in one
+  of them (`MHJSFunctionCode`, since the direct calls of compiled functions): the thread that linked it
+  published its call target without ordering the writes, which the other read without the lock. Found by
+  test262 with forced splitting, whose harness scripts the test threads share. Not gated: a crash.
+- Known gap, unchanged: under `VERSION_ES6`, `for (const x of xs)` in an arrow function never assigns `x` (stock
+  behavior, both modes); a chunk being an arrow function, such a loop moved to a chunk does too.
+- test262: no change.
+
 ### The value of a generator's return before its unwinding (2026-10-25)
 
 - Gated: in a generator or an async function, the value of a `return` that leaves a block with a scope object,
@@ -80,7 +103,8 @@ other suites do not have. Its first run in compiled mode failed 10 of them on en
     both modes; and, with a `finally` block, after it. A function evaluates it first. Fixing it needs a value
     kept across the yields of the unwinding (fixed the same day, 1.104);
   - Babylon.js's scene workload still has functions too large after splitting (thousands of `let`, `const`
-    and classes in a bundle's function, which the Splitter keeps in place): it runs in the interpreter.
+    and classes in a bundle's function, which the Splitter keeps in place): it runs in the interpreter (fixed
+    the same day).
 - test262: no change.
 
 ### Javadoc references (2026-10-25)

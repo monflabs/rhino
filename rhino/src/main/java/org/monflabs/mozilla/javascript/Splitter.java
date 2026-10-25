@@ -61,10 +61,11 @@ import org.monflabs.mozilla.javascript.config.RhinoConfig;
  * replays them.
  *
  * <p>Runs on the AST, before IRFactory transforms the body, when the class compiler found the
- * function too large (CompilerEnvirons#splitFurther). Lexical declarations and function
- * declarations stay in place. Not split: generators and async functions (a yield cannot cross a
- * function), derived constructors (super()), and functions with a direct eval or a with statement,
- * whose names resolve at run time.
+ * function too large (CompilerEnvirons#splitFurther). Function declarations stay in place, as do
+ * lexical declarations, but those of the body of a function, whose bindings are variables of the
+ * function. Not split: generators and async functions (a yield cannot cross a function), derived
+ * constructors (super()), and functions with a direct eval or a with statement, whose names resolve
+ * at run time.
  *
  * <p>The chunks of a script keep its completion value: a chunk takes the current value as its
  * parameter (FunctionNode#SPLIT_COMPLETION, the result of the script at its call site) and returns
@@ -527,12 +528,12 @@ final class Splitter {
     }
 
     /**
-     * Splits the object literals of a statement too heavy for a chunk, outside of its blocks and
-     * nested functions, innermost first; returns whether it did.
+     * Splits the expressions of a statement too heavy for a chunk, outside of its blocks and nested
+     * functions, innermost first: object literals, comma expressions, and the operands of ?:, &&,
+     * || and ??; returns whether it did.
      */
     private boolean splitLiterals(AstNode statement) {
-        List<ObjectLiteral> literals = new ArrayList<>();
-        List<ConditionalExpression> conditionals = new ArrayList<>();
+        List<AstNode> expressions = new ArrayList<>();
         statement.visit(
                 node -> {
                     if (node instanceof FunctionNode
@@ -542,23 +543,24 @@ final class Splitter {
                                                     && isStatementBlock(node))))) {
                         return false;
                     }
-                    if (node instanceof ObjectLiteral
-                            && !((ObjectLiteral) node).isDestructuring()) {
-                        literals.add((ObjectLiteral) node);
-                    } else if (node instanceof ConditionalExpression) {
-                        conditionals.add((ConditionalExpression) node);
+                    if ((node instanceof ObjectLiteral && !((ObjectLiteral) node).isDestructuring())
+                            || node instanceof ConditionalExpression
+                            || isLogical(node)
+                            || (isComma(node) && !isComma(node.getParent()))) {
+                        expressions.add(node);
                     }
                     return true;
                 });
         boolean changed = false;
-        for (int i = literals.size() - 1; i >= 0; i--) {
-            if (weight(literals.get(i)) > limit) {
-                changed |= splitLiteral(literals.get(i));
+        for (int i = expressions.size() - 1; i >= 0; i--) {
+            AstNode expression = expressions.get(i);
+            if (weight(expression) <= limit) {
+                continue;
             }
-        }
-        for (int i = conditionals.size() - 1; i >= 0; i--) {
-            ConditionalExpression conditional = conditionals.get(i);
-            if (weight(conditional) > limit) {
+            if (expression instanceof ObjectLiteral) {
+                changed |= splitLiteral((ObjectLiteral) expression);
+            } else if (expression instanceof ConditionalExpression) {
+                ConditionalExpression conditional = (ConditionalExpression) expression;
                 changed |=
                         splitOperand(
                                 conditional.getTestExpression(), conditional::setTestExpression);
@@ -568,9 +570,110 @@ final class Splitter {
                 changed |=
                         splitOperand(
                                 conditional.getFalseExpression(), conditional::setFalseExpression);
+            } else if (isComma(expression)) {
+                changed |= splitComma((InfixExpression) expression);
+            } else {
+                InfixExpression logical = (InfixExpression) expression;
+                changed |= splitOperand(logical.getLeft(), logical::setLeft);
+                changed |= splitOperand(logical.getRight(), logical::setRight);
             }
         }
         return changed;
+    }
+
+    private static boolean isComma(AstNode node) {
+        return node instanceof InfixExpression && node.getType() == Token.COMMA;
+    }
+
+    private static boolean isLogical(AstNode node) {
+        return node instanceof InfixExpression
+                && (node.getType() == Token.AND
+                        || node.getType() == Token.OR
+                        || node.getType() == Token.NULLISH_COALESCING);
+    }
+
+    /**
+     * Moves runs of the operands of a comma expression to chunks returning the value of their last
+     * operand, (a, b, c, d) being ((() => (a, b))(), (() => (c, d))()): the same values, in the
+     * same order, the last one being the result.
+     */
+    private boolean splitComma(InfixExpression comma) {
+        List<AstNode> operands = new ArrayList<>();
+        addOperands(comma, operands);
+        if (weight(operands) <= limit) {
+            return false;
+        }
+        List<AstNode> result = new ArrayList<>();
+        List<AstNode> run = new ArrayList<>();
+        int runWeight = 0;
+        boolean changed = false;
+        for (AstNode operand : operands) {
+            int w = weight(operand);
+            if (!run.isEmpty() && runWeight + w > limit) {
+                changed |= flushOperands(run, result);
+                runWeight = 0;
+            }
+            run.add(operand);
+            runWeight += w;
+        }
+        changed |= flushOperands(run, result);
+        if (!changed) {
+            return false;
+        }
+        AstNode last = result.remove(result.size() - 1);
+        AstNode left = result.size() == 1 ? result.get(0) : sequence(result);
+        left.setParent(null);
+        last.setParent(null);
+        comma.setLeft(left);
+        comma.setRight(last);
+        return true;
+    }
+
+    private static void addOperands(AstNode node, List<AstNode> operands) {
+        if (isComma(node)) {
+            addOperands(((InfixExpression) node).getLeft(), operands);
+            addOperands(((InfixExpression) node).getRight(), operands);
+        } else {
+            operands.add(node);
+        }
+    }
+
+    /** The comma expression of the operands, from the left. */
+    private static AstNode sequence(List<AstNode> operands) {
+        AstNode result = operands.get(0);
+        result.setParent(null);
+        for (int i = 1; i < operands.size(); i++) {
+            AstNode operand = operands.get(i);
+            int position = operand.getAbsolutePosition();
+            operand.setParent(null);
+            result = new InfixExpression(Token.COMMA, result, operand, position);
+            result.setLineColumnNumber(operands.get(0).getLineno(), operands.get(0).getColumn());
+        }
+        return result;
+    }
+
+    /** Replaces a run of operands of a comma expression by the call of a chunk returning them. */
+    private boolean flushOperands(List<AstNode> run, List<AstNode> result) {
+        if (run.size() == 1 || weight(run) < Math.min(limit, 16) || hasLegacyScope(run)) {
+            result.addAll(run);
+            run.clear();
+            return false;
+        }
+        int start = run.get(0).getAbsolutePosition();
+        AstNode last = run.get(run.size() - 1);
+        int end = last.getAbsolutePosition() + last.getLength();
+        result.add(valueChunk(sequence(run), start, end, run.get(0), last));
+        run.clear();
+        return true;
+    }
+
+    private static boolean hasLegacyScope(List<AstNode> expressions) {
+        for (AstNode expression : expressions) {
+            if (hasLegacyScope(expression)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -585,21 +688,26 @@ final class Splitter {
         int start = operand.getAbsolutePosition();
         int end = start + operand.getLength();
         operand.setParent(null);
+        setter.accept(valueChunk(operand, start, end, operand, operand));
+        return true;
+    }
+
+    /** The call of a chunk returning the value of an expression, (() => expression)(). */
+    private FunctionCall valueChunk(
+            AstNode expression, int start, int end, AstNode first, AstNode last) {
         ReturnStatement ret = new ReturnStatement(start);
-        ret.setReturnValue(operand);
-        ret.setLineColumnNumber(operand.getLineno(), operand.getColumn());
+        ret.setReturnValue(expression);
+        ret.setLineColumnNumber(first.getLineno(), first.getColumn());
         Block body = new Block(start, end - start);
-        body.setLineColumnNumber(operand.getLineno(), operand.getColumn());
+        body.setLineColumnNumber(first.getLineno(), first.getColumn());
         body.addStatement(ret);
-        FunctionNode chunk =
-                newChunk(body, start, end, operand.getLineno(), operand.getColumn(), operand);
+        FunctionNode chunk = newChunk(body, start, end, first.getLineno(), first.getColumn(), last);
         moveScopes(body, chunk);
         FunctionCall call = new FunctionCall(start, end - start);
         call.setTarget(new ParenthesizedExpression(start, end - start, chunk));
         call.setArguments(new ArrayList<>());
-        call.setLineColumnNumber(operand.getLineno(), operand.getColumn());
-        setter.accept(call);
-        return true;
+        call.setLineColumnNumber(first.getLineno(), first.getColumn());
+        return call;
     }
 
     /**
@@ -696,21 +804,8 @@ final class Splitter {
             element.setParent(null);
             part.addElement(element);
         }
-        ReturnStatement ret = new ReturnStatement(start);
-        ret.setReturnValue(part);
-        ret.setLineColumnNumber(first.getLineno(), first.getColumn());
-        Block body = new Block(start, end - start);
-        body.setLineColumnNumber(first.getLineno(), first.getColumn());
-        body.addStatement(ret);
-        FunctionNode chunk = newChunk(body, start, end, first.getLineno(), first.getColumn(), last);
-        moveScopes(body, chunk);
-
-        FunctionCall call = new FunctionCall(start, end - start);
-        call.setTarget(new ParenthesizedExpression(start, end - start, chunk));
-        call.setArguments(new ArrayList<>());
-        call.setLineColumnNumber(first.getLineno(), first.getColumn());
         Spread spread = new Spread(start, end - start);
-        spread.setExpression(call);
+        spread.setExpression(valueChunk(part, start, end, first, last));
         spread.setLineColumnNumber(first.getLineno(), first.getColumn());
         SpreadObjectProperty spreadProperty = new SpreadObjectProperty(spread);
         spreadProperty.setLineColumnNumber(first.getLineno(), first.getColumn());
@@ -788,11 +883,29 @@ final class Splitter {
             return false;
         }
         if (statement instanceof VariableDeclaration) {
-            return statement.getType() == Token.VAR;
+            return statement.getType() == Token.VAR || isFunctionLexical(statement);
         }
         if (statement instanceof ExpressionStatement) {
             AstNode expression = ((ExpressionStatement) statement).getExpression();
             return !(expression instanceof FunctionNode || expression instanceof ClassNode);
+        }
+        return true;
+    }
+
+    /**
+     * Whether a statement is a let, const or class declaration of the body of a function: its
+     * bindings are variables of the function, which a chunk initializes through its scope chain, as
+     * those of a var. A destructuring declaration stays: its stores are not marked as
+     * initializations.
+     */
+    private boolean isFunctionLexical(AstNode statement) {
+        if (script || statement.getParent() != ((FunctionNode) owner).getBody()) {
+            return false;
+        }
+        for (VariableInitializer declarator : ((VariableDeclaration) statement).getVariables()) {
+            if (declarator.isDestructuring()) {
+                return false;
+            }
         }
         return true;
     }

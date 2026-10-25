@@ -628,8 +628,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   8,000-byte limit for compiling a method), half as large on each new failure, up to 3 times.
 - **When it applies.** Compiled mode, only after a failure: code that fits is unchanged. Not split: generators and
   async functions (a `yield` cannot cross a function), derived constructors (`super()`), functions with a direct
-  `eval` or a `with`. Lexical and function declarations, and statements holding a function declared in a block
-  (Annex B), stay in place.
+  `eval` or a `with`. Function declarations, statements holding a function declared in a block (Annex B), and
+  the lexical declarations of blocks and scripts stay in place.
 - **How it stays correct.** An arrow function shares `this`, `arguments`, `new.target` and `super`. Names in a
   chunk resolve to the bindings of the enclosing scopes through the syntax tree, as for any nested function; the
   scopes moved into a chunk and their bindings become the chunk's, and a `var` that `IRFactory` declares in a chunk
@@ -663,6 +663,17 @@ on, and what it gained. It also records the experiments that measured no gain, s
     object is the literal) and `__proto__` stay. TypeScript's table of diagnostics has thousands;
   - a `?:`: an operand heavier than half a chunk moves to a chunk returning its value, `(() => operand)()`, a value
     evaluated with the same `this`, `arguments` and bindings: Prettier's lexer tables are trees of them.
+  - (2026-10-25) a comma expression: runs of its operands move to chunks returning the value of their last
+    operand, `(a, b, c, d)` being `((() => (a, b))(), (() => (c, d))())`, the same values in the same order; and
+    an operand of `&&`, `||` or `??` heavier than half a chunk, as one of `?:`. The wasm2js code in Babylon.js has
+    a `return` of a comma expression of 21,000 nodes, and conditions of thousands.
+- **Lexical declarations of a function (2026-10-25).** The `let`, `const` and class declarations of the body of
+  a function move to chunks as a `var` does: the module function of a bundle declares thousands of them
+  (Babylon.js 1,494), which did not fit in a method however split. Their bindings stay variables of the
+  function: they start in their temporal dead zone on entry, as before, and the chunk initializes them through
+  its scope chain, the stores of a declaration being marked as initializations (`TDZ_DECLARATION_PROP`); a read
+  from a chunk is checked at run time, as from any closure. A destructuring declaration stays, its stores not
+  being marked so; the lexical declarations of a block stay, since their scope is the block.
 - **Many function declarations (2026-10-25).** The declarations of a function are created on entry, about 30
   bytes of code each: TypeScript's compiler, a function of 3,560 of them, did not fit in a method however split.
   Beyond 64, a call of `OptRuntime.initFunctions` creates them in a loop, from their descriptor indexes encoded in
@@ -674,7 +685,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Octane `regexp.js`, whose `runBlock` functions outgrew the limits with the fork's larger code (direct
   calls to nested declarations; under `VERSION_ECMASCRIPT`, reads of captured variables at their activation
   position), ran interpreted: score 460 → 606 (`VERSION_ES6`), 455 → about 570 (`VERSION_ECMASCRIPT`); upstream's
-  base 525, Rhino 1.8.0 538. Chunks of 300 or 1,200 nodes score the same.
+  base 525, Rhino 1.8.0 538. Chunks of 300 or 1,200 nodes score the same. The JetStream 3 `threejs` workload runs compiled: 5.3 s per
+  run, 14.2 s interpreted; Babylon.js's scene compiles, at about the speed of the interpreter (780 and 700 ms).
 
 ### Scripts spread over several classes (M17, 17.3)
 
