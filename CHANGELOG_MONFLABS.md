@@ -39,6 +39,16 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The value of a generator's return before its unwinding (2026-10-25)
+
+- Gated: in a generator or an async function, the value of a `return` that leaves a block with a scope object,
+  a `for-of` loop or a `try` with a `finally` block was evaluated after leaving them: `for (const x of xs) {
+  return x; }` was a ReferenceError, in both modes, and the `finally` block ran first. NodeTransformer now
+  stores the value in a variable of the generator's activation (`%generatorReturn`), which survives the yields
+  of the unwinding, before leaving them, then returns it. BACKWARD_COMPATIBILITY.md 1.104; this closes the
+  first known gap of the entry below.
+- test262: no change.
+
 ### Bugs found by JetStream 3 (2026-10-25)
 
 JetStream 3, added to JavascriptPerformance as the `jetstream3` suite, runs 39 JavaScript workloads that the
@@ -68,7 +78,7 @@ other suites do not have. Its first run in compiled mode failed 10 of them on en
   - in a generator or an async function, the value of a `return` that leaves a `for-of` loop or a block with
     a scope object is evaluated after leaving it: `for (const x of xs) { return x; }` is a ReferenceError, in
     both modes; and, with a `finally` block, after it. A function evaluates it first. Fixing it needs a value
-    kept across the yields of the unwinding;
+    kept across the yields of the unwinding (fixed the same day, 1.104);
   - Babylon.js's scene workload still has functions too large after splitting (thousands of `let`, `const`
     and classes in a bundle's function, which the Splitter keeps in place): it runs in the interpreter.
 - test262: no change.

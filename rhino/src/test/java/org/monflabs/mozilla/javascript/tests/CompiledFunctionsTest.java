@@ -161,12 +161,16 @@ class CompiledFunctionsTest {
         // the resumption point of the await was not recorded: the compiler failed, and the
         // script ran in the interpreter
         assertCompiles(
-                "3,2",
+                "3,4,2,5",
                 "var r = [];"
                         + "async function f(e) { { const n = []; for (const t of [1]) n.push(t);"
                         + "  return await e; } }"
                         + "function* g() { for (const x of [1]) { try { return yield 3; } finally {} } }"
-                        + "f(2).then(v => r.push(v)); r.push(g().next().value);",
+                        + "async function h() { for (const x of [4]) { try { return x + 1; }"
+                        + "  finally { await null; } } }"
+                        + "async function k() { for (const x of [4]) { return x; } }"
+                        + "f(2).then(v => r.push(v)); r.push(g().next().value);"
+                        + "h().then(v => r.push(v)); k().then(v => r.push(v));",
                 "r.join()");
     }
 

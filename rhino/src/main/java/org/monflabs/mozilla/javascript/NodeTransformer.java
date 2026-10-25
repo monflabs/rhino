@@ -56,6 +56,7 @@ public class NodeTransformer {
         inEval = env.isInEval();
         activationNames = env.getActivationNames();
         registersWithActivation = env.isLatestEcmaScript();
+        returnBeforeUnwind = env.isLatestEcmaScript();
         transformCompilationUnit(tree, useStrictMode);
         for (int i = 0; i != tree.getFunctionCount(); ++i) {
             FunctionNode fn = tree.getFunctionNode(i);
@@ -73,6 +74,13 @@ public class NodeTransformer {
         // Flatten all only if we are not using scope objects for block scope
         boolean createScopeObjects =
                 tree.getType() != Token.FUNCTION || ((FunctionNode) tree).requiresActivation();
+        if (returnBeforeUnwind
+                && tree instanceof FunctionNode
+                && ((FunctionNode) tree).isGenerator()
+                && tree.getSymbol(GENERATOR_RETURN) == null
+                && hasReturnValue(tree)) {
+            tree.putSymbol(new Symbol(Symbol.Type.VAR, GENERATOR_RETURN));
+        }
         tree.flattenSymbolTable(!createScopeObjects);
         registerNames = null;
         registerLexicals = null;
@@ -302,7 +310,24 @@ public class NodeTransformer {
                             Node returnNode = node;
                             Node returnExpr = returnNode.getFirstChild();
                             node = replaceCurrent(parent, previous, node, unwindBlock);
-                            if (returnExpr == null || isGenerator) {
+                            if (isGenerator && returnExpr != null && returnBeforeUnwind) {
+                                // %generatorReturn = expr; unwind; return %generatorReturn
+                                returnNode.removeChild(returnExpr);
+                                Node store =
+                                        new Node(
+                                                Token.EXPR_VOID,
+                                                new Node(
+                                                        Token.SETNAME,
+                                                        Node.newString(
+                                                                Token.BINDNAME, GENERATOR_RETURN),
+                                                        returnExpr));
+                                unwindBlock.addChildToFront(store);
+                                returnNode.addChildToBack(
+                                        Node.newString(Token.NAME, GENERATOR_RETURN));
+                                unwindBlock.addChildToBack(returnNode);
+                                transformCompilationUnit_r(
+                                        tree, store, scope, createScopeObjects, inStrictMode);
+                            } else if (returnExpr == null || isGenerator) {
                                 unwindBlock.addChildToBack(returnNode);
                                 if (returnExpr != null) {
                                     // the yields of a generator's return expression are its
@@ -665,6 +690,17 @@ public class NodeTransformer {
         return name.equals(((FunctionNode) tree).getName()) && scope.getDefiningScope(name) == tree;
     }
 
+    /** Whether a node holds a return with a value, outside of nested functions. */
+    private static boolean hasReturnValue(Node node) {
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            if ((child.getType() == Token.RETURN && child.getFirstChild() != null)
+                    || hasReturnValue(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * A for-of loop, which closes its iterator when a jump leaves it (see IRFactory#createForIn).
      */
@@ -878,6 +914,18 @@ public class NodeTransformer {
      * than direct eval, no longer sees them).
      */
     private boolean registersWithActivation;
+
+    /**
+     * Whether a generator's return expression is evaluated before the scopes, iterators and finally
+     * blocks it leaves (VERSION_ECMASCRIPT), as a function's is.
+     */
+    private boolean returnBeforeUnwind;
+
+    /**
+     * The variable of a generator that holds the value of a return while it leaves its scopes,
+     * iterators and finally blocks: one of its activation, which survives their yields.
+     */
+    static final String GENERATOR_RETURN = "%generatorReturn";
 
     /** The names that the backends may not move out of the activation object (embedding API). */
     private Set<String> activationNames;

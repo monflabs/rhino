@@ -198,6 +198,8 @@ public class Context implements Closeable {
      *       its end matches them, instead of throwing a SyntaxError.
      *   <li>In compiled mode, BigInt arithmetic stored in a variable keeps the BigInt, instead of a
      *       TypeError.
+     *   <li>The value of a {@code return} of a generator or an async function is evaluated before
+     *       the scopes, loops and {@code finally} blocks it leaves, instead of after them.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

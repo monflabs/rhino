@@ -66,4 +66,23 @@ class GeneratorCompletionTest {
                         + "  return s; }"
                         + "String(loop(200000).next().value)");
     }
+
+    @Test
+    void returnThatLeavesAScopeOrAFinallyBlock() {
+        // the value of the return was evaluated after leaving the loop's scope and running the
+        // finally block
+        Utils.assertGatedBehavior(
+                "{\"value\":1,\"done\":true} [\"f,e\",1] ReferenceError",
+                "{\"value\":1,\"done\":true} [\"e,f\",1]"
+                        + " [{\"value\":9,\"done\":false},{\"value\":3,\"done\":true},{\"done\":true}]",
+                "function t(f) { try { return JSON.stringify(f()); } catch (e) { return e.name; } }"
+                        + "[t(() => { function* g() { for (const x of [1, 2]) { return x; } }"
+                        + "  return g().next(); }),"
+                        + " t(() => { var log = [];"
+                        + "  function* g() { try { return (log.push('e'), 1); } finally { log.push('f'); } }"
+                        + "  var r = g().next(); return [log.join(), r.value]; }),"
+                        + " t(() => { function* g() { for (const x of [3]) {"
+                        + "  try { return x; } finally { yield 9; } } }"
+                        + "  var it = g(); return [it.next(), it.next(), it.next()]; })].join(' ')");
+    }
 }

@@ -117,6 +117,7 @@ changes.
 | 1.101 | A `-` after a class escape at the end of a character class with the `u` flag | `VERSION_ECMASCRIPT` |
 | 1.102 | A case-insensitive class range whose characters have case variants past its end | `VERSION_ECMASCRIPT` |
 | 1.103 | BigInt arithmetic stored in a variable of a compiled function | `VERSION_ECMASCRIPT` |
+| 1.104 | The value of a `return` of a generator that leaves a scope, a loop or a `try` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1692,6 +1693,23 @@ mod(-9n, 7n);   // compiled, before: TypeError "Cannot convert BigInt to a numbe
   failed on it.
 - **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator), §13.5.4 and §13.5.6 (unary `-` and `~`
   of a BigInt), §13.4.4 (postfix increment: BigInt::add).
+
+### 1.104 The value of a `return` of a generator that leaves a scope, a loop or a `try`
+
+```js
+async function first(items) {
+  for (const item of items) { return item; }   // before: ReferenceError: "item" is not defined   now: the item
+}
+function* g() { try { return log('value'); } finally { log('finally'); } }   // before: finally, value   now: value, finally
+```
+
+- In a generator or an async function, a `return` that leaves a block with a scope object, a `for-of` loop or a
+  `try` with a `finally` block evaluated its value after leaving them: after the scope of the loop's or the
+  block's bindings (a ReferenceError for them) and after the `finally` block. It is now evaluated first and kept
+  in a variable of the generator (`%generatorReturn`, in its activation, which survives a `yield` in the
+  `finally` block or the close of a `for await` loop), as a function keeps it.
+- **Why:** ECMA-262 2026, §14.10.1 (ReturnStatement evaluation: the expression is evaluated, then the return
+  completion leaves the enclosing statements, running their finally blocks and closing their iterators).
 
 ---
 
