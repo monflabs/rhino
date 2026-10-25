@@ -102,6 +102,8 @@ JavaScript.
 - [Changes and incompatibilities](changes.md): what behaves differently, and how to migrate.
 - [Performance optimizations](performance.md): what was made faster, and how performance is
   guarded.
+- [Asynchronous code](async.md): generators, promises and the optional event loop, and how to
+  write host functions such as `setTimeout()` and `fetch()` in Java.
 - [How the engine is validated](validation.md): the harnesses that check the engine, from test262
   to the JavascriptPerformance project.
 

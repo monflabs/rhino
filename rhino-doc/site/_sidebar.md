@@ -8,3 +8,6 @@
   - [Changes and incompatibilities](/changes.md)
   - [Performance optimizations](/performance.md)
   - [How the engine is validated](/validation.md)
+
+- **Embedding**
+  - [Asynchronous code](/async.md)

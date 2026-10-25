@@ -246,6 +246,9 @@ loop.run(cx);   // or loop.run(cx, timeoutMillis)
 
 Without a scheduler, which is the default, `Atomics.waitAsync` throws a TypeError when it would have to wait.
 
+[Asynchronous code](async.md) explains the queues and the scheduler in detail, with host functions such as
+`setTimeout()` and `fetch()` written in Java.
+
 ### Shared memory across threads
 
 `SharedArrayBuffer` and `Atomics` work across contexts on different threads. `NativeSharedArrayBuffer.share(scope,
