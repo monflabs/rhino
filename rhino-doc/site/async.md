@@ -358,6 +358,41 @@ worker.submit(() -> {
 Only one thread may have the context entered at a time. The threads that do the host work never enter it: they
 `post` jobs, and whichever thread runs the loop runs them.
 
+### Pattern: one virtual thread per script
+
+A server running many scripts at once, one per request or per user session, can give each one a **virtual thread**
+that owns its context and runs its loop. A script waiting on a timer or a query then holds no operating-system
+thread at all: `EventLoop.run` waits on a `LinkedBlockingQueue`, and a virtual thread blocked there is unmounted
+from its carrier.
+
+```java
+ExecutorService requests = Executors.newVirtualThreadPerTaskExecutor();
+
+Future<Object> submit(String source, String name) {
+    return requests.submit(() -> {
+        try (ScriptHost host = new ScriptHost()) {     // enters a new Context on this virtual thread
+            Object result = host.eval(source, name);
+            return host.await(result, 30_000);         // timers and queries run in this loop
+        }
+    });
+}
+```
+
+With the `query()` function above, without its semaphore, 50 such scripts started together, each awaiting 1,000
+queries of 100 ms, all completed in under a second: 50 contexts and 50,000 virtual threads, on as many carrier
+threads as the machine has cores.
+
+Three things make this safe:
+
+- **A context per thread, never shared.** Each virtual thread enters its own `Context`; `Context.enter` and the
+  `ContextFactory` bind it to the current thread, a virtual one included.
+- **No pinning while waiting.** `EventLoop` only holds its monitor for a few instructions, never while it waits.
+  From Java 24 (JEP 491), `synchronized` no longer pins a virtual thread at all; on Java 21 to 23 it does, but only
+  for those few instructions.
+- **Scripts that compute still use a core.** A virtual thread frees its carrier only while it waits. A script that
+  computes for a second holds a carrier for that second, as it would hold a platform thread, so CPU-bound scripts
+  are limited by the number of cores, not by the number of virtual threads.
+
 ## Writing host functions in Java
 
 The examples below are **pseudo-code**: they show the shape of a host function and where the asynchrony goes, not
@@ -480,6 +515,102 @@ async function main() {
 }
 main().catch(e => print('failed: ' + e));
 ```
+
+### `query()`: blocking work on a virtual thread
+
+`fetch` above did not need a thread of its own: `HttpClient.sendAsync` is already asynchronous, and its callback
+only had to `post` a job. Much of Java is not: JDBC, file I/O through `java.io`, most SDK clients and legacy
+libraries **block** the thread that calls them. Calling one from a host function would block the context's thread,
+and with it the script, every timer and every other pending reaction, for as long as the call lasts.
+
+Such work needs a thread of its own, and a **virtual thread** is the right one (Java 21, JEP 444):
+
+- **It costs almost nothing.** A virtual thread is a Java object, not an operating-system thread. A script can start
+  thousands of queries with `Promise.all`, one virtual thread each, where as many platform threads would exhaust
+  the machine, and a thread pool would queue them.
+- **Blocking is what it is for.** When a virtual thread blocks on I/O, a lock or `Thread.sleep`, the JVM unmounts it
+  and its carrier thread runs something else. Code that blocks stays simple, synchronous Java.
+- **No pool to size.** One thread per operation, started when the operation starts, ended when it ends.
+
+The function has the same three steps as `fetch`, and only the second one changes: it starts a virtual thread that
+makes the blocking call.
+
+```java
+static final Semaphore connections = new Semaphore(20);   // threads are cheap, connections are not
+
+static Object query(Context cx, VarScope scope, Object thisObj, Object[] args) {
+    String sql = Context.toString(args[0]);
+
+    // 1. On the context's thread: a pending promise, and a job announced to the loop.
+    Deferred deferred = newPromise(cx, scope);
+    HostJobScheduler.Pending pending = cx.getHostJobScheduler().expect();
+
+    // 2. A virtual thread per query: it may block as long as it needs to.
+    Thread.ofVirtual().name("query").start(() -> {
+        try {
+            List<Map<String, Object>> rows;
+            connections.acquire();                  // waits without holding an OS thread
+            try (Connection c = dataSource.getConnection();
+                 ResultSet rs = c.createStatement().executeQuery(sql)) {
+                rows = readRows(rs);                // plain Java values, no script object
+            } finally {
+                connections.release();
+            }
+
+            // 3. Back on the context's thread: convert, settle, react.
+            pending.post(jcx -> {
+                deferred.resolve().call(jcx, scope, Undefined.SCRIPTABLE_UNDEFINED,
+                        new Object[] {toScriptArray(jcx, scope, rows)});
+                jcx.processMicrotasks();
+            });
+        } catch (Exception e) {
+            pending.post(jcx -> {
+                Object error = jcx.newObject(scope, "Error", new Object[] {e.getMessage()});
+                deferred.reject().call(jcx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {error});
+                jcx.processMicrotasks();
+            });
+        }
+    });
+
+    return deferred.promise();                      // the context's thread goes on at once
+}
+```
+
+The script sees an ordinary promise, and runs its queries in parallel by starting them together:
+
+```js
+const [orders, customers] = await Promise.all([
+  query('select * from orders'),
+  query('select * from customers'),
+]);
+const details = await Promise.all(orders.map(o => query(`select * from items where order_id = ${o.id}`)));
+```
+
+Measured on an Apple M-series laptop, with a 100 ms `Thread.sleep` standing in for the query and no semaphore: a
+script that awaits `Promise.all` of 1,000 queries, one virtual thread each, completes in about 0.5 s instead of
+100 s. With the semaphore of 20, the same script takes about 5 s: the limit is then the connections, which is the
+point of having one.
+
+What the virtual thread may and may not do:
+
+| On the virtual thread | Not on the virtual thread |
+|---|---|
+| Block: JDBC, `java.io`, `Thread.sleep`, locks, a `Semaphore` | Read or write a script object, or the scope |
+| Compute plain Java values (`String`, `List`, records...) | Call a script function, or settle the promise |
+| `pending.post(job)`, exactly once, on success or failure | Use the `Context` it was started from: the job receives its own, `jcx` |
+
+Two more rules:
+
+- **Always post, or cancel.** Every path out of the thread, the exception included, must `post` a job (or call
+  `pending.cancel()`); otherwise the loop waits for that job for ever.
+- **Bound the resource, not the threads.** A virtual thread makes a thread cheap; it does not make a database
+  connection cheap. Limit what is scarce with a `Semaphore`, as above, or a connection pool: a virtual thread
+  waiting for it costs nothing.
+
+Virtual threads are for work that **waits**. Work that computes (hashing a large file, image processing, a
+compression) gains nothing from them, because it occupies its carrier thread for its whole duration. Give it a
+small pool of platform threads instead (`Executors.newFixedThreadPool(cores)`), and keep the same three steps:
+only the line that starts the thread changes.
 
 ### The order things run in
 
