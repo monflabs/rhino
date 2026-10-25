@@ -1796,6 +1796,16 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         stackChange(-1);
     }
 
+    private static Object[] withoutComputedKeys(Object[] propertyIds) {
+        Object[] ids = propertyIds.clone();
+        for (int i = 0; i < ids.length; i++) {
+            if (ids[i] instanceof Node) {
+                ids[i] = null;
+            }
+        }
+        return ids;
+    }
+
     private void visitObjectLiteral(Node node, Node child) {
         Object[] propertyIds = (Object[]) node.getProp(Node.OBJECT_IDS_PROP);
         int count = propertyIds == null ? 0 : propertyIds.length;
@@ -1810,7 +1820,9 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 propertyIds != null
                         && Arrays.stream(propertyIds).anyMatch(id -> id instanceof Node);
         int nextLiteralIndex = literalIds.size();
-        literalIds.add(propertyIds);
+        // a computed key is set at run time in a copy of the ids: its node is not kept, which would
+        // keep the whole syntax tree of the script alive through the parents of its AST nodes
+        literalIds.add(hasAnyComputedProperty ? withoutComputedKeys(propertyIds) : propertyIds);
 
         addIndexOp(Icode.LITERAL_NEW_OBJECT, nextLiteralIndex);
         addUint8(hasAnyComputedProperty ? 1 : 0);

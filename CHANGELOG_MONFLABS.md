@@ -39,6 +39,18 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The syntax tree of an interpreted script kept alive (2026-10-25)
+
+- Interpreted mode: the keys of an object literal with a computed key kept the node of that key, which the
+  run time replaces in a copy of the keys: the AST nodes of the IR link to their parents, so the whole syntax
+  tree of the script stayed in memory as long as its code. For the Babylon.js bundle, 280 MB: interpreted, the
+  JetStream 3 scene workload held 457 MB after its first run, against 224 MB compiled, and ran out of memory
+  in the harness's 1 GB heap within 8 runs. It now holds 178 MB. The interpreter's code keeps no node; the
+  compiled code never did. Not gated: not observable.
+- Unchanged: the workload keeps each run's Babylon.js engine and scene, which it never disposes (Babylon.js
+  registers its engines in `EngineStore`): about 100 MB per run, in V8 too (89 MB, mostly array buffers).
+- test262: no change.
+
 ### Babylon.js and three.js compiled (2026-10-25)
 
 - Compiled mode: two JetStream 3 workloads still had functions too large after splitting, and ran in the
