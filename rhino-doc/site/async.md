@@ -162,6 +162,202 @@ A server that already has an executor, or an event loop of its own (Netty, Vert.
 implements `HostJobScheduler` over it instead. It must keep the guarantee above: one job at a time per context,
 entered on that context, never during a script.
 
+## Driving the event loop from Java
+
+The engine never runs the event loop by itself: the embedder decides when. This section shows how to tell whether
+it needs to run, and the usual ways to run it.
+
+### Does the loop need to run?
+
+Two questions, both answered by the context and its loop:
+
+- **Is there an event loop at all?** `cx.getHostJobScheduler()` is `null` by default. Then no host work can have
+  been started, and there is nothing to run: the `evaluate` call already drained the microtasks.
+- **Is any job left?** `EventLoop.run(cx, 0)` runs the jobs that are ready, without waiting, and returns `true`
+  when nothing is posted, expected or scheduled any more. A `false` means that something is still coming: a timer
+  that has not fallen due, or an operation that another thread has not posted yet.
+
+`run(cx, 0)` is a check that also does the work that is ready: there is no separate "is it idle?" query, because
+the answer would be stale by the time it is acted on.
+
+### When to run it
+
+| After | Do |
+|---|---|
+| `evaluateString`, `evaluateReader`, `Script.exec` | Nothing for promises: their microtasks have run. Run the loop if the script may have started host work (a timer, a `fetch`). |
+| `Callable.call` / `Function.call` from Java | `cx.processMicrotasks()` first, since a call does not drain the queue; then the loop, as above. |
+| `evaluateModule` / `ModuleRecord.evaluate` | The loop, then `evaluate` again, if the module awaits host work (see [top-level `await`](#modules-and-top-level-await)). |
+| Getting the result of a promise | The loop until that promise settles (`await` below). |
+| Closing the context | Decide what to do with the jobs left: run them to completion, or abandon them. |
+
+The loop must run **on a thread where the context is current**, between scripts. It is never run from a host
+function, nor from inside a job.
+
+### A host object for one context
+
+The class below wraps the four ways to run the loop. It is complete, and runs as is, but leaves out what a real
+host adds: the host functions themselves, a `ContextFactory`, error reporting.
+
+```java
+/** One Context, its global scope and its event loop, used from one thread at a time. */
+final class ScriptHost implements AutoCloseable {
+    private final Context cx;
+    private final TopLevel scope;
+    private final EventLoop loop = new EventLoop();
+
+    ScriptHost() {
+        cx = Context.enter();
+        scope = cx.initStandardObjects();
+        cx.setHostJobScheduler(loop);      // without this line, no host work can be started
+        // define setTimeout, fetch, ... on scope here
+    }
+
+    /** Runs a script and its microtasks. Host work it started may still be pending. */
+    Object eval(String source, String name) {
+        return cx.evaluateString(scope, source, name, 1, null);
+    }
+
+    /** Calls a script function: unlike evaluate, a call does not drain the microtasks. */
+    Object call(Callable function, Object... args) {
+        Object result = function.call(cx, scope, Undefined.SCRIPTABLE_UNDEFINED, args);
+        cx.processMicrotasks();
+        return result;
+    }
+
+    /** Runs the jobs that are ready, without waiting; true when the loop no longer needs to run. */
+    boolean poll() {
+        return loop.run(cx, 0);
+    }
+
+    /** Runs the loop until no job is left, or the timeout has passed: false on a timeout. */
+    boolean runToCompletion(long timeoutMillis) {
+        return loop.run(cx, timeoutMillis);
+    }
+
+    /** Runs the loop until the promise settles: its value, or its rejection reason thrown. */
+    Object await(Object valueOrPromise, long timeoutMillis) throws TimeoutException {
+        Scriptable promiseCtor = (Scriptable) scope.get("Promise", scope);
+        Scriptable promise = (Scriptable) ScriptableObject.callMethod(
+                cx, promiseCtor, "resolve", new Object[] {valueOrPromise});   // a plain value too
+        Object[] value = new Object[1];
+        boolean[] state = new boolean[2];    // {settled, rejected}
+        ScriptableObject.callMethod(cx, promise, "then", new Object[] {
+            new LambdaFunction(scope, 1, (c, s, t, a) -> {
+                value[0] = a[0]; state[0] = true; return Undefined.instance;
+            }),
+            new LambdaFunction(scope, 1, (c, s, t, a) -> {
+                value[0] = a[0]; state[0] = state[1] = true; return Undefined.instance;
+            })
+        });
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        cx.processMicrotasks();              // a promise already settled reacts here
+        while (!state[0]) {
+            long left = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+            if (left <= 0) {
+                throw new TimeoutException("the promise did not settle in time");
+            }
+            // short slices: run() returns at the end of the slice, not when the promise settles
+            if (loop.run(cx, Math.min(left, 10)) && !state[0]) {
+                throw new IllegalStateException("the promise can never settle: no job is left");
+            }
+        }
+        if (state[1]) {
+            throw new JavaScriptException(value[0], "await", 0);
+        }
+        return value[0];
+    }
+
+    @Override
+    public void close() {
+        Context.exit();
+    }
+}
+```
+
+`await` tells the two ways a promise can fail to settle apart. When the loop becomes idle and the promise is still
+pending, nothing can ever settle it (a script awaiting `new Promise(() => {})`): waiting longer would not help. When
+the deadline passes with jobs still pending, the work is merely slow.
+
+### Pattern: run a script to completion
+
+A command-line tool, a batch job, a test: run the script, then the loop until nothing is left.
+
+```java
+try (ScriptHost host = new ScriptHost()) {
+    host.eval(source, "main.js");
+    if (!host.runToCompletion(60_000)) {
+        System.err.println("main.js: jobs still pending after 60 s");
+    }
+}
+```
+
+`loop.run(cx)`, without a timeout, waits as long as a job is expected or scheduled. A script that leaves an
+interval running, or an expected job that is never posted, keeps it waiting for ever: give it a timeout unless the
+script is trusted to finish.
+
+### Pattern: a request handler that returns a promise
+
+A server calls a script function per request and needs its result before it answers. The handler may be `async`,
+await timers or I/O, and throw:
+
+```java
+// once, when the worker is set up
+host.eval(handlerSource, "handler.js");
+Callable handle = (Callable) host.scope().get("handle", host.scope());
+
+// per request, on the worker's thread
+try {
+    Object promise = host.call(handle, toScript(request));
+    Object result = host.await(promise, 5_000);
+    respond(200, result);
+} catch (RhinoException e) {
+    respond(500, e.getMessage());         // the handler threw, or its promise rejected
+} catch (TimeoutException e) {
+    respond(504, "timed out");            // its jobs may still run on the next await or poll
+}
+```
+
+A handler that returns a plain value works too: `await` passes its argument through `Promise.resolve`.
+
+After a timeout, the jobs that the request started are still in the loop and run the next time the loop runs. If
+they must not, give each request a fresh `EventLoop` (`cx.setHostJobScheduler(new EventLoop())`) and drop the old
+one: its jobs then never run, and an operation that posts to it later posts into nothing.
+
+### Pattern: a host that already has a loop
+
+A UI, a game or a simulation already has a tick. Poll the script's loop from it, on the context's thread, without
+ever blocking it:
+
+```java
+void onTick() {                           // called by the host's own loop
+    boolean idle = host.poll();           // the timers due and the posted jobs, then return
+    statusBar.setBusy(!idle);
+}
+```
+
+### Pattern: the context on another thread
+
+A `Context` belongs to one thread at a time, but can move: exit it on one thread, enter it on another, and run the
+loop there. Here the loop is run by a worker while the thread that evaluated the script goes on:
+
+```java
+Context cx = Context.enter();
+// ... evaluate the script, which starts host work ...
+Context.exit();                           // the context is now free
+
+worker.submit(() -> {
+    Context entered = cx.getFactory().enterContext(cx);   // current on this thread now
+    try {
+        loop.run(cx, 30_000);
+    } finally {
+        Context.exit();
+    }
+});
+```
+
+Only one thread may have the context entered at a time. The threads that do the host work never enter it: they
+`post` jobs, and whichever thread runs the loop runs them.
+
 ## Writing host functions in Java
 
 The examples below are **pseudo-code**: they show the shape of a host function and where the asynchrony goes, not
