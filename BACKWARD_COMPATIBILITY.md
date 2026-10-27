@@ -119,10 +119,14 @@ changes.
 | 1.103 | BigInt arithmetic stored in a variable of a compiled function | `VERSION_ECMASCRIPT` |
 | 1.104 | The value of a `return` of a generator that leaves a scope, a loop or a `try` | `VERSION_ECMASCRIPT` |
 | 1.105 | A `yield*` in the `catch` or `finally` block that a `throw()` or a `return()` runs | `VERSION_ECMASCRIPT` |
+| 1.106 | A call stack that runs out is a `RangeError` | `VERSION_ECMASCRIPT` |
+| 1.107 | The `next` method of a built-in iterator called on another kind of iterator | `VERSION_ECMASCRIPT` |
+| 1.108 | A Symbol on the left of `instanceof` | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
 | 2.4 | A script that compiled mode falls back to interpreting is logged | all |
+| 2.5 | Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups | all |
 
 ---
 
@@ -1732,6 +1736,54 @@ it2.return(5);   // before: { done: false } (compiled), a TypeError (interpreted
 - **Why:** ECMA-262 2026, §27.5.3.4 GeneratorResumeAbrupt and §15.5.5 (`yield*` evaluation, whichever completion
   resumed the generator).
 
+### 1.106 A call stack that runs out is a `RangeError`
+
+```js
+function f() { return f() + 1; }
+try { f(); } catch (e) { print(e); }   // before: a Java StackOverflowError (compiled), which the catch did not
+                                       // see, or a heap exhausted (interpreted)   now: RangeError: Maximum call
+                                       // stack size exceeded
+```
+
+- Compiled mode: a `catch` also catches the JVM's `StackOverflowError`, as a `RangeError`; one that no script
+  catches reaches the embedder as an `EcmaError` (`RangeError`), and a compiled function that runs out of stack
+  returns that error to its caller, so that a native caller that handles JavaScript errors (the `Promise`
+  constructor and its executor) handles it.
+- Interpreter: its frames are on the heap, so a runaway recursion exhausted it and could take the JVM down. Without
+  a limit of the embedder's (`Context.setMaximumInterpreterStackDepth`), it now stops at 100,000 frames (V8 stops
+  near 10,000) with the same `RangeError`.
+- Where an overflow is caught deep in the stack, which `catch` receives it depends on how much stack is left:
+  as in other engines, code that recurses until it overflows, catches the error and recurses again sees it at a
+  depth that varies.
+- **Why:** other engines throw a catchable `RangeError`; a Java error that a script cannot catch, or that takes the
+  host down, is not something an embedding can let a script cause.
+
+### 1.107 The `next` method of a built-in iterator called on another kind of iterator
+
+```js
+const next = Object.getPrototypeOf([][Symbol.iterator]()).next;
+next.call("ab"[Symbol.iterator]());   // before: { value: 'a', done: false }   now: TypeError
+```
+
+- Each kind of built-in iterator (array, string, map, set, regexp string) has a `next` of its own, which throws a
+  TypeError for an object that is not an iterator of its kind, the prototype object included (whose
+  `RegExp String Iterator` next threw a `NullPointerException` in every version).
+- **Why:** ECMA-262 2026, the `[[Iterated…]]` slot checks of %ArrayIteratorPrototype%.next and its kin
+  (§23.1.5.2.1, §22.1.5.1.1, §24.1.5.2.1, §24.2.6.2.1, §22.2.9.2.1).
+
+### 1.108 A Symbol on the left of `instanceof`
+
+```js
+const C = () => {}; Object.defineProperty(C, "prototype", { get() { throw new Error("read"); } });
+Symbol() instanceof C.bind();   // before: Error: read (or a ClassCastException)   now: false
+```
+
+- A Symbol is a primitive: OrdinaryHasInstance returns false for it before reading the `prototype` of the
+  constructor. `Function.prototype[Symbol.hasInstance]` on a bound function now applies `instanceof` to its target,
+  which may itself be bound or have its own `@@hasInstance` (it cast the target, and threw a
+  `ClassCastException` for a bound target).
+- **Why:** ECMA-262 2026, §7.3.21 OrdinaryHasInstance, steps 2 and 3.
+
 ---
 
 ## 2. Platform and embedding
@@ -1778,3 +1830,15 @@ it2.return(5);   // before: { done: false } (compiled), a TypeError (interpreted
   derived constructor, a function with a direct `eval` or a `with`; the others are split, see `OPTIMIZATION.md`).
 - **Migration:** none; to silence the log, set the level of the `org.monflabs.mozilla.javascript` logger (for
   example with `java.util.logging` or the bridge of the application's logging framework).
+
+
+### 2.5 Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups
+
+- A string operation that would make a string of more than 2^29 - 24 characters (V8's limit) throws
+  `RangeError: Invalid string length`: concatenation, `padStart`/`padEnd`, `repeat`, `concat`, `join`, `replace`
+  and `replaceAll`. Past it the JVM ran out of heap, or past 2^31 an int length overflowed (`join` threw a
+  `NegativeArraySizeException`).
+- A regular expression of more than 65,536 capture groups (V8's limit) is a `SyntaxError`, instead of exhausting
+  the heap while it is parsed.
+- **Why:** both are implementation limits, which ECMA-262 leaves to the host; reaching them must not take the host
+  down.

@@ -45,6 +45,18 @@ public class Decimal {
         this.negative = n;
     }
 
+    long getDigits() {
+        return digits;
+    }
+
+    int getExponent() {
+        return exponent;
+    }
+
+    boolean isNegative() {
+        return negative;
+    }
+
     /**
      * Format the number according to the formatting rules in EcmaScript chapter 6, as defined for
      * the "Number::toString" operation, for radix 10.

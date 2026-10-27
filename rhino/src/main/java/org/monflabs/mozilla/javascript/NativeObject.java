@@ -605,7 +605,14 @@ public class NativeObject extends ScriptableObject implements Map {
                         // (see org.monflabs.mozilla.javascript.tests.es6.Symbol3Test.fromEntries)
                         ((SymbolScriptable) obj).put((Symbol) key, obj, value);
                     } else {
-                        obj.put(ScriptRuntime.toString(key), obj, value);
+                        // a canonical numeric string ("1") is an index, as for o["1"] = v
+                        ScriptRuntime.StringIdOrIndex id =
+                                ScriptRuntime.toStringIdOrIndex(ScriptRuntime.toString(key));
+                        if (id.getStringId() == null) {
+                            obj.put(id.getIndex(), obj, value);
+                        } else {
+                            obj.put(id.getStringId(), obj, value);
+                        }
                     }
                 });
         return obj;

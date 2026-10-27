@@ -203,6 +203,15 @@ public class Context implements Closeable {
      *   <li>A {@code yield*} in the {@code catch} or {@code finally} block that the {@code throw()}
      *       or {@code return()} of a generator runs delegates, instead of returning an internal
      *       object.
+     *   <li>A call stack that runs out is a RangeError ("Maximum call stack size exceeded") a
+     *       script can catch, instead of a Java {@code StackOverflowError}; the interpreter stops
+     *       at 100,000 frames unless {@link #setMaximumInterpreterStackDepth} sets another limit,
+     *       instead of exhausting the heap.
+     *   <li>The {@code next} method of a built-in iterator throws a TypeError for an iterator of
+     *       another kind, as {@code %ArrayIteratorPrototype%.next} called on a string iterator,
+     *       instead of iterating it.
+     *   <li>A Symbol on the left of {@code instanceof} is not an instance of anything, instead of
+     *       having its prototype chain walked.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

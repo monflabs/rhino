@@ -3374,6 +3374,12 @@ public class NativeRegExp extends ScriptableObject {
                         }
                         /* LPAREN, <index>, ... RPAREN, <index> */
                         state.progLength += 6;
+                        if (state.parenCount >= MAX_CAPTURE_GROUPS) {
+                            // as in V8: a pattern of millions of groups is a SyntaxError rather
+                            // than a heap exhausted by its parse
+                            reportError("msg.too.many.captures", "");
+                            return false;
+                        }
                         result.parenIndex = state.parenCount++;
                     }
                     ++state.parenNesting;
@@ -5529,6 +5535,9 @@ public class NativeRegExp extends ScriptableObject {
         }
     }
 
+    /** The most capture groups a pattern may have (V8's limit). */
+    private static final int MAX_CAPTURE_GROUPS = 1 << 16;
+
     private static void reportError(String messageId, String arg) {
         String msg = ScriptRuntime.getMessageById(messageId, arg);
         throw ScriptRuntime.constructError("SyntaxError", msg);
@@ -5544,7 +5553,7 @@ public class NativeRegExp extends ScriptableObject {
     }
 
     /** Set(R, "lastIndex", value, true). */
-    private static void setLastIndex(Scriptable thisObj, Object value) {
+    static void setLastIndex(Scriptable thisObj, Object value) {
         if (!Context.getCurrentContext().isLatestEcmaScript()) {
             ScriptableObject.putProperty(thisObj, "lastIndex", value);
             return;

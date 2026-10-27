@@ -5,8 +5,10 @@ recursion safe. Rhino does not implement that, the same choice every major engin
 made, and how deep a recursion can go depends on the execution mode:
 
 - **Compiled**, each call takes a JVM frame, and a deep enough recursion overflows the stack: the
-  run ends with a Java `StackOverflowError`, which the script cannot catch.
+  call throws a `RangeError` ("Maximum call stack size exceeded"), as in other engines, which the
+  script can catch.
 - **Interpreted**, a call from a script function to another does not use the JVM stack, so the
-  million-deep recursion completes.
+  50,000-deep recursion completes. The interpreter stops at 100,000 frames, with the same
+  `RangeError`, unless the embedder sets another limit (`Context.setMaximumInterpreterStackDepth`).
 
 Switch the mode in the toolbar and run again to see both.

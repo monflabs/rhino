@@ -70,10 +70,12 @@ public class NumberToStringTest {
         {"1.9400994884341945e+25", 1.9400994884341945E25},
         {"3.6131332396758635e+25", 3.6131332396758635E25},
         {"2.5138990223946153e+25", 2.5138990223946153E25},
-        // These are controversial -- Java gives a more rounded-
-        // off result but the original Schubfach code does not.
-        {"9.9e-324", 9.9E-324},
-        {"9.9e-323", 9.9E-323}
+        // Subnormals: Java's Double.toString keeps two digits (9.9E-324); Number::toString
+        // wants the shortest decimal that reads back as the same double, as V8 prints it
+        {"1e-323", 9.9E-324},
+        {"1e-322", 9.9E-323},
+        {"5e-324", Double.MIN_VALUE},
+        {"1.5e-323", 3 * Double.MIN_VALUE}
     };
 
     private static Object[][] getToStringParams() {

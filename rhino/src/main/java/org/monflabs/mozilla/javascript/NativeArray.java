@@ -1227,6 +1227,26 @@ public class NativeArray extends ScriptableObject implements List {
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         Scriptable o = ScriptRuntime.toObject(cx, f.getDeclarationScope(), thisObj);
 
+        // an array that holds itself joins to "" where it recurs, as toString does: join took no
+        // part in the recursion detector, so a.join() of a cyclic a joined a once more inside
+        boolean toplevel = cx.iterating == null;
+        if (toplevel) {
+            cx.iterating = new HashSet<Object>();
+        } else if (cx.iterating.contains(o)) {
+            return "";
+        }
+        cx.iterating.add(o);
+        try {
+            return joinElements(cx, o, args);
+        } finally {
+            cx.iterating.remove(o);
+            if (toplevel) {
+                cx.iterating = null;
+            }
+        }
+    }
+
+    private static String joinElements(Context cx, Scriptable o, Object[] args) {
         long llength = getLengthProperty(cx, o);
         int length = (int) llength;
         if (llength != length) {
@@ -1244,14 +1264,14 @@ public class NativeArray extends ScriptableObject implements List {
                 StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < length; i++) {
                     if (i != 0) {
-                        sb.append(separator);
+                        appendWithinStringLimit(sb, separator);
                     }
                     if (i < na.dense.length) {
                         Object temp = na.dense[i];
                         if (temp != null
                                 && temp != Undefined.instance
                                 && temp != Scriptable.NOT_FOUND) {
-                            sb.append(ScriptRuntime.toString(temp));
+                            appendWithinStringLimit(sb, ScriptRuntime.toString(temp));
                         }
                     }
                 }
@@ -1262,7 +1282,7 @@ public class NativeArray extends ScriptableObject implements List {
             return "";
         }
         String[] buf = new String[length];
-        int total_size = 0;
+        long total_size = 0;
         for (int i = 0; i != length; i++) {
             Object temp = getElem(cx, o, i);
             if (temp != null && temp != Undefined.instance) {
@@ -1271,8 +1291,9 @@ public class NativeArray extends ScriptableObject implements List {
                 buf[i] = str;
             }
         }
-        total_size += (length - 1) * separator.length();
-        StringBuilder sb = new StringBuilder(total_size);
+        total_size += (length - 1) * (long) separator.length();
+        ScriptRuntime.checkStringLength(total_size);
+        StringBuilder sb = new StringBuilder((int) total_size);
         for (int i = 0; i != length; i++) {
             if (i != 0) {
                 sb.append(separator);
@@ -1284,6 +1305,15 @@ public class NativeArray extends ScriptableObject implements List {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * A join past {@link ScriptRuntime#MAX_STRING_LENGTH} is a {@code RangeError}, as in other
+     * engines, rather than a {@code NegativeArraySizeException} or an {@code OutOfMemoryError}.
+     */
+    private static void appendWithinStringLimit(StringBuilder sb, String str) {
+        ScriptRuntime.checkStringLength((long) sb.length() + str.length());
+        sb.append(str);
     }
 
     /** See ECMA 15.4.4.4 */

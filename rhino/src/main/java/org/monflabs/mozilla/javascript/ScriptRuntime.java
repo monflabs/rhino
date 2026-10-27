@@ -21,6 +21,7 @@ import java.math.MathContext;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -889,7 +890,7 @@ public class ScriptRuntime {
                 }
                 if (radix != -1) {
                     try {
-                        return new BigInteger(s.substring(start + 2, end + 1), radix);
+                        return parseBigInteger(s.substring(start + 2, end + 1), radix);
                     } catch (NumberFormatException ex) {
                         throw syntaxErrorById("msg.bigint.bad.form");
                     }
@@ -911,7 +912,7 @@ public class ScriptRuntime {
             throw syntaxErrorById("msg.bigint.bad.form");
         }
         try {
-            return new BigInteger(sub);
+            return parseBigInteger(sub, 10);
         } catch (NumberFormatException ex) {
             throw syntaxErrorById("msg.bigint.bad.form");
         }
@@ -4919,6 +4920,10 @@ public class ScriptRuntime {
     public static Number multiply(Integer i1, Integer i2) {
         // Account for overflow
         long r = i1.longValue() * i2.longValue();
+        if (r == 0 && (i1 < 0 || i2 < 0)) {
+            // 0 * -3 and -5 * 0 are -0, which no Integer holds
+            return -0.0;
+        }
         if ((r >= Integer.MIN_VALUE) && (r <= Integer.MAX_VALUE)) {
             return (int) r;
         }
@@ -5158,11 +5163,7 @@ public class ScriptRuntime {
                 result = ((BigInteger) number).subtract(BigInteger.ONE);
             }
         } else if (number instanceof Integer) {
-            if ((incrDecrMask & Node.DECR_FLAG) == 0) {
-                result = ((Integer) number).intValue() + 1;
-            } else {
-                result = ((Integer) number).intValue() - 1;
-            }
+            result = incrDecrInteger((Integer) number, incrDecrMask);
         } else {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {
                 result = number.doubleValue() + 1.0;
@@ -5176,6 +5177,18 @@ public class ScriptRuntime {
             return number;
         }
         return result;
+    }
+
+    /**
+     * ++ or -- on a number held as an Integer: past the int range it becomes a double, as
+     * 2147483647 + 1 is 2147483648 and not -2147483648.
+     */
+    private static Number incrDecrInteger(Integer number, int incrDecrMask) {
+        long r = number.longValue() + ((incrDecrMask & Node.DECR_FLAG) == 0 ? 1 : -1);
+        if (r >= Integer.MIN_VALUE && r <= Integer.MAX_VALUE) {
+            return (int) r;
+        }
+        return (double) r;
     }
 
     private static Object doScopeIncrDecr(
@@ -5197,11 +5210,7 @@ public class ScriptRuntime {
                 result = ((BigInteger) number).subtract(BigInteger.ONE);
             }
         } else if (number instanceof Integer) {
-            if ((incrDecrMask & Node.DECR_FLAG) == 0) {
-                result = ((Integer) number).intValue() + 1;
-            } else {
-                result = ((Integer) number).intValue() - 1;
-            }
+            result = incrDecrInteger((Integer) number, incrDecrMask);
         } else {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {
                 result = number.doubleValue() + 1.0;
@@ -5282,11 +5291,7 @@ public class ScriptRuntime {
                 result = ((BigInteger) number).subtract(BigInteger.ONE);
             }
         } else if (number instanceof Integer) {
-            if ((incrDecrMask & Node.DECR_FLAG) == 0) {
-                result = ((Integer) number).intValue() + 1;
-            } else {
-                result = ((Integer) number).intValue() - 1;
-            }
+            result = incrDecrInteger((Integer) number, incrDecrMask);
         } else {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {
                 result = number.doubleValue() + 1.0;
@@ -5325,11 +5330,7 @@ public class ScriptRuntime {
                 result = ((BigInteger) number).subtract(BigInteger.ONE);
             }
         } else if (number instanceof Integer) {
-            if ((incrDecrMask & Node.DECR_FLAG) == 0) {
-                result = ((Integer) number).intValue() + 1;
-            } else {
-                result = ((Integer) number).intValue() - 1;
-            }
+            result = incrDecrInteger((Integer) number, incrDecrMask);
         } else {
             if ((incrDecrMask & Node.DECR_FLAG) == 0) {
                 result = number.doubleValue() + 1.0;
@@ -5803,7 +5804,9 @@ public class ScriptRuntime {
                 if (!(handler instanceof Callable)) {
                     throw typeErrorById("msg.instanceof.bad.target");
                 }
-                if (BaseFunction.isHasInstanceIntrinsic(handler) && a instanceof Scriptable) {
+                if (BaseFunction.isHasInstanceIntrinsic(handler)
+                        && a instanceof Scriptable
+                        && !isSymbol(a)) {
                     // OrdinaryHasInstance, with the overrides of the host objects (E4X, Java)
                     return target.hasInstance((Scriptable) a);
                 }
@@ -5817,7 +5820,7 @@ public class ScriptRuntime {
         }
 
         // for primitive values on LHS, return false
-        if (!(a instanceof Scriptable)) return false;
+        if (!(a instanceof Scriptable) || (cx.isLatestEcmaScript() && isSymbol(a))) return false;
 
         return ((Scriptable) b).hasInstance((Scriptable) a);
     }
@@ -6023,6 +6026,9 @@ public class ScriptRuntime {
         if (scope == null) throw new IllegalArgumentException();
         if (cx.topCallScope != null) throw new IllegalStateException();
 
+        if (cx.isLatestEcmaScript()) {
+            StackOverflowMessage.load();
+        }
         Object result;
         cx.topCallScope = ScriptableObject.getTopLevelScope(scope);
         cx.useDynamicScope = cx.hasFeature(Context.FEATURE_DYNAMIC_SCOPE);
@@ -6031,6 +6037,12 @@ public class ScriptRuntime {
         ContextFactory f = cx.getFactory();
         try {
             result = f.doTopCall(callable, cx, scope, thisObj, args);
+        } catch (StackOverflowError e) {
+            // uncaught by the script: the embedder gets the RangeError the script would have
+            if (cx.isLatestEcmaScript()) {
+                throw stackOverflowError();
+            }
+            throw e;
         } finally {
             cx.topCallScope = null;
             // Cleanup cached references
@@ -6048,6 +6060,9 @@ public class ScriptRuntime {
         if (scope == null) throw new IllegalArgumentException();
         if (cx.topCallScope != null) throw new IllegalStateException();
 
+        if (cx.isLatestEcmaScript()) {
+            StackOverflowMessage.load();
+        }
         Object result;
         cx.topCallScope = ScriptableObject.getTopLevelScope(scope);
         cx.useDynamicScope = cx.hasFeature(Context.FEATURE_DYNAMIC_SCOPE);
@@ -6056,6 +6071,12 @@ public class ScriptRuntime {
         ContextFactory f = cx.getFactory();
         try {
             result = f.doTopCall(script, cx, scope, thisObj);
+        } catch (StackOverflowError e) {
+            // uncaught by the script: the embedder gets the RangeError the script would have
+            if (cx.isLatestEcmaScript()) {
+                throw stackOverflowError();
+            }
+            throw e;
         } finally {
             cx.topCallScope = null;
             // Cleanup cached references
@@ -6378,6 +6399,12 @@ public class ScriptRuntime {
                 re = ee;
                 type = TopLevel.NativeErrors.InternalError;
                 errorMsg = ee.getMessage();
+            } else if (t instanceof StackOverflowError && cx.isLatestEcmaScript()) {
+                // the call stack ran out: a RangeError the script can catch
+                EcmaError ee = stackOverflowError();
+                re = ee;
+                type = TopLevel.NativeErrors.RangeError;
+                errorMsg = ee.getErrorMessage();
             } else if (cx.hasFeature(Context.FEATURE_ENHANCED_JAVA_ACCESS)) {
                 // With FEATURE_ENHANCED_JAVA_ACCESS, scripts can catch
                 // all exception types
@@ -6408,7 +6435,11 @@ public class ScriptRuntime {
                 ((NativeError) errorObject).setStackProvider(re);
             }
 
-            if (javaException != null && isVisible(cx, javaException)) {
+            // A stack overflow is caught where the stack is nearly exhausted: nothing is wrapped
+            // for it, which could load and initialize classes (TypeInfo) without the stack to do
+            // it, and leave them unusable for the rest of the JVM
+            boolean exposeJava = !(t instanceof StackOverflowError) && !isStackOverflowError(re);
+            if (exposeJava && javaException != null && isVisible(cx, javaException)) {
                 Object wrap = cx.getWrapFactory().wrap(cx, scope, javaException, TypeInfo.NONE);
                 ScriptableObject.defineProperty(
                         errorObject,
@@ -6418,7 +6449,7 @@ public class ScriptRuntime {
                                 | ScriptableObject.READONLY
                                 | ScriptableObject.DONTENUM);
             }
-            if (isVisible(cx, re)) {
+            if (exposeJava && isVisible(cx, re)) {
                 Object wrap = cx.getWrapFactory().wrap(cx, scope, re, TypeInfo.NONE);
                 ScriptableObject.defineProperty(
                         errorObject,
@@ -7843,6 +7874,98 @@ public class ScriptRuntime {
     }
 
     /** Throws a ReferenceError "cannot delete a super property". See ECMAScript spec 13.5.1.2 */
+    /**
+     * The BigInteger of a string of digits, with an optional sign. {@code new BigInteger(String)}
+     * takes a time quadratic in the length, half a minute for the million digits of a BigInt
+     * literal; long strings are split in halves instead, high * radix^n + low, which the
+     * multiplication algorithms of BigInteger make subquadratic.
+     */
+    public static BigInteger parseBigInteger(String digits, int radix) {
+        if (digits.length() <= BIGINT_PARSE_CHUNK) {
+            return new BigInteger(digits, radix);
+        }
+        boolean negative = digits.charAt(0) == '-';
+        int start = negative || digits.charAt(0) == '+' ? 1 : 0;
+        BigInteger value = parseBigInteger(digits, start, digits.length(), radix, new HashMap<>());
+        return negative ? value.negate() : value;
+    }
+
+    private static final int BIGINT_PARSE_CHUNK = 1000;
+
+    private static BigInteger parseBigInteger(
+            String digits, int from, int to, int radix, Map<Integer, BigInteger> powers) {
+        int length = to - from;
+        if (length <= BIGINT_PARSE_CHUNK) {
+            return new BigInteger(digits.substring(from, to), radix);
+        }
+        int lowLength = length / 2;
+        BigInteger high = parseBigInteger(digits, from, to - lowLength, radix, powers);
+        BigInteger low = parseBigInteger(digits, to - lowLength, to, radix, powers);
+        BigInteger scale = powers.computeIfAbsent(lowLength, n -> BigInteger.valueOf(radix).pow(n));
+        return high.multiply(scale).add(low);
+    }
+
+    /**
+     * The RangeError of a call stack that ran out: a StackOverflowError of the JVM, or the
+     * interpreter's frame limit, made catchable by the script (VERSION_ECMASCRIPT), as in other
+     * engines.
+     */
+    public static EcmaError stackOverflowError() {
+        return rangeError(StackOverflowMessage.TEXT);
+    }
+
+    /** Whether the exception is a {@link #stackOverflowError}. */
+    private static boolean isStackOverflowError(RhinoException re) {
+        return re instanceof EcmaError
+                && "RangeError".equals(((EcmaError) re).getName())
+                && StackOverflowMessage.TEXT.equals(((EcmaError) re).getErrorMessage());
+    }
+
+    /**
+     * The message of {@link #stackOverflowError}, read when the class is first used to convert an
+     * overflow: that happens where the stack is nearly exhausted, too little to load the resource
+     * bundle, which would leave its classes unusable for the rest of the JVM (a
+     * NoClassDefFoundError on every later message). The top call loads it, where the stack is still
+     * shallow.
+     */
+    static final class StackOverflowMessage {
+        static final String TEXT = getMessageById("msg.call.stack.exceeded");
+
+        // and what catching the error may use, for the same reason
+        static final Object PRELOADED = TypeInfo.NONE;
+
+        private StackOverflowMessage() {}
+
+        static void load() {}
+    }
+
+    /**
+     * The longest string the engine makes, as V8's: (2^29 - 24) characters. A string operation that
+     * would exceed it throws RangeError ("Invalid string length"), where the JVM would otherwise
+     * run out of heap, or overflow an int length. The specification leaves the limit to the
+     * implementation.
+     */
+    public static final int MAX_STRING_LENGTH = (1 << 29) - 24;
+
+    /** Throws the RangeError of a string longer than {@link #MAX_STRING_LENGTH}. */
+    public static void checkStringLength(long length) {
+        if (length > MAX_STRING_LENGTH) {
+            throw rangeError(getMessageById("msg.string.too.long"));
+        }
+    }
+
+    /**
+     * The home object of the method whose code runs in this scope: that of its activation, found
+     * through the block scopes the code may be in.
+     */
+    public static Scriptable superHomeObject(VarScope scope) {
+        VarScope s = scope;
+        while (s != null && !(s instanceof NativeCall)) {
+            s = s.getParentScope();
+        }
+        return s == null ? null : ((NativeCall) s).getHomeObject();
+    }
+
     public static void throwDeleteOnSuperPropertyNotAllowed() {
         throw referenceError("msg.delete.super");
     }

@@ -14,6 +14,7 @@ console.log(factorial(10));
 console.log(factorial(100));
 console.log(factorial(1000));
 
-// Deep enough, and the recursion overflows the stack in the compiled mode: the run ends with a
-// java.lang.StackOverflowError, which the script cannot catch. Interpreted, it prints Infinity
-console.log(factorial(1000000));
+// Deep enough, and the recursion overflows the stack in the compiled mode: the call throws a
+// RangeError, "Maximum call stack size exceeded", which a script can catch. Interpreted, it prints
+// Infinity
+console.log(factorial(50000));

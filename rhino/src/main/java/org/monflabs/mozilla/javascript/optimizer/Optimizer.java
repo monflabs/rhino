@@ -937,11 +937,47 @@ class Optimizer {
                     }
                     return NoType;
                 }
+            case Token.OBJECTLIT:
+            case Token.OBJECT_REST:
+                {
+                    rewriteComputedKeys(n);
+                    rewriteAsObjectChildren(n, n.getFirstChild());
+                    return NoType;
+                }
             default:
                 {
                     rewriteAsObjectChildren(n, n.getFirstChild());
                     return NoType;
                 }
+        }
+    }
+
+    /**
+     * The computed keys of an object literal or of an object rest pattern are not children of its
+     * node but entries of its OBJECT_IDS_PROP, which the code generator evaluates as objects: a key
+     * that reads a number variable, as {[i]: v} does, must be converted like any child.
+     */
+    private void rewriteComputedKeys(Node n) {
+        Object[] ids = (Object[]) n.getProp(Node.OBJECT_IDS_PROP);
+        if (ids == null) {
+            return;
+        }
+        for (int i = 0; i < ids.length; i++) {
+            if (!(ids[i] instanceof Node)) {
+                continue;
+            }
+            Node id = (Node) ids[i];
+            if (id.getType() == Token.COMPUTED_PROPERTY) {
+                Node key = id.getFirstChild();
+                if (key != null && rewriteForNumberVariables(key, NoType) == NumberType) {
+                    wrapAsObject(id, key);
+                }
+            } else if (n.getType() == Token.OBJECT_REST
+                    && rewriteForNumberVariables(id, NoType) == NumberType) {
+                // a computed key of a rest pattern is the expression itself (an entry of an
+                // object literal that is not a COMPUTED_PROPERTY is something else, a spread)
+                ids[i] = toObject(id);
+            }
         }
     }
 

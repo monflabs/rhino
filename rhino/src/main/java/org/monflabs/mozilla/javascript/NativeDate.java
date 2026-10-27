@@ -1040,6 +1040,12 @@ final class NativeDate extends ScriptableObject {
         // before year 1 AD, so we map to equivalent dates for the
         // purposes of finding DST. To be safe, we do this for years
         // before 1970.
+        if (!(Math.abs(t) <= 8.64e15 + msPerDay)) {
+            // Out of the time value range (or NaN), as an argument of setMilliseconds and its kin
+            // can make it: the result will be clipped to NaN, and the date arithmetic below would
+            // overflow
+            return 0;
+        }
         if (t < 0.0) {
             int year = EquivalentYear(YearFromTime(t));
             double day = MakeDay(year, MonthFromTime(t), DateFromTime(t));

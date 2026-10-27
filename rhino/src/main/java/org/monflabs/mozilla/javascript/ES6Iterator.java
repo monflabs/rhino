@@ -21,14 +21,44 @@ public abstract class ES6Iterator extends ScriptableObject {
     public static final String VALUE_PROPERTY = "value";
     public static final String RETURN_METHOD = "return";
 
-    private static final ClassDescriptor.BuiltInJSCodeExec<JSFunction> NEXT = ES6Iterator::js_next;
+    /**
+     * The {@code next} method of one kind of built-in iterator. Each kind has its own, which knows
+     * the kind it belongs to: %ArrayIteratorPrototype%.next called on a string iterator, or on the
+     * prototype object itself, which has none of an iterator's state, is a {@code TypeError} (the
+     * {@code [[IteratedObject]]}-style slot checks of each next method).
+     */
+    private static final class Next implements ClassDescriptor.BuiltInJSCodeExec<JSFunction> {
+        private static final long serialVersionUID = 1L;
+
+        private final String tag;
+
+        Next(String tag) {
+            this.tag = tag;
+        }
+
+        @Override
+        public Object execute(
+                Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+            ES6Iterator iterator = realThis(thisObj);
+            if (iterator.tag == null || (cx.isLatestEcmaScript() && !tag.equals(iterator.tag))) {
+                throw ScriptRuntime.typeErrorById("msg.incompat.call", NEXT_METHOD);
+            }
+            return iterator.next(cx, s);
+        }
+    }
 
     /** Returned by {@link #step} once the iterator is done. */
     static final Object DONE = new Object();
 
-    /** Whether the function is the original next method of a built-in iterator. */
-    static boolean isNextMethod(Object f) {
-        return ClassDescriptor.isBuiltIn(f, NEXT);
+    /**
+     * Whether the function is the original next method of the iterator's own kind, so that the
+     * iterator can be stepped without calling it: anything else (another kind's next, a prototype
+     * object without an iterator's state) goes through the call and its receiver check.
+     */
+    static boolean isNextMethodOf(Object f, ES6Iterator iterator) {
+        return ClassDescriptor.builtInCode(f) instanceof Next
+                && iterator.tag != null
+                && iterator.tag.equals(((Next) ClassDescriptor.builtInCode(f)).tag);
     }
 
     public static ClassDescriptor makeDescriptor(String name, String tag) {
@@ -36,7 +66,7 @@ public abstract class ES6Iterator extends ScriptableObject {
         // kind of need this in general, and at the top level, but we
         // can bodge it for now.
         return new ClassDescriptor.Builder(name)
-                .withMethod(CTOR, "next", 0, NEXT)
+                .withMethod(CTOR, "next", 0, new Next(name))
                 .withMethod(CTOR, SymbolKey.ITERATOR, 1, ES6Iterator::js_iterator)
                 .withProp(CTOR, SymbolKey.TO_STRING_TAG, value(tag, DONTENUM | READONLY))
                 .build();
@@ -82,12 +112,6 @@ public abstract class ES6Iterator extends ScriptableObject {
 
     private static ES6Iterator realThis(Object thisObj) {
         return LambdaConstructor.convertThisObject(thisObj, ES6Iterator.class);
-    }
-
-    private static Object js_next(
-            Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
-        ES6Iterator iterator = realThis(thisObj);
-        return iterator.next(cx, s);
     }
 
     private static Object js_iterator(

@@ -71,7 +71,7 @@ final class IteratorRecord {
         // iterator results are not observable before VERSION_ECMASCRIPT only
         boolean builtIn =
                 it instanceof ES6Iterator
-                        && ES6Iterator.isNextMethod(next)
+                        && ES6Iterator.isNextMethodOf(next, (ES6Iterator) it)
                         && cx.isLatestEcmaScript()
                         && ScriptRuntime.hasTopCall(cx);
         return new IteratorRecord(it, next, null, builtIn ? (ES6Iterator) it : null);

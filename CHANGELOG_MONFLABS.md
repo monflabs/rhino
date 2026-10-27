@@ -39,6 +39,53 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Robustness fixes (2026-10-26)
+
+Bugs found by the robustness harnesses of [JavascriptPerformance](https://github.com/monflabs/JavascriptPerformance):
+JavaScriptCore's `JSTests/stress` (about 4,300 of its tests run, compared with V8), differential fuzzing against
+V8, and coverage-guided fuzzing of the parser, compiler, regexps and `JSON.parse` with Jazzer. On the JSC corpus the
+Java exceptions escaping the engine went from 14 (compiled) and 12 (interpreted) to none, and the stack and heap
+limits reached as Java errors from 63 and 49 to 3 (a test that is meant to be stopped by JSC's watchdog among
+them). `RobustnessFixesTest` holds one case per bug, in both backends. How the tests and harnesses are run, and how a finding is read:
+[doc/ROBUSTNESS_MONFLABS.md](doc/ROBUSTNESS_MONFLABS.md).
+
+- Class compiler (crashes, the script then ran interpreted or not at all): `super.f()` taken for a direct call
+  of a function named `f`; `{[i]: v}` with a number variable `i` (computed keys were not converted from the
+  double register: a `VerifyError` or "bad local variable type"); `**` in a generator loop (its temporary was
+  never released); `undefined &&= v` (an assignment to the `undefined` keyword node); `super` in a `for` loop
+  with a `let` (the scope was cast to the activation); finally blocks nested so deeply that their inlined copies
+  grow exponentially now make the function run interpreted instead of failing.
+- Wrong results, compiled: `++`/`--` on a number held as an `Integer` wrapped at 2^31 (`for (let i = 2147483645;
+  i < 2147483650; ++i)` never ended); `0 * -3` was `0` instead of `-0`; arrow functions had a `prototype`.
+- Wrong results, interpreted: `super.p += v` and `super[k] += v` read the property with the home object as the
+  getter's receiver (`NaN`); `{...5}` copied the internal marker of a number on the interpreter's double stack
+  (exposing Java methods); `return` in the `finally` block a generator's `return()` ran left it suspended (and its
+  next `next()` threw a `NullPointerException`).
+- Both backends: `super.m()` and `for (super.p in o)`, `[super.p] = a` ran a getter or setter with the home
+  object as `this`; `x &&= v` before `let x` did not throw (the read was not checked for the temporal dead zone);
+  `Object.fromEntries([["1", v]])[1]` was undefined (the key was not made an index); `Date` setters with values
+  past the time range failed an assertion; `Number.MIN_VALUE` printed `4.9e-324` and other subnormals two digits
+  where one reads back (`5e-324`, `1e-322`, as V8 prints them); the regexp string iterator wrote `lastIndex`
+  without throwing for a non-writable one; `a.join()` of an array that holds itself joined it once more inside
+  (`0,0,,-1,-1` where `String(a)` and other engines give `0,,-1`): `join` now takes part in the recursion
+  detector `toString` uses.
+- Strictness, compiled: a strict function that threw left the context strict for its sloppy caller, so after
+  `try { strictFn(); } catch (e) {}` an assignment to a primitive's property threw a TypeError. A `catch` or
+  `finally` now restores its own function's strictness, and so does a call from Java that the exception passes
+  through (a promise job, an iterator close), and the handler that exits a function's activation on a throw now
+  restores its caller's strictness too.
+- Java exceptions escaping the engine: `Function.prototype[Symbol.hasInstance]` on a bound function
+  (`ClassCastException`), the regexp string iterator's `next` on a wrong receiver (`NullPointerException`), `join`
+  of strings past 2^31 characters (`NegativeArraySizeException`), interpreter frames for functions of more than
+  32,767 locals (a `short` field overflowed: "FAILED ASSERTION").
+- Limits (BACKWARD_COMPATIBILITY.md 1.106 and 2.5): a stack overflow is a catchable `RangeError` in both backends,
+  the interpreter stops at 100,000 frames, strings stop at 2^29 - 24 characters and patterns at 65,536 groups,
+  and a typed array made from an array-like is filled element by element instead of from a copy of every element
+  (80 million elements exhausted the heap).
+- Gated: BACKWARD_COMPATIBILITY.md 1.106 to 1.108.
+- Performance: a BigInt literal or `BigInt()` of a million digits took 38 s (BigInteger parses quadratically); the
+  digits are now split in halves, 2.4 s.
+
 ### Functions too large for the JIT (2026-10-25)
 
 HotSpot does not compile a method of more than 8,000 bytes of bytecode: it runs in the bytecode interpreter of

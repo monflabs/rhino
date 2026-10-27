@@ -97,7 +97,8 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
 
     /** Whether the function gets a prototype object (setupDefaultPrototype). */
     private static boolean hasDefaultPrototype(Context cx, JSDescriptor<JSFunction> descriptor) {
-        return !descriptor.isShorthand()
+        // an arrow function has none (its descriptor says so, see CodeGenUtils)
+        return (!descriptor.isShorthand() && descriptor.hasPrototype())
                 || (descriptor.isES6Generator() && cx != null && cx.isLatestEcmaScript());
     }
 
@@ -287,7 +288,15 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
             return ScriptRuntime.doTopCall(this, cx, scope, thisObj, args, isStrict());
         }
         var realThis = getCallThis(cx, thisObj);
-        return descriptor.getCode().execute(cx, this, lexicalNewTarget, scope, realThis, args);
+        boolean callerStrict = cx.isStrictMode();
+        try {
+            return descriptor.getCode().execute(cx, this, lexicalNewTarget, scope, realThis, args);
+        } catch (RuntimeException | Error e) {
+            // a compiled body that throws does not restore its caller's strictness: a caller in
+            // Java that catches (a promise job, an iterator close, ...) needs it back
+            cx.setIsStrictMode(callerStrict);
+            throw e;
+        }
     }
 
     /**
@@ -333,6 +342,17 @@ public class JSFunction extends BaseFunction implements ScriptOrFn<JSFunction> {
         if (nt == null || Undefined.isUndefined(nt)) {
             nt = this;
         }
+        boolean callerStrict = cx.isStrictMode();
+        try {
+            return constructBody(cx, nt, s, args);
+        } catch (RuntimeException | Error e) {
+            // as for call: restore the strictness of a caller that catches
+            cx.setIsStrictMode(callerStrict);
+            throw e;
+        }
+    }
+
+    private Scriptable constructBody(Context cx, Object nt, VarScope s, Object[] args) {
         if (descriptor.isDerivedConstructor()) {
             var binding = new ClassDefinition.DerivedThis(this, nt);
             return binding.result(

@@ -821,6 +821,15 @@ public class ClassDescriptor {
         }
     }
 
+    /** The code of a built-in method, or {@code null} when the function is not one. */
+    static BuiltInJSCodeExec<JSFunction> builtInCode(Object f) {
+        if (f instanceof JSFunction && ((JSFunction) f).getCode() instanceof BuiltInJSCode) {
+            JSCodeExec<JSFunction> exec = ((BuiltInJSCode) ((JSFunction) f).getCode()).exec;
+            return exec instanceof BuiltInJSCodeExec ? (BuiltInJSCodeExec<JSFunction>) exec : null;
+        }
+        return null;
+    }
+
     /** Whether the function is a built-in method made with this code. */
     static boolean isBuiltIn(Object f, BuiltInJSCodeExec<JSFunction> code) {
         return f instanceof JSFunction

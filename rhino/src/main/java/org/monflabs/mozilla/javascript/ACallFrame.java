@@ -21,7 +21,7 @@ public abstract class ACallFrame<T extends ACallFrame<T, U>, U extends ACompiler
     private static final long serialVersionUID = 6100049821156242226L;
 
     public final T parentFrame;
-    public final short frameIndex;
+    public final int frameIndex;
     public final ACallFrame<?, ?> previousInterpreterFrame;
     public final int parentPC;
     public boolean frozen;
@@ -49,9 +49,17 @@ public abstract class ACallFrame<T extends ACallFrame<T, U>, U extends ACompiler
 
     public ACallFrame<T, U> varSource;
     public final int localShift;
-    public final short emptyStackTop;
+    public final int emptyStackTop;
     public Object throwable;
     final boolean parentStrictness;
+
+    /**
+     * The interpreter's call depth in VERSION_ECMASCRIPT when the embedder set no maximum (see
+     * {@link Context#setMaximumInterpreterStackDepth}). V8 stops at about 10,000 frames; the
+     * interpreter, whose frames are not on the JVM stack, allows far deeper recursion than the
+     * class compiler can, and keeps doing so.
+     */
+    static final int DEFAULT_MAXIMUM_DEPTH = 100_000;
 
     ACallFrame(
             Context cx,
@@ -66,7 +74,7 @@ public abstract class ACallFrame<T extends ACallFrame<T, U>, U extends ACompiler
                 cx.debugger != null ? cx.debugger.getFrame(cx, fnOrScript.getDescriptor()) : null;
         useActivation = fnOrScript.getDescriptor().requiresActivationFrame();
 
-        emptyStackTop = (short) (compilerData.maxVars + compilerData.maxLocals - 1);
+        emptyStackTop = compilerData.maxVars + compilerData.maxLocals - 1;
         int maxFrameArray = compilerData.maxFrameSize;
         if (maxFrameArray != emptyStackTop + compilerData.maxStack + 1) Kit.codeBug();
 
@@ -90,9 +98,18 @@ public abstract class ACallFrame<T extends ACallFrame<T, U>, U extends ACompiler
             this.parentPC = parentFrame.getPcSourceLineStart();
         }
         this.previousInterpreterFrame = previousInterpreterFrame;
-        frameIndex = (short) ((parentFrame == null) ? 0 : parentFrame.frameIndex + 1);
+        frameIndex = (parentFrame == null) ? 0 : parentFrame.frameIndex + 1;
         if (frameIndex > cx.getMaximumInterpreterStackDepth()) {
             throw Context.reportRuntimeError("Exceeded maximum stack depth");
+        }
+        if (frameIndex > DEFAULT_MAXIMUM_DEPTH
+                && cx.getMaximumInterpreterStackDepth() == Integer.MAX_VALUE
+                && cx.isLatestEcmaScript()) {
+            // The frames live on the heap, so a runaway recursion would exhaust it and take the
+            // JVM with it: without a limit of the embedder's, VERSION_ECMASCRIPT stops, with the
+            // RangeError other engines throw, at a depth ten times V8's, which a heap of 256 MB
+            // still holds
+            throw ScriptRuntime.stackOverflowError();
         }
 
         var desc = fnOrScript.getDescriptor();

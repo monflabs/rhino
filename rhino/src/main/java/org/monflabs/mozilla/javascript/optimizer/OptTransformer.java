@@ -76,7 +76,8 @@ class OptTransformer extends NodeTransformer {
              *  else
              *      ScriptRuntime.Call(fn, tmp, b, c)
              */
-            if (declarations != null) {
+            // super.f(): a method of the home object's prototype, never a declared function
+            if (declarations != null && node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 0) {
                 String targetName = null;
                 if (left.getType() == Token.NAME) {
                     targetName = left.getString();

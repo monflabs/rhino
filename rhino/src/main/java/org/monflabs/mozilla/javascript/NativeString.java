@@ -915,20 +915,22 @@ final class NativeString extends ScriptableObject {
             return target;
         } else if (N == 1) {
             String arg = ScriptRuntime.toString(args[0]);
+            ScriptRuntime.checkStringLength((long) target.length() + arg.length());
             return target.concat(arg);
         }
 
         // Find total capacity for the final string to avoid unnecessary
         // re-allocations in StringBuilder
-        int size = target.length();
+        long size = target.length();
         String[] argsAsStrings = new String[N];
         for (int i = 0; i != N; ++i) {
             String str = ScriptRuntime.toString(args[i]);
             argsAsStrings[i] = str;
             size += str.length();
         }
+        ScriptRuntime.checkStringLength(size);
 
-        StringBuilder result = new StringBuilder(size);
+        StringBuilder result = new StringBuilder((int) size);
         result.append(target);
         for (int i = 0; i != N; ++i) {
             result.append(argsAsStrings[i]);
@@ -1115,6 +1117,8 @@ final class NativeString extends ScriptableObject {
                             Undefined.SCRIPTABLE_UNDEFINED,
                             replaceOps);
         }
+        ScriptRuntime.checkStringLength(
+                (long) preceding.length() + replacement.length() + following.length());
         return preceding + replacement + following;
     }
 
@@ -1210,6 +1214,8 @@ final class NativeString extends ScriptableObject {
                                 Undefined.SCRIPTABLE_UNDEFINED,
                                 replaceOps);
             }
+            ScriptRuntime.checkStringLength(
+                    (long) result.length() + preserved.length() + replacement.length());
             result.append(preserved);
             result.append(replacement);
             endOfLastMatch = p + searchLength;
@@ -1404,6 +1410,7 @@ final class NativeString extends ScriptableObject {
         if ((cnt > Integer.MAX_VALUE) || (size > Integer.MAX_VALUE)) {
             throw rangeError("Invalid size or count value");
         }
+        ScriptRuntime.checkStringLength(size);
 
         StringBuilder retval = new StringBuilder((int) size);
         retval.append(str);
@@ -1456,7 +1463,7 @@ final class NativeString extends ScriptableObject {
             }
         }
 
-        // cast is not really correct here
+        ScriptRuntime.checkStringLength(intMaxLength);
         int fillLen = (int) (intMaxLength - pad.length());
         StringBuilder concat = new StringBuilder();
         do {

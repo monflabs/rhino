@@ -59,7 +59,7 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
         builtIn =
                 !eagerReturn
                                 && iterator instanceof ES6Iterator
-                                && ES6Iterator.isNextMethod(next)
+                                && ES6Iterator.isNextMethodOf(next, (ES6Iterator) iterator)
                                 && ScriptRuntime.hasTopCall(cx)
                         ? (ES6Iterator) iterator
                         : null;

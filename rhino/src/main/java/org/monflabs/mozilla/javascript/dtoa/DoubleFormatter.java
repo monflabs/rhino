@@ -140,12 +140,33 @@ public class DoubleFormatter {
             return toDecimalFull(-mq, c, 0, negative);
         }
         if (t != 0) {
-            // subnormal value
-            return t < C_TINY
-                    ? toDecimalFull(Q_MIN, 10 * t, -1, negative)
-                    : toDecimalFull(Q_MIN, t, 0, negative);
+            // subnormal value: Java's Double.toString wants at least two digits, hence its
+            // 4.9E-324 and 9.9E-323; Number::toString wants the shortest decimal that rounds to the
+            // value, 5e-324 and 1e-322. The two-digit result is shortened when one digit, rounded,
+            // still reads back as the same double
+            final Decimal decimal =
+                    t < C_TINY
+                            ? toDecimalFull(Q_MIN, 10 * t, -1, negative)
+                            : toDecimalFull(Q_MIN, t, 0, negative);
+            return shortenSubnormal(decimal, Double.longBitsToDouble(bits & ~SIGN_BIT));
         }
         return new Decimal(0, 1, false);
+    }
+
+    private static final long SIGN_BIT = 0x8000_0000_0000_0000L;
+
+    /** A two-digit decimal of a subnormal, with one digit if that is enough to read it back. */
+    private static Decimal shortenSubnormal(Decimal decimal, double magnitude) {
+        final long digits = decimal.getDigits();
+        if (digits < 10 || digits >= 100) {
+            return decimal;
+        }
+        final long oneDigit = (digits + 5) / 10;
+        final int exponent = decimal.getExponent() + 1;
+        if (Double.parseDouble(oneDigit + "e" + exponent) == magnitude) {
+            return new Decimal(oneDigit, exponent, decimal.isNegative());
+        }
+        return decimal;
     }
 
     private static Decimal toDecimalFull(int q, long c, int dk, boolean negative) {

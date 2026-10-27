@@ -132,6 +132,16 @@ public final class NativeGenerator extends ScriptableObject {
             // throws a special exception. This ensures execution of all pending
             // finalizers and will not get caught by user code.
             return Undefined.instance;
+        } catch (JavaScriptException e) {
+            if (operation == GENERATOR_CLOSE
+                    && e.getValue() instanceof NativeIterator.StopIteration) {
+                // a return in a finally block that close() ran: the generator is closed
+                return Undefined.instance;
+            }
+            lineNumber = e.lineNumber();
+            lineSource = e.lineSource();
+            savedState = null;
+            throw e;
         } catch (RhinoException e) {
             lineNumber = e.lineNumber();
             lineSource = e.lineSource();

@@ -3302,6 +3302,11 @@ public final class IRFactory {
             return right;
         }
         left = ref;
+        if (left.getType() == Token.UNDEFINED && assignType != Token.ASSIGN) {
+            // undefined += 1, undefined ||= 1: a compound assignment to the global binding
+            // named undefined, which reads it and then fails to write it (or throws, strict)
+            left = Node.newString(Token.NAME, "undefined");
+        }
 
         int assignOp;
         switch (assignType) {
@@ -3415,9 +3420,20 @@ public final class IRFactory {
     private Node createLogicalAssignment(int assignOp, Node left, Node right) {
         int nodeType = left.getType();
         if (nodeType == Token.NAME) {
-            Node read = Node.newString(Token.NAME, left.getString());
-            Node set = parser.simpleAssignment(left, right);
-            return new Node(assignOp, read, set);
+            // Both the read and the write are references of the source name, so that each is
+            // subject to the temporal dead zone of its binding: x &&= v before let x throws on
+            // the read, which a name made by the compiler would not check
+            Node target = Node.newString(Token.NAME, left.getString());
+            if (left instanceof Name) {
+                Name name = (Name) left;
+                Name copy = new Name(name.getPosition(), name.getLength(), name.getIdentifier());
+                copy.setParent(name.getParent());
+                copy.setScope(name.getScope());
+                copy.setLineColumnNumber(name.getLineno(), name.getColumn());
+                target = copy;
+            }
+            Node set = parser.simpleAssignment(target, right);
+            return new Node(assignOp, left, set);
         }
         Node obj = left.getFirstChild();
         Node id = left.getLastChild();

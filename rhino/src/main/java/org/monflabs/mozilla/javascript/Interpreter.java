@@ -483,7 +483,13 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             GeneratorState generatorState = new GeneratorState(operation, value);
             if (operation == NativeGenerator.GENERATOR_CLOSE) {
                 try {
-                    return interpretLoop(cx, activeFrame, generatorState);
+                    Object result = interpretLoop(cx, activeFrame, generatorState);
+                    if (generatorState.returnedException != null) {
+                        // a return in the finally block the close ran: the generator completes,
+                        // with that value
+                        throw generatorState.returnedException;
+                    }
+                    return result;
                 } catch (NativeGenerator.GeneratorClosedException e) {
                     // Re-throw GeneratorClosedException so ES6Generator can catch and complete
                     throw e;
@@ -965,6 +971,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                 // finally when it needs to propagate exception or from
                 // explicit throw
                 if (throwable == null) Kit.codeBug();
+
+                if (throwable instanceof StackOverflowError && cx.isLatestEcmaScript()) {
+                    // the Java stack ran out (a native call between interpreted frames): a
+                    // RangeError the script can catch, as when the frame limit is reached
+                    throwable = ScriptRuntime.stackOverflowError();
+                }
 
                 // Exception type
                 final int EX_CATCH_STATE = 2; // Can execute JS catch
@@ -4169,6 +4181,10 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             // stack: [..., NewLiteralStorage, sourceObj]
             Object source = frame.stack[frame.stackTop];
+            if (source == DOUBLE_MARK) {
+                // a number on the double stack: {...5}
+                source = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            }
             --frame.stackTop;
             NewLiteralStorage store = (NewLiteralStorage) frame.stack[frame.stackTop];
 

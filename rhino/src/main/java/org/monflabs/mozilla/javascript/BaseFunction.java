@@ -648,16 +648,29 @@ public class BaseFunction extends ScriptableObject implements Function {
         }
         if (cx.isLatestEcmaScript()
                 && !(thisObj instanceof BoundFunction)
-                && (args.length == 0 || ScriptRuntime.isPrimitive(args[0]))) {
+                && (args.length == 0
+                        || ScriptRuntime.isPrimitive(args[0])
+                        || ScriptRuntime.isSymbol(args[0]))) {
             // OrdinaryHasInstance (7.3.21) step 4: a primitive is not an instance
             return false;
         }
+        if (cx.isLatestEcmaScript() && thisObj instanceof BoundFunction) {
+            // OrdinaryHasInstance (7.3.21) step 2: InstanceofOperator(O, the target), which may
+            // itself be bound, a proxy or an object with its own @@hasInstance
+            return ScriptRuntime.instanceOf(
+                    args.length == 0 ? Undefined.instance : args[0],
+                    ((BoundFunction) thisObj).getTargetFunction(),
+                    cx);
+        }
         Object protoProp = null;
-        if (thisObj instanceof BoundFunction)
+        if (thisObj instanceof BoundFunction) {
+            Callable target = ((BoundFunction) thisObj).getTargetFunction();
             protoProp =
-                    ((JSFunction) ((BoundFunction) thisObj).getTargetFunction())
-                            .getPrototypeProperty();
-        else {
+                    target instanceof JSFunction
+                            ? ((JSFunction) target).getPrototypeProperty()
+                            : ScriptableObject.getProperty(
+                                    (Scriptable) target, PROTOTYPE_PROPERTY_NAME);
+        } else {
             protoProp = ScriptableObject.getProperty((Scriptable) thisObj, PROTOTYPE_PROPERTY_NAME);
         }
 

@@ -30,7 +30,7 @@ class SampleRunTest {
     private static final Map<String, String> EXPECTED_COMPILED_FAILURES =
             Map.of(
                     "02 - ECMAScript support/01 - ES2015/23 - Proper tail calls",
-                    "StackOverflowError");
+                    "Maximum call stack size exceeded");
 
     private static ScriptRunner runner;
 

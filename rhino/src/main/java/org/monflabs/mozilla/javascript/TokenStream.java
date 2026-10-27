@@ -995,7 +995,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                 }
 
                 if (isBigInt) {
-                    this.bigInt = new BigInteger(numString, base);
+                    this.bigInt = ScriptRuntime.parseBigInteger(numString, base);
                     return Token.BIGINT;
                 }
 

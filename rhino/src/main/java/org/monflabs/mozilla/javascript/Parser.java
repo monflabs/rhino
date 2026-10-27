@@ -8775,7 +8775,14 @@ public class Parser {
                     } else {
                         type = Token.SETELEM;
                     }
-                    return new Node(type, obj, id, right);
+                    Node set = new Node(type, obj, id, right);
+                    if (left.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1
+                            || obj.getType() == Token.SUPER) {
+                        // for (super.p in o), [super.p] = a: a super property's setter runs with
+                        // this as its receiver, as for super.p = v
+                        set.putIntProp(Node.SUPER_PROPERTY_ACCESS, 1);
+                    }
+                    return set;
                 }
             case Token.GET_REF:
                 {

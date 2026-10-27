@@ -661,6 +661,32 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         return cx.newObject(scope, className, args);
     }
 
+    /**
+     * InitializeTypedArrayFromArrayLike (23.2.5.1.5): the length is read, the typed array
+     * allocated, and then each element read and written in turn, without collecting the elements
+     * first - an array-like of 80 million elements is 80 MB as a Uint8Array, and far more as an
+     * array of boxed values.
+     */
+    private static NativeTypedArrayView<?> fromArrayLike(
+            Context cx,
+            VarScope scope,
+            Scriptable arrayLike,
+            int bytesPerElement,
+            TypedArrayConstructable constructable) {
+        long length = NativeArray.getLengthProperty(cx, arrayLike);
+        if (length > Integer.MAX_VALUE) {
+            throw ScriptRuntime.rangeErrorById("msg.arraylength.too.big", String.valueOf(length));
+        }
+        int len = (int) length;
+        NativeArrayBuffer na = makeArrayBuffer(cx, scope, len, bytesPerElement);
+        NativeTypedArrayView<?> v = constructable.construct(na, 0, len);
+        for (int i = 0; i < len; i++) {
+            Object element = ScriptableObject.getProperty(arrayLike, i);
+            v.js_set(i, element == Scriptable.NOT_FOUND ? Undefined.instance : element);
+        }
+        return v;
+    }
+
     protected interface TypedArrayConstructable {
         NativeTypedArrayView<?> construct(NativeArrayBuffer ab, int off, int len);
     }
@@ -834,9 +860,13 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
                         }
                     }
                     arrayElements = elems.toArray();
+                } else if (cx.isLatestEcmaScript()) {
+                    return fromArrayLike(cx, scope, obj, bytesPerElement, constructable);
                 } else {
                     arrayElements = ScriptRuntime.getArrayElements(cx, obj);
                 }
+            } else if (cx.isLatestEcmaScript()) {
+                return fromArrayLike(cx, scope, obj, bytesPerElement, constructable);
             } else {
                 arrayElements = ScriptRuntime.getArrayElements(cx, obj);
             }

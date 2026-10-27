@@ -91,7 +91,8 @@ public final class NativeRegExpStringIterator extends ES6Iterator {
             long thisIndex =
                     ScriptRuntime.toLength(ScriptRuntime.getObjectProp(regexp, "lastIndex", cx));
             long nextIndex = ScriptRuntime.advanceStringIndex(string, thisIndex, fullUnicode);
-            ScriptRuntime.setObjectProp(regexp, "lastIndex", nextIndex, cx);
+            // Set(R, "lastIndex", nextIndex, true): a non-writable lastIndex throws
+            NativeRegExp.setLastIndex(regexp, Double.valueOf(nextIndex));
         }
 
         return false;

@@ -41,7 +41,9 @@ public class ConsString implements CharSequence, Serializable {
         }
         left = str1;
         right = str2;
-        length = left.length() + right.length();
+        long total = (long) left.length() + right.length();
+        ScriptRuntime.checkStringLength(total);
+        length = (int) total;
         isFlat = false;
     }
 

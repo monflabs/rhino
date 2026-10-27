@@ -1096,10 +1096,12 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     child = child.getNext();
                     String property = child.getString();
                     child = child.getNext();
+                    boolean superAccess = node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1;
                     if (type == Token.SETPROP_OP) {
                         addIcode(Icode.DUP);
                         stackChange(1);
-                        addStringOp(Token.GETPROP, property);
+                        // super.p += v reads super.p with this as the getter's receiver
+                        addStringOp(superAccess ? Token.GETPROP_SUPER : Token.GETPROP, property);
                         // Compensate for the following USE_STACK
                         stackChange(-1);
                     }
@@ -1126,7 +1128,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     }
                     addIcode(Icode.DUP2);
                     stackChange(2);
-                    addToken(Token.GETELEM);
+                    addToken(
+                            node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1
+                                    ? Token.GETELEM_SUPER
+                                    : Token.GETELEM);
                     stackChange(-1);
                     // Compensate for the following USE_STACK
                     stackChange(-1);
@@ -1504,7 +1509,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             Node left, boolean isOptionalChainingCall) {
         // Generate code to place on stack function and thisObj
         int type = left.getType();
-        switch (type) {
+        // super.m(): the method is read as super.m is, with this as the receiver of a getter;
+        // CALL_ON_SUPER then calls it with this
+        boolean superAccess = left.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1;
+        switch (superAccess ? Token.EMPTY : type) {
             case Token.NAME:
                 {
                     String name = left.getString();

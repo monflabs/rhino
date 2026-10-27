@@ -12,6 +12,7 @@ import org.monflabs.mozilla.javascript.JSCodeExec;
 import org.monflabs.mozilla.javascript.JSCodeResume;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.ScriptOrFn;
+import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.VarScope;
 
 /** Subclass of {@link JSCode} for compiled Java methods. */
@@ -75,7 +76,24 @@ public class MHJSFunctionCode extends MHJSCode<JSFunction> {
         if (e == null) {
             e = link();
         }
-        return e.execute(cx, executableObject, newTarget, scope, thisObj, args);
+        try {
+            return e.execute(cx, executableObject, newTarget, scope, thisObj, args);
+        } catch (StackOverflowError overflow) {
+            throw stackOverflow(cx, overflow);
+        }
+    }
+
+    /**
+     * A compiled function that ran out of stack returns the RangeError the script would catch
+     * (VERSION_ECMASCRIPT), so that its caller sees a JavaScript error, as the interpreter's does:
+     * a native caller that handles one, as the Promise constructor does for its executor, would not
+     * catch the Java error.
+     */
+    private static RuntimeException stackOverflow(Context cx, StackOverflowError overflow) {
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            throw overflow;
+        }
+        return ScriptRuntime.stackOverflowError();
     }
 
     /**

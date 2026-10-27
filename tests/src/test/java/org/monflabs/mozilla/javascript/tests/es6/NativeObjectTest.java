@@ -348,9 +348,10 @@ public class NativeObjectTest {
     @Test
     public void fromEntriesOnArray() {
         Map<Object, Object> map = new HashMap<>();
-        map.put("0", "x");
-        map.put("1", "y");
-        map.put("2", "z");
+        // index keys, stored as they are for ({0: "x"}), so that they enumerate first
+        map.put(0, "x");
+        map.put(1, "y");
+        map.put(2, "z");
         assertWithAllModes_StrictAndNonStrict_ES6(
                 "Object.fromEntries(Object.entries(['x','y','z']))", map);
     }

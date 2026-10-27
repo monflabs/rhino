@@ -804,6 +804,7 @@ class BodyCodegen {
 
             // Duplicate generateActivationExit() in the catch block since it
             // takes less space then full-featured ByteCode.JSR/ByteCode.RET
+            generateFunctionStrictnessExit();
             generateActivationExit();
 
             cfw.addALoad(exceptionObject);
@@ -1528,13 +1529,13 @@ class BodyCodegen {
 
                     // Read home object from activation, which we know we'll always have because we
                     // set "requiresActivation" to any function that mentions "super" in IRFactory
+                    // (the scope is the activation, or a block scope inside it, as in a for loop
+                    // with a let binding)
                     cfw.addALoad(variableObjectLocal);
-                    cfw.add(ByteCode.CHECKCAST, "org/monflabs/mozilla/javascript/NativeCall");
-                    cfw.addInvoke(
-                            ByteCode.INVOKEVIRTUAL,
-                            "org/monflabs/mozilla/javascript/NativeCall",
-                            "getHomeObject",
-                            "()Lorg/monflabs/mozilla/javascript/Scriptable;");
+                    addScriptRuntimeInvoke(
+                            "superHomeObject",
+                            "(Lorg/monflabs/mozilla/javascript/VarScope;)"
+                                    + "Lorg/monflabs/mozilla/javascript/Scriptable;");
 
                     // If null, then put undefined
                     int after = cfw.acquireLabel();
@@ -4063,7 +4064,10 @@ class BodyCodegen {
         // Place on stack (function object, function this) pair
         int type = node.getType();
         boolean isOptionalChainingCall = parent.getIntProp(Node.OPTIONAL_CHAINING, 0) == 1;
-        switch (node.getType()) {
+        // super.m(): the method is read as super.m is, with this as the receiver of a getter
+        // (GetSuperBase, then [[Get]] with the this value); the call then uses this too
+        boolean superAccess = node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1;
+        switch (superAccess ? Token.EMPTY : node.getType()) {
             case Token.GETPROPNOWARN:
                 throw Kit.codeBug();
 
@@ -4225,6 +4229,9 @@ class BodyCodegen {
             Context cx = Context.getCurrentContext();
             if (cx != null && cx.hasFeature(Context.FEATURE_ENHANCED_JAVA_ACCESS)) {
                 handlerLabels[THROWABLE_EXCEPTION] = cfw.acquireLabel();
+            } else if (compilerEnv.isLatestEcmaScript()) {
+                // a call stack that ran out is a RangeError the script catches
+                handlerLabels[STACK_OVERFLOW_EXCEPTION] = cfw.acquireLabel();
             }
         }
         if (finallyTarget != null) {
@@ -4251,6 +4258,7 @@ class BodyCodegen {
                 exceptionManager.removeHandler(EVALUATOR_EXCEPTION, catchLabel);
                 exceptionManager.removeHandler(ECMAERROR_EXCEPTION, catchLabel);
                 exceptionManager.removeHandler(THROWABLE_EXCEPTION, catchLabel);
+                exceptionManager.removeHandler(STACK_OVERFLOW_EXCEPTION, catchLabel);
             }
             generateStatement(child);
             child = child.getNext();
@@ -4308,6 +4316,13 @@ class BodyCodegen {
                         catchLabel,
                         exceptionLocal,
                         handlerLabels[THROWABLE_EXCEPTION]);
+            } else if (handlerLabels[STACK_OVERFLOW_EXCEPTION] != 0) {
+                generateCatchBlock(
+                        STACK_OVERFLOW_EXCEPTION,
+                        savedVariableObject,
+                        catchLabel,
+                        exceptionLocal,
+                        handlerLabels[STACK_OVERFLOW_EXCEPTION]);
             }
         }
 
@@ -4362,11 +4377,12 @@ class BodyCodegen {
     private static final int EVALUATOR_EXCEPTION = 1;
     private static final int ECMAERROR_EXCEPTION = 2;
     private static final int THROWABLE_EXCEPTION = 3;
+    private static final int STACK_OVERFLOW_EXCEPTION = 4;
     // Finally catch-alls are technically Throwable, but we want a distinction
     // for the exception manager and we want to use a null string instead of
     // an explicit Throwable string.
-    private static final int FINALLY_EXCEPTION = 4;
-    private static final int EXCEPTION_MAX = 5;
+    private static final int FINALLY_EXCEPTION = 5;
+    private static final int EXCEPTION_MAX = 6;
 
     private void generateCatchBlock(
             int exceptionType,
@@ -4386,6 +4402,15 @@ class BodyCodegen {
         cfw.addALoad(savedVariableObject);
         cfw.addAStore(variableObjectLocal);
 
+        // reset the strictness: a strict callee that threw has not restored this frame's
+        cfw.addALoad(contextLocal);
+        cfw.addPush(scriptOrFn.isInStrictMode());
+        cfw.addInvoke(
+                ByteCode.INVOKEVIRTUAL,
+                "org/monflabs/mozilla/javascript/Context",
+                "setIsStrictMode",
+                "(Z)V");
+
         cfw.add(ByteCode.GOTO, catchLabel);
     }
 
@@ -4398,6 +4423,8 @@ class BodyCodegen {
             return "org/monflabs/mozilla/javascript/EcmaError";
         } else if (exceptionType == THROWABLE_EXCEPTION) {
             return "java/lang/Throwable";
+        } else if (exceptionType == STACK_OVERFLOW_EXCEPTION) {
+            return "java/lang/StackOverflowError";
         } else if (exceptionType == FINALLY_EXCEPTION) {
             return null;
         } else {
@@ -4650,13 +4677,29 @@ class BodyCodegen {
         Node fBlock = getFinallyAtTarget(finallyTarget);
         fBlock.resetTargets();
         Node child = fBlock.getFirstChild();
-        exceptionManager.markInlineFinallyStart(fBlock, finallyStart);
-        while (child != null) {
-            generateStatement(child);
-            child = child.getNext();
+        if (++inlinedFinallyDepth > MAX_INLINED_FINALLY_DEPTH) {
+            // A finally block that leaves (return, break) inlines the enclosing finally blocks,
+            // each on the normal and the exceptional path: nested deeply, the copies grow
+            // exponentially. Such a function runs in the interpreter, which does not copy them.
+            throw new ClassFileWriter.ClassSizeException(
+                    "finally blocks nested too deeply to inline");
         }
-        exceptionManager.markInlineFinallyEnd(fBlock, finallyEnd);
+        try {
+            exceptionManager.markInlineFinallyStart(fBlock, finallyStart);
+            while (child != null) {
+                generateStatement(child);
+                child = child.getNext();
+            }
+            exceptionManager.markInlineFinallyEnd(fBlock, finallyEnd);
+        } finally {
+            inlinedFinallyDepth--;
+        }
     }
+
+    /** How deeply inlined finally blocks may nest: 2 to this power copies at worst. */
+    private static final int MAX_INLINED_FINALLY_DEPTH = 12;
+
+    private int inlinedFinallyDepth;
 
     private void inlineFinally(Node finallyTarget) {
         int finallyStart = cfw.acquireLabel();
@@ -5205,6 +5248,8 @@ class BodyCodegen {
             cfw.addAStore(reg);
             addObjectToNumeric();
             cfw.addALoad(reg);
+            // released, or a generator would save it at a later yield where it holds nothing
+            releaseWordLocal(reg);
             addObjectToNumeric();
 
             addScriptRuntimeInvoke(
