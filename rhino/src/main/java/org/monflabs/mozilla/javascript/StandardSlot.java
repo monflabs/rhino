@@ -3,7 +3,6 @@ package org.monflabs.mozilla.javascript;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serial;
-import java.util.Objects;
 
 /**
  * A Slot is the base class for all properties stored in the ScriptableObject class. There are a
@@ -150,7 +149,8 @@ public class StandardSlot<T extends PropHolder<T>> extends Slot<T> {
 
     @Override
     public final boolean keyMatches(Object key, int indexOrHash) {
-        return indexOrHash == this.indexOrHash && Objects.equals(this.name, key);
+        Object n = this.name;
+        return indexOrHash == this.indexOrHash && (n == key || (n != null && n.equals(key)));
     }
 
     @Override

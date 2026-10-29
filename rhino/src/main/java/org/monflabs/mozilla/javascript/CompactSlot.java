@@ -3,7 +3,6 @@ package org.monflabs.mozilla.javascript;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.Serializable;
-import java.util.Objects;
 import org.monflabs.mozilla.javascript.ScriptableObject.DescriptorInfo;
 
 public abstract class CompactSlot<
@@ -108,8 +107,9 @@ public abstract class CompactSlot<
 
     @Override
     public final boolean keyMatches(Object key, int indexOrHash) {
+        Object n = this.descriptor.getName();
         return indexOrHash == this.descriptor.getIndexOrHash()
-                && Objects.equals(this.descriptor.getName(), key);
+                && (n == key || (n != null && n.equals(key)));
     }
 
     @Override

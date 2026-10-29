@@ -113,6 +113,22 @@ public class SlotMapTest {
 
     @MethodSource("mapTypes")
     @ParameterizedTest
+    public void keysMatchByValue(Supplier<SlotMap<Scriptable>> mapSupplier) {
+        initSlotMapTest(mapSupplier);
+        obj.getMap().modify(obj, KEYS[0], 0, 0);
+        createBuiltInSlot(obj, KEYS[1]);
+        var standard = obj.getMap().query(new String(KEYS[0]), 0);
+        assertNotNull(standard);
+        assertEquals(KEYS[0], standard.getName());
+        var builtIn = obj.getMap().query(new String(KEYS[1]), 0);
+        assertTrue(builtIn instanceof BuiltInSlot);
+        assertEquals(KEYS[1], builtIn.getName());
+        assertEquals(KEYS[2].hashCode(), KEYS[0].hashCode());
+        assertNull(obj.getMap().query(KEYS[2], 0));
+    }
+
+    @MethodSource("mapTypes")
+    @ParameterizedTest
     public void crudOneIndex(Supplier<SlotMap<Scriptable>> mapSupplier) {
         initSlotMapTest(mapSupplier);
         assertNull(obj.getMap().query(null, 11));

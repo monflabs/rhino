@@ -39,6 +39,16 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Slot keys compared without `Objects.equals` (2026-10-29)
+
+The slot lookup compared keys with `java.util.Objects.equals`, which stopped being inlined after upstream commit
+c1ac6c149 (scopes as `ScopeObject`), one cause of the fork being slower than Rhino 1.9.1 on Octane's object code.
+`StandardSlot.keyMatches` and `CompactSlot.keyMatches` now compare by identity, then call `equals` themselves.
+
+- Octane compiled, each file alone: `deltablue` about 18% faster, `richards` 6–10%; `raytrace` and `box2d`
+  level. Perf gate: no regression in two runs. OPTIMIZATION.md "Slot keys compared without `Objects.equals`".
+- Not observable, not gated. test262: no change.
+
 ### Robustness fixes (2026-10-26)
 
 Bugs found by the robustness harnesses of [JavascriptPerformance](https://github.com/monflabs/JavascriptPerformance):

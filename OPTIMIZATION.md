@@ -273,6 +273,21 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** 3 million accesses three levels up, compiled: a method 66 ms → 41–54 ms, a property 45 ms → 18–23 ms;
   `protochain` −28% compiled, −13% interpreted. All versions.
 
+### Slot keys compared without `Objects.equals` (2026-10-29)
+
+- **What.** `StandardSlot.keyMatches` and `CompactSlot.keyMatches` compare the key by identity first, then call
+  `equals` on the slot's name themselves, instead of calling `java.util.Objects.equals`.
+- **Why.** Upstream commit c1ac6c149 ("Start using the new scopes hierarchy internally", after Rhino 1.9.1) made
+  the scopes `ScopeObject`s that share `SlotMapOwner.get` with `ScriptableObject`. Octane `box2d` went from 12.9 s
+  to 18.2 s at that commit (found by bisecting 270 upstream commits). JFR: the `Objects.equals` of the slot lookup
+  no longer inlined (24 samples out of line before, 257 after, under `EmbeddedSlotMap.query`). Out of line,
+  `Objects.equals` carries a type profile shared by every caller in the JVM; the key comparison now has a call
+  site of its own, and most keys are the same string as the slot's name, so the identity check settles them.
+- **Gain.** Octane, compiled, `VERSION_ES6`, each file alone, 2 rounds: `deltablue` 32.5–33.4 s → 26.6–26.8 s,
+  `richards` 30.6–32.2 s → 28.9 s; `raytrace` and `box2d` level (the rest of `box2d`'s regression is elsewhere in
+  that commit). Two full gate runs against the commit before: no regression, `v8-richards` level. The first run
+  flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions.
+
 ### Per-iteration bindings that cost nothing without closures
 
 - **What.** A `let`/`const` loop head gets a fresh binding per iteration (a `COPY_SCOPE` of the loop's scope object),
