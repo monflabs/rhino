@@ -402,6 +402,10 @@ public class ArrayLikeAbstractOperations {
 
     // same as NativeArray::getElem, but without converting NOT_FOUND to undefined
     static Object getRawElem(Scriptable target, long index) {
+        if ((index & 0x3FF) == 0) {
+            // a loop over {length: 2**32 - 1} has no other safepoint
+            ResourceScope.pollCurrent(1024);
+        }
         if (index < 0 || index > Integer.MAX_VALUE) {
             return ScriptableObject.getProperty(target, Long.toString(index));
         }

@@ -727,6 +727,10 @@ public class Context implements Closeable {
     }
 
     private void releaseContext() {
+        // a binding that was not closed must not reach the next user of this Context
+        while (resourceBinding != null) {
+            resourceBinding.close();
+        }
         // Drain the reference queue to prevent memory leaks
         cleanUpReferences();
         // do not use contextLocal.remove() here, as this might be much slower, when the same thread
@@ -2738,6 +2742,10 @@ public class Context implements Closeable {
      * @see #setOptimizationLevel(int)
      */
     protected void observeInstructionCount(int instructionCount) {
+        ResourceScope.Binding binding = resourceBinding;
+        if (binding != null) {
+            binding.check();
+        }
         ContextFactory f = getFactory();
         f.observeInstructionCount(this, instructionCount);
     }
@@ -3481,7 +3489,7 @@ public class Context implements Closeable {
     boolean useDynamicScope;
     // interpreted mode defaulted to false, so we keep compatibility with that.
     private EvaluationMethod evaluationMethod = EvaluationMethod.Compiler;
-    private int maximumInterpreterStackDepth;
+    int maximumInterpreterStackDepth;
     private WrapFactory wrapFactory;
     Debugger debugger;
     private Object debuggerData;
@@ -3506,6 +3514,7 @@ public class Context implements Closeable {
     // For instruction counting (interpreter only)
     int instructionCount;
     int instructionThreshold;
+    ResourceScope.Binding resourceBinding;
 
     // It can be used to return the second uint32 result from function
     long scratchUint32;

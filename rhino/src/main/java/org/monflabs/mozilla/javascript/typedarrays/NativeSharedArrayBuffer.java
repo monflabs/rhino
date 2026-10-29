@@ -22,6 +22,7 @@ import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.LambdaConstructor;
 import org.monflabs.mozilla.javascript.NativeObject;
+import org.monflabs.mozilla.javascript.ResourceScope;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.ScriptRuntimeES6;
 import org.monflabs.mozilla.javascript.Scriptable;
@@ -199,6 +200,7 @@ public final class NativeSharedArrayBuffer extends NativeArrayBuffer {
         Scriptable proto = ScriptRuntime.findPrototype(f, nt, TopLevel.Builtins.SharedArrayBuffer);
         int capacity = maxByteLength >= 0 ? maxByteLength : byteLength;
         ByteBuffer bytes;
+        ResourceScope.chargeCurrent(capacity);
         try {
             bytes = ByteBuffer.allocate(capacity);
         } catch (OutOfMemoryError e) {

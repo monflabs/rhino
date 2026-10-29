@@ -42,6 +42,7 @@ public class ConsString implements CharSequence, Serializable {
         left = str1;
         right = str2;
         length = left.length() + right.length();
+        if (length < 0) ResourceScope.stringOverflow();
         isFlat = false;
     }
 
@@ -57,6 +58,7 @@ public class ConsString implements CharSequence, Serializable {
 
     private synchronized String flatten() {
         if (!isFlat) {
+            if (length > 4096) ResourceScope.chargeCurrent(2L * length);
             final char[] chars = new char[length];
             int charPos = length;
 

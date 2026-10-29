@@ -215,6 +215,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (denseOnly) {
             int intLength = (int) lengthArg;
             if (intLength < DEFAULT_INITIAL_CAPACITY) intLength = DEFAULT_INITIAL_CAPACITY;
+            if (intLength > 1024) ResourceScope.chargeCurrent(4L * intLength);
             dense = new Object[intLength];
             Arrays.fill(dense, Scriptable.NOT_FOUND);
         }
@@ -370,6 +371,7 @@ public class NativeArray extends ScriptableObject implements List {
                 return false;
             }
             capacity = Math.max(capacity, (int) (dense.length * GROW_FACTOR));
+            ResourceScope.chargeCurrent(4L * (capacity - dense.length));
             Object[] newDense = new Object[capacity];
             System.arraycopy(dense, 0, newDense, 0, dense.length);
             Arrays.fill(newDense, dense.length, newDense.length, Scriptable.NOT_FOUND);
@@ -1078,6 +1080,13 @@ public class NativeArray extends ScriptableObject implements List {
      * is ignored before).
      */
     private static void setElem(Context cx, Scriptable target, long index, Object value) {
+        if ((index & 0x3FF) == 0) {
+            ResourceScope.pollCurrent(1024);
+            if (target instanceof NativeArray na && !na.denseOnly) {
+                // sparse elements live in the slot map: about 64 bytes each
+                ResourceScope.chargeCurrent(64L * 1024);
+            }
+        }
         boolean wasStrict = cx.isStrictMode();
         cx.setIsStrictMode(wasStrict || cx.isLatestEcmaScript());
         try {
@@ -1238,6 +1247,9 @@ public class NativeArray extends ScriptableObject implements List {
                 (args.length < 1 || args[0] == Undefined.instance)
                         ? ","
                         : ScriptRuntime.toString(args[0]);
+        if (length > 1024 && !separator.isEmpty()) {
+            ResourceScope.chargeCurrent(2L * length * separator.length());
+        }
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly) {
@@ -1343,6 +1355,16 @@ public class NativeArray extends ScriptableObject implements List {
         return sort(cx, o, comparator);
     }
 
+    private static Comparator<Object> polling(Context cx, Comparator<Object> comparator) {
+        int[] comparisons = {0};
+        return (x, y) -> {
+            if ((++comparisons[0] & 0x3FF) == 0) {
+                ScriptRuntime.addInstructionCount(cx, 1024);
+            }
+            return comparator.compare(x, y);
+        };
+    }
+
     private static Scriptable sort(Context cx, Scriptable o, Comparator<Object> comparator) {
         long llength = getLengthProperty(cx, o);
         final int length = (int) llength;
@@ -1352,9 +1374,13 @@ public class NativeArray extends ScriptableObject implements List {
         }
         // copy the JS array into a working array, so it can be
         // sorted cheaply.
+        ResourceScope.chargeCurrent(8L * length);
         final Object[] working = new Object[length];
         for (int i = 0; i != length; ++i) {
             working[i] = getRawElem(o, i);
+        }
+        if (cx.instructionThreshold != 0) {
+            comparator = polling(cx, comparator);
         }
 
         // Java's 'Arrays.sort' is guaranteed to be stable so we can use it; however,
@@ -1939,6 +1965,9 @@ public class NativeArray extends ScriptableObject implements List {
     }
 
     private static boolean hasElem(Scriptable o, long index) {
+        if ((index & 0x3FF) == 0) {
+            ResourceScope.pollCurrent(1024);
+        }
         return index > Integer.MAX_VALUE
                 ? ScriptableObject.hasProperty(o, Long.toString(index))
                 : ScriptableObject.hasProperty(o, (int) index);

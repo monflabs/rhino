@@ -1405,6 +1405,7 @@ final class NativeString extends ScriptableObject {
             throw rangeError("Invalid size or count value");
         }
 
+        ResourceScope.chargeCurrent(2 * size);
         StringBuilder retval = new StringBuilder((int) size);
         retval.append(str);
 
@@ -1456,6 +1457,7 @@ final class NativeString extends ScriptableObject {
             }
         }
 
+        ResourceScope.chargeCurrent(2 * intMaxLength);
         // cast is not really correct here
         int fillLen = (int) (intMaxLength - pad.length());
         StringBuilder concat = new StringBuilder();

@@ -461,6 +461,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         frame.isContinuationsTopFrame = cx.isContinuationsTopCall;
         cx.isContinuationsTopCall = false;
 
+        if (cx.instructionThreshold != 0) {
+            cx.instructionCount += INVOCATION_COST;
+        }
         return interpretLoop(cx, frame, null);
     }
 
@@ -1133,6 +1136,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
 
             // Store new frame in cx which is used for error reporting etc.
             cx.lastInterpreterFrame = frame;
+
+            if (instructionCounting) {
+                // calls add their cost without a check, and a function without a jump has no
+                // other safepoint: look here, so that call-only code can be stopped
+                observeIfOverThreshold(cx);
+            }
 
             Loop:
             for (; ; ) {
@@ -4903,6 +4912,13 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             args[i] = val;
         }
         return args;
+    }
+
+    private static void observeIfOverThreshold(Context cx) {
+        if (cx.instructionCount > cx.instructionThreshold) {
+            cx.observeInstructionCount(cx.instructionCount);
+            cx.instructionCount = 0;
+        }
     }
 
     private static void addInstructionCount(Context cx, CallFrame frame, int extra) {

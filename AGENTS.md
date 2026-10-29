@@ -99,6 +99,27 @@ it documents. Port the logic, not the code structure, and keep the differences i
   `LambdaConstructor`, `ScriptableObject`). Follow Rhino's existing patterns.
 - As in Nashorn, built-ins are implemented in Java, leveraging the JDK, never in JavaScript.
 
+### Resource limits (guardrails for untrusted scripts)
+
+The engine has opt-in per-request limits (`ResourceLimits`, `ResourceScope`, `ResourceLimitError`; design and known
+evasions in [doc/RESOURCE_LIMITS.md](doc/RESOURCE_LIMITS.md)). They are only as good as the code that honors them, so
+**every addition to the engine must keep them intact**:
+
+- **Time.** Any loop that can run long without going back through script code (a built-in iterating over a
+  `length`, a parser, a regex-like matcher, a retry loop) must call `ResourceScope.pollCurrent(n)` every few hundred
+  iterations. Any new script-level construct or call path must be counted in both backends (`BodyCodegen` and
+  `Interpreter`): a new loop, jump or call that is not counted lets a script run forever.
+- **Memory.** Any code that allocates a block whose size a script controls (strings, arrays, buffers, BigInts,
+  collections, regex or JSON results) must call `ResourceScope.chargeCurrent(bytes)` *before* allocating, or
+  `checkBigIntBits` for BigInts. Guard overflow of sizes too.
+- **Termination.** `ResourceLimitError` is an `Error` and must never be caught, wrapped or turned into a JS exception
+  (no `catch (Throwable)` / `catch (Error)` in engine code that continues running). Cleanup must use `finally`.
+- **State.** Do not keep per-request state in statics or on shared scopes; per-request state belongs to the `Context`
+  or the `ResourceScope`. Blocking calls must react to `Thread.interrupt()`.
+- **Cost.** Unbound code must pay only a null or int comparison; run `buildtools/perf-gate.sh`.
+- **Tests.** Add a case to `ResourceLimitsTest` for each new polled loop or charged allocation, in both backends, and
+  list any new unguarded path under "Not covered" in `doc/RESOURCE_LIMITS.md`.
+
 ### Workflow
 
 - [MONFLABS_PLAN.md](MONFLABS_PLAN.md) is the plan: scope, milestone order, the definition of done for a feature, the

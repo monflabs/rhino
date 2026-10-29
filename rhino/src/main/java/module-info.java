@@ -29,6 +29,7 @@ module org.monflabs.mozilla.rhino {
     requires jdk.jfr;
     requires transitive java.desktop;
     requires java.logging;
+    requires static jdk.management;
 
     exports org.monflabs.mozilla.javascript.interpreterv2;
     exports org.monflabs.mozilla.javascript.interpreterv2.instruction;

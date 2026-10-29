@@ -110,6 +110,7 @@ final class NativeBigInt extends ScriptableObject {
             return BigInteger.ZERO;
         }
 
+        if (bits > (1 << 16)) ResourceScope.checkBigIntBits(bits);
         BigInteger modulus = BigInteger.ONE.shiftLeft(bits); // 2^bits
 
         if (isSigned) {

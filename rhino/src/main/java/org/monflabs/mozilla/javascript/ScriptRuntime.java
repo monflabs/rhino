@@ -4854,8 +4854,13 @@ public class ScriptRuntime {
         }
     }
 
+    // results smaller than this are never looked at by the resource limits
+    private static final int BIGINT_CHECK_BITS = 1 << 16;
+
     public static Number multiply(Number val1, Number val2) {
         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
+            long bits = (long) ((BigInteger) val1).bitLength() + ((BigInteger) val2).bitLength();
+            if (bits > BIGINT_CHECK_BITS) ResourceScope.checkBigIntBits(bits);
             return ((BigInteger) val1).multiply((BigInteger) val2);
         } else if (val1 instanceof BigInteger || val2 instanceof BigInteger) {
             throw ScriptRuntime.typeErrorById("msg.cant.convert.to.number", "BigInt");
@@ -4936,6 +4941,8 @@ public class ScriptRuntime {
 
             try {
                 int intVal2 = ((BigInteger) val2).intValueExact();
+                long bits = (long) ((BigInteger) val1).bitLength() * intVal2;
+                if (bits > BIGINT_CHECK_BITS) ResourceScope.checkBigIntBits(bits);
                 return ((BigInteger) val1).pow(intVal2);
             } catch (ArithmeticException e) {
                 // This is outside the scope of the ECMA262 specification.
@@ -5010,6 +5017,8 @@ public class ScriptRuntime {
         if (val1 instanceof BigInteger && val2 instanceof BigInteger) {
             try {
                 int intVal2 = ((BigInteger) val2).intValueExact();
+                long bits = (long) ((BigInteger) val1).bitLength() + intVal2;
+                if (bits > BIGINT_CHECK_BITS) ResourceScope.checkBigIntBits(bits);
                 return ((BigInteger) val1).shiftLeft(intVal2);
             } catch (ArithmeticException e) {
                 // This is outside the scope of the ECMA262 specification.

@@ -20,6 +20,7 @@ import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.JSFunction;
 import org.monflabs.mozilla.javascript.LambdaConstructor;
 import org.monflabs.mozilla.javascript.NativeObject;
+import org.monflabs.mozilla.javascript.ResourceScope;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 import org.monflabs.mozilla.javascript.ScriptRuntimeES6;
 import org.monflabs.mozilla.javascript.Scriptable;
@@ -113,6 +114,7 @@ public class NativeArrayBuffer extends ScriptableObject {
 
     private NativeArrayBuffer(int len) {
         byteOrder = defaultByteOrder();
+        ResourceScope.chargeCurrent(len);
         try {
             buffer = allocateBuffer(len);
         } catch (OutOfMemoryError e) {
@@ -374,6 +376,7 @@ public class NativeArrayBuffer extends ScriptableObject {
             return Undefined.instance;
         }
 
+        ResourceScope.chargeCurrent(newLength);
         var newBuffer = self.allocateBuffer(newLength);
         int copyLength = Math.min(newLength, oldLength);
 

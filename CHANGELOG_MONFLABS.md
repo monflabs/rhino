@@ -39,6 +39,27 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Per-request resource limits (2026-10-27)
+
+New opt-in API for running untrusted scripts: `ResourceLimits` (immutable settings), `ResourceScope` (one request:
+deadline, cancellation, memory budget; `bind(Context)` returns a `Binding` to close in a `finally`) and
+`ResourceLimitError` (a stackless `Error` that scripts cannot catch and that is raised again at every safepoint).
+Design, guarantees and evasions that remain: [doc/RESOURCE_LIMITS.md](doc/RESOURCE_LIMITS.md).
+
+- The timeout reuses the instruction observer in both backends. Gaps closed: the interpreter did not call the observer
+  on a call without a branch (an exponential recursion ran forever); the built-ins that loop on their own now poll
+  (`getRawElem`, `hasElem`, `setElem`, the sort comparator).
+- The memory budget is charged before large blocks are allocated (`repeat`, `padStart`/`padEnd`, `join`, array growth
+  and `sort`, sparse element writes, flattening of a `ConsString`, `ArrayBuffer`/`SharedArrayBuffer`, BigInt `**`, `*`,
+  `<<`, `asUintN`/`asIntN`). A string whose length overflows an int ends a bound script; unbound code is unchanged.
+- Optional: a cap on the bytes allocated by the thread (`ThreadMXBean`, platform threads only), and interruption of
+  blocking calls at the deadline or on `cancel`.
+- Additive and ungated: nothing changes for a Context without a binding. `Context.releaseContext()` closes a forgotten
+  binding.
+- Not covered, by design: small objects, a hard heap quota (none exists in the JVM), blocking Java code that ignores
+  interrupts. Use a worker process for those.
+- Tests: `ResourceLimitsTest` (both backends, concurrency, virtual threads).
+
 ### Functions too large for the JIT (2026-10-25)
 
 HotSpot does not compile a method of more than 8,000 bytes of bytecode: it runs in the bytecode interpreter of
