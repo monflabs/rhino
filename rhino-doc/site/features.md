@@ -1,6 +1,7 @@
 # Features on top of stock Rhino
 
-Monflabs Rhino is a fork of [Mozilla Rhino](https://github.com/mozilla/rhino), based on stock Rhino 1.9.1. It brings
+Monflabs Rhino is a fork of [Mozilla Rhino](https://github.com/mozilla/rhino), taken from its development line after
+release 1.9.1 (October 2026); this page compares it with the 1.9.1 release. It brings
 the engine to **ECMAScript 2026** (ECMA-262, 17th edition) without breaking existing code. The fork is developed at
 [github.com/monflabs/rhino](https://github.com/monflabs/rhino) and released as `2026.0`.
 

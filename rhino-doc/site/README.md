@@ -1,7 +1,8 @@
 # Monflabs Rhino
 
 [Rhino](https://github.com/mozilla/rhino) is a JavaScript engine written in Java, maintained by
-Mozilla. Monflabs Rhino is a fork of it, based on Rhino 1.9.1. It keeps Rhino's architecture,
+Mozilla. Monflabs Rhino is a fork of it, taken from its development line after release 1.9.1
+(October 2026). It keeps Rhino's architecture,
 API and license (MPL 2.0) and brings the language up to **ECMAScript 2026**. Its conformance is
 measured against the official [test262](https://github.com/tc39/test262) suite. It does this
 **without breaking existing code**: every change that could alter what an existing script does is

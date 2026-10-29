@@ -35,7 +35,11 @@ stock.
   - `gbemu`: ×1.15–1.3.
   - `deltablue`, `raytrace` and `earley-boyer`: ×1.0–1.17.
 
-  These are all property-access-heavy object code. They are the next thing to look at.
+  These are all property-access-heavy object code. Run alone, `access-nbody` and `gbemu` are level with stock or
+  faster: their ratios come from running after the other files in one JVM. The others were already slower in the
+  upstream code the fork starts from, which is not 1.9.1 but upstream `master` of 2026-10-05, about 270 commits
+  later. A bisection of upstream finds one commit for `box2d`; the analysis, and what the fork changed since, is in
+  [Where the fork is slower than Rhino 1.9.1](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
 - **Three benchmarks run under ECMASCRIPT only.** `mandreel` fails its checksum, and `async_generator_stream` and
   `async_request_handler` use syntax beyond ES6. All three fail on stock *and* on Monflabs ES6, so this is a
   language-level limit and not a regression.
@@ -281,8 +285,11 @@ To redo this:
    per round for the three engines.
 2. **Memory, one JVM per benchmark.** Rerun the memory command, which now starts one JVM per (engine, benchmark).
    Expect about 5 hours. Then check that no figure is negative and that the totals in `memsum.py` add up.
-3. **The regressions.** Profile the fork's slowdowns: `access-nbody`, `box2d`, `richards`, `gbemu` and
-   `deltablue`.
+3. **The regressions.** Analysed in [performance.md](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
+   Since this run, slot keys are compared without `Objects.equals` (`deltablue` about 18% faster, `richards`
+   6–10%), and the double conversions are linked without a guard that calls the native `Class.isInstance`
+   (`box2d` 18.4 s → 9.1 s alone, faster than stock). Still open: the rest of the upstream regression on
+   `richards` and `raytrace`, and the deoptimizations of the inherited-property cache. Rerun the compiled timing.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 

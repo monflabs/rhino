@@ -39,6 +39,23 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Double conversions linked without a guard, and the 1.9.1 comparison explained (2026-10-29)
+
+The conversions of a double linked by the `DoubleLinker` (to boolean, number, numeric, int32, uint32) had a guard
+that called the native `Class.isInstance` wherever the JIT did not inline the call site, which on macOS/AArch64
+also switches the code memory between writable and executable twice per call. They now take any value and need
+no guard.
+
+- Octane `box2d` compiled, alone: 18.4 s → 9.1 s (Rhino 1.9.1: 12.8 s); `access-nbody`, `richards`, `deltablue`,
+  `raytrace` level. Perf gate: the second run passed (the first flagged the bimodal `sort.cmp.ecma`).
+  OPTIMIZATION.md "Double conversions linked without a guard".
+- Docs: the fork starts from upstream `master` of 2026-10-05 (`perf-baseline`), about 270 commits after 1.9.1,
+  not from 1.9.1 (site README, features, performance). performance.md "Where the fork is slower than Rhino
+  1.9.1": each regressed file alone on 1.9.1, the upstream base and the fork, and the upstream commit found by
+  bisection for `box2d` (c1ac6c149). `sort` and `v8-crypto` added to the bimodal metrics of the perf gate.
+- Not observable, not gated. test262: no change (DoubleConversionSitesTest: other values at sites linked for a
+  double).
+
 ### A package cycle with `lc.type` (2026-10-29)
 
 `ScriptRuntime.StackOverflowMessage` (robustness fixes, 2026-10-26) referred to `TypeInfo` itself, a cycle between

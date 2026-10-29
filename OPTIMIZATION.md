@@ -288,6 +288,26 @@ on, and what it gained. It also records the experiments that measured no gain, s
   that commit). Two full gate runs against the commit before: no regression, `v8-richards` level. The first run
   flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions.
 
+### Double conversions linked without a guard (2026-10-29)
+
+- **What.** The `DoubleLinker` links the conversions of a double (`TOBOOLEAN`, `TONUMBER`, `TONUMERIC`,
+  `TOINT32`, `TOUINT32`) without a guard. The linked method converts a `Double` directly and any other value with
+  the `ScriptRuntime` method the `DefaultLinker` would link, so the site is valid for every value and never
+  relinks.
+- **Why.** Their guard was `Guards.getInstanceOfGuard(Double.class)`, a method handle of the native
+  `Class.isInstance`. At a call site the JIT inlined, it becomes a type check; at one it did not (large script
+  functions past the inlining budget), every conversion was a JNI call, and on macOS/AArch64 each JNI call also
+  switches the thread's code memory between writable and executable twice (`pthread_jit_write_protect_np`). JFR
+  does not sample that time; the macOS `sample` tool on the main thread showed it at about 48% of Octane `box2d`
+  (35% before upstream c1ac6c149, which made more sites miss the inlining budget).
+- **Gain.** Compiled, `VERSION_ES6`, each file alone: `box2d` 18.4 s → 9.1 s (Rhino 1.9.1: 12.8 s). `richards`,
+  `deltablue`, `raytrace` level; `gbemu` 3–7% slower in 2 rounds, not confirmed. `access-nbody` unchanged: median
+  2,086 → 2,093 ms over 10 runs, 9 in 10 in its fast JIT state on both. Perf gate against the commit before: the first run flagged
+  `sort.cmp.ecma` (+23%), a bimodal metric (2 of 6 runs slow on the same jar after the other scripts, level alone
+  in 7 rounds); the second run passed, `v8-richards` level. All versions.
+- **Tried first.** The same guards as static `instanceof` methods in every linker (`box2d` 10.1 s) or in the
+  `DoubleLinker` only (11.4 s): `access-nbody` settled in its slow JIT state 5 and 3 times in 10, against 1.
+
 ### Per-iteration bindings that cost nothing without closures
 
 - **What.** A `let`/`const` loop head gets a fresh binding per iteration (a `COPY_SCOPE` of the loop's scope object),

@@ -17,7 +17,8 @@ Three reference points appear in the figures below:
 
 | Name | What it is |
 |---|---|
-| **Upstream base** | The upstream Rhino code the fork started from (the Rhino 1.9.1 line), tagged `perf-baseline` in the repository. The perf gate compares against it. |
+| **Upstream base** | The upstream Rhino code the fork started from, tagged `perf-baseline` in the repository: upstream `master` of 2026-10-05 (`a2fd8fe11`), about 270 commits after the 1.9.1 release. The perf gate compares against it. |
+| **Rhino 1.9.1** | The upstream release, from Maven Central. It is older than the upstream base, and faster on some object-heavy benchmarks (see [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)). |
 | **Previous commit** | Most figures on this page are before/after a single change, measured against the commit before it. |
 | **Rhino 1.8.0** | The upstream release used by the external JavascriptPerformance harness, and quoted in a few micro-benchmarks as a reference. |
 
@@ -79,8 +80,10 @@ PERF_ROUNDS=7 PERF_JAVA_OPTS='-Dperf.only=instanceof -Dperf.tolerance=0.05' buil
 ### Pitfalls the gate accounts for
 
 - **Bimodal metrics.** Some compiled-mode metrics (`properties`, `v8-richards`, `closures`, `wideobject`,
-  `typedarray`, `split`) settle in one of two JIT states from one JVM to the next. A single round can flag a
-  regression that is not there; these are confirmed with several rounds, alternating the two jars.
+  `typedarray`, `split`, `v8-crypto`, `sort`) settle in one of two JIT states from one JVM to the next. A single
+  round can flag a regression that is not there; these are confirmed with several rounds, alternating the two
+  jars. `sort.cmp.ecma` (about 7.3 or 9 ms after the other scripts, a third of the runs slow on the same jar) has
+  a two-state gap wider than its 15% band, so a 3-round gate fails on it by chance.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of
   what runs next. A change can look neutral on a benchmark alone and regress in the full run; several changes on
   this page were reshaped, or dropped, for that reason.
@@ -464,7 +467,8 @@ slowed `v8-richards` (see [Tried and dropped](#tried-and-dropped)). For `regexp`
 
 `deltablue`, `splay` and `regexp-dna` are slower alone too, under both language versions, so the cost is not in the
 ES2015+ semantics that `VERSION_ECMASCRIPT` adds but in engine changes that apply to every version. Part of it is
-upstream: Rhino 1.9.1, the base of the fork, is already 6% slower than 1.8.0 on `deltablue`.
+upstream: Rhino 1.9.1 is already 6% slower than 1.8.0 on `deltablue`, and the upstream base of the fork, later
+than 1.9.1, slower again (see [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)).
 
 JFR profiles, fork against 1.9.1 (sampled, so the percentages are approximate):
 
@@ -494,8 +498,64 @@ since earlier changes of this kind regressed `v8-richards`:
 
 - skipping the own-map check of the inherited-property cache when the receiver's map has not changed;
 - not calling `toObject` when `this` is already an object;
-- comparing keys inline in the slot map that dominates the profile;
+- comparing keys inline in the slot map that dominates the profile (done: see
+  [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191));
 - sizing the slot map of an object literal for its properties up front.
+
+## Where the fork is slower than Rhino 1.9.1
+
+In the JavascriptPerformance run of 2026-10-28/29 against Rhino 1.9.1 (compiled mode, 3 rounds, fork at
+`36f03fef4`), the fork is 1.45 times faster under `VERSION_ES6` and 1.6 times faster under `VERSION_ECMASCRIPT`, but
+slower on a few object-heavy files: `access-nbody` ×1.9–2.1, `box2d` ×1.3–1.5, `richards` ×1.24, `gbemu`
+×1.15–1.3, `deltablue` and `raytrace` up to ×1.17.
+
+The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate
+the two, each file was run alone (one JVM, best of 2 runs after 1, `VERSION_ES6`) on 1.9.1, on that upstream base
+and on the fork, in milliseconds:
+
+| File | Rhino 1.9.1 | Upstream base | Fork | Where the difference comes from |
+|---|---:|---:|---:|---|
+| `access-nbody` | 2,052 | 3,989 | 2,133 | the harness sequence: level alone |
+| `gbemu` | 8,283 | 9,011 | 8,031 | the harness sequence: faster alone |
+| `box2d` | 12,799 | 18,486 | 18,098 | upstream, one commit (below) |
+| `richards` | 28,172 | 34,846 | 35,659 | upstream |
+| `raytrace` | 29,667 | 32,934 | 32,850 | upstream |
+| `deltablue` | 26,238 | 30,630 | 33,140 | upstream, and about 8% in the fork |
+
+### The upstream commit
+
+Bisecting the upstream commits on `box2d` finds a single step: c1ac6c149, "Start using the new scopes hierarchy
+internally" (2025-12-07), 12.9 s → 18.2 s. It made scopes `ScopeObject`s, apart from `ScriptableObject`. Two
+effects were measured:
+
+- **The key comparison of the slot lookup.** `SlotMapOwner.get` now serves both kinds of object, and the
+  `Objects.equals` of `EmbeddedSlotMap.query` is no longer inlined (24 JFR samples out of line before, 257
+  after). Out of line, its type profile is shared by every caller in the JVM. The fork now compares keys by
+  identity, then with `equals` called from the slot itself: `deltablue` about 18% faster, `richards` 6–10%,
+  `box2d` level.
+- **Type guards that call into the JVM.** The guards of the linkers (`Guards.getInstanceOfGuard(Double.class)`
+  and the like) are method handles of the native `Class.isInstance`. Inlined, the JIT turns it into a type check;
+  at a call site it did not inline, every guard is a JNI call, and on macOS/AArch64 each one also switches the
+  thread's code memory between writable and executable twice (`pthread_jit_write_protect_np`). JFR does not see
+  this time; the macOS `sample` tool on the main thread does: about 35% of `box2d` before the commit, 48% after,
+  about 4.3 of the 5.5 s it lost. The commit made more call sites miss the JIT's inlining budget.
+
+  In `box2d` they are the conversions of the `DoubleLinker` (to boolean, number, numeric, int32 and uint32). Each
+  of them takes any value, so they are now linked without a guard: the method converts a double directly and
+  anything else through `ScriptRuntime`, and the site never relinks. `box2d` 18.4 s → 9.1 s (Rhino 1.9.1:
+  12.8 s); `access-nbody` unchanged (median 2,086 → 2,093 ms over 10 runs, 9 in 10 in its fast JIT state on both);
+  `richards`, `deltablue` and `raytrace` level. Guards written as static `instanceof` methods were tried first:
+  `box2d` 10.1–11.4 s, but `access-nbody` settled in its slow state 3 to 5 times in 10.
+
+  On Linux/x86, without the code-memory switch, the native calls cost much less; the gain there has not been
+  measured.
+
+### Also seen in `box2d`
+
+The [per-site cache of inherited properties](#per-site-cache-of-inherited-properties) deoptimizes 74 times in a
+`box2d` run, in 64 compiled methods: the validity check of the cache (`PropertyCache.inherited`) is compiled as
+never failing, and fails when a prototype changes. Each deoptimization discards the compiled script function the
+check was inlined in.
 
 ## Known gap and future work: the object model
 

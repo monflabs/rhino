@@ -7,7 +7,6 @@ import jdk.dynalink.linker.GuardedInvocation;
 import jdk.dynalink.linker.LinkRequest;
 import jdk.dynalink.linker.LinkerServices;
 import jdk.dynalink.linker.TypeBasedGuardingDynamicLinker;
-import jdk.dynalink.linker.support.Guards;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.ScriptRuntime;
 
@@ -83,28 +82,24 @@ class DoubleLinker implements TypeBasedGuardingDynamicLinker {
                 guard = lookup.findStatic(DoubleLinker.class, "testTwoInt", mType);
             } else if (op.isOperation(RhinoOperation.TOBOOLEAN)) {
                 mh = lookup.findStatic(DoubleLinker.class, "toBoolean", mType);
-                guard = Guards.getInstanceOfGuard(Double.class);
             } else if (op.isOperation(RhinoOperation.TONUMBER)) {
                 mh = lookup.findStatic(DoubleLinker.class, "toNumber", mType);
-                guard = Guards.getInstanceOfGuard(Double.class);
             } else if (op.isOperation(RhinoOperation.TONUMERIC)) {
                 mh = lookup.findStatic(DoubleLinker.class, "toNumeric", mType);
-                guard = Guards.getInstanceOfGuard(Double.class);
             } else if (op.isOperation(RhinoOperation.TOINT32)) {
                 mh = lookup.findStatic(DoubleLinker.class, "toInt32", mType);
-                guard = Guards.getInstanceOfGuard(Double.class);
             } else if (op.isOperation(RhinoOperation.TOUINT32)) {
                 mh = lookup.findStatic(DoubleLinker.class, "toUint32", mType);
-                guard = Guards.getInstanceOfGuard(Double.class);
             }
         }
 
         if (mh != null) {
-            assert guard != null;
             if (DefaultLinker.DEBUG) {
                 System.out.println(op + " double operation");
             }
-            return new GuardedInvocation(mh, guard);
+            // The conversions take any value, so they need no guard: a guard here is a call to the
+            // native Class.isInstance wherever the JIT does not inline the call site
+            return guard == null ? new GuardedInvocation(mh) : new GuardedInvocation(mh, guard);
         }
 
         return null;
@@ -192,16 +187,19 @@ class DoubleLinker implements TypeBasedGuardingDynamicLinker {
 
     @SuppressWarnings("unused")
     private static double toNumber(Object raw) {
-        return (Double) raw;
+        return raw instanceof Double ? (Double) raw : ScriptRuntime.toNumber(raw);
     }
 
     @SuppressWarnings("unused")
     private static Number toNumeric(Object raw) {
-        return (Double) raw;
+        return raw instanceof Double ? (Double) raw : ScriptRuntime.toNumeric(raw);
     }
 
     @SuppressWarnings("unused")
     private static boolean toBoolean(Object raw) {
+        if (!(raw instanceof Double)) {
+            return ScriptRuntime.toBoolean(raw);
+        }
         double v = (Double) raw;
         if (Double.isNaN(v)) {
             return false;
@@ -211,11 +209,15 @@ class DoubleLinker implements TypeBasedGuardingDynamicLinker {
 
     @SuppressWarnings("unused")
     private static int toInt32(Object raw) {
-        return ScriptRuntime.toInt32(((Double) raw).doubleValue());
+        return raw instanceof Double
+                ? ScriptRuntime.toInt32(((Double) raw).doubleValue())
+                : ScriptRuntime.toInt32(raw);
     }
 
     @SuppressWarnings("unused")
     private static long toUint32(Object raw) {
-        return ScriptRuntime.toUint32(((Double) raw).doubleValue());
+        return raw instanceof Double
+                ? ScriptRuntime.toUint32(((Double) raw).doubleValue())
+                : ScriptRuntime.toUint32(raw);
     }
 }
