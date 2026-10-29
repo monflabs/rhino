@@ -1,0 +1,608 @@
+
+=== round 1/3 :: RHINO_INTERPRETED ===
+-----------------------------------------------------
+octane-master :: box2d.js
+START RHINO_INTERPRETED
+Box2D: 1041
+----
+Score (version 9): 1041
+Box2D: 1070
+----
+Score (version 9): 1070
+    RHINO_INTERPRETED, 30466ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: crypto.js
+START RHINO_INTERPRETED
+Crypto: 279
+----
+Score (version 9): 279
+Crypto: 285
+----
+Score (version 9): 285
+    RHINO_INTERPRETED, 347315ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: deltablue.js
+START RHINO_INTERPRETED
+DeltaBlue: 271
+----
+Score (version 9): 271
+DeltaBlue: 272
+----
+Score (version 9): 272
+    RHINO_INTERPRETED, 211900ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: earley-boyer.js
+START RHINO_INTERPRETED
+EarleyBoyer: 913
+----
+Score (version 9): 913
+EarleyBoyer: 898
+----
+Score (version 9): 898
+    RHINO_INTERPRETED, 208912ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: gbemu-part1.js
+START RHINO_INTERPRETED
+Gameboy: 1791
+----
+Score (version 9): 1791
+Gameboy: 1863
+----
+Score (version 9): 1863
+    RHINO_INTERPRETED, 28276ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: mandreel.js
+START RHINO_INTERPRETED
+Mandreel: Alert called with argument: Check sum mismatch: expected ???, actual 6152943
+    RHINO_INTERPRETED *** FAILED ***, org.mozilla.javascript.JavaScriptException: Error: Mandreel: Alert called with argument: Check sum mismatch: expected ???, actual 6152943 (/benchmarks/octane-master/mandreel.js#15745)
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: navier-stokes.js
+START RHINO_INTERPRETED
+NavierStokes: 312
+----
+Score (version 9): 312
+NavierStokes: 315
+----
+Score (version 9): 315
+    RHINO_INTERPRETED, 169906ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: pdfjs.js
+START RHINO_INTERPRETED
+PdfJS: 1833
+----
+Score (version 9): 1833
+PdfJS: 1774
+----
+Score (version 9): 1774
+    RHINO_INTERPRETED, 14270ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: raytrace.js
+START RHINO_INTERPRETED
+RayTrace: 797
+----
+Score (version 9): 797
+RayTrace: 793
+----
+Score (version 9): 793
+    RHINO_INTERPRETED, 112114ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: regexp.js
+START RHINO_INTERPRETED
+RegExp: 448
+----
+Score (version 9): 448
+RegExp: 447
+----
+Score (version 9): 447
+    RHINO_INTERPRETED, 20784ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: richards.js
+START RHINO_INTERPRETED
+Richards: 253
+----
+Score (version 9): 253
+Richards: 256
+----
+Score (version 9): 256
+    RHINO_INTERPRETED, 225857ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: splay.js
+START RHINO_INTERPRETED
+Splay: 1682
+SplayLatency: 4246
+----
+Score (version 9): 2673
+Splay: 1636
+SplayLatency: 5076
+----
+Score (version 9): 2882
+    RHINO_INTERPRETED, 14103ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: 3d-cube.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 1903ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: 3d-morph.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 9872ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: 3d-raytrace.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 1152ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: access-binary-trees.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 6661ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: access-fannkuch.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 10628ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: access-nbody.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 17948ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: access-nsieve.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 4587ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: bitops-3bit-bits-in-byte.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 202900ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: bitops-bits-in-byte.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 46346ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: bitops-bitwise-and.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 5354ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: bitops-nsieve-bits.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 7014ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: controlflow-recursive.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 33435ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: crypto-aes.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 2513ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: crypto-md5.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 3397ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: crypto-sha1.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 3317ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: date-format-tofte.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 745ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: date-format-xparb.js
+START RHINO_INTERPRETED
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+INFO Created format0, function(){return this.getFullYear() + '-' + String.leftPad(this.getMonth() + 1, 2, '0') + '-' + String.leftPad(this.getDate(), 2, '0');}
+INFO Date flag format0, format0
+INFO Created format1, function(){return Date.dayNames[this.getDay()] + ',' + ' ' + Date.monthNames[this.getMonth()] + ' ' + String.leftPad(this.getDate(), 2, '0') + ',' + ' ' + this.getFullYear() + ' ' + ((this.getHours() %12) ? this.getHours() % 12 : 12) + ':' + String.leftPad(this.getMinutes(), 2, '0') + ':' + String.leftPad(this.getSeconds(), 2, '0') + ' ' + (this.getHours() < 12 ? 'AM' : 'PM');}
+INFO Date flag format1, format1
+    RHINO_INTERPRETED, 562ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: math-cordic.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 29834ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: math-partial-sums.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 3962ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: math-spectral-norm.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 35085ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: regexp-dna.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 286ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: string-base64.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 3322ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: string-fasta.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 589ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: string-tagcloud.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 822ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: string-unpack-code.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 332ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+sunspider-1.0.2 :: string-validate-input.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 1824ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: function-closure.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 2225ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: function-correct-args.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 624ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: function-excess-args.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 979ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: function-missing-args.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 497ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: interp_hot_closure.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 673ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: interp_hot_property.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 303ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: interp_recursive_fib.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 2914ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: loop-empty-resolve.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 127ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: loop-empty.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 771ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+ubench :: loop-sum.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 1123ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: async_generator_stream.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED *** FAILED ***, org.mozilla.javascript.EvaluatorException: missing ; before statement (/benchmarks/intrinsics/async_generator_stream.js#24)
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: async_promise_combinators.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 254ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: async_request_handler.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED *** FAILED ***, org.mozilla.javascript.EvaluatorException: identifier is a reserved word: class (/benchmarks/intrinsics/async_request_handler.js#13)
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: generator_iterable_collection.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 346ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: generator_nqueens.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 512ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: generator_pipeline.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 868ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: generator_tokenizer.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 376ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+intrinsics :: generator_tree_iterator.js
+START RHINO_INTERPRETED
+    RHINO_INTERPRETED, 530ms
+END RHINO_INTERPRETED
+-----------------------------------------------------
+
+=== round 1/3 :: RHINO_MONFLABS_ES6_INTERPRETED ===
+-----------------------------------------------------
+octane-master :: box2d.js
+START RHINO_MONFLABS_ES6_INTERPRETED
+Box2D: 1070
+----
+Score (version 9): 1070
+Box2D: 1159
+----
+Score (version 9): 1159
+    RHINO_MONFLABS_ES6_INTERPRETED, 28127ms
+END RHINO_MONFLABS_ES6_INTERPRETED
+-----------------------------------------------------
+-----------------------------------------------------
+octane-master :: crypto.js
+START RHINO_MONFLABS_ES6_INTERPRETED

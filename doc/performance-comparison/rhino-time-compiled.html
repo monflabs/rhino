@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>JavaScript engines performance report</title>
+<style>
+body{font-family:sans-serif;margin:2em;color:#111}
+table{border-collapse:collapse;margin-bottom:2em}
+th,td{border:1px solid #ccc;padding:4px 8px;font-size:13px;text-align:right}
+th:first-child,th:nth-child(2),td:first-child,td:nth-child(2){text-align:left}
+.legend{margin-bottom:1.5em;font-size:13px}
+.legend span{display:inline-block;margin-right:1.2em}
+.swatch{display:inline-block;width:10px;height:10px;margin-right:4px}
+.row{display:flex;align-items:center;margin-bottom:4px}
+.row-label{width:220px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h2{margin-top:2em}
+</style></head><body>
+<h1>JavaScript engines performance report</h1>
+<div class="legend"><span><span class="swatch" style="background:#10b981"></span>RHINO_COMPILED</span><span><span class="swatch" style="background:#dc2626"></span>RHINO_MONFLABS_COMPILED</span><span><span class="swatch" style="background:#0e7490"></span>RHINO_MONFLABS_ES6_COMPILED</span></div>
+<table>
+<tr><th>Suite</th><th>File</th><th>RHINO_COMPILED wall(ms)</th><th>RHINO_MONFLABS_COMPILED wall(ms)</th><th>RHINO_MONFLABS_ES6_COMPILED wall(ms)</th></tr>
+<tr><td>intrinsics</td><td>async_generator_stream.js</td><td>FAILED</td><td>197</td><td>FAILED</td></tr>
+<tr><td>intrinsics</td><td>async_promise_combinators.js</td><td>146</td><td>102</td><td>110</td></tr>
+<tr><td>intrinsics</td><td>async_request_handler.js</td><td>FAILED</td><td>231</td><td>FAILED</td></tr>
+<tr><td>intrinsics</td><td>generator_iterable_collection.js</td><td>230</td><td>149</td><td>164</td></tr>
+<tr><td>intrinsics</td><td>generator_nqueens.js</td><td>361</td><td>162</td><td>167</td></tr>
+<tr><td>intrinsics</td><td>generator_pipeline.js</td><td>594</td><td>368</td><td>512</td></tr>
+<tr><td>intrinsics</td><td>generator_tokenizer.js</td><td>181</td><td>116</td><td>125</td></tr>
+<tr><td>intrinsics</td><td>generator_tree_iterator.js</td><td>383</td><td>166</td><td>171</td></tr>
+<tr><td>octane-master</td><td>box2d.js</td><td>12838</td><td>16465</td><td>19021</td></tr>
+<tr><td>octane-master</td><td>crypto.js</td><td>32877</td><td>22248</td><td>23041</td></tr>
+<tr><td>octane-master</td><td>deltablue.js</td><td>28069</td><td>32898</td><td>32066</td></tr>
+<tr><td>octane-master</td><td>earley-boyer.js</td><td>60873</td><td>58827</td><td>69642</td></tr>
+<tr><td>octane-master</td><td>gbemu-part1.js</td><td>6389</td><td>7342</td><td>8158</td></tr>
+<tr><td>octane-master</td><td>mandreel.js</td><td>FAILED</td><td>38509</td><td>FAILED</td></tr>
+<tr><td>octane-master</td><td>navier-stokes.js</td><td>23445</td><td>5859</td><td>8504</td></tr>
+<tr><td>octane-master</td><td>pdfjs.js</td><td>12947</td><td>3581</td><td>3921</td></tr>
+<tr><td>octane-master</td><td>raytrace.js</td><td>35061</td><td>37748</td><td>40455</td></tr>
+<tr><td>octane-master</td><td>regexp.js</td><td>13589</td><td>16056</td><td>14637</td></tr>
+<tr><td>octane-master</td><td>richards.js</td><td>35625</td><td>44073</td><td>44309</td></tr>
+<tr><td>octane-master</td><td>splay.js</td><td>3990</td><td>4418</td><td>4237</td></tr>
+<tr><td>sunspider-1.0.2</td><td>3d-cube.js</td><td>364</td><td>191</td><td>232</td></tr>
+<tr><td>sunspider-1.0.2</td><td>3d-morph.js</td><td>1878</td><td>714</td><td>1232</td></tr>
+<tr><td>sunspider-1.0.2</td><td>3d-raytrace.js</td><td>281</td><td>207</td><td>209</td></tr>
+<tr><td>sunspider-1.0.2</td><td>access-binary-trees.js</td><td>1683</td><td>1730</td><td>1999</td></tr>
+<tr><td>sunspider-1.0.2</td><td>access-fannkuch.js</td><td>1998</td><td>350</td><td>380</td></tr>
+<tr><td>sunspider-1.0.2</td><td>access-nbody.js</td><td>2953</td><td>5727</td><td>6269</td></tr>
+<tr><td>sunspider-1.0.2</td><td>access-nsieve.js</td><td>304</td><td>178</td><td>196</td></tr>
+<tr><td>sunspider-1.0.2</td><td>bitops-3bit-bits-in-byte.js</td><td>22575</td><td>5861</td><td>5802</td></tr>
+<tr><td>sunspider-1.0.2</td><td>bitops-bits-in-byte.js</td><td>2959</td><td>2513</td><td>1281</td></tr>
+<tr><td>sunspider-1.0.2</td><td>bitops-bitwise-and.js</td><td>659</td><td>392</td><td>402</td></tr>
+<tr><td>sunspider-1.0.2</td><td>bitops-nsieve-bits.js</td><td>1260</td><td>296</td><td>317</td></tr>
+<tr><td>sunspider-1.0.2</td><td>controlflow-recursive.js</td><td>3897</td><td>969</td><td>1896</td></tr>
+<tr><td>sunspider-1.0.2</td><td>crypto-aes.js</td><td>636</td><td>312</td><td>424</td></tr>
+<tr><td>sunspider-1.0.2</td><td>crypto-md5.js</td><td>943</td><td>721</td><td>693</td></tr>
+<tr><td>sunspider-1.0.2</td><td>crypto-sha1.js</td><td>493</td><td>317</td><td>353</td></tr>
+<tr><td>sunspider-1.0.2</td><td>date-format-tofte.js</td><td>325</td><td>221</td><td>257</td></tr>
+<tr><td>sunspider-1.0.2</td><td>date-format-xparb.js</td><td>400</td><td>373</td><td>367</td></tr>
+<tr><td>sunspider-1.0.2</td><td>math-cordic.js</td><td>2767</td><td>1125</td><td>1591</td></tr>
+<tr><td>sunspider-1.0.2</td><td>math-partial-sums.js</td><td>2484</td><td>1849</td><td>1456</td></tr>
+<tr><td>sunspider-1.0.2</td><td>math-spectral-norm.js</td><td>2945</td><td>460</td><td>1208</td></tr>
+<tr><td>sunspider-1.0.2</td><td>regexp-dna.js</td><td>288</td><td>294</td><td>301</td></tr>
+<tr><td>sunspider-1.0.2</td><td>string-base64.js</td><td>993</td><td>747</td><td>953</td></tr>
+<tr><td>sunspider-1.0.2</td><td>string-fasta.js</td><td>155</td><td>132</td><td>137</td></tr>
+<tr><td>sunspider-1.0.2</td><td>string-tagcloud.js</td><td>459</td><td>403</td><td>475</td></tr>
+<tr><td>sunspider-1.0.2</td><td>string-unpack-code.js</td><td>217</td><td>247</td><td>243</td></tr>
+<tr><td>sunspider-1.0.2</td><td>string-validate-input.js</td><td>576</td><td>504</td><td>565</td></tr>
+<tr><td>ubench</td><td>function-closure.js</td><td>1181</td><td>685</td><td>672</td></tr>
+<tr><td>ubench</td><td>function-correct-args.js</td><td>123</td><td>72</td><td>68</td></tr>
+<tr><td>ubench</td><td>function-excess-args.js</td><td>122</td><td>73</td><td>69</td></tr>
+<tr><td>ubench</td><td>function-missing-args.js</td><td>136</td><td>88</td><td>88</td></tr>
+<tr><td>ubench</td><td>interp_hot_closure.js</td><td>97</td><td>85</td><td>78</td></tr>
+<tr><td>ubench</td><td>interp_hot_property.js</td><td>87</td><td>68</td><td>72</td></tr>
+<tr><td>ubench</td><td>interp_recursive_fib.js</td><td>130</td><td>79</td><td>80</td></tr>
+<tr><td>ubench</td><td>loop-empty-resolve.js</td><td>20</td><td>11</td><td>11</td></tr>
+<tr><td>ubench</td><td>loop-empty.js</td><td>174</td><td>93</td><td>93</td></tr>
+<tr><td>ubench</td><td>loop-sum.js</td><td>337</td><td>150</td><td>154</td></tr>
+</table>
+<h2>intrinsics</h2>
+<div class="row"><div class="row-label" title="async_generator_stream.js">async_generator_stream.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: FAILED</title><text x="78.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 197ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">197</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: FAILED</title><text x="380.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="async_promise_combinators.js">async_promise_combinators.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 146ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">146</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 102ms</title><rect x="157" y="41" width="145" height="63" fill="#dc2626"/><text x="229.5" y="38" font-size="9" text-anchor="middle">102</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 110ms</title><rect x="308" y="36" width="145" height="68" fill="#0e7490"/><text x="380.5" y="33" font-size="9" text-anchor="middle">110</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="async_request_handler.js">async_request_handler.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: FAILED</title><text x="78.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 231ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">231</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: FAILED</title><text x="380.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="generator_iterable_collection.js">generator_iterable_collection.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 230ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">230</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 149ms</title><rect x="157" y="46" width="145" height="58" fill="#dc2626"/><text x="229.5" y="43" font-size="9" text-anchor="middle">149</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 164ms</title><rect x="308" y="40" width="145" height="64" fill="#0e7490"/><text x="380.5" y="37" font-size="9" text-anchor="middle">164</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="generator_nqueens.js">generator_nqueens.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 361ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">361</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 162ms</title><rect x="157" y="64" width="145" height="40" fill="#dc2626"/><text x="229.5" y="61" font-size="9" text-anchor="middle">162</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 167ms</title><rect x="308" y="62" width="145" height="42" fill="#0e7490"/><text x="380.5" y="59" font-size="9" text-anchor="middle">167</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="generator_pipeline.js">generator_pipeline.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 594ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">594</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 368ms</title><rect x="157" y="48" width="145" height="56" fill="#dc2626"/><text x="229.5" y="45" font-size="9" text-anchor="middle">368</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 512ms</title><rect x="308" y="26" width="145" height="78" fill="#0e7490"/><text x="380.5" y="23" font-size="9" text-anchor="middle">512</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="generator_tokenizer.js">generator_tokenizer.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 181ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">181</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 116ms</title><rect x="157" y="46" width="145" height="58" fill="#dc2626"/><text x="229.5" y="43" font-size="9" text-anchor="middle">116</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 125ms</title><rect x="308" y="42" width="145" height="62" fill="#0e7490"/><text x="380.5" y="39" font-size="9" text-anchor="middle">125</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="generator_tree_iterator.js">generator_tree_iterator.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 383ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">383</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 166ms</title><rect x="157" y="65" width="145" height="39" fill="#dc2626"/><text x="229.5" y="62" font-size="9" text-anchor="middle">166</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 171ms</title><rect x="308" y="64" width="145" height="40" fill="#0e7490"/><text x="380.5" y="61" font-size="9" text-anchor="middle">171</text></g>
+</svg>
+</div>
+<h2>octane-master</h2>
+<div class="row"><div class="row-label" title="box2d.js">box2d.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 12838ms</title><rect x="6" y="43" width="145" height="61" fill="#10b981"/><text x="78.5" y="40" font-size="9" text-anchor="middle">12838</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 16465ms</title><rect x="157" y="26" width="145" height="78" fill="#dc2626"/><text x="229.5" y="23" font-size="9" text-anchor="middle">16465</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 19021ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">19021</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="crypto.js">crypto.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 32877ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">32877</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 22248ms</title><rect x="157" y="43" width="145" height="61" fill="#dc2626"/><text x="229.5" y="40" font-size="9" text-anchor="middle">22248</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 23041ms</title><rect x="308" y="41" width="145" height="63" fill="#0e7490"/><text x="380.5" y="38" font-size="9" text-anchor="middle">23041</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="deltablue.js">deltablue.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 28069ms</title><rect x="6" y="27" width="145" height="77" fill="#10b981"/><text x="78.5" y="24" font-size="9" text-anchor="middle">28069</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 32898ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">32898</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 32066ms</title><rect x="308" y="16" width="145" height="88" fill="#0e7490"/><text x="380.5" y="13" font-size="9" text-anchor="middle">32066</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="earley-boyer.js">earley-boyer.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 60873ms</title><rect x="6" y="25" width="145" height="79" fill="#10b981"/><text x="78.5" y="22" font-size="9" text-anchor="middle">60873</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 58827ms</title><rect x="157" y="28" width="145" height="76" fill="#dc2626"/><text x="229.5" y="25" font-size="9" text-anchor="middle">58827</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 69642ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">69642</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="gbemu-part1.js">gbemu-part1.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 6389ms</title><rect x="6" y="34" width="145" height="70" fill="#10b981"/><text x="78.5" y="31" font-size="9" text-anchor="middle">6389</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 7342ms</title><rect x="157" y="23" width="145" height="81" fill="#dc2626"/><text x="229.5" y="20" font-size="9" text-anchor="middle">7342</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 8158ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">8158</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="mandreel.js">mandreel.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: FAILED</title><text x="78.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 38509ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">38509</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: FAILED</title><text x="380.5" y="100" font-size="9" text-anchor="middle" fill="#999">FAILED</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="navier-stokes.js">navier-stokes.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 23445ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">23445</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 5859ms</title><rect x="157" y="82" width="145" height="22" fill="#dc2626"/><text x="229.5" y="79" font-size="9" text-anchor="middle">5859</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 8504ms</title><rect x="308" y="71" width="145" height="33" fill="#0e7490"/><text x="380.5" y="68" font-size="9" text-anchor="middle">8504</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="pdfjs.js">pdfjs.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 12947ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">12947</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 3581ms</title><rect x="157" y="79" width="145" height="25" fill="#dc2626"/><text x="229.5" y="76" font-size="9" text-anchor="middle">3581</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 3921ms</title><rect x="308" y="77" width="145" height="27" fill="#0e7490"/><text x="380.5" y="74" font-size="9" text-anchor="middle">3921</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="raytrace.js">raytrace.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 35061ms</title><rect x="6" y="26" width="145" height="78" fill="#10b981"/><text x="78.5" y="23" font-size="9" text-anchor="middle">35061</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 37748ms</title><rect x="157" y="20" width="145" height="84" fill="#dc2626"/><text x="229.5" y="17" font-size="9" text-anchor="middle">37748</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 40455ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">40455</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="regexp.js">regexp.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 13589ms</title><rect x="6" y="28" width="145" height="76" fill="#10b981"/><text x="78.5" y="25" font-size="9" text-anchor="middle">13589</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 16056ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">16056</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 14637ms</title><rect x="308" y="22" width="145" height="82" fill="#0e7490"/><text x="380.5" y="19" font-size="9" text-anchor="middle">14637</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="richards.js">richards.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 35625ms</title><rect x="6" y="32" width="145" height="72" fill="#10b981"/><text x="78.5" y="29" font-size="9" text-anchor="middle">35625</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 44073ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">44073</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 44309ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">44309</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="splay.js">splay.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 3990ms</title><rect x="6" y="23" width="145" height="81" fill="#10b981"/><text x="78.5" y="20" font-size="9" text-anchor="middle">3990</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 4418ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">4418</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 4237ms</title><rect x="308" y="18" width="145" height="86" fill="#0e7490"/><text x="380.5" y="15" font-size="9" text-anchor="middle">4237</text></g>
+</svg>
+</div>
+<h2>sunspider-1.0.2</h2>
+<div class="row"><div class="row-label" title="3d-cube.js">3d-cube.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 364ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">364</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 191ms</title><rect x="157" y="57" width="145" height="47" fill="#dc2626"/><text x="229.5" y="54" font-size="9" text-anchor="middle">191</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 232ms</title><rect x="308" y="47" width="145" height="57" fill="#0e7490"/><text x="380.5" y="44" font-size="9" text-anchor="middle">232</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="3d-morph.js">3d-morph.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 1878ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">1878</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 714ms</title><rect x="157" y="70" width="145" height="34" fill="#dc2626"/><text x="229.5" y="67" font-size="9" text-anchor="middle">714</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1232ms</title><rect x="308" y="45" width="145" height="59" fill="#0e7490"/><text x="380.5" y="42" font-size="9" text-anchor="middle">1232</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="3d-raytrace.js">3d-raytrace.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 281ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">281</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 207ms</title><rect x="157" y="38" width="145" height="66" fill="#dc2626"/><text x="229.5" y="35" font-size="9" text-anchor="middle">207</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 209ms</title><rect x="308" y="37" width="145" height="67" fill="#0e7490"/><text x="380.5" y="34" font-size="9" text-anchor="middle">209</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="access-binary-trees.js">access-binary-trees.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 1683ms</title><rect x="6" y="28" width="145" height="76" fill="#10b981"/><text x="78.5" y="25" font-size="9" text-anchor="middle">1683</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 1730ms</title><rect x="157" y="26" width="145" height="78" fill="#dc2626"/><text x="229.5" y="23" font-size="9" text-anchor="middle">1730</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1999ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">1999</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="access-fannkuch.js">access-fannkuch.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 1998ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">1998</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 350ms</title><rect x="157" y="88" width="145" height="16" fill="#dc2626"/><text x="229.5" y="85" font-size="9" text-anchor="middle">350</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 380ms</title><rect x="308" y="87" width="145" height="17" fill="#0e7490"/><text x="380.5" y="84" font-size="9" text-anchor="middle">380</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="access-nbody.js">access-nbody.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 2953ms</title><rect x="6" y="62" width="145" height="42" fill="#10b981"/><text x="78.5" y="59" font-size="9" text-anchor="middle">2953</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 5727ms</title><rect x="157" y="22" width="145" height="82" fill="#dc2626"/><text x="229.5" y="19" font-size="9" text-anchor="middle">5727</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 6269ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">6269</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="access-nsieve.js">access-nsieve.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 304ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">304</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 178ms</title><rect x="157" y="51" width="145" height="53" fill="#dc2626"/><text x="229.5" y="48" font-size="9" text-anchor="middle">178</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 196ms</title><rect x="308" y="46" width="145" height="58" fill="#0e7490"/><text x="380.5" y="43" font-size="9" text-anchor="middle">196</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="bitops-3bit-bits-in-byte.js">bitops-3bit-bits-in-byte.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 22575ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">22575</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 5861ms</title><rect x="157" y="81" width="145" height="23" fill="#dc2626"/><text x="229.5" y="78" font-size="9" text-anchor="middle">5861</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 5802ms</title><rect x="308" y="81" width="145" height="23" fill="#0e7490"/><text x="380.5" y="78" font-size="9" text-anchor="middle">5802</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="bitops-bits-in-byte.js">bitops-bits-in-byte.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 2959ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">2959</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 2513ms</title><rect x="157" y="28" width="145" height="76" fill="#dc2626"/><text x="229.5" y="25" font-size="9" text-anchor="middle">2513</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1281ms</title><rect x="308" y="65" width="145" height="39" fill="#0e7490"/><text x="380.5" y="62" font-size="9" text-anchor="middle">1281</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="bitops-bitwise-and.js">bitops-bitwise-and.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 659ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">659</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 392ms</title><rect x="157" y="50" width="145" height="54" fill="#dc2626"/><text x="229.5" y="47" font-size="9" text-anchor="middle">392</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 402ms</title><rect x="308" y="49" width="145" height="55" fill="#0e7490"/><text x="380.5" y="46" font-size="9" text-anchor="middle">402</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="bitops-nsieve-bits.js">bitops-nsieve-bits.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 1260ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">1260</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 296ms</title><rect x="157" y="83" width="145" height="21" fill="#dc2626"/><text x="229.5" y="80" font-size="9" text-anchor="middle">296</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 317ms</title><rect x="308" y="81" width="145" height="23" fill="#0e7490"/><text x="380.5" y="78" font-size="9" text-anchor="middle">317</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="controlflow-recursive.js">controlflow-recursive.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 3897ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">3897</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 969ms</title><rect x="157" y="82" width="145" height="22" fill="#dc2626"/><text x="229.5" y="79" font-size="9" text-anchor="middle">969</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1896ms</title><rect x="308" y="60" width="145" height="44" fill="#0e7490"/><text x="380.5" y="57" font-size="9" text-anchor="middle">1896</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="crypto-aes.js">crypto-aes.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 636ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">636</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 312ms</title><rect x="157" y="60" width="145" height="44" fill="#dc2626"/><text x="229.5" y="57" font-size="9" text-anchor="middle">312</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 424ms</title><rect x="308" y="44" width="145" height="60" fill="#0e7490"/><text x="380.5" y="41" font-size="9" text-anchor="middle">424</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="crypto-md5.js">crypto-md5.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 943ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">943</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 721ms</title><rect x="157" y="35" width="145" height="69" fill="#dc2626"/><text x="229.5" y="32" font-size="9" text-anchor="middle">721</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 693ms</title><rect x="308" y="38" width="145" height="66" fill="#0e7490"/><text x="380.5" y="35" font-size="9" text-anchor="middle">693</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="crypto-sha1.js">crypto-sha1.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 493ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">493</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 317ms</title><rect x="157" y="46" width="145" height="58" fill="#dc2626"/><text x="229.5" y="43" font-size="9" text-anchor="middle">317</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 353ms</title><rect x="308" y="40" width="145" height="64" fill="#0e7490"/><text x="380.5" y="37" font-size="9" text-anchor="middle">353</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="date-format-tofte.js">date-format-tofte.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 325ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">325</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 221ms</title><rect x="157" y="43" width="145" height="61" fill="#dc2626"/><text x="229.5" y="40" font-size="9" text-anchor="middle">221</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 257ms</title><rect x="308" y="33" width="145" height="71" fill="#0e7490"/><text x="380.5" y="30" font-size="9" text-anchor="middle">257</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="date-format-xparb.js">date-format-xparb.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 400ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">400</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 373ms</title><rect x="157" y="20" width="145" height="84" fill="#dc2626"/><text x="229.5" y="17" font-size="9" text-anchor="middle">373</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 367ms</title><rect x="308" y="21" width="145" height="83" fill="#0e7490"/><text x="380.5" y="18" font-size="9" text-anchor="middle">367</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="math-cordic.js">math-cordic.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 2767ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">2767</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 1125ms</title><rect x="157" y="67" width="145" height="37" fill="#dc2626"/><text x="229.5" y="64" font-size="9" text-anchor="middle">1125</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1591ms</title><rect x="308" y="52" width="145" height="52" fill="#0e7490"/><text x="380.5" y="49" font-size="9" text-anchor="middle">1591</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="math-partial-sums.js">math-partial-sums.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 2484ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">2484</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 1849ms</title><rect x="157" y="37" width="145" height="67" fill="#dc2626"/><text x="229.5" y="34" font-size="9" text-anchor="middle">1849</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1456ms</title><rect x="308" y="51" width="145" height="53" fill="#0e7490"/><text x="380.5" y="48" font-size="9" text-anchor="middle">1456</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="math-spectral-norm.js">math-spectral-norm.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 2945ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">2945</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 460ms</title><rect x="157" y="90" width="145" height="14" fill="#dc2626"/><text x="229.5" y="87" font-size="9" text-anchor="middle">460</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 1208ms</title><rect x="308" y="67" width="145" height="37" fill="#0e7490"/><text x="380.5" y="64" font-size="9" text-anchor="middle">1208</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="regexp-dna.js">regexp-dna.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 288ms</title><rect x="6" y="18" width="145" height="86" fill="#10b981"/><text x="78.5" y="15" font-size="9" text-anchor="middle">288</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 294ms</title><rect x="157" y="16" width="145" height="88" fill="#dc2626"/><text x="229.5" y="13" font-size="9" text-anchor="middle">294</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 301ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">301</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="string-base64.js">string-base64.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 993ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">993</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 747ms</title><rect x="157" y="36" width="145" height="68" fill="#dc2626"/><text x="229.5" y="33" font-size="9" text-anchor="middle">747</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 953ms</title><rect x="308" y="18" width="145" height="86" fill="#0e7490"/><text x="380.5" y="15" font-size="9" text-anchor="middle">953</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="string-fasta.js">string-fasta.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 155ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">155</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 132ms</title><rect x="157" y="27" width="145" height="77" fill="#dc2626"/><text x="229.5" y="24" font-size="9" text-anchor="middle">132</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 137ms</title><rect x="308" y="24" width="145" height="80" fill="#0e7490"/><text x="380.5" y="21" font-size="9" text-anchor="middle">137</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="string-tagcloud.js">string-tagcloud.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 459ms</title><rect x="6" y="17" width="145" height="87" fill="#10b981"/><text x="78.5" y="14" font-size="9" text-anchor="middle">459</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 403ms</title><rect x="157" y="28" width="145" height="76" fill="#dc2626"/><text x="229.5" y="25" font-size="9" text-anchor="middle">403</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 475ms</title><rect x="308" y="14" width="145" height="90" fill="#0e7490"/><text x="380.5" y="11" font-size="9" text-anchor="middle">475</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="string-unpack-code.js">string-unpack-code.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 217ms</title><rect x="6" y="25" width="145" height="79" fill="#10b981"/><text x="78.5" y="22" font-size="9" text-anchor="middle">217</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 247ms</title><rect x="157" y="14" width="145" height="90" fill="#dc2626"/><text x="229.5" y="11" font-size="9" text-anchor="middle">247</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 243ms</title><rect x="308" y="15" width="145" height="89" fill="#0e7490"/><text x="380.5" y="12" font-size="9" text-anchor="middle">243</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="string-validate-input.js">string-validate-input.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 576ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">576</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 504ms</title><rect x="157" y="25" width="145" height="79" fill="#dc2626"/><text x="229.5" y="22" font-size="9" text-anchor="middle">504</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 565ms</title><rect x="308" y="16" width="145" height="88" fill="#0e7490"/><text x="380.5" y="13" font-size="9" text-anchor="middle">565</text></g>
+</svg>
+</div>
+<h2>ubench</h2>
+<div class="row"><div class="row-label" title="function-closure.js">function-closure.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 1181ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">1181</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 685ms</title><rect x="157" y="52" width="145" height="52" fill="#dc2626"/><text x="229.5" y="49" font-size="9" text-anchor="middle">685</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 672ms</title><rect x="308" y="53" width="145" height="51" fill="#0e7490"/><text x="380.5" y="50" font-size="9" text-anchor="middle">672</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="function-correct-args.js">function-correct-args.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 123ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">123</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 72ms</title><rect x="157" y="51" width="145" height="53" fill="#dc2626"/><text x="229.5" y="48" font-size="9" text-anchor="middle">72</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 68ms</title><rect x="308" y="54" width="145" height="50" fill="#0e7490"/><text x="380.5" y="51" font-size="9" text-anchor="middle">68</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="function-excess-args.js">function-excess-args.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 122ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">122</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 73ms</title><rect x="157" y="50" width="145" height="54" fill="#dc2626"/><text x="229.5" y="47" font-size="9" text-anchor="middle">73</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 69ms</title><rect x="308" y="53" width="145" height="51" fill="#0e7490"/><text x="380.5" y="50" font-size="9" text-anchor="middle">69</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="function-missing-args.js">function-missing-args.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 136ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">136</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 88ms</title><rect x="157" y="46" width="145" height="58" fill="#dc2626"/><text x="229.5" y="43" font-size="9" text-anchor="middle">88</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 88ms</title><rect x="308" y="46" width="145" height="58" fill="#0e7490"/><text x="380.5" y="43" font-size="9" text-anchor="middle">88</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="interp_hot_closure.js">interp_hot_closure.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 97ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">97</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 85ms</title><rect x="157" y="25" width="145" height="79" fill="#dc2626"/><text x="229.5" y="22" font-size="9" text-anchor="middle">85</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 78ms</title><rect x="308" y="32" width="145" height="72" fill="#0e7490"/><text x="380.5" y="29" font-size="9" text-anchor="middle">78</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="interp_hot_property.js">interp_hot_property.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 87ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">87</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 68ms</title><rect x="157" y="34" width="145" height="70" fill="#dc2626"/><text x="229.5" y="31" font-size="9" text-anchor="middle">68</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 72ms</title><rect x="308" y="30" width="145" height="74" fill="#0e7490"/><text x="380.5" y="27" font-size="9" text-anchor="middle">72</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="interp_recursive_fib.js">interp_recursive_fib.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 130ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">130</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 79ms</title><rect x="157" y="49" width="145" height="55" fill="#dc2626"/><text x="229.5" y="46" font-size="9" text-anchor="middle">79</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 80ms</title><rect x="308" y="49" width="145" height="55" fill="#0e7490"/><text x="380.5" y="46" font-size="9" text-anchor="middle">80</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="loop-empty-resolve.js">loop-empty-resolve.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 20ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">20</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 11ms</title><rect x="157" y="54" width="145" height="50" fill="#dc2626"/><text x="229.5" y="51" font-size="9" text-anchor="middle">11</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 11ms</title><rect x="308" y="54" width="145" height="50" fill="#0e7490"/><text x="380.5" y="51" font-size="9" text-anchor="middle">11</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="loop-empty.js">loop-empty.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 174ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">174</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 93ms</title><rect x="157" y="56" width="145" height="48" fill="#dc2626"/><text x="229.5" y="53" font-size="9" text-anchor="middle">93</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 93ms</title><rect x="308" y="56" width="145" height="48" fill="#0e7490"/><text x="380.5" y="53" font-size="9" text-anchor="middle">93</text></g>
+</svg>
+</div>
+<div class="row"><div class="row-label" title="loop-sum.js">loop-sum.js</div><svg width="460" height="104">
+<g><title>RHINO_COMPILED: 337ms</title><rect x="6" y="14" width="145" height="90" fill="#10b981"/><text x="78.5" y="11" font-size="9" text-anchor="middle">337</text></g>
+<g><title>RHINO_MONFLABS_COMPILED: 150ms</title><rect x="157" y="64" width="145" height="40" fill="#dc2626"/><text x="229.5" y="61" font-size="9" text-anchor="middle">150</text></g>
+<g><title>RHINO_MONFLABS_ES6_COMPILED: 154ms</title><rect x="308" y="63" width="145" height="41" fill="#0e7490"/><text x="380.5" y="60" font-size="9" text-anchor="middle">154</text></g>
+</svg>
+</div>
+</body></html>
