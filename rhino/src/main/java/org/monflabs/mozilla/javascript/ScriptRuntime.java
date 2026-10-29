@@ -7932,11 +7932,16 @@ public class ScriptRuntime {
         static final String TEXT = getMessageById("msg.call.stack.exceeded");
 
         // and what catching the error may use, for the same reason
-        static final Object PRELOADED = TypeInfo.NONE;
+        static final Object PRELOADED = preloadedTypeInfo();
 
         private StackOverflowMessage() {}
 
         static void load() {}
+    }
+
+    // In ScriptRuntime itself, whose dependency on lc.type is an accepted cycle (build.gradle)
+    private static Object preloadedTypeInfo() {
+        return TypeInfo.NONE;
     }
 
     /**

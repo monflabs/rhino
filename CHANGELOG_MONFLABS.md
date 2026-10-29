@@ -39,6 +39,13 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### A package cycle with `lc.type` (2026-10-29)
+
+`ScriptRuntime.StackOverflowMessage` (robustness fixes, 2026-10-26) referred to `TypeInfo` itself, a cycle between
+`org.monflabs.mozilla.javascript` and `lc.type` that `./gradlew check` (`:rhino:decycleMain`) rejected: the accepted
+cycle in `rhino/build.gradle` covers `ScriptRuntime`, not its nested classes. The preload of `TypeInfo` now goes
+through a method of `ScriptRuntime`, at the same moment. No behavior change.
+
 ### Slot keys compared without `Objects.equals` (2026-10-29)
 
 The slot lookup compared keys with `java.util.Objects.equals`, which stopped being inlined after upstream commit
