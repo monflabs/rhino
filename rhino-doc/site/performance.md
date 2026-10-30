@@ -426,6 +426,7 @@ Experiments that measured no gain, or a regression elsewhere, and were not kept:
 | `Number` fast path in `toNumeric` | level | the JIT already folds it |
 | BMP fast paths in the regexp matcher and its character classes | level to +2% | below noise; samples moved to other frames |
 | Hash mixing of integral `Double` keys in `Map`/`Set` | slower | loses the locality of sequential keys |
+| Compiled functions called through a generated subclass, as in Rhino 1.9.1, rather than an interface | `richards` level, `deltablue` −2.4%, `box2d` +4.6% | the dispatch was not the cost |
 | Hidden classes (shared shapes) | not attempted | a rewrite of the object model, see below |
 
 ## Where the fork is slower than Rhino 1.8.0

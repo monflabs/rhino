@@ -864,6 +864,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 | A per-site cache of own slots by map | not worth it | maps belong to objects, not to shared shapes: a site only hits for a single object |
 | Hash mixing of integral `Double` keys in `Map`/`Set` | slower | loses the locality of sequential keys |
 | `putProperty` with one lookup (M16, 16.5): the receiver's map queried once, an own writable data property written directly | richards +58–74% in the gate, three versions | an exact `NativeObject` check with or without the prototype walk for new properties, with or without a method split to keep `putProperty` inlinable; own writes 48 ms → 20 ms and constructors 155 ms → 86 ms alone, but `v8-richards` (and once `sort`) regressed in the full gate run every time |
+| Compiled functions called through a generated subclass of `OptJSFunctionCode` (as in Rhino 1.9.1) rather than the `JSCodeExec` lambda, so that the call from `MHJSFunctionCode.execute` is a virtual call instead of an interface call (2026-10-29) | `richards` +0.2%, `deltablue` −2.4%, `box2d` +4.6% (overlapping runs), others level; 3 rounds alone | JFR's 11% of `richards` in `MHJSFunctionCode.execute` includes the compiled bodies inlined into it, not only the dispatch; the remaining 2.5% to Rhino 1.9.1 has no single cause found |
 | Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
 
 ## Second pass (M16)

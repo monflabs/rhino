@@ -293,8 +293,9 @@ To redo this:
    of the inherited-property cache stop after warm-up, and the property names `raytrace` seemed to hash again
    were a JFR attribution (no `String` is allocated while it runs). Still open: `richards`, about 2.5% behind
    stock (median of 6 alternating runs each: 29.19 s, against 28.48 s). JFR puts 11% of it in
-   `MHJSFunctionCode.execute`, whose call to the per-function `JSCodeExec` is one interface call site for every
-   function; 1.9.1 dispatched to a generated subclass of `OptJSFunctionCode`. Rerun the compiled timing.
+   `MHJSFunctionCode.execute`, but calling functions through a generated subclass, as 1.9.1 does, left it
+   unchanged (see the "Tried and dropped" table of performance.md); no single cause found. Rerun the compiled
+   timing.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 
