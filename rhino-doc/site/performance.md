@@ -510,13 +510,14 @@ since earlier changes of this kind regressed `v8-richards`:
 
 In the JavascriptPerformance run of 2026-10-28/29 against Rhino 1.9.1 (compiled mode, 3 rounds, fork at
 `36f03fef4`), the fork is 1.45 times faster under `VERSION_ES6` and 1.6 times faster under `VERSION_ECMASCRIPT`, but
-slower on a few object-heavy files: `access-nbody` ×1.9–2.1, `box2d` ×1.3–1.5, `richards` ×1.24, `gbemu`
-×1.15–1.3, `deltablue` and `raytrace` up to ×1.17.
+slower on a few object-heavy files. In speed multipliers (1.9.1's time divided by the fork's, below ×1 when the
+fork is slower): `access-nbody` ×0.47–0.52, `box2d` ×0.68–0.78, `richards` ×0.81, `gbemu` ×0.78–0.87,
+`deltablue` and `raytrace` down to ×0.85.
 
-The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives ×0.71 under `VERSION_ES6` and ×0.66
-under `VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (×0.76 / ×0.71) and `access-nbody` is at ×1.2–1.4.
-`deltablue`, `richards`, `raytrace` and `gbemu` read ×1.2–1.4 in that run, but ×0.85–1.17 when each runs alone
-in its engine's JVM (×0.95–1.06 under `VERSION_ES6`). The harness runs every file of a round in one JVM per
+The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives ×1.40 under `VERSION_ES6` and ×1.53
+under `VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (×1.31 / ×1.41) and `access-nbody` is at ×0.73–0.85.
+`deltablue`, `richards`, `raytrace` and `gbemu` read ×0.70–0.85 in that run, but ×0.86–1.17 when each runs alone
+in its engine's JVM (×0.95–1.05 under `VERSION_ES6`). The harness runs every file of a round in one JVM per
 engine; 1.9.1 also slows down when these files run after the others, the fork more. Why it is more sensitive is
 not known yet.
 
