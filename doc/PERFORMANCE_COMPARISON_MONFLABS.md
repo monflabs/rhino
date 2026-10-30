@@ -290,8 +290,11 @@ To redo this:
    6–10%), and the double conversions are linked without a guard that calls the native `Class.isInstance`
    (`box2d` 18.4 s → 9.1 s alone, faster than stock), and objects created by `new` start with a hash table
    (`deltablue` a further 9–12%, now faster than stock; `raytrace` within about 2% of stock). The deoptimizations
-   of the inherited-property cache stop after warm-up. Still open: `richards` (2–5% behind stock), and the
-   property names hashed again in `raytrace`. Rerun the compiled timing.
+   of the inherited-property cache stop after warm-up, and the property names `raytrace` seemed to hash again
+   were a JFR attribution (no `String` is allocated while it runs). Still open: `richards`, about 2.5% behind
+   stock (median of 6 alternating runs each: 29.19 s, against 28.48 s). JFR puts 11% of it in
+   `MHJSFunctionCode.execute`, whose call to the per-function `JSCodeExec` is one interface call site for every
+   function; 1.9.1 dispatched to a generated subclass of `OptJSFunctionCode`. Rerun the compiled timing.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 

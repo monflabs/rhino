@@ -564,8 +564,10 @@ effects were measured:
   `new` now start with one (the table itself is still allocated at the first property): `deltablue` −9 to −12%
   (now about 10% faster than 1.9.1), `splay` −2 to −5%, `raytrace` −1.5 to −4% (within about 2% of 1.9.1),
   `richards`, `box2d` and `access-nbody` level, 3 rounds alone.
-- **Strings hashed again.** Property names reach the slot maps as new `String` objects in some paths, whose hash
-  is computed at each lookup (`StringLatin1.hashCode`, about 2% of `raytrace`). Not yet traced.
+- **Not a cost: `StringLatin1.hashCode`.** JFR puts about 2% of `raytrace` there, as if property names were
+  hashed again at each lookup, but the script allocates no `String` while it runs (JFR allocation samples): the
+  names keep their cached hash, and the samples are those of the inlined `String.hashCode` in the slot lookup,
+  attributed to the method that computes it.
 - **`arguments` objects**, created by `Class.create`'s `this.initialize.apply(this, arguments)` (about 2%).
 
 ### Also seen in `box2d`
