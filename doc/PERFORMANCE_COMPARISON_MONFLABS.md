@@ -8,8 +8,8 @@ Three engines, measured on the same machine with the same harness:
 | **Monflabs ES6** | this fork, `Context.VERSION_ES6` (upstream's language level) | `RHINO_MONFLABS_ES6_COMPILED` / `_INTERPRETED` |
 | **Monflabs ECMASCRIPT** | this fork, `Context.VERSION_ECMASCRIPT` (ES2026) | `RHINO_MONFLABS_COMPILED` / `_INTERPRETED` |
 
-Measured 2026-10-28/29, fork at `36f03fef4`. A ratio below 1 means the fork is faster, or uses less memory, than
-stock.
+Compiled time measured 2026-10-30, fork at `efc8516b1`; memory and the partial interpreted run measured
+2026-10-28/29, fork at `36f03fef4`. A ratio below 1 means the fork is faster, or uses less memory, than stock.
 
 ## Summary
 
@@ -17,28 +17,35 @@ stock.
 
 | Suite | Benchmarks | Monflabs ES6 / stock | Monflabs ECMASCRIPT / stock |
 | --- | --- | --- | --- |
-| SunSpider 1.0.2 | 26 | ×0.67 | ×0.59 |
-| Octane | 11 | ×0.90 | ×0.83 |
-| ubench | 10 | ×0.60 | ×0.61 |
-| intrinsics (generators, async) | 6 | ×0.64 | ×0.57 |
-| **All** | **53** | **×0.69** | **×0.63** |
+| SunSpider 1.0.2 | 26 | ×0.68 | ×0.60 |
+| Octane | 11 | ×0.88 | ×0.83 |
+| ubench | 10 | ×0.69 | ×0.69 |
+| intrinsics (generators, async) | 6 | ×0.65 | ×0.58 |
+| **All** | **53** | **×0.71** | **×0.66** |
 
-- The fork is about **1.45× faster** than stock under ES6 and **1.6× faster** under ECMASCRIPT. ECMASCRIPT is about
-  9% faster than ES6 on the same engine.
+- The fork is about **1.4× faster** than stock under ES6 and **1.5× faster** under ECMASCRIPT. ECMASCRIPT is about
+  8% faster than ES6 on the same engine.
+- The run of 2026-10-28/29, at `36f03fef4`, gave ×0.69 and ×0.63. The difference is ubench, whose stock times
+  are 70–130 ms and moved by up to 45% between the two runs; Octane is level or better.
 - The gains are broad: numeric loops, bit operations, calls and closures, generators. The largest are 4× to 6×,
   on `access-fannkuch`, `math-spectral-norm`, `bitops-nsieve-bits`, `controlflow-recursive`, `navier-stokes` and
   `pdfjs`.
 - **Some benchmarks are slower on the fork:**
-  - `access-nbody`: ×1.9–2.1.
-  - `box2d`: ×1.3–1.5.
-  - `richards`: ×1.24.
-  - `gbemu`: ×1.15–1.3.
-  - `deltablue`, `raytrace` and `earley-boyer`: ×1.0–1.17.
 
-  These are all property-access-heavy object code. Run alone, `access-nbody` and `gbemu` are level with stock or
-  faster: their ratios come from running after the other files in one JVM. The others were already slower in the
-  upstream code the fork starts from, which is not 1.9.1 but upstream `master` of 2026-10-05, about 270 commits
-  later. A bisection of upstream finds one commit for `box2d`; the analysis, and what the fork changed since, is in
+  | Benchmark | In the run (ES6 / ECMASCRIPT) | Alone (ES6 / ECMASCRIPT) |
+  | --- | --- | --- |
+  | `deltablue` | ×1.31 / ×1.32 | ×0.95 / ×1.17 |
+  | `richards` | ×1.21 / ×1.32 | ×1.04 / ×1.04 |
+  | `raytrace` | ×1.26 / ×1.18 | ×1.06 / ×0.91 |
+  | `gbemu` | ×1.31 / ×1.43 | ×1.05 / ×0.85 |
+  | `access-nbody` | ×1.18 / ×1.38 | |
+  | `earley-boyer` | ×1.15 / ×0.99 | |
+
+  These are all property-access-heavy object code. "Alone" is the same harness with `--octane-benchmarks=<file>`
+  and one round, so each engine's JVM runs that file only. Most of the gap comes from running after the other
+  files in one JVM: stock slows down there too (`richards` 27.3 s alone, 35.2 s in the run), but the fork slows
+  down more. `box2d`, ×1.3–1.5 in the previous run, is now faster than stock (×0.76 / ×0.71), and `access-nbody`
+  went from ×1.9–2.1 to ×1.2–1.4. The analysis is in
   [Where the fork is slower than Rhino 1.9.1](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
 - **Three benchmarks run under ECMASCRIPT only.** `mandreel` fails its checksum, and `async_generator_stream` and
   `async_request_handler` use syntax beyond ES6. All three fail on stock *and* on Monflabs ES6, so this is a
@@ -176,68 +183,68 @@ The stock column is wall time in ms; the other two columns are ratios to it.
 | Benchmark | Stock ms | ES6 | ECMASCRIPT |
 | --- | --- | --- | --- |
 | **intrinsics** | | | |
-| async_generator_stream | FAILED | FAILED | 197 ms |
-| async_promise_combinators | 146 | 0.75 | 0.70 |
-| async_request_handler | FAILED | FAILED | 231 ms |
-| generator_iterable_collection | 230 | 0.71 | 0.65 |
-| generator_nqueens | 361 | 0.46 | 0.45 |
-| generator_pipeline | 594 | 0.86 | 0.62 |
-| generator_tokenizer | 181 | 0.69 | 0.64 |
-| generator_tree_iterator | 383 | 0.45 | 0.43 |
+| async_generator_stream | FAILED | FAILED | 202 ms |
+| async_promise_combinators | 171 | 0.75 | 0.65 |
+| async_request_handler | FAILED | FAILED | 251 ms |
+| generator_iterable_collection | 263 | 0.69 | 0.62 |
+| generator_nqueens | 387 | 0.45 | 0.45 |
+| generator_pipeline | 647 | 0.90 | 0.64 |
+| generator_tokenizer | 176 | 0.77 | 0.72 |
+| generator_tree_iterator | 411 | 0.46 | 0.45 |
 | **Octane** | | | |
-| box2d | 12838 | 1.48 | 1.28 |
-| crypto | 32877 | 0.70 | 0.68 |
-| deltablue | 28069 | 1.14 | 1.17 |
-| earley-boyer | 60873 | 1.14 | 0.97 |
-| gbemu-part1 | 6389 | 1.28 | 1.15 |
-| mandreel | FAILED | FAILED | 38509 ms |
-| navier-stokes | 23445 | 0.36 | 0.25 |
-| pdfjs | 12947 | 0.30 | 0.28 |
-| raytrace | 35061 | 1.15 | 1.08 |
-| regexp | 13589 | 1.08 | 1.18 |
-| richards | 35625 | 1.24 | 1.24 |
-| splay | 3990 | 1.06 | 1.11 |
+| box2d | 12682 | 0.76 | 0.71 |
+| crypto | 33062 | 0.80 | 0.74 |
+| deltablue | 28065 | 1.31 | 1.32 |
+| earley-boyer | 59634 | 1.15 | 0.99 |
+| gbemu-part1 | 6230 | 1.31 | 1.43 |
+| mandreel | FAILED | FAILED | 40829 ms |
+| navier-stokes | 24028 | 0.33 | 0.25 |
+| pdfjs | 13181 | 0.33 | 0.28 |
+| raytrace | 33384 | 1.26 | 1.18 |
+| regexp | 13597 | 1.08 | 1.17 |
+| richards | 35242 | 1.21 | 1.32 |
+| splay | 3800 | 1.15 | 1.05 |
 | **SunSpider** | | | |
-| 3d-cube | 364 | 0.64 | 0.52 |
-| 3d-morph | 1878 | 0.66 | 0.38 |
-| 3d-raytrace | 281 | 0.74 | 0.74 |
-| access-binary-trees | 1683 | 1.19 | 1.03 |
-| access-fannkuch | 1998 | 0.19 | 0.18 |
-| access-nbody | 2953 | 2.12 | 1.94 |
-| access-nsieve | 304 | 0.64 | 0.59 |
-| bitops-3bit-bits-in-byte | 22575 | 0.26 | 0.26 |
-| bitops-bits-in-byte | 2959 | 0.43 | 0.85 |
-| bitops-bitwise-and | 659 | 0.61 | 0.59 |
-| bitops-nsieve-bits | 1260 | 0.25 | 0.23 |
-| controlflow-recursive | 3897 | 0.49 | 0.25 |
-| crypto-aes | 636 | 0.67 | 0.49 |
-| crypto-md5 | 943 | 0.73 | 0.76 |
-| crypto-sha1 | 493 | 0.72 | 0.64 |
-| date-format-tofte | 325 | 0.79 | 0.68 |
-| date-format-xparb | 400 | 0.92 | 0.93 |
-| math-cordic | 2767 | 0.57 | 0.41 |
-| math-partial-sums | 2484 | 0.59 | 0.74 |
-| math-spectral-norm | 2945 | 0.41 | 0.16 |
-| regexp-dna | 288 | 1.05 | 1.02 |
-| string-base64 | 993 | 0.96 | 0.75 |
-| string-fasta | 155 | 0.88 | 0.85 |
-| string-tagcloud | 459 | 1.03 | 0.88 |
-| string-unpack-code | 217 | 1.12 | 1.14 |
-| string-validate-input | 576 | 0.98 | 0.88 |
+| 3d-cube | 396 | 0.60 | 0.54 |
+| 3d-morph | 2224 | 0.57 | 0.33 |
+| 3d-raytrace | 280 | 0.80 | 0.87 |
+| access-binary-trees | 1532 | 1.19 | 1.05 |
+| access-fannkuch | 2124 | 0.16 | 0.15 |
+| access-nbody | 3021 | 1.18 | 1.38 |
+| access-nsieve | 319 | 0.57 | 0.56 |
+| bitops-3bit-bits-in-byte | 20866 | 0.28 | 0.29 |
+| bitops-bits-in-byte | 3247 | 0.63 | 0.76 |
+| bitops-bitwise-and | 705 | 0.57 | 0.56 |
+| bitops-nsieve-bits | 1197 | 0.26 | 0.25 |
+| controlflow-recursive | 3526 | 0.56 | 0.28 |
+| crypto-aes | 602 | 0.75 | 0.69 |
+| crypto-md5 | 949 | 0.73 | 0.78 |
+| crypto-sha1 | 503 | 0.72 | 0.65 |
+| date-format-tofte | 296 | 0.82 | 0.78 |
+| date-format-xparb | 400 | 1.00 | 0.97 |
+| math-cordic | 2932 | 0.79 | 0.40 |
+| math-partial-sums | 2286 | 0.73 | 0.77 |
+| math-spectral-norm | 2923 | 0.43 | 0.18 |
+| regexp-dna | 302 | 1.00 | 1.02 |
+| string-base64 | 1042 | 1.00 | 0.90 |
+| string-fasta | 156 | 0.88 | 0.88 |
+| string-tagcloud | 503 | 1.00 | 0.87 |
+| string-unpack-code | 238 | 1.09 | 1.04 |
+| string-validate-input | 603 | 0.99 | 0.86 |
 | **ubench** | | | |
-| function-closure | 1181 | 0.57 | 0.58 |
-| function-correct-args | 123 | 0.55 | 0.59 |
-| function-excess-args | 122 | 0.57 | 0.60 |
-| function-missing-args | 136 | 0.65 | 0.65 |
-| interp_hot_closure | 97 | 0.80 | 0.88 |
-| interp_hot_property | 87 | 0.83 | 0.78 |
-| interp_recursive_fib | 130 | 0.62 | 0.61 |
-| loop-empty-resolve | 20 | 0.55 | 0.55 |
-| loop-empty | 174 | 0.53 | 0.53 |
-| loop-sum | 337 | 0.46 | 0.45 |
+| function-closure | 1248 | 0.54 | 0.58 |
+| function-correct-args | 85 | 0.88 | 0.91 |
+| function-excess-args | 85 | 0.86 | 0.89 |
+| function-missing-args | 111 | 0.80 | 0.82 |
+| interp_hot_closure | 117 | 0.71 | 0.71 |
+| interp_hot_property | 97 | 0.72 | 0.74 |
+| interp_recursive_fib | 70 | 1.23 | 1.16 |
+| loop-empty-resolve | 23 | 0.52 | 0.48 |
+| loop-empty | 194 | 0.50 | 0.50 |
+| loop-sum | 349 | 0.44 | 0.44 |
 
 Differences under about 10% on one benchmark are within the noise of a 3-round run. Examples are `regexp` going
-from ×1.08 to ×1.18, and `splay`. ES6 against ECMASCRIPT on the same engine differ most where the language
+from ×1.08 to ×1.17, and `splay`. ES6 against ECMASCRIPT on the same engine differ most where the language
 version changes the code generated:
 
 - `math-spectral-norm`, `controlflow-recursive` and `3d-morph` are much faster under ECMASCRIPT.
@@ -269,6 +276,9 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
   without reporting it, so a benchmark's figures leave out the engine's fixed cost. The change has been
   smoke-tested on ubench, where no figure is negative, but the full suites have not been rerun with it (see
   [What remains](#what-remains)).
+- **A ratio depends on the files run before it.** Each engine runs all the files in one JVM per round, so a
+  file's profile, code cache and heap are those the previous files left. Object-heavy Octane files read 15–35%
+  slower on the fork than alone; see the table in the [Summary](#summary).
 - **The machine was not idle.** The measurements ran on an Apple M2 (8 cores, 24 GB) under Azul Zulu 25.0.4.
   Chrome Remote Desktop used about a third of a core throughout. All three engines were exposed to that equally,
   since they were interleaved, but it widens the noise.
@@ -294,8 +304,11 @@ To redo this:
    were a JFR attribution (no `String` is allocated while it runs). Still open: `richards`, about 2.5% behind
    stock (median of 6 alternating runs each: 29.19 s, against 28.48 s). JFR puts 11% of it in
    `MHJSFunctionCode.execute`, but calling functions through a generated subclass, as 1.9.1 does, left it
-   unchanged (see the "Tried and dropped" table of performance.md); no single cause found. Rerun the compiled
-   timing.
+   unchanged (see the "Tried and dropped" table of performance.md); no single cause found. The compiled timing
+   was rerun on 2026-10-30. Still open from it:
+   - why the fork loses more than stock when the object-heavy files run after the others in one JVM (`deltablue`
+     ×0.95 alone, ×1.31 in the run, under ES6);
+   - whether `deltablue` under ECMASCRIPT is ×1.17 alone, measured in one round only.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 
