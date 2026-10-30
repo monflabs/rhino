@@ -871,14 +871,16 @@ public class BaseFunction extends ScriptableObject implements Function {
      * #call} unless they are already set.
      */
     public Scriptable createObject(Context cx, VarScope scope) {
-        Scriptable newInstance = new NativeObject();
+        NativeObject newInstance = new NativeObject();
+        newInstance.setMap(createSlotMap(1));
         newInstance.setPrototype(getClassPrototype());
         newInstance.setParentScope(getParentScope());
         return newInstance;
     }
 
     public Scriptable createObject(Context cx, VarScope scope, Object nt) {
-        Scriptable newInstance = new NativeObject();
+        NativeObject newInstance = new NativeObject();
+        newInstance.setMap(createSlotMap(1));
         Object proto;
         if (nt instanceof JSFunction || nt instanceof ClassDefinition.DefaultConstructor) {
             proto = ((BaseFunction) nt).getPrototypeProperty();

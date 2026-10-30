@@ -66,7 +66,10 @@ absolute numbers come from an Apple M-series laptop and are only meaningful rela
 - **Tolerances are measured, not chosen.** `buildtools/perf-calibrate.py` simulates the gate's 3-against-3
   comparison 5,000 times over 12 recordings of identical code and takes the 99th percentile of the apparent
   regression, plus a 25% margin (minimum 10%). Most metrics have a 10–20% band. A deliberate regression of
-  `instanceof` was caught at +15–19%; one of +4–8% was not.
+  `instanceof` was caught at +15–19%; one of +4–8% was not. Metrics with several JIT states are not seen in the
+  same proportions by every set of 12 recordings, so a recalibration only widens bands: each is the larger of
+  the previous one and the new one (2026-10-29: 11 bands widened, `sort.cmp.ecma` 15% → 30%,
+  `closures.cmp.es6` 10% → 15%, after both failed gates by chance).
 - **Idle machine.** A full run takes about 18 minutes. The gate refuses to run during a Time Machine backup, and
   no build may run alongside it.
 
@@ -550,12 +553,29 @@ effects were measured:
   On Linux/x86, without the code-memory switch, the native calls cost much less; the gain there has not been
   measured.
 
+### What the fork pays on its own
+
+`raytrace` was bisected the same way, to upstream 80cc8c60d ("Reduce heap space used by built in slots", 30.1 s →
+32.7 s), whose cost is the key comparison above. With that fixed, the fork was still about 6% slower than 1.9.1 on
+`raytrace`, from three costs of its own:
+
+- **Slot maps grown on every new object.** An object starts with a shared empty map, then a single-entry map,
+  and is copied into a hash table at its second property; 1.9.1 starts it with a hash table. Objects created by
+  `new` now start with one (the table itself is still allocated at the first property): `deltablue` −9 to −12%
+  (now about 10% faster than 1.9.1), `splay` −2 to −5%, `raytrace` −1.5 to −4% (within about 2% of 1.9.1),
+  `richards`, `box2d` and `access-nbody` level, 3 rounds alone.
+- **Strings hashed again.** Property names reach the slot maps as new `String` objects in some paths, whose hash
+  is computed at each lookup (`StringLatin1.hashCode`, about 2% of `raytrace`). Not yet traced.
+- **`arguments` objects**, created by `Class.create`'s `this.initialize.apply(this, arguments)` (about 2%).
+
 ### Also seen in `box2d`
 
-The [per-site cache of inherited properties](#per-site-cache-of-inherited-properties) deoptimizes 74 times in a
-`box2d` run, in 64 compiled methods: the validity check of the cache (`PropertyCache.inherited`) is compiled as
-never failing, and fails when a prototype changes. Each deoptimization discards the compiled script function the
-check was inlined in.
+The [per-site cache of inherited properties](#per-site-cache-of-inherited-properties) deoptimizes up to 74
+times while `box2d` warms up, in up to 64 compiled methods: the validity check of the cache
+(`PropertyCache.inherited`) is compiled as never failing, and fails when a prototype changes. Each deoptimization
+discards the compiled script function the check was inlined in. It is a warm-up cost only: over 7 runs, the
+deoptimizations of the whole engine fall from 201 and 73 in the first two to none from the fifth (those of the
+cache: 6, 14, 1, then none), and the runs settle at 8.95–9.0 s from the fourth.
 
 ## Known gap and future work: the object model
 

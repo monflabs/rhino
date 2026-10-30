@@ -288,8 +288,10 @@ To redo this:
 3. **The regressions.** Analysed in [performance.md](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
    Since this run, slot keys are compared without `Objects.equals` (`deltablue` about 18% faster, `richards`
    6–10%), and the double conversions are linked without a guard that calls the native `Class.isInstance`
-   (`box2d` 18.4 s → 9.1 s alone, faster than stock). Still open: the rest of the upstream regression on
-   `richards` and `raytrace`, and the deoptimizations of the inherited-property cache. Rerun the compiled timing.
+   (`box2d` 18.4 s → 9.1 s alone, faster than stock), and objects created by `new` start with a hash table
+   (`deltablue` a further 9–12%, now faster than stock; `raytrace` within about 2% of stock). The deoptimizations
+   of the inherited-property cache stop after warm-up. Still open: `richards` (2–5% behind stock), and the
+   property names hashed again in `raytrace`. Rerun the compiled timing.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 

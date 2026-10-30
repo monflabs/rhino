@@ -288,6 +288,20 @@ on, and what it gained. It also records the experiments that measured no gain, s
   that commit). Two full gate runs against the commit before: no regression, `v8-richards` level. The first run
   flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions.
 
+### Objects created by `new` start with a hash table (2026-10-29)
+
+- **What.** `BaseFunction.createObject` gives the new object an `EmbeddedSlotMap` (or its thread-safe variant)
+  instead of the shared empty map; the table itself is allocated at the first property, as before.
+- **Why.** Upstream's slot maps start an object empty, move it to a single-entry map at its first property and
+  copy it into a hash table at its second (`SingleEntrySlotMap.add` → `EmbeddedSlotMap.createNewSlot`): about 4%
+  of Octane `raytrace` in JFR, where Rhino 1.9.1 created the hash table up front. Objects built by a constructor
+  usually get several properties at once.
+- **Gain.** Compiled, `VERSION_ES6`, each file alone, 3 rounds: `deltablue` −9 to −12%, `splay` −2 to −5%,
+  `raytrace` −1.5 to −4%; `richards`, `box2d`, `access-nbody` level. Perf gate against the commit before: no regression with the widened bands
+  (`sort.cmp.ecma` +24% and `wideobject.cmp.es6` +86%, both metrics with two JIT states, would have failed the
+  previous ones); `v8-deltablue` compiled −10%, `v8-richards` level. All versions.
+- **Cost.** One `EmbeddedSlotMap` (a small object) per constructed object that never gets a property.
+
 ### Double conversions linked without a guard (2026-10-29)
 
 - **What.** The `DoubleLinker` links the conversions of a double (`TOBOOLEAN`, `TONUMBER`, `TONUMERIC`,
