@@ -343,6 +343,14 @@ To redo this:
 
         Earlier attempts to inline the slot lookup made `v8-richards` 60–85% slower in the gate. Smaller lookups
         (shared shapes) remain the structural answer if this does not hold.
+
+     Steps 1–3 were tried for the cached gets on 2026-10-31 and dropped; see the "Tried and dropped" table.
+     - The per-site chain helped the shared sequences: `richards` after `box2d` about 20% faster.
+     - It cost `deltablue` alone 11% and `v8-raytrace` 35% in the gate, because its `MethodHandle` chain at every
+       get site uses up C2's inlining budget in the script methods.
+
+     A per-site fix has to add no bytecode to the site. Shared shapes (smaller lookups) are now the remaining
+     candidate.
    - whether `deltablue` under ECMASCRIPT is ×0.86 alone, measured in one round only.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
