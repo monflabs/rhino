@@ -518,8 +518,18 @@ The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives ×1.40
 under `VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (×1.31 / ×1.41) and `access-nbody` is at ×0.73–0.85.
 `deltablue`, `richards`, `raytrace` and `gbemu` read ×0.70–0.85 in that run, but ×0.86–1.17 when each runs alone
 in its engine's JVM (×0.95–1.05 under `VERSION_ES6`). The harness runs every file of a round in one JVM per
-engine; 1.9.1 also slows down when these files run after the others, the fork more. Why it is more sensitive is
-not known yet.
+engine; 1.9.1 also slows down when these files run after the others, but the fork slows down more.
+
+The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
+- The files that run first compile the shared helpers on their own, into code larger than `InlineSmallCode`
+  (2,500 bytes). Later files then call them instead of inlining them.
+- 1.9.1's method lookup is a chain of small wrappers that stay inlinable.
+- The fork's per-site property cache (`PropertyCache.getPropAndThis`, about 2.6 KB compiled) and its typed links
+  do not. Those are what make it faster alone.
+
+`-XX:InlineSmallCode=8000` takes the fork to ×1.40 / ×1.63 and `deltablue` to ×0.93 / ×0.96, but slows down a
+few other files. The planned fix is to link these helpers per site as small methods, as the array elements
+already are.
 
 The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate
 the two, each file was run alone (one JVM, best of 2 runs after 1, `VERSION_ES6`) on 1.9.1, on that upstream base

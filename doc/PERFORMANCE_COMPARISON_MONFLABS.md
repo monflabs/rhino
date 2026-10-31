@@ -281,6 +281,26 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
 - **A ratio depends on the files run before it.** Each engine runs all the files in one JVM per round, so a
   file's profile, code cache and heap are those the previous files left. Object-heavy Octane files read 15–35%
   slower on the fork than alone; see the table in the [Summary](#summary).
+  - **Cause.** The first file compiles the shared runtime helpers on their own, into code larger than
+    `InlineSmallCode` (2,500 bytes). Later files then call those helpers instead of inlining them, using the
+    first file's type profiles. Stock is exposed to the same thing, but its hot lookup path is a chain of small
+    wrappers that stay inlinable. The fork's per-site property cache (`PropertyCache.getPropAndThis`, about
+    2.6 KB compiled) and its other typed links do not: after `crypto`, C2 refused to inline them 522 times, against
+    135 when `deltablue` runs alone.
+  - **With `-XX:InlineSmallCode=8000`** (all engines; [CSV](performance-comparison/rhino-time-compiled-isc8000.csv),
+    2026-10-31, same commit and settings), All goes to ×1.40/×1.63:
+
+    | Benchmark | Without the flag | With it |
+    |---|---|---|
+    | deltablue | ×0.77/×0.76 | ×0.93/×0.96 |
+    | richards | ×0.82/×0.76 | ×0.86/×0.88 |
+    | raytrace | ×0.79/×0.85 | ×0.82/×0.93 |
+    | gbemu | ×0.77/×0.70 | ×0.75/×0.79 |
+    | access-nbody | ×0.85/×0.73 | ×0.95/×1.04 |
+
+    The flag speeds up each engine's own times overall: stock by 3%, the fork by 3% under ES6 and 10% under
+    ECMASCRIPT. Some ES6 files got slower: `crypto-sha1` 364 → 614 ms, `generator_tokenizer` 135 → 210 ms,
+    `access-fannkuch` 341 → 424 ms. It is a tuning option for embedders, not a fix.
 - **The machine was not idle.** The measurements ran on an Apple M2 (8 cores, 24 GB) under Azul Zulu 25.0.4.
   Chrome Remote Desktop used about a third of a core throughout. All three engines were exposed to that equally,
   since they were interleaved, but it widens the noise.
@@ -308,8 +328,21 @@ To redo this:
    `MHJSFunctionCode.execute`, but calling functions through a generated subclass, as 1.9.1 does, left it
    unchanged (see the "Tried and dropped" table of performance.md); no single cause found. The compiled timing
    was rerun on 2026-10-30. Still open from it:
-   - why the fork loses more than stock when the object-heavy files run after the others in one JVM (`deltablue`
-     ×1.05 alone, ×0.77 in the run, under ES6);
+   - the fork loses more than stock when the object-heavy files run after the others in one JVM (`deltablue`
+     ×1.05 alone, ×0.77 in the run, under ES6). The cause is explained in [Caveats](#caveats). Two quick fixes
+     failed; they are in OPTIMIZATION.md's "Tried and dropped" table. The planned fix:
+     1. Do for the cached gets, `setObjectProp` / `ScriptableObject.put` and `Constructable.construct` what
+        `NativeArrayLinker` does for elements: link each site to small methods, so they inline whatever other
+        scripts did. That means a per-site guard on the receiver's exact class and the cache epoch, then small
+        leaves that read the slot and build the result. The miss path stays out of line.
+     2. Keep every leaf small enough that its own compiled code stays under `InlineSmallCode`.
+     3. Measure:
+        - `crypto` → `deltablue` and `box2d` → `richards` in one JVM, against `deltablue` alone, with 6
+          alternating runs;
+        - then the perf gate.
+
+        Earlier attempts to inline the slot lookup made `v8-richards` 60–85% slower in the gate. Smaller lookups
+        (shared shapes) remain the structural answer if this does not hold.
    - whether `deltablue` under ECMASCRIPT is ×0.86 alone, measured in one round only.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
