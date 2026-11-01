@@ -7,6 +7,7 @@
   - [Features on top of stock Rhino](/features.md)
   - [Changes and incompatibilities](/changes.md)
   - [Performance optimizations](/performance.md)
+  - [Comparison with Rhino 1.9.1](/comparison.md)
   - [How the engine is validated](/validation.md)
 
 - **Embedding**

@@ -508,6 +508,8 @@ since earlier changes of this kind regressed `v8-richards`:
 
 ## Where the fork is slower than Rhino 1.9.1
 
+The full comparison, with every benchmark and the memory figures, is [Comparison with Rhino 1.9.1](comparison.md).
+
 In the JavascriptPerformance run of 2026-10-28/29 against Rhino 1.9.1 (compiled mode, 3 rounds, fork at
 `36f03fef4`), the fork is 1.45 times faster under `VERSION_ES6` and 1.6 times faster under `VERSION_ECMASCRIPT`, but
 slower on a few object-heavy files. In speed multipliers (1.9.1's time divided by the fork's, below ×1 when the
@@ -524,7 +526,7 @@ A second rerun on 2026-10-31 (fork at `2ccfaeaa4`, the same engine code: only do
 and ×1.54. The means held, but single files did not: `richards` read ×0.68 under both versions and
 `access-nbody` ×0.55 under `VERSION_ECMASCRIPT`, and some of stock's own times moved by up to 47%. A single
 file's multiplier in one session is not reliable; see
-[Variation between runs](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/PERFORMANCE_COMPARISON_MONFLABS.md#variation-between-runs).
+[Variation between runs](comparison.md#variation-between-runs).
 
 The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
 - The files that run first compile the shared helpers on their own, into code larger than `InlineSmallCode`
