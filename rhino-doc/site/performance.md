@@ -510,11 +510,12 @@ effects were measured:
 
 `raytrace` was bisected the same way, to upstream 80cc8c60d ("Reduce heap space used by built in slots", 30.1 s →
 32.7 s), whose cost is the key comparison above. With that fixed, the fork still took about 106% of 1.9.1's time
-on `raytrace`, from three costs of its own:
+on `raytrace`. JFR showed three costs:
 
 - **Slot maps grown on every new object.** An object starts with a shared empty map, then a single-entry map,
-  and is copied into a hash table at its second property; 1.9.1 starts it with a hash table. Objects created by
-  `new` now start with one (the table itself is still allocated at the first property): `deltablue` −9 to −12%
+  and is copied into a hash table at its second property. 1.9.1 does the same, so this was not a difference from
+  it, but a cost both had. Objects created by `new` now start with a hash table (the table itself is still
+  allocated at the first property): `deltablue` −9 to −12%
   (now about 90% of 1.9.1's time), `splay` −2 to −5%, `raytrace` −1.5 to −4% (about 102% of 1.9.1's time),
   `richards`, `box2d` and `access-nbody` level, 3 rounds alone.
 - **Not a cost: `StringLatin1.hashCode`.** JFR puts about 2% of `raytrace` there, as if property names were
@@ -540,8 +541,8 @@ the percentages are approximate):
     (`JSFunction.getThisObj` → `ScriptRuntime.toObject`), about 5% on a benchmark made almost entirely of method
     calls.
 - **`splay`** (then 108%) creates objects, and creation costs more: growing a new object's slot map from a single
-  entry to a hash table (`SingleEntrySlotMap` → `EmbeddedSlotMap`, 6%; objects created by `new` now start with a
-  hash table), finding the built-in prototype of each new object (12%), and the check of each literal for getters
+  entry to a hash table (`SingleEntrySlotMap` → `EmbeddedSlotMap`, 6%, which 1.9.1 also does; objects created by
+  `new` now start with a hash table), finding the built-in prototype of each new object (12%), and the check of each literal for getters
   and setters (2%). Garbage collection is not the difference: the GC pauses were similar, slightly shorter on the
   fork.
 - **`regexp-dna`** (then 106%) is in the regexp matcher, spread over it with no single hotspot.

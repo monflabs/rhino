@@ -591,6 +591,9 @@ public class BaseFunction extends ScriptableObject implements Function {
         // Attempt to call custom Symbol.hasInstance implementation if present
 
         Object hasInstanceMethod = ScriptRuntime.getObjectElem(this, SymbolKey.HAS_INSTANCE, cx);
+        if (isHasInstanceIntrinsic(hasInstanceMethod)) {
+            return ordinaryHasInstance(cx, this, instance);
+        }
         if (hasInstanceMethod instanceof Callable) {
             return ScriptRuntime.toBoolean(
                     ((Callable) hasInstanceMethod)
@@ -610,6 +613,28 @@ public class BaseFunction extends ScriptableObject implements Function {
             Id_prototype = 4,
             Id_arguments = 5,
             MAX_INSTANCE_ID = 5;
+
+    /** Whether the hasInstance of the class of obj is the one of BaseFunction. */
+    private static final ClassValue<Boolean> ORDINARY_HAS_INSTANCE =
+            new ClassValue<>() {
+                @Override
+                protected Boolean computeValue(Class<?> type) {
+                    try {
+                        return type.getMethod("hasInstance", Scriptable.class).getDeclaringClass()
+                                == BaseFunction.class;
+                    } catch (NoSuchMethodException e) {
+                        return false;
+                    }
+                }
+            };
+
+    /**
+     * Whether obj.hasInstance(v), for an obj whose @@hasInstance is the intrinsic, is the result of
+     * the intrinsic, {@link #ordinaryHasInstance}.
+     */
+    static boolean hasOrdinaryHasInstance(Scriptable obj) {
+        return obj instanceof BaseFunction && ORDINARY_HAS_INSTANCE.get(obj.getClass());
+    }
 
     /** Whether f is %Function.prototype%[@@hasInstance]. */
     static boolean isHasInstanceIntrinsic(Object f) {
@@ -643,24 +668,24 @@ public class BaseFunction extends ScriptableObject implements Function {
 
     private static Object js_hasInstance(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
+        return ordinaryHasInstance(cx, thisObj, args.length == 0 ? Undefined.instance : args[0]);
+    }
+
+    /** %Function.prototype%[@@hasInstance] called on thisObj with v. */
+    static boolean ordinaryHasInstance(Context cx, Object thisObj, Object v) {
         if (!(thisObj instanceof Callable && thisObj instanceof Scriptable)) {
             return false;
         }
         if (cx.isLatestEcmaScript()
                 && !(thisObj instanceof BoundFunction)
-                && (args.length == 0
-                        || ScriptRuntime.isPrimitive(args[0])
-                        || ScriptRuntime.isSymbol(args[0]))) {
+                && (ScriptRuntime.isPrimitive(v) || ScriptRuntime.isSymbol(v))) {
             // OrdinaryHasInstance (7.3.21) step 4: a primitive is not an instance
             return false;
         }
         if (cx.isLatestEcmaScript() && thisObj instanceof BoundFunction) {
             // OrdinaryHasInstance (7.3.21) step 2: InstanceofOperator(O, the target), which may
             // itself be bound, a proxy or an object with its own @@hasInstance
-            return ScriptRuntime.instanceOf(
-                    args.length == 0 ? Undefined.instance : args[0],
-                    ((BoundFunction) thisObj).getTargetFunction(),
-                    cx);
+            return ScriptRuntime.instanceOf(v, ((BoundFunction) thisObj).getTargetFunction(), cx);
         }
         Object protoProp = null;
         if (thisObj instanceof BoundFunction) {
@@ -675,8 +700,8 @@ public class BaseFunction extends ScriptableObject implements Function {
         }
 
         if (ScriptRuntime.isObject(protoProp) || protoProp instanceof XMLObject) {
-            if (args.length > 0 && args[0] instanceof Scriptable) {
-                Scriptable obj = (Scriptable) args[0];
+            if (v instanceof Scriptable) {
+                Scriptable obj = (Scriptable) v;
 
                 return ScriptRuntime.jsDelegatesTo(obj, (Scriptable) protoProp);
             }

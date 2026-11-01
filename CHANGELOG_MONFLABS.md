@@ -39,10 +39,25 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### `instanceof` without calling the intrinsic `@@hasInstance` (2026-11-01)
+
+When `instanceof` finds the intrinsic `Function.prototype[@@hasInstance]`, it runs its algorithm directly
+(`BaseFunction.ordinaryHasInstance`) instead of calling the built-in, and under `VERSION_ECMASCRIPT` it no longer
+looks `@@hasInstance` up twice. Java classes that override `hasInstance` keep their override.
+
+- Octane compiled, alone: `earley-boyer` −7.7% under `VERSION_ECMASCRIPT`, −2.1% under `VERSION_ES6`; `richards`,
+  `deltablue`, `box2d` level. Perf gate: no regression (`arith.cmp.es6` flagged once, −7.8% over 6 rounds).
+  OPTIMIZATION.md "`instanceof` without calling the intrinsic `@@hasInstance`".
+- Dropped: linking the cached inherited gets without their `ScriptableObject` guard (`deltablue` +2.6%),
+  OPTIMIZATION.md "Tried and dropped".
+- Docs: Rhino 1.9.1 also grows a new object's slot map from empty to a single entry to a hash table, so starting
+  the objects of `new` with a hash table was a gain over it, not a catch-up (OPTIMIZATION.md, performance.md).
+- Not observable, not gated. test262: no change (SymbolHasInstanceTest).
+
 ### Objects created by `new` start with a hash table; perf-gate bands widened (2026-10-29)
 
 Objects created by `new` (`BaseFunction.createObject`) start with a hash-table slot map instead of growing
-through the empty and single-entry maps, as in Rhino 1.9.1.
+through the empty and single-entry maps, as upstream and Rhino 1.9.1 do.
 
 - Octane compiled, alone: `deltablue` −9 to −12%, `splay` −2 to −5%, `raytrace` −1.5 to −4%; `richards`, `box2d`,
   `access-nbody` level. Perf gate: no regression with the widened bands. OPTIMIZATION.md "Objects created by `new` start with a hash table".

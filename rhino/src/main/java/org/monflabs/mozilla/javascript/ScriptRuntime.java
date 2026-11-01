@@ -5808,6 +5808,9 @@ public class ScriptRuntime {
                         && a instanceof Scriptable
                         && !isSymbol(a)) {
                     // OrdinaryHasInstance, with the overrides of the host objects (E4X, Java)
+                    if (BaseFunction.hasOrdinaryHasInstance(target)) {
+                        return BaseFunction.ordinaryHasInstance(cx, target, a);
+                    }
                     return target.hasInstance((Scriptable) a);
                 }
                 return toBoolean(

@@ -294,8 +294,9 @@ on, and what it gained. It also records the experiments that measured no gain, s
   instead of the shared empty map; the table itself is allocated at the first property, as before.
 - **Why.** Upstream's slot maps start an object empty, move it to a single-entry map at its first property and
   copy it into a hash table at its second (`SingleEntrySlotMap.add` → `EmbeddedSlotMap.createNewSlot`): about 4%
-  of Octane `raytrace` in JFR, where Rhino 1.9.1 created the hash table up front. Objects built by a constructor
-  usually get several properties at once.
+  of Octane `raytrace` in JFR. Objects built by a constructor usually get several properties at once. Rhino 1.9.1
+  grows its maps the same way (its `createObject` makes a `NativeObject` with the empty map), so this is a gain
+  over it, not a catch-up.
 - **Gain.** Compiled, `VERSION_ES6`, each file alone, 3 rounds: `deltablue` −9 to −12%, `splay` −2 to −5%,
   `raytrace` −1.5 to −4%; `richards`, `box2d`, `access-nbody` level. Perf gate against the commit before: no regression with the widened bands
   (`sort.cmp.ecma` +24% and `wideobject.cmp.es6` +86%, both metrics with two JIT states, would have failed the
@@ -321,6 +322,28 @@ on, and what it gained. It also records the experiments that measured no gain, s
   in 7 rounds); the second run passed, `v8-richards` level. All versions.
 - **Tried first.** The same guards as static `instanceof` methods in every linker (`box2d` 10.1 s) or in the
   `DoubleLinker` only (11.4 s): `access-nbody` settled in its slow JIT state 5 and 3 times in 10, against 1.
+
+### `instanceof` without calling the intrinsic `@@hasInstance` (2026-11-01)
+
+- **What.** When the `@@hasInstance` that `instanceof` finds is the intrinsic
+  `Function.prototype[@@hasInstance]`, `BaseFunction.hasInstance` runs its algorithm directly
+  (`BaseFunction.ordinaryHasInstance`: the `prototype` property and the prototype chain) instead of calling it with
+  a new argument array through `JSFunction.call`. Under `VERSION_ECMASCRIPT`, `ScriptRuntime.instanceOf` already
+  looked `@@hasInstance` up; it now runs the same algorithm for the functions whose class keeps
+  `BaseFunction.hasInstance`, instead of calling `hasInstance`, which looked it up a second time.
+- **Why.** Rhino 1.9.1's `instanceof` reads `prototype` and walks the chain; the fork paid a symbol lookup through
+  the constructor and `Function.prototype`, then a full call of the built-in (and a second lookup under
+  `VERSION_ECMASCRIPT`). `earley-boyer` has 69 `instanceof` sites.
+- **Correctness.** The result is the intrinsic's, which is `ordinaryHasInstance` itself (`js_hasInstance`
+  delegates to it). The intrinsic is non-writable and non-configurable, so a function that defines its own
+  `@@hasInstance` gets a different value and is still called. A Java class that overrides `hasInstance` (host
+  objects, embedders' subclasses of `BaseFunction`) keeps its override: the shortcut in `instanceOf` applies only
+  to the classes that inherit `BaseFunction`'s (checked once per class with a `ClassValue`).
+- **Gain.** Compiled, each file alone, 4 alternating runs: `earley-boyer` −7.7% under `VERSION_ECMASCRIPT` (51.9 s
+  → 47.9 s), −2.1% under `VERSION_ES6`; `richards`, `deltablue`, `box2d` level, and the sequences `crypto` →
+  `deltablue` and `box2d` → `richards` level. Perf gate against the commit before: `instanceof` level (−2.7% to
+  +0.2%), `v8-earley-boyer` −1 to −3%; `arith.cmp.es6` was flagged (+16.8%) on a script without `instanceof`, and
+  was −7.8% over 6 rounds alone. All versions.
 
 ### Per-iteration bindings that cost nothing without closures
 
@@ -868,6 +891,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 | `PropertyCache` with its miss paths (lookup and refill) in separate methods, to make the hit path small enough to inline after other scripts (2026-10-30) | `crypto` → `deltablue` level (33.1/33.3 s against 38.7/33.3 s); `box2d` → `richards` 37.5/40.1 s against 43.5/45.3 s | the hit path still inlines the slot-map query and the prototype check, so after other scripts it is refused as too big; forcing only `PropertyCache` back inline was level too (34.5 s). Only all five helpers together (cached gets, `setObjectProp`, `ScriptableObject.put`, `asScriptableOrThrowUndefWriteError`, `Constructable.construct`) helped (27.9 s) |
 | Forcing the hot helpers inline at startup through a compiler directive (`DiagnosticCommand` `compilerDirectivesAdd`, no JVM flags) (2026-10-30) | `crypto` → `deltablue` about 28 s in 2 of 6 runs, about 34 s in 4; about 33 s without; `box2d` → `richards` level | C2 does force-inline them (509 sites), but the gain depends on the order things get compiled in |
 | The cached gets linked per site as a `MethodHandle` chain (2026-10-31): `PropertyCache.cached` folded into a `guardWithTest` between the found value and a miss method, so that each site has its own branch profile and keeps the miss path out of line; with or without the outer `ScriptableObject` guard | `box2d` → `richards` 43.9–46.6 s → 33.7–38.3 s, `crypto` → `deltablue` 32.9–38.6 → 25.1–36.7 s; but `deltablue` alone 24.4–24.8 → 26.9–28.0 s, and in the gate `v8-raytrace` +35% (both versions), `split` +13%, `v8-crypto` −11 to −18% | the chain at every inherited get site uses C2's inlining budget of the script methods: alone, `MHJSFunctionCode.execute` went from 9% to 16% of the samples and `EmbeddedSlotMap.modify` from 4% to 9%. `raytrace` alone was level, so the loss shows only in the gate sequence |
+| The cached inherited gets linked without the `Guards.isInstance(ScriptableObject)` guard, as for the double conversions (2026-11-01): `PropertyCache` already takes any receiver | `deltablue` alone +2.6% under `VERSION_ES6` over 8 alternating runs (level without it), `richards`, `box2d` and the sequences level | not profiled; unlike the double conversions, these sites are inlined in the files that use them, where the guard is a plain type check (which may also let C2 drop the casts in `PropertyCache.cached`) |
 | Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
 
 ## Second pass (M16)
