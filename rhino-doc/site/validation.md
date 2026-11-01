@@ -120,9 +120,10 @@ maps, property access and built-in object creation (`./gradlew jmh`; `BENCHMARK=
 ### JavascriptPerformance
 
 [JavascriptPerformance](https://github.com/monflabs/JavascriptPerformance) is a separate project that runs the same
-benchmarks on several engines: the fork (under `VERSION_ECMASCRIPT`, compiled and interpreted), stock Rhino 1.8.0
-(under `VERSION_ES6`), the [Monflabs Nashorn](https://github.com/monflabs/nashorn) fork, OpenJDK Nashorn, GraalJS
-and V8. Each engine runs in its own JVM, in interleaved rounds.
+benchmarks on several engines: the fork (under `VERSION_ECMASCRIPT` and `VERSION_ES6`, compiled and interpreted),
+stock Rhino 1.9.1, the [Monflabs Nashorn](https://github.com/monflabs/nashorn) fork, OpenJDK Nashorn, GraalJS and
+V8. Each engine runs in its own JVM, in interleaved rounds. Its timings against Rhino 1.9.1 are in
+[Comparison with Rhino 1.9.1](comparison.md).
 
 It is a correctness harness as much as a performance one. **A benchmark that throws, does not compile, or fails its
 own result check is reported as FAILED**, not timed: Octane's and the V8 benchmarks' checksums (mandreel's, for

@@ -20,14 +20,15 @@ Three reference points appear in the figures below:
 | **Upstream base** | The upstream Rhino code the fork started from, tagged `perf-baseline` in the repository: upstream `master` of 2026-10-05 (`a2fd8fe11`), about 270 commits after the 1.9.1 release. The perf gate compares against it. |
 | **Rhino 1.9.1** | The upstream release, from Maven Central. It is older than the upstream base, and faster on some object-heavy benchmarks (see [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)). |
 | **Previous commit** | Most figures on this page are before/after a single change, measured against the commit before it. |
-| **Rhino 1.8.0** | The upstream release used by the external JavascriptPerformance harness, and quoted in a few micro-benchmarks as a reference. |
 
 Language versions: `Context.VERSION_ECMASCRIPT` (250) is the default language version of a new `Context`, the
 shell and `javax.script`. `Context.VERSION_ES6` (200) keeps the behavior of stock Rhino and must be selected
 explicitly. "All versions" below means an optimization applies to both, and to the older versions too.
 
-A figure such as "355 → 167 ms" is the time before and after one change, on the same machine, in the same run. The
-absolute numbers come from an Apple M-series laptop and are only meaningful relative to each other.
+A figure such as "355 → 167 ms" is the time before and after one change, on the same machine, in the same run. A
+comparison with stock Rhino is given as the fork's time as a percentage of stock's: 72% means the fork takes 72% of
+the time stock takes, and above 100% it is slower. The absolute numbers come from an Apple M-series laptop and are
+only meaningful relative to each other.
 
 ## Principles
 
@@ -101,10 +102,10 @@ PERF_ROUNDS=7 PERF_JAVA_OPTS='-Dperf.only=instanceof -Dperf.tolerance=0.05' buil
   slot maps, property access and built-in object creation. `BENCHMARK=<regex>` and `EVALMODE=Compiler` or
   `Interpreter` narrow a run.
 - **JavascriptPerformance**, an external harness, runs Octane, SunSpider, ubench and the V8 benchmarks on the
-  fork (under `VERSION_ECMASCRIPT`), Rhino 1.8.0 (under `VERSION_ES6`), the Monflabs Nashorn fork, OpenJDK Nashorn,
+  fork (under `VERSION_ECMASCRIPT` and `VERSION_ES6`), Rhino 1.9.1, the Monflabs Nashorn fork, OpenJDK Nashorn,
   GraalJS and V8, each in its own JVM, in interleaved rounds. It wraps every SunSpider file in a function, which
   is how several of the optimizations below were found: code inside a function took slower paths than top-level
-  code.
+  code. Its results against Rhino 1.9.1 are in [Comparison with Rhino 1.9.1](comparison.md).
 
 ## Calls and functions
 
@@ -124,7 +125,7 @@ check that the name still holds that function, with a regular call otherwise.
 
 - **Arguments evaluated once.** The arguments were generated in both branches of the guard; they are now
   evaluated once into locals. This brought a recursive `fib` back under the 325-byte limit at which the JIT
-  inlines a hot callee. Ten runs of `fib(28)`: 100 → 83 ms (upstream base: 133 ms; Rhino 1.8.0: 55 ms).
+  inlines a hot callee. Ten runs of `fib(28)`: 100 → 83 ms (upstream base: 133 ms).
 - **Nested declarations.** Direct calls covered the top-level declarations of a script only. A call inside a
   function now also targets a declaration of an enclosing function. This matters for code wrapped in a function
   (a module pattern, an IIFE): the shared call path becomes megamorphic once a JVM has run other scripts, while a
@@ -162,8 +163,8 @@ Using `arguments` gave a function an activation object and moved all its variabl
 `arguments` object in a plain variable, and its variables in registers.
 
 - **Applies to:** both modes, `VERSION_ECMASCRIPT`.
-- **Gain:** 1 million calls, compiled: a strict function summing `arguments` 818 → 200 ms (Rhino 1.8.0: 735 ms; a
-  rest parameter: 74 ms), passing it to `apply` 1,194 → 341 ms. Interpreted: 1,909 → 1,069 ms.
+- **Gain:** 1 million calls, compiled: a strict function summing `arguments` 818 → 200 ms (a rest parameter:
+  74 ms), passing it to `apply` 1,194 → 341 ms. Interpreted: 1,909 → 1,069 ms.
 
 ### Number parameters and return values
 
@@ -220,8 +221,8 @@ are all registers gets no scope object.
   than a direct `eval` (a legacy `Script` object, a host function) no longer sees register variables (see
   [Changes](changes.md)).
 - **Gain:** a function with a `catch` clause and 7 variables, called 3 million times: 592 → 87 ms compiled,
-  1,295 → 866 ms interpreted. A `let` loop in a function with a closure: 84 → 6 ms compiled; interpreted 1.5 to
-  2.9 times faster.
+  1,295 → 866 ms interpreted. A `let` loop in a function with a closure: 84 → 6 ms compiled; interpreted 34–67%
+  of the previous time.
 
 ### Captured variables at a fixed position
 
@@ -353,9 +354,9 @@ own prototype, no own property but `lastIndex`, and the relevant `RegExp.prototy
 flags come from the compiled pattern and the splitter is built once per pattern and flags.
 
 - **Applies to:** both modes, all versions (the `lastIndex` shortcut: `VERSION_ECMASCRIPT`).
-- **Gain:** 200,000 calls, compiled: `split` 268 → 146 ms, `replace` 166 → 108 ms, `exec` 119 → 96 ms (Rhino
-  1.8.0: 120, 73, 68 ms). Octane `regexp.js` at steady state: 16.4 → 14.7 s (Rhino 1.8.0: 13.2 s). The rest of
-  the gap is in the matcher, with no single hotspot.
+- **Gain:** 200,000 calls, compiled: `split` 268 → 146 ms, `replace` 166 → 108 ms, `exec` 119 → 96 ms. Octane
+  `regexp.js` at steady state: 16.4 → 14.7 s. What it still costs over Rhino 1.9.1 is in the matcher, with no
+  single hotspot.
 
 ### Other built-ins
 
@@ -376,7 +377,7 @@ instead:
 
 | Limit hit | What the compiler does | Gain |
 |---|---|---|
-| A function or the top-level code is too large | Re-parses with that function split into chunks of about 600 nodes, each an arrow function called in place; halves the size on each new failure, up to 3 times | Octane `regexp.js` compiled again: score 460 → 606 (Rhino 1.8.0: 538) |
+| A function or the top-level code is too large | Re-parses with that function split into chunks of about 600 nodes, each an arrow function called in place; halves the size on each new failure, up to 3 times | Octane `regexp.js` compiled again: score 460 → 606 |
 | The class is too large (constant pool, invokedynamic sites) | Spreads the functions over several classes, doubling the count on each failure, up to 256 | Octane `mandreel` over 16 classes: score 628 → 826 |
 | A literal of more than 1,000 constants | Compiles it as text parsed once into a cached template | Octane `pdfjs` compiles under `VERSION_ECMASCRIPT`: score 2,100 → 4,505 |
 
@@ -429,103 +430,25 @@ Experiments that measured no gain, or a regression elsewhere, and were not kept:
 | Compiled functions called through a generated subclass, as in Rhino 1.9.1, rather than an interface | `richards` level, `deltablue` −2.4%, `box2d` +4.6% | the dispatch was not the cost |
 | Hidden classes (shared shapes) | not attempted | a rewrite of the object model, see below |
 
-## Where the fork is slower than Rhino 1.8.0
-
-Across the JavascriptPerformance run of 2026-10-26 the fork is 1.62 times faster than Rhino 1.8.0 (geometric mean
-of 60 files, compiled mode). A few files are slower:
-
-| File | Fork vs 1.8.0 in the harness | Cause |
-|---|---:|---|
-| SunSpider `access-nbody` | 0.96 | the harness sequence |
-| SunSpider `crypto-md5` | 0.86 | the harness sequence |
-| Octane and V8 `regexp` | 0.82, 0.90 | the harness sequence |
-| SunSpider `regexp-dna` | 0.94 | the regexp matcher |
-| Octane and V8 `splay` | 0.82, 1.06 | object creation |
-| Octane and V8 `deltablue` | 0.94, 0.86 | property lookup and calls |
-
-(Above 1 is faster.) To separate the engine from the harness, each file was then run alone, one JVM per engine
-and file, in 3 interleaved rounds, with the same heap and options as the harness. The figure is the median of the
-best of 5 passes, in milliseconds, compiled mode:
-
-| File | Rhino 1.8.0 | Rhino 1.9.1 | Fork, `VERSION_ES6` | Fork, `VERSION_ECMASCRIPT` | Fork vs 1.8.0, alone |
-|---|---:|---:|---:|---:|---:|
-| `access-nbody` | 3,732 | 2,240 | 2,181 | 2,208 | 1.69 times faster |
-| `crypto-md5` | 1,986 | 1,423 | 1,408 | 1,399 | 1.42 times faster |
-| Octane `regexp` | 1,109 | 1,187 | 1,072 | 1,114 | level |
-| `regexp-dna` | 1,797 | 1,836 | 2,028 | 1,908 | 6% slower |
-| Octane `splay` | 421 | 433 | 473 | 464 | 10% slower |
-| Octane `deltablue` | 572 | 606 | 732 | 737 | 29% slower |
-
-### The harness sequence
-
-Alone, the fork is faster than 1.8.0 on `access-nbody` and `crypto-md5`, and level on `regexp`. The harness runs
-every file of every suite in one JVM per engine, so the files that ran first have already profiled the call sites
-that every property lookup shares (the slot map query and its key comparison) and that the regexp matcher shares
-with many receiver types. Those sites become megamorphic, the JIT stops inlining them, and the same code runs
-slower late in the sequence than alone. This is [profile pollution](#pitfalls-the-gate-accounts-for): `access-nbody`
-is level with 1.8.0 alone and about 25% slower after the other files, and forcing the lookup inline helped it but
-slowed `v8-richards` (see [Tried and dropped](#tried-and-dropped)). For `regexp`, in an earlier full run, 1.8.0 took 13.7 s and the fork
-16.7 s after the Octane files, with a megamorphic `ArrayList.contains` in the matcher.
-
-### Slower in the engine
-
-`deltablue`, `splay` and `regexp-dna` are slower alone too, under both language versions, so the cost is not in the
-ES2015+ semantics that `VERSION_ECMASCRIPT` adds but in engine changes that apply to every version. Part of it is
-upstream: Rhino 1.9.1 is already 6% slower than 1.8.0 on `deltablue`, and the upstream base of the fork, later
-than 1.9.1, slower again (see [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)).
-
-JFR profiles, fork against 1.9.1 (sampled, so the percentages are approximate):
-
-- **`deltablue`** (21% slower than 1.9.1) is about three quarters property lookup in both engines, and the fork
-  does more of it:
-  - the key comparison of the slot lookup (`StandardSlot.keyMatches`, reached through `EmbeddedSlotMap.query`)
-    takes 47% of the samples, against 24% in 1.9.1. Part of that is likely the memory latency of the slot it
-    loads rather than the comparison itself;
-  - the [per-site cache of inherited properties](#per-site-cache-of-inherited-properties) queries the receiver's
-    own slot map on every hit before it uses the cached slot. That pays on deep prototype chains; `deltablue`'s
-    objects are small with shallow chains, so the check is mostly extra work (about 8%, plus its lookups);
-  - a non-strict function computes its `this` on every call as the specification requires
-    (`JSFunction.getThisObj` → `ScriptRuntime.toObject`), about 5% on a benchmark made almost entirely of method
-    calls.
-- **`splay`** (8% slower than 1.9.1) creates objects, and creation costs more: growing a new object's slot map from
-  a single entry to a hash table (`SingleEntrySlotMap` → `EmbeddedSlotMap`, 6%), finding the built-in prototype
-  of each new object (12%), and the check of each literal for getters and setters (2%). Garbage collection is not
-  the difference: the GC pauses were similar, slightly shorter on the fork.
-- **`regexp-dna`** (6%) is in the regexp matcher, spread over it with no single hotspot.
-
-### What would close it
-
-Most of these costs come from the object model: each object has its own slot map, so every property read is a hash
-lookup, which is also what makes the lookup sites sensitive to the harness sequence. Shared shapes, described
-below, would address them together. Smaller changes could be tried first, each measured in the full perf gate
-since earlier changes of this kind regressed `v8-richards`:
-
-- skipping the own-map check of the inherited-property cache when the receiver's map has not changed;
-- not calling `toObject` when `this` is already an object;
-- comparing keys inline in the slot map that dominates the profile (done: see
-  [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191));
-- sizing the slot map of an object literal for its properties up front.
-
 ## Where the fork is slower than Rhino 1.9.1
 
 The full comparison, with every benchmark and the memory figures, is [Comparison with Rhino 1.9.1](comparison.md).
 
 In the JavascriptPerformance run of 2026-10-28/29 against Rhino 1.9.1 (compiled mode, 3 rounds, fork at
-`36f03fef4`), the fork is 1.45 times faster under `VERSION_ES6` and 1.6 times faster under `VERSION_ECMASCRIPT`, but
-slower on a few object-heavy files. In speed multipliers (1.9.1's time divided by the fork's, below ×1 when the
-fork is slower): `access-nbody` ×0.47–0.52, `box2d` ×0.68–0.78, `richards` ×0.81, `gbemu` ×0.78–0.87,
-`deltablue` and `raytrace` down to ×0.85.
+`36f03fef4`), the fork takes 69% of 1.9.1's time under `VERSION_ES6` and 63% under `VERSION_ECMASCRIPT`, but more
+on a few object-heavy files: `access-nbody` 192–213%, `box2d` 128–147%, `richards` 123%, `gbemu` 115–128%,
+`deltablue` and `raytrace` up to 118%.
 
-The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives ×1.40 under `VERSION_ES6` and ×1.53
-under `VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (×1.31 / ×1.41) and `access-nbody` is at ×0.73–0.85.
-`deltablue`, `richards`, `raytrace` and `gbemu` read ×0.70–0.85 in that run, but ×0.86–1.17 when each runs alone
-in its engine's JVM (×0.95–1.05 under `VERSION_ES6`). The harness runs every file of a round in one JVM per
-engine; 1.9.1 also slows down when these files run after the others, but the fork slows down more.
+The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives 71% under `VERSION_ES6` and 66% under
+`VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (76% / 71%) and `access-nbody` is at 118–138%.
+`deltablue`, `richards`, `raytrace` and `gbemu` read 118–143% in that run, but 85–116% when each runs alone in
+its engine's JVM (95–105% under `VERSION_ES6`). The harness runs every file of a round in one JVM per engine; 1.9.1
+also slows down when these files run after the others, but the fork slows down more.
 
-A second rerun on 2026-10-31 (fork at `2ccfaeaa4`, the same engine code: only documentation changed) gives ×1.39
-and ×1.54. The means held, but single files did not: `richards` read ×0.68 under both versions and
-`access-nbody` ×0.55 under `VERSION_ECMASCRIPT`, and some of stock's own times moved by up to 47%. A single
-file's multiplier in one session is not reliable; see
+A second rerun on 2026-10-31 (fork at `2ccfaeaa4`, the same engine code: only documentation changed) gives 72%
+and 65%. The means held, but single files did not: `richards` read 147–148% under both versions and
+`access-nbody` 183% under `VERSION_ECMASCRIPT`, and some of stock's own times moved by up to 47%. A single
+file's percentage in one session is not reliable; see
 [Variation between runs](comparison.md#variation-between-runs).
 
 The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
@@ -535,8 +458,8 @@ The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime
 - The fork's per-site property cache (`PropertyCache.getPropAndThis`, about 2.6 KB compiled) and its typed links
   do not. Those are what make it faster alone.
 
-`-XX:InlineSmallCode=8000` takes the fork to ×1.40 / ×1.63 and `deltablue` to ×0.93 / ×0.96, but slows down a
-few other files. Linking these helpers per site, as the array elements already are, was tried on 2026-10-31 and
+`-XX:InlineSmallCode=8000` takes the fork to 71% / 61% and `deltablue` to 107% / 104%, but slows down a few
+other files. Linking these helpers per site, as the array elements already are, was tried on 2026-10-31 and
 dropped: the `MethodHandle` chain at every get site used up C2's inlining budget in the script methods (see the
 "Tried and dropped" table of
 [OPTIMIZATION.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION.md)). Shared shapes
@@ -544,16 +467,16 @@ are the remaining candidate.
 
 The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate
 the two, each file was run alone (one JVM, best of 2 runs after 1, `VERSION_ES6`) on 1.9.1, on that upstream base
-and on the fork, in milliseconds:
+and on the fork, before the fixes below, in milliseconds:
 
-| File | Rhino 1.9.1 | Upstream base | Fork | Where the difference comes from |
-|---|---:|---:|---:|---|
-| `access-nbody` | 2,052 | 3,989 | 2,133 | the harness sequence: level alone |
-| `gbemu` | 8,283 | 9,011 | 8,031 | the harness sequence: faster alone |
-| `box2d` | 12,799 | 18,486 | 18,098 | upstream, one commit (below) |
-| `richards` | 28,172 | 34,846 | 35,659 | upstream |
-| `raytrace` | 29,667 | 32,934 | 32,850 | upstream |
-| `deltablue` | 26,238 | 30,630 | 33,140 | upstream, and about 8% in the fork |
+| File | Rhino 1.9.1 | Upstream base | Fork | Fork, % of 1.9.1 | Where the difference comes from |
+|---|---:|---:|---:|---:|---|
+| `access-nbody` | 2,052 | 3,989 | 2,133 | 104% | the harness sequence: level alone |
+| `gbemu` | 8,283 | 9,011 | 8,031 | 97% | the harness sequence: faster alone |
+| `box2d` | 12,799 | 18,486 | 18,098 | 141% | upstream, one commit (below) |
+| `richards` | 28,172 | 34,846 | 35,659 | 127% | upstream |
+| `raytrace` | 29,667 | 32,934 | 32,850 | 111% | upstream |
+| `deltablue` | 26,238 | 30,630 | 33,140 | 126% | upstream, and about 8% in the fork |
 
 ### The upstream commit
 
@@ -586,19 +509,42 @@ effects were measured:
 ### What the fork pays on its own
 
 `raytrace` was bisected the same way, to upstream 80cc8c60d ("Reduce heap space used by built in slots", 30.1 s →
-32.7 s), whose cost is the key comparison above. With that fixed, the fork was still about 6% slower than 1.9.1 on
-`raytrace`, from three costs of its own:
+32.7 s), whose cost is the key comparison above. With that fixed, the fork still took about 106% of 1.9.1's time
+on `raytrace`, from three costs of its own:
 
 - **Slot maps grown on every new object.** An object starts with a shared empty map, then a single-entry map,
   and is copied into a hash table at its second property; 1.9.1 starts it with a hash table. Objects created by
   `new` now start with one (the table itself is still allocated at the first property): `deltablue` −9 to −12%
-  (now about 10% faster than 1.9.1), `splay` −2 to −5%, `raytrace` −1.5 to −4% (within about 2% of 1.9.1),
+  (now about 90% of 1.9.1's time), `splay` −2 to −5%, `raytrace` −1.5 to −4% (about 102% of 1.9.1's time),
   `richards`, `box2d` and `access-nbody` level, 3 rounds alone.
 - **Not a cost: `StringLatin1.hashCode`.** JFR puts about 2% of `raytrace` there, as if property names were
   hashed again at each lookup, but the script allocates no `String` while it runs (JFR allocation samples): the
   names keep their cached hash, and the samples are those of the inlined `String.hashCode` in the slot lookup,
   attributed to the method that computes it.
 - **`arguments` objects**, created by `Class.create`'s `this.initialize.apply(this, arguments)` (about 2%).
+
+### Profiles before the fixes
+
+JFR profiles of the files that were slower alone, fork against 1.9.1, taken before the fixes above (sampled, so
+the percentages are approximate):
+
+- **`deltablue`** (then 121% of 1.9.1's time) is about three quarters property lookup in both engines, and the
+  fork does more of it:
+  - the key comparison of the slot lookup (`StandardSlot.keyMatches`, reached through `EmbeddedSlotMap.query`)
+    took 47% of the samples, against 24% in 1.9.1; the key comparison is now done without `Objects.equals` (see
+    [The upstream commit](#the-upstream-commit));
+  - the [per-site cache of inherited properties](#per-site-cache-of-inherited-properties) queries the receiver's
+    own slot map on every hit before it uses the cached slot. That pays on deep prototype chains; `deltablue`'s
+    objects are small with shallow chains, so the check is mostly extra work (about 8%, plus its lookups);
+  - a non-strict function computes its `this` on every call as the specification requires
+    (`JSFunction.getThisObj` → `ScriptRuntime.toObject`), about 5% on a benchmark made almost entirely of method
+    calls.
+- **`splay`** (then 108%) creates objects, and creation costs more: growing a new object's slot map from a single
+  entry to a hash table (`SingleEntrySlotMap` → `EmbeddedSlotMap`, 6%; objects created by `new` now start with a
+  hash table), finding the built-in prototype of each new object (12%), and the check of each literal for getters
+  and setters (2%). Garbage collection is not the difference: the GC pauses were similar, slightly shorter on the
+  fork.
+- **`regexp-dna`** (then 106%) is in the regexp matcher, spread over it with no single hotspot.
 
 ### Also seen in `box2d`
 
@@ -614,17 +560,24 @@ cache: 6, 14, 1, then none), and the runs settle at 8.95–9.0 s from the fourth
 Property access on objects is the largest remaining gap with Nashorn. In the JavascriptPerformance run of
 2026-10-26 (compiled mode, 3 rounds):
 
-| Octane benchmark | Monflabs Nashorn | Rhino 1.8.0 | Rhino fork |
-|---|---|---|---|
-| `richards` | 5.0 s | 50.3 s | 42.2 s |
-| `deltablue` | 5.8 s | 31.0 s | 33.0 s |
-| `raytrace` | 6.5 s | 41.4 s | 38.3 s |
+| Octane benchmark | Monflabs Nashorn | Rhino fork |
+|---|---|---|
+| `richards` | 5.0 s | 42.2 s |
+| `deltablue` | 5.8 s | 33.0 s |
+| `raytrace` | 6.5 s | 38.3 s |
 
-The fork is slightly ahead of Rhino 1.8.0 on `richards` and `raytrace`, and behind on `deltablue` (see
-[Where the fork is slower than Rhino 1.8.0](#where-the-fork-is-slower-than-rhino-180)). Own-property lookups are
-the largest compiled cost left, about 15%. In Rhino each object has its own slot map (a hash table), so a call site cannot remember where a property
-is: every attempt to make the lookup itself cheaper either gained nothing or regressed `v8-richards` (see the
-table above).
+These are also the files on which the fork takes more time than Rhino 1.9.1 (see
+[Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)). Own-property lookups are
+the largest compiled cost left, about 15%. In Rhino each object has its own slot map (a hash table), so a call site
+cannot remember where a property is: every attempt to make the lookup itself cheaper either gained nothing or
+regressed `v8-richards` (see [Tried and dropped](#tried-and-dropped)).
+
+Smaller changes could be tried first, each measured in the full perf gate since earlier changes of this kind
+regressed `v8-richards`:
+
+- skipping the own-map check of the inherited-property cache when the receiver's map has not changed;
+- not calling `toObject` when `this` is already an object;
+- sizing the slot map of an object literal for its properties up front.
 
 Nashorn shares a property map among the objects that have the same properties added in the same order, and its
 call sites link against that map, so a property read becomes a map check and a field load. Bringing shared shapes

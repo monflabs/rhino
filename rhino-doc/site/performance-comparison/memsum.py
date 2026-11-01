@@ -15,6 +15,6 @@ for g,es in groups.items():
         out=[]
         for e in es[1:]:
             lr=[math.log(max(1,float(d[k][e][c]))/max(1,float(d[k][es[0]][c]))) for k in keys]
-            out.append(f"{e}: x{math.exp(sum(lr)/len(lr)):.2f}")
+            out.append(f"{e}: {100*math.exp(sum(lr)/len(lr)):.0f}%")
         tot=[sum(float(d[k][e][c]) for k in keys) for e in es]
         print(f"  {c:24} geomean vs stock: "+"; ".join(out)+"  | totals "+" / ".join(f"{t/1024:.0f}MB" if 'KB' in c else f"{t:.0f}" for t in tot))
