@@ -520,6 +520,12 @@ under `VERSION_ECMASCRIPT`; `box2d` is now faster than 1.9.1 (×1.31 / ×1.41) a
 in its engine's JVM (×0.95–1.05 under `VERSION_ES6`). The harness runs every file of a round in one JVM per
 engine; 1.9.1 also slows down when these files run after the others, but the fork slows down more.
 
+A second rerun on 2026-10-31 (fork at `2ccfaeaa4`, the same engine code: only documentation changed) gives ×1.39
+and ×1.54. The means held, but single files did not: `richards` read ×0.68 under both versions and
+`access-nbody` ×0.55 under `VERSION_ECMASCRIPT`, and some of stock's own times moved by up to 47%. A single
+file's multiplier in one session is not reliable; see
+[Variation between runs](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/PERFORMANCE_COMPARISON_MONFLABS.md#variation-between-runs).
+
 The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
 - The files that run first compile the shared helpers on their own, into code larger than `InlineSmallCode`
   (2,500 bytes). Later files then call them instead of inlining them.
@@ -528,8 +534,11 @@ The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime
   do not. Those are what make it faster alone.
 
 `-XX:InlineSmallCode=8000` takes the fork to ×1.40 / ×1.63 and `deltablue` to ×0.93 / ×0.96, but slows down a
-few other files. The planned fix is to link these helpers per site as small methods, as the array elements
-already are.
+few other files. Linking these helpers per site, as the array elements already are, was tried on 2026-10-31 and
+dropped: the `MethodHandle` chain at every get site used up C2's inlining budget in the script methods (see the
+"Tried and dropped" table of
+[OPTIMIZATION.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION.md)). Shared shapes
+are the remaining candidate.
 
 The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate
 the two, each file was run alone (one JVM, best of 2 runs after 1, `VERSION_ES6`) on 1.9.1, on that upstream base

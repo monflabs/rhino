@@ -8,7 +8,7 @@ Three engines, measured on the same machine with the same harness:
 | **Monflabs ES6** | this fork, `Context.VERSION_ES6` (upstream's language level) | `RHINO_MONFLABS_ES6_COMPILED` / `_INTERPRETED` |
 | **Monflabs ECMASCRIPT** | this fork, `Context.VERSION_ECMASCRIPT` (ES2026) | `RHINO_MONFLABS_COMPILED` / `_INTERPRETED` |
 
-Compiled time measured 2026-10-30, fork at `efc8516b1`; memory and the partial interpreted run measured
+Compiled time measured 2026-10-31, fork at `2ccfaeaa4`; memory and the partial interpreted run measured
 2026-10-28/29, fork at `36f03fef4`. Times are given as speed multipliers, stock time divided by fork time: ×1.40
 means the fork runs 1.4 times as fast as stock, and below ×1 it is slower. Memory figures are ratios to stock:
 below 1 means the fork uses less memory.
@@ -17,37 +17,50 @@ below 1 means the fork uses less memory.
 
 **Time, compiled mode (complete: 3 rounds).** Geometric mean over the 53 benchmarks that run on all three engines:
 
-| Suite | Benchmarks | Monflabs ES6 speed | Monflabs ECMASCRIPT speed |
-| --- | --- | --- | --- |
-| SunSpider 1.0.2 | 26 | ×1.48 | ×1.67 |
-| Octane | 11 | ×1.14 | ×1.20 |
-| ubench | 10 | ×1.45 | ×1.45 |
-| intrinsics (generators, async) | 6 | ×1.54 | ×1.73 |
-| **All** | **53** | **×1.40** | **×1.53** |
+| Suite | Benchmarks | Monflabs ES6 speed | Monflabs ECMASCRIPT speed | 2026-10-30 run |
+| --- | --- | --- | --- | --- |
+| SunSpider 1.0.2 | 26 | ×1.45 | ×1.70 | ×1.48 / ×1.67 |
+| Octane | 11 | ×1.12 | ×1.21 | ×1.14 / ×1.20 |
+| ubench | 10 | ×1.43 | ×1.43 | ×1.45 / ×1.45 |
+| intrinsics (generators, async) | 6 | ×1.66 | ×1.77 | ×1.54 / ×1.73 |
+| **All** | **53** | **×1.39** | **×1.54** | **×1.40 / ×1.53** |
 
-- The fork is about **1.4× faster** than stock under ES6 and **1.5× faster** under ECMASCRIPT. ECMASCRIPT is ×1.09
+- The fork is about **1.4× faster** than stock under ES6 and **1.5× faster** under ECMASCRIPT. ECMASCRIPT is ×1.11
   against ES6 on the same engine.
+- **This run repeats the previous one on the same engine.** Every commit between `efc8516b1` (the run of
+  2026-10-30) and `2ccfaeaa4` changes documentation only, so the two runs measure the variation between sessions,
+  not a change. See [Variation between runs](#variation-between-runs).
+  - The means agree within 1%, and each suite within 3%, except intrinsics, whose stock times are 140–610 ms.
+  - 39 to 42 of the 53 per-benchmark times agree within 10%, depending on the engine. The rest move by up to 55%,
+    in both directions and on either engine.
 - The run of 2026-10-28/29, at `36f03fef4`, gave ×1.45 and ×1.59. The difference is ubench, whose stock times
   are 70–130 ms and moved by up to 45% between the two runs; Octane is level or better.
-- The gains are broad: numeric loops, bit operations, calls and closures, generators. The largest are ×3 to ×6.5,
-  on `access-fannkuch`, `math-spectral-norm`, `bitops-nsieve-bits`, `controlflow-recursive`, `navier-stokes` and
-  `pdfjs`.
+- The gains are broad: numeric loops, bit operations, calls and closures, generators. The largest are ×3 to ×6,
+  on `access-fannkuch`, `math-spectral-norm`, `controlflow-recursive`, `bitops-nsieve-bits`,
+  `bitops-3bit-bits-in-byte`, `navier-stokes`, `pdfjs` and `generator_nqueens`.
 - **Some benchmarks are slower on the fork:**
 
-  | Benchmark | In the run (ES6 / ECMASCRIPT) | Alone (ES6 / ECMASCRIPT) |
-  | --- | --- | --- |
-  | `deltablue` | ×0.77 / ×0.76 | ×1.05 / ×0.86 |
-  | `richards` | ×0.82 / ×0.76 | ×0.96 / ×0.96 |
-  | `raytrace` | ×0.79 / ×0.85 | ×0.95 / ×1.10 |
-  | `gbemu` | ×0.77 / ×0.70 | ×0.95 / ×1.17 |
-  | `access-nbody` | ×0.85 / ×0.73 | |
-  | `earley-boyer` | ×0.87 / ×1.01 | |
+  | Benchmark | In the run (ES6 / ECMASCRIPT) | 2026-10-30 run | Alone (ES6 / ECMASCRIPT) |
+  | --- | --- | --- | --- |
+  | `deltablue` | ×0.76 / ×0.75 | ×0.77 / ×0.76 | ×1.05 / ×0.86 |
+  | `richards` | ×0.68 / ×0.68 | ×0.82 / ×0.76 | ×0.96 / ×0.96 |
+  | `raytrace` | ×0.81 / ×0.87 | ×0.79 / ×0.85 | ×0.95 / ×1.10 |
+  | `gbemu` | ×0.76 / ×0.84 | ×0.77 / ×0.70 | ×0.95 / ×1.17 |
+  | `access-nbody` | ×0.78 / ×0.55 | ×0.85 / ×0.73 | |
+  | `splay` | ×0.78 / ×0.90 | ×0.87 / ×0.95 | |
+  | `earley-boyer` | ×0.90 / ×1.05 | ×0.87 / ×1.01 | |
 
   These are all property-access-heavy object code. "Alone" is the same harness with `--octane-benchmarks=<file>`
-  and one round, so each engine's JVM runs that file only. Most of the gap comes from running after the other
-  files in one JVM: stock slows down there too (`richards` 27.3 s alone, 35.2 s in the run), but the fork slows
-  down more. `box2d`, ×0.68–0.78 in the previous run, is now faster than stock (×1.31 / ×1.41), and
-  `access-nbody` went from ×0.47–0.52 to ×0.73–0.85. The analysis is in
+  and one round, so each engine's JVM runs that file only; it was measured at `efc8516b1`, the same engine code.
+  Most of the gap comes from running after the other files in one JVM: stock slows down there too (`richards`
+  27.3 s alone, 35.3 s in the run), but the fork slows down more.
+  - `richards` and `access-nbody` under ECMASCRIPT are the furthest behind in this run, but with no code change.
+    The fork's `richards` took 42.7 s (ES6) and 46.6 s (ECMASCRIPT) on 2026-10-30, and 52.1 s and 51.9 s here. Its
+    three rounds agree with each other in both runs (Octane scores 1080–1244 here), so the fork's JIT settles
+    differently from one session to the next, not from one JVM to the next.
+  - `box2d`, ×0.68–0.78 in the run of 2026-10-28/29, is faster than stock (×1.43 / ×1.50).
+
+  The analysis is in
   [Where the fork is slower than Rhino 1.9.1](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
 - **Three benchmarks run under ECMASCRIPT only.** `mandreel` fails its checksum, and `async_generator_stream` and
   `async_request_handler` use syntax beyond ES6. All three fail on stock *and* on Monflabs ES6, so this is a
@@ -133,7 +146,7 @@ round. Every JVM gets `-Xms1g -Xmx1g -XX:+UseG1GC`.
 These are the rules the Nashorn performance gate uses: interleaving, minimum within a JVM, median across JVMs and
 a pinned heap. Each was introduced after it was seen to move results by 15–30%.
 
-- **Compiled run time:** 4h 16m.
+- **Compiled run time:** 4h 16m on 2026-10-30, 4h 12m on 2026-10-31.
 - **Interpreted run time:** about 25 hours projected, because stock Octane interpreted takes up to 6 minutes a
   run (`crypto`).
 
@@ -172,8 +185,10 @@ The whole memory run took about 5 hours.
 
 The raw data is in [`performance-comparison/`](performance-comparison/):
 
-- `rhino-time-compiled.csv`
-- `rhino-time-compiled.html`: the harness's chart report.
+- `rhino-time-compiled.csv`: the run of 2026-10-31.
+- `rhino-time-compiled.html`: the harness's chart report for it.
+- `rhino-time-compiled-2026-10-30.csv`: the previous run, on the same engine code.
+- `rhino-time-compiled-isc8000.csv`: the run with `-XX:InlineSmallCode=8000` (see [Caveats](#caveats)).
 - `rhino-memory.csv`
 - `rhino-time-interpreted-partial.log`
 - the two summary scripts.
@@ -186,71 +201,106 @@ The stock column is wall time in ms; the other two columns are speed multipliers
 | --- | --- | --- | --- |
 | **intrinsics** | | | |
 | async_generator_stream | FAILED | FAILED | 202 ms |
-| async_promise_combinators | 171 | ×1.33 | ×1.54 |
-| async_request_handler | FAILED | FAILED | 251 ms |
-| generator_iterable_collection | 263 | ×1.45 | ×1.61 |
-| generator_nqueens | 387 | ×2.20 | ×2.21 |
-| generator_pipeline | 647 | ×1.12 | ×1.55 |
-| generator_tokenizer | 176 | ×1.30 | ×1.40 |
-| generator_tree_iterator | 411 | ×2.19 | ×2.25 |
+| async_promise_combinators | 144 | ×1.25 | ×1.33 |
+| async_request_handler | FAILED | FAILED | 252 ms |
+| generator_iterable_collection | 236 | ×1.43 | ×1.39 |
+| generator_nqueens | 532 | ×3.15 | ×3.19 |
+| generator_pipeline | 610 | ×1.15 | ×1.60 |
+| generator_tokenizer | 173 | ×1.49 | ×1.59 |
+| generator_tree_iterator | 370 | ×2.18 | ×2.09 |
 | **Octane** | | | |
-| box2d | 12682 | ×1.31 | ×1.41 |
-| crypto | 33062 | ×1.25 | ×1.35 |
-| deltablue | 28065 | ×0.77 | ×0.76 |
-| earley-boyer | 59634 | ×0.87 | ×1.01 |
-| gbemu-part1 | 6230 | ×0.77 | ×0.70 |
-| mandreel | FAILED | FAILED | 40829 ms |
-| navier-stokes | 24028 | ×3.01 | ×3.97 |
-| pdfjs | 13181 | ×3.04 | ×3.56 |
-| raytrace | 33384 | ×0.79 | ×0.85 |
-| regexp | 13597 | ×0.93 | ×0.85 |
-| richards | 35242 | ×0.82 | ×0.76 |
-| splay | 3800 | ×0.87 | ×0.95 |
+| box2d | 12963 | ×1.43 | ×1.50 |
+| crypto | 32430 | ×1.29 | ×1.34 |
+| deltablue | 28879 | ×0.76 | ×0.75 |
+| earley-boyer | 61224 | ×0.90 | ×1.05 |
+| gbemu-part1 | 6189 | ×0.76 | ×0.84 |
+| mandreel | FAILED | FAILED | 38315 ms |
+| navier-stokes | 21783 | ×2.77 | ×3.70 |
+| pdfjs | 13409 | ×3.30 | ×3.80 |
+| raytrace | 34029 | ×0.81 | ×0.87 |
+| regexp | 13878 | ×0.94 | ×0.84 |
+| richards | 35258 | ×0.68 | ×0.68 |
+| splay | 3698 | ×0.78 | ×0.90 |
 | **SunSpider** | | | |
-| 3d-cube | 396 | ×1.67 | ×1.87 |
-| 3d-morph | 2224 | ×1.77 | ×3.01 |
-| 3d-raytrace | 280 | ×1.25 | ×1.15 |
-| access-binary-trees | 1532 | ×0.84 | ×0.95 |
-| access-fannkuch | 2124 | ×6.23 | ×6.52 |
-| access-nbody | 3021 | ×0.85 | ×0.73 |
-| access-nsieve | 319 | ×1.74 | ×1.78 |
-| bitops-3bit-bits-in-byte | 20866 | ×3.60 | ×3.39 |
-| bitops-bits-in-byte | 3247 | ×1.58 | ×1.32 |
-| bitops-bitwise-and | 705 | ×1.74 | ×1.77 |
-| bitops-nsieve-bits | 1197 | ×3.90 | ×3.94 |
-| controlflow-recursive | 3526 | ×1.80 | ×3.62 |
-| crypto-aes | 602 | ×1.33 | ×1.45 |
-| crypto-md5 | 949 | ×1.38 | ×1.28 |
-| crypto-sha1 | 503 | ×1.38 | ×1.55 |
-| date-format-tofte | 296 | ×1.22 | ×1.29 |
-| date-format-xparb | 400 | ×1.00 | ×1.03 |
-| math-cordic | 2932 | ×1.26 | ×2.47 |
-| math-partial-sums | 2286 | ×1.38 | ×1.30 |
-| math-spectral-norm | 2923 | ×2.31 | ×5.70 |
-| regexp-dna | 302 | ×1.00 | ×0.98 |
-| string-base64 | 1042 | ×1.00 | ×1.11 |
-| string-fasta | 156 | ×1.13 | ×1.14 |
-| string-tagcloud | 503 | ×1.00 | ×1.15 |
-| string-unpack-code | 238 | ×0.92 | ×0.96 |
-| string-validate-input | 603 | ×1.01 | ×1.16 |
+| 3d-cube | 346 | ×1.46 | ×1.70 |
+| 3d-morph | 2112 | ×1.67 | ×2.92 |
+| 3d-raytrace | 228 | ×1.15 | ×1.00 |
+| access-binary-trees | 1962 | ×0.90 | ×1.00 |
+| access-fannkuch | 1922 | ×4.93 | ×5.64 |
+| access-nbody | 2993 | ×0.78 | ×0.55 |
+| access-nsieve | 291 | ×1.56 | ×1.63 |
+| bitops-3bit-bits-in-byte | 20920 | ×3.74 | ×3.65 |
+| bitops-bits-in-byte | 3531 | ×1.10 | ×2.23 |
+| bitops-bitwise-and | 708 | ×1.73 | ×1.76 |
+| bitops-nsieve-bits | 1181 | ×3.73 | ×3.82 |
+| controlflow-recursive | 4578 | ×2.35 | ×4.75 |
+| crypto-aes | 649 | ×1.53 | ×2.08 |
+| crypto-md5 | 937 | ×1.37 | ×1.31 |
+| crypto-sha1 | 482 | ×1.30 | ×1.70 |
+| date-format-tofte | 308 | ×1.36 | ×1.33 |
+| date-format-xparb | 388 | ×1.02 | ×1.00 |
+| math-cordic | 2868 | ×1.51 | ×2.96 |
+| math-partial-sums | 2201 | ×1.20 | ×1.04 |
+| math-spectral-norm | 2853 | ×2.34 | ×6.03 |
+| regexp-dna | 287 | ×0.97 | ×0.94 |
+| string-base64 | 994 | ×1.00 | ×1.15 |
+| string-fasta | 153 | ×1.10 | ×1.09 |
+| string-tagcloud | 458 | ×0.98 | ×1.12 |
+| string-unpack-code | 219 | ×0.91 | ×0.92 |
+| string-validate-input | 592 | ×1.04 | ×1.15 |
 | **ubench** | | | |
-| function-closure | 1248 | ×1.84 | ×1.74 |
-| function-correct-args | 85 | ×1.13 | ×1.10 |
-| function-excess-args | 85 | ×1.16 | ×1.12 |
-| function-missing-args | 111 | ×1.25 | ×1.22 |
-| interp_hot_closure | 117 | ×1.41 | ×1.41 |
-| interp_hot_property | 97 | ×1.39 | ×1.35 |
-| interp_recursive_fib | 70 | ×0.81 | ×0.86 |
-| loop-empty-resolve | 23 | ×1.92 | ×2.09 |
-| loop-empty | 194 | ×2.00 | ×2.00 |
-| loop-sum | 349 | ×2.25 | ×2.25 |
+| function-closure | 1198 | ×1.72 | ×1.67 |
+| function-correct-args | 92 | ×1.33 | ×1.33 |
+| function-excess-args | 91 | ×1.32 | ×1.32 |
+| function-missing-args | 115 | ×1.25 | ×1.25 |
+| interp_hot_closure | 96 | ×1.14 | ×1.13 |
+| interp_hot_property | 83 | ×1.17 | ×1.14 |
+| interp_recursive_fib | 103 | ×1.21 | ×1.14 |
+| loop-empty-resolve | 22 | ×1.69 | ×1.83 |
+| loop-empty | 185 | ×1.81 | ×1.89 |
+| loop-sum | 311 | ×1.91 | ×1.92 |
 
-Differences under about 10% on one benchmark are within the noise of a 3-round run. Examples are `regexp` going
-from ×0.93 to ×0.85, and `splay`. ES6 against ECMASCRIPT on the same engine differ most where the language
-version changes the code generated:
+ES6 against ECMASCRIPT on the same engine differ most where the language version changes the code generated:
 
-- `math-spectral-norm`, `controlflow-recursive` and `3d-morph` are much faster under ECMASCRIPT.
-- `bitops-bits-in-byte` and `math-partial-sums` are faster under ES6.
+- `math-spectral-norm`, `controlflow-recursive`, `math-cordic` and `3d-morph` are much faster under ECMASCRIPT, in
+  both runs.
+- `math-partial-sums` and `access-nbody` are faster under ES6, in both runs.
+- `bitops-bits-in-byte` is not a language-version difference. It was faster under ES6 on 2026-10-30 (×1.58
+  against ×1.32) and is faster under ECMASCRIPT here (×1.10 against ×2.23); see below.
+
+### Variation between runs
+
+The runs of 2026-10-30 and 2026-10-31 measure the same engine code, on the same machine, with the same harness
+settings. Taking each engine's own times, new against old:
+
+| Engine | Geometric mean of the 53 | Benchmarks within 10% |
+| --- | --- | --- |
+| Stock | 1.01× as fast | 39 |
+| Monflabs ES6 | level | 42 |
+| Monflabs ECMASCRIPT | 1.02× as fast | 40 |
+
+So a suite mean is good to about 3%, but one benchmark's multiplier is not, even in a 3-round run. The largest
+moves, all without a code change:
+
+| Benchmark | Engine | 2026-10-30 | 2026-10-31 |
+| --- | --- | --- | --- |
+| `bitops-bits-in-byte` | ES6 / ECMASCRIPT | 2,057 / 2,459 ms | 3,218 / 1,584 ms |
+| `richards` | ES6 / ECMASCRIPT | 42.7 / 46.6 s | 52.1 / 51.9 s |
+| `access-nbody` | ECMASCRIPT | 4,164 ms | 5,491 ms |
+| `crypto-aes` | ECMASCRIPT | 416 ms | 312 ms |
+| `gbemu` | ECMASCRIPT | 8,908 ms | 7,375 ms |
+| `generator_nqueens` | stock | 387 ms | 532 ms |
+| `controlflow-recursive` | stock | 3,526 ms | 4,578 ms |
+| `interp_recursive_fib` | stock | 70 ms | 103 ms |
+
+- **The rounds of one run agree with each other.** For example, `richards` on the fork scores 1080–1244 in this
+  run's three rounds, and stock 1564–1777. The variation is between sessions, not between the JVMs of a
+  session, so the median of 3 rounds does not remove it.
+- **It is in both directions and on every engine.** The last three rows are stock moving, not the fork.
+  `access-nbody` was already known to have a fast and a slow JIT state: alone, 9 runs in 10 land in the fast one
+  (see [performance.md](../rhino-doc/site/performance.md#the-upstream-commit)).
+- **Conclusion.** To call a change on one benchmark, compare two sessions, or run that file alone with
+  alternating runs, as the regression analysis does.
 
 ### Memory: the fixed cost of an engine (empty script)
 
@@ -288,9 +338,9 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
     2.6 KB compiled) and its other typed links do not: after `crypto`, C2 refused to inline them 522 times, against
     135 when `deltablue` runs alone.
   - **With `-XX:InlineSmallCode=8000`** (all engines; [CSV](performance-comparison/rhino-time-compiled-isc8000.csv),
-    2026-10-31, same commit and settings), All goes to ×1.40/×1.63:
+    2026-10-31, same engine and settings as the run of 2026-10-30), All goes from ×1.40/×1.53 to ×1.40/×1.63:
 
-    | Benchmark | Without the flag | With it |
+    | Benchmark | Without the flag (2026-10-30) | With it |
     |---|---|---|
     | deltablue | ×0.77/×0.76 | ×0.93/×0.96 |
     | richards | ×0.82/×0.76 | ×0.86/×0.88 |
@@ -300,10 +350,13 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
 
     The flag speeds up each engine's own times overall: stock by 3%, the fork by 3% under ES6 and 10% under
     ECMASCRIPT. Some ES6 files got slower: `crypto-sha1` 364 → 614 ms, `generator_tokenizer` 135 → 210 ms,
-    `access-fannkuch` 341 → 424 ms. It is a tuning option for embedders, not a fix.
-- **The machine was not idle.** The measurements ran on an Apple M2 (8 cores, 24 GB) under Azul Zulu 25.0.4.
-  Chrome Remote Desktop used about a third of a core throughout. All three engines were exposed to that equally,
-  since they were interleaved, but it widens the noise.
+    `access-fannkuch` 341 → 424 ms. It is a tuning option for embedders, not a fix. Given the
+    [variation between runs](#variation-between-runs), the per-benchmark gains of one session with the flag are
+    indicative only.
+- **The machine was not always idle.** The measurements ran on an Apple M2 (8 cores, 24 GB) under Azul Zulu
+  25.0.4. During the run of 2026-10-30, Chrome Remote Desktop used about a third of a core throughout. During the
+  run of 2026-10-31 its host was running but idle (2 s of CPU in all), and the per-benchmark variation was no
+  smaller. All three engines were exposed equally, since they were interleaved.
 - **Octane is timed, not scored.** The harness reports the wall time of a run. The Octane score each benchmark
   prints is in the log, but not used.
 - **A failed benchmark is left out of the means.** Only the 53 that run on all three engines count. The ECMASCRIPT
@@ -318,40 +371,38 @@ To redo this:
 2. **Memory, one JVM per benchmark.** Rerun the memory command, which now starts one JVM per (engine, benchmark).
    Expect about 5 hours. Then check that no figure is negative and that the totals in `memsum.py` add up.
 3. **The regressions.** Analysed in [performance.md](../rhino-doc/site/performance.md#where-the-fork-is-slower-than-rhino-191).
-   Since this run, slot keys are compared without `Objects.equals` (`deltablue` about 18% faster, `richards`
-   6–10%), and the double conversions are linked without a guard that calls the native `Class.isInstance`
-   (`box2d` 18.4 s → 9.1 s alone, faster than stock), and objects created by `new` start with a hash table
-   (`deltablue` a further 9–12%, now faster than stock; `raytrace` within about 2% of stock). The deoptimizations
-   of the inherited-property cache stop after warm-up, and the property names `raytrace` seemed to hash again
-   were a JFR attribution (no `String` is allocated while it runs). Still open: `richards`, about 2.5% behind
-   stock (median of 6 alternating runs each: 29.19 s, against 28.48 s). JFR puts 11% of it in
-   `MHJSFunctionCode.execute`, but calling functions through a generated subclass, as 1.9.1 does, left it
-   unchanged (see the "Tried and dropped" table of performance.md); no single cause found. The compiled timing
-   was rerun on 2026-10-30. Still open from it:
-   - the fork loses more than stock when the object-heavy files run after the others in one JVM (`deltablue`
-     ×1.05 alone, ×0.77 in the run, under ES6). The cause is explained in [Caveats](#caveats). Two quick fixes
-     failed; they are in OPTIMIZATION.md's "Tried and dropped" table. The planned fix:
-     1. Do for the cached gets, `setObjectProp` / `ScriptableObject.put` and `Constructable.construct` what
-        `NativeArrayLinker` does for elements: link each site to small methods, so they inline whatever other
-        scripts did. That means a per-site guard on the receiver's exact class and the cache epoch, then small
-        leaves that read the slot and build the result. The miss path stays out of line.
-     2. Keep every leaf small enough that its own compiled code stays under `InlineSmallCode`.
-     3. Measure:
-        - `crypto` → `deltablue` and `box2d` → `richards` in one JVM, against `deltablue` alone, with 6
-          alternating runs;
-        - then the perf gate.
+   - **Done since the run of 2026-10-28/29**, and included in both later runs:
+     - slot keys are compared without `Objects.equals` (`deltablue` about 18% faster, `richards` 6–10%);
+     - the double conversions are linked without a guard that calls the native `Class.isInstance` (`box2d`
+       18.4 s → 9.1 s alone, faster than stock);
+     - objects created by `new` start with a hash table (`deltablue` a further 9–12%, now faster than stock alone;
+       `raytrace` within about 2% of stock).
 
-        Earlier attempts to inline the slot lookup made `v8-richards` 60–85% slower in the gate. Smaller lookups
-        (shared shapes) remain the structural answer if this does not hold.
+     Two suspects were ruled out: the deoptimizations of the inherited-property cache stop after warm-up, and the
+     property names `raytrace` seemed to hash again were a JFR attribution (no `String` is allocated while it
+     runs).
+   - **`richards` alone**, about 2.5% behind stock (median of 6 alternating runs each: 29.19 s, against
+     28.48 s). JFR puts 11% of it in `MHJSFunctionCode.execute`, but calling functions through a generated
+     subclass, as 1.9.1 does, left it unchanged (see the "Tried and dropped" table of performance.md); no single
+     cause found.
+   - **The shared JVM.** The fork loses more than stock when the object-heavy files run after the others in one
+     JVM (`deltablue` ×1.05 alone, ×0.76 in the run, under ES6). The cause is explained in [Caveats](#caveats).
+     Three fixes were tried and dropped; all three are in OPTIMIZATION.md's "Tried and dropped" table:
+     - the miss paths of `PropertyCache` moved out of line (2026-10-30): `crypto` → `deltablue` level, because
+       the hit path is still too big to inline after other scripts;
+     - the hot helpers forced inline through a compiler directive (2026-10-30): the gain depends on compile order;
+     - the cached gets linked per site as a `MethodHandle` chain, as `NativeArrayLinker` does for elements
+       (2026-10-31). It helped the shared sequences (`richards` after `box2d` about 20% faster), but cost
+       `deltablue` alone 11% and `v8-raytrace` 35% in the gate, because the chain at every get site uses up C2's
+       inlining budget in the script methods.
 
-     Steps 1–3 were tried for the cached gets on 2026-10-31 and dropped; see the "Tried and dropped" table.
-     - The per-site chain helped the shared sequences: `richards` after `box2d` about 20% faster.
-     - It cost `deltablue` alone 11% and `v8-raytrace` 35% in the gate, because its `MethodHandle` chain at every
-       get site uses up C2's inlining budget in the script methods.
-
-     A per-site fix has to add no bytecode to the site. Shared shapes (smaller lookups) are now the remaining
-     candidate.
-   - whether `deltablue` under ECMASCRIPT is ×0.86 alone, measured in one round only.
+     A per-site fix has to add no bytecode to the site. Earlier attempts to inline the slot lookup made
+     `v8-richards` 60–85% slower in the gate. Shared shapes (smaller lookups) are the remaining candidate.
+   - **Whether `deltablue` under ECMASCRIPT is ×0.86 alone**: measured in one round only.
+   - **Which in-run figures to trust.** The run of 2026-10-31 repeated the engine of 2026-10-30 and moved
+     `richards` from ×0.82/×0.76 to ×0.68/×0.68, and `access-nbody` under ECMASCRIPT from ×0.73 to ×0.55, with no
+     code change (see [Variation between runs](#variation-between-runs)). Before reading them as a trend, measure
+     each file alone in two sessions, or record which JIT state each session settles in.
 4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate twice as much
    during compile.
 
