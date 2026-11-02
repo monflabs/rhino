@@ -2145,6 +2145,15 @@ public class ScriptRuntime {
      * @param scope the scope that should be used to resolve primitive prototype
      */
     public static Object getObjectProp(Object obj, String property, Context cx, VarScope scope) {
+        if (obj instanceof Scriptable && !(obj instanceof VarScope)) {
+            return getObjectProp((Scriptable) obj, property, cx);
+        }
+        return getOtherObjectProp(obj, property, cx, scope);
+    }
+
+    /** {@link #getObjectProp(Object, String, Context, VarScope)} on a scope or a primitive. */
+    private static Object getOtherObjectProp(
+            Object obj, String property, Context cx, VarScope scope) {
         if (obj instanceof VarScope) {
             return ((VarScope) obj).get(property, (VarScope) obj);
         }
@@ -2186,6 +2195,16 @@ public class ScriptRuntime {
     }
 
     public static Object getObjectPropNoWarn(
+            Object obj, String property, Context cx, VarScope scope) {
+        if (obj instanceof Scriptable) {
+            Object result = ScriptableObject.getProperty((Scriptable) obj, property);
+            return result == Scriptable.NOT_FOUND ? Undefined.instance : result;
+        }
+        return getPrimitivePropNoWarn(obj, property, cx, scope);
+    }
+
+    /** {@link #getObjectPropNoWarn(Object, String, Context, VarScope)} on a primitive. */
+    private static Object getPrimitivePropNoWarn(
             Object obj, String property, Context cx, VarScope scope) {
         Scriptable sobj = asScriptableOrThrowUndefReadError(cx, scope, obj, property);
         Object result;
@@ -2412,6 +2431,16 @@ public class ScriptRuntime {
 
     /** Version of setObjectElem when elem is a valid JS identifier name. */
     public static Object setObjectProp(
+            Object obj, String property, Object value, Context cx, VarScope scope) {
+        if (obj instanceof Scriptable) {
+            ScriptableObject.putProperty((Scriptable) obj, property, value);
+            return value;
+        }
+        return setPrimitiveProp(obj, property, value, cx, scope);
+    }
+
+    /** {@link #setObjectProp(Object, String, Object, Context, VarScope)} on a primitive. */
+    private static Object setPrimitiveProp(
             Object obj, String property, Object value, Context cx, VarScope scope) {
         if (isPrimitiveBase(obj) && cx.isLatestEcmaScript()) {
             return setOnPrimitive(cx, scope, obj, property, value);

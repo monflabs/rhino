@@ -286,7 +286,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Octane, compiled, `VERSION_ES6`, each file alone, 2 rounds: `deltablue` 32.5–33.4 s → 26.6–26.8 s,
   `richards` 30.6–32.2 s → 28.9 s; `raytrace` and `box2d` level (the rest of `box2d`'s regression is elsewhere in
   that commit). Two full gate runs against the commit before: no regression, `v8-richards` level. The first run
-  flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions.
+  flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
 
 ### Objects created by `new` start with a hash table (2026-10-29)
 
@@ -300,7 +300,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Compiled, `VERSION_ES6`, each file alone, 3 rounds: `deltablue` −9 to −12%, `splay` −2 to −5%,
   `raytrace` −1.5 to −4%; `richards`, `box2d`, `access-nbody` level. Perf gate against the commit before: no regression with the widened bands
   (`sort.cmp.ecma` +24% and `wideobject.cmp.es6` +86%, both metrics with two JIT states, would have failed the
-  previous ones); `v8-deltablue` compiled −10%, `v8-richards` level. All versions.
+  previous ones); `v8-deltablue` compiled −10%, `v8-richards` level. All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
 - **Cost.** One `EmbeddedSlotMap` (a small object) per constructed object that never gets a property.
 
 ### Double conversions linked without a guard (2026-10-29)
@@ -319,7 +319,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `deltablue`, `raytrace` level; `gbemu` 3–7% slower in 2 rounds, not confirmed. `access-nbody` unchanged: median
   2,086 → 2,093 ms over 10 runs, 9 in 10 in its fast JIT state on both. Perf gate against the commit before: the first run flagged
   `sort.cmp.ecma` (+23%), a bimodal metric (2 of 6 runs slow on the same jar after the other scripts, level alone
-  in 7 rounds); the second run passed, `v8-richards` level. All versions.
+  in 7 rounds); the second run passed, `v8-richards` level. All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
 - **Tried first.** The same guards as static `instanceof` methods in every linker (`box2d` 10.1 s) or in the
   `DoubleLinker` only (11.4 s): `access-nbody` settled in its slow JIT state 5 and 3 times in 10, against 1.
 
@@ -341,9 +341,23 @@ on, and what it gained. It also records the experiments that measured no gain, s
   to the classes that inherit `BaseFunction`'s (checked once per class with a `ClassValue`).
 - **Gain.** Compiled, each file alone, 4 alternating runs: `earley-boyer` −7.7% under `VERSION_ECMASCRIPT` (51.9 s
   → 47.9 s), −2.1% under `VERSION_ES6`; `richards`, `deltablue`, `box2d` level, and the sequences `crypto` →
-  `deltablue` and `box2d` → `richards` level. Perf gate against the commit before: `instanceof` level (−2.7% to
-  +0.2%), `v8-earley-boyer` −1 to −3%; `arith.cmp.es6` was flagged (+16.8%) on a script without `instanceof`, and
-  was −7.8% over 6 rounds alone. All versions.
+  `deltablue` and `box2d` → `richards` level. Perf gate, together with the next change (the property helpers), against the
+  commit before both: no regression, `instanceof` −2.5 to −12.6%, `v8-earley-boyer` −3 to −10%. All versions.
+
+### Named gets and sets on objects without the primitive paths (2026-11-02)
+
+- **What.** `ScriptRuntime.getObjectProp`, `getObjectPropNoWarn` and `setObjectProp` (the versions with a scope,
+  which compiled code and the interpreter call) test first whether the receiver is an object and then do the
+  lookup or the store directly. The rest (a scope as receiver, the conversion of a primitive with the
+  `primitiveWrapper` save and restore, `undefined` and `null`) moved to separate methods. Bytecode: 116 → 32,
+  111 → 42 and 51 → 28 bytes (Rhino 1.9.1: 17, 32, 27).
+- **Why.** The try/finally of the primitive wrapper made these helpers too large to inline once other scripts had
+  run in the JVM (`InlineSmallCode`), the "gap B" of the 1.9.1 comparison: a file slower after others than alone.
+- **Gain.** Compiled, 4 alternating runs: `deltablue` after `crypto` −15% under `VERSION_ES6` (40.2 s → 34.3 s),
+  −2% under `VERSION_ECMASCRIPT` (within its spread); `deltablue` alone −3 to −4%; `richards` (alone and after
+  `box2d`), `box2d`, `raytrace`, `splay` level. Perf gate against the commit before: no regression;
+  `v8-raytrace` compiled −33%; `regexp.cmp.es6` was flagged once (+19%) with `split` and `stringmethods.cmp.es6`
+  +20% in the same run, all level over 6 rounds alone. All versions.
 
 ### Per-iteration bindings that cost nothing without closures
 
@@ -892,6 +906,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 | Forcing the hot helpers inline at startup through a compiler directive (`DiagnosticCommand` `compilerDirectivesAdd`, no JVM flags) (2026-10-30) | `crypto` → `deltablue` about 28 s in 2 of 6 runs, about 34 s in 4; about 33 s without; `box2d` → `richards` level | C2 does force-inline them (509 sites), but the gain depends on the order things get compiled in |
 | The cached gets linked per site as a `MethodHandle` chain (2026-10-31): `PropertyCache.cached` folded into a `guardWithTest` between the found value and a miss method, so that each site has its own branch profile and keeps the miss path out of line; with or without the outer `ScriptableObject` guard | `box2d` → `richards` 43.9–46.6 s → 33.7–38.3 s, `crypto` → `deltablue` 32.9–38.6 → 25.1–36.7 s; but `deltablue` alone 24.4–24.8 → 26.9–28.0 s, and in the gate `v8-raytrace` +35% (both versions), `split` +13%, `v8-crypto` −11 to −18% | the chain at every inherited get site uses C2's inlining budget of the script methods: alone, `MHJSFunctionCode.execute` went from 9% to 16% of the samples and `EmbeddedSlotMap.modify` from 4% to 9%. `raytrace` alone was level, so the loss shows only in the gate sequence |
 | The cached inherited gets linked without the `Guards.isInstance(ScriptableObject)` guard, as for the double conversions (2026-11-01): `PropertyCache` already takes any receiver | `deltablue` alone +2.6% under `VERSION_ES6` over 8 alternating runs (level without it), `richards`, `box2d` and the sequences level | not profiled; unlike the double conversions, these sites are inlined in the files that use them, where the guard is a plain type check (which may also let C2 drop the casts in `PropertyCache.cached`) |
+| `getPropAndThis` with the same split, its lookup on objects inline and the string-method and primitive paths separate (2026-11-02) | `box2d` alone +8 to +16% (+25 to +29% with the other three helpers), the other files level | the lookup and the `LookupResult` allocation inlined into `getPropAndThisInner` made it larger; sending objects straight to the existing lookup, without inlining it, was level |
 | Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
 
 ## Second pass (M16)

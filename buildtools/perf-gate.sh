@@ -59,8 +59,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The jar of the tree's own version: build/libs keeps the jars of earlier versions,
+# and the first one in name order was measured instead (rhino-2.0.0-SNAPSHOT.jar
+# sorts before rhino-2026.0.jar).
 engine_jar() {
-    ls "$1"/rhino/build/libs/rhino-*.jar | grep -v -e '-sources' -e '-javadoc' | head -1
+    local version
+    version="$(sed -n 's/^version=//p' "$1/gradle.properties")"
+    local jar="$1/rhino/build/libs/rhino-$version.jar"
+    if [ ! -f "$jar" ]; then
+        echo "perf-gate: no engine jar $jar" >&2
+        exit 2
+    fi
+    echo "$jar"
 }
 
 git -C "$ROOT" worktree add --detach --quiet "$WORKTREE" "$BASE_REF"

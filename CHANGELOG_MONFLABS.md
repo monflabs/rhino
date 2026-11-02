@@ -39,6 +39,32 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Named gets and sets on objects without the primitive paths (2026-11-02)
+
+`ScriptRuntime.getObjectProp`, `getObjectPropNoWarn` and `setObjectProp` handle an object receiver first and
+directly; scopes, primitives, `undefined` and `null` take separate methods, so that the helpers stay small enough
+to inline after other scripts.
+
+- Octane compiled: `deltablue` after `crypto` −15% under `VERSION_ES6`, alone −3 to −4%; `richards`, `box2d`,
+  `raytrace`, `splay` level. Perf gate: no regression, `v8-raytrace` compiled −33%. OPTIMIZATION.md "Named gets
+  and sets on objects without the primitive paths".
+- Dropped: the same split of `getPropAndThis` (`box2d` +8 to +16%), OPTIMIZATION.md "Tried and dropped".
+- Not observable, not gated. test262: no change (PropertyAccessPathsTest).
+
+### The perf gate measured the working tree (2026-11-02)
+
+`buildtools/perf-gate.sh` took the first `rhino/build/libs/rhino-*.jar` in name order as each side's engine. A
+checkout that still had `rhino-2.0.0-SNAPSHOT.jar` (from before the version became `2026.0`, 2026-10-23) measured
+that jar as the head instead of the working tree; the base, built in a fresh worktree, was right. The gate now
+takes `rhino-<version>.jar` from the tree's `gradle.properties` and stops if it is missing. With no engine
+change, `instanceof.cmp.ecma` went from a 25% "regression" to level.
+
+- The gate results recorded from 2026-10-23 to 2026-11-01 in this checkout compared against that old build: those
+  of "Slot keys compared without `Objects.equals`", "Double conversions linked without a guard" and "Objects
+  created by `new` start with a hash table" (and the bands widened with it, from failures that may have been this),
+  and the first gate of "`instanceof` without calling the intrinsic `@@hasInstance`", rerun since. Measurements
+  made with JavascriptPerformance, which uses the jar published to the local Maven repository, are not affected.
+
 ### `instanceof` without calling the intrinsic `@@hasInstance` (2026-11-01)
 
 When `instanceof` finds the intrinsic `Function.prototype[@@hasInstance]`, it runs its algorithm directly
@@ -46,8 +72,9 @@ When `instanceof` finds the intrinsic `Function.prototype[@@hasInstance]`, it ru
 looks `@@hasInstance` up twice. Java classes that override `hasInstance` keep their override.
 
 - Octane compiled, alone: `earley-boyer` −7.7% under `VERSION_ECMASCRIPT`, −2.1% under `VERSION_ES6`; `richards`,
-  `deltablue`, `box2d` level. Perf gate: no regression (`arith.cmp.es6` flagged once, −7.8% over 6 rounds).
-  OPTIMIZATION.md "`instanceof` without calling the intrinsic `@@hasInstance`".
+  `deltablue`, `box2d` level. Perf gate, with the property helpers below, against the commit before: no
+  regression (the gate first run for this change measured a stale build). OPTIMIZATION.md "`instanceof` without
+  calling the intrinsic `@@hasInstance`".
 - Dropped: linking the cached inherited gets without their `ScriptableObject` guard (`deltablue` +2.6%),
   OPTIMIZATION.md "Tried and dropped".
 - Docs: Rhino 1.9.1 also grows a new object's slot map from empty to a single entry to a hash table, so starting
