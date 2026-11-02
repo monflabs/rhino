@@ -62,7 +62,16 @@ change, `instanceof.cmp.ecma` went from a 25% "regression" to level.
 - The gate results recorded from 2026-10-23 to 2026-11-01 in this checkout compared against that old build: those
   of "Slot keys compared without `Objects.equals`", "Double conversions linked without a guard" and "Objects
   created by `new` start with a hash table" (and the bands widened with it, from failures that may have been this),
-  and the first gate of "`instanceof` without calling the intrinsic `@@hasInstance`", rerun since. Measurements
+  and the first gate of "`instanceof` without calling the intrinsic `@@hasInstance`". All four were rerun with the
+  fixed gate against the commit before each: no regression. None of the metrics whose bands were widened on
+  2026-10-29 moved past its previous band in the rerun; those bands are kept, since 12 new recordings of the
+  current engine still put `regexp.cmp.ecma`, `sort.cmp.ecma`, `closures.cmp.es6` and `properties.cmp.es6` above
+  their old ones.
+- `perf-tolerances.properties`: 8 more bands widened to those recordings' calibration (`v8-raytrace.cmp.es6` 25% →
+  55%, `v8-richards.cmp.es6` 60% → 80%, `closures`, `regexp.cmp.es6`, `sort.int.ecma`, `stringmethods.cmp.es6`).
+  Not `arith.cmp.*`: in about 1 JVM in 4 the script runs 8 times slower, in the JVM's interpreter, until C2
+  compiles it, because C1 gives up on the generated method ("out of virtual registers"); the gate's median of 3
+  rounds hides it. Measurements
   made with JavascriptPerformance, which uses the jar published to the local Maven repository, are not affected.
 
 ### `instanceof` without calling the intrinsic `@@hasInstance` (2026-11-01)

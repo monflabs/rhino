@@ -286,7 +286,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Octane, compiled, `VERSION_ES6`, each file alone, 2 rounds: `deltablue` 32.5–33.4 s → 26.6–26.8 s,
   `richards` 30.6–32.2 s → 28.9 s; `raytrace` and `box2d` level (the rest of `box2d`'s regression is elsewhere in
   that commit). Two full gate runs against the commit before: no regression, `v8-richards` level. The first run
-  flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
+  flagged `sort.cmp.ecma` (+24%), level in 7 rounds alone and in the second run (−0.6%). All versions. (Those gates measured a stale build as the head, see "The perf gate measured the working tree" in
+  CHANGELOG_MONFLABS.md; rerun on 2026-11-02 against the commit before: no regression.)
 
 ### Objects created by `new` start with a hash table (2026-10-29)
 
@@ -300,7 +301,9 @@ on, and what it gained. It also records the experiments that measured no gain, s
 - **Gain.** Compiled, `VERSION_ES6`, each file alone, 3 rounds: `deltablue` −9 to −12%, `splay` −2 to −5%,
   `raytrace` −1.5 to −4%; `richards`, `box2d`, `access-nbody` level. Perf gate against the commit before: no regression with the widened bands
   (`sort.cmp.ecma` +24% and `wideobject.cmp.es6` +86%, both metrics with two JIT states, would have failed the
-  previous ones); `v8-deltablue` compiled −10%, `v8-richards` level. All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
+  previous ones); `v8-deltablue` compiled −10%, `v8-richards` level. All versions. (That gate measured a stale build as the head, see "The perf gate measured the working tree" in
+  CHANGELOG_MONFLABS.md; rerun on 2026-11-02 against the commit before: no regression, and none of the widened
+  metrics past its previous band; `v8-raytrace.cmp.es6` −28%.)
 - **Cost.** One `EmbeddedSlotMap` (a small object) per constructed object that never gets a property.
 
 ### Double conversions linked without a guard (2026-10-29)
@@ -319,7 +322,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   `deltablue`, `raytrace` level; `gbemu` 3–7% slower in 2 rounds, not confirmed. `access-nbody` unchanged: median
   2,086 → 2,093 ms over 10 runs, 9 in 10 in its fast JIT state on both. Perf gate against the commit before: the first run flagged
   `sort.cmp.ecma` (+23%), a bimodal metric (2 of 6 runs slow on the same jar after the other scripts, level alone
-  in 7 rounds); the second run passed, `v8-richards` level. All versions. (This gate measured a stale build as the head, see "The perf gate measured the working tree" in CHANGELOG_MONFLABS.md; not rerun.)
+  in 7 rounds); the second run passed, `v8-richards` level. All versions. (Those gates measured a stale build as the head, see "The perf gate measured the working tree" in
+  CHANGELOG_MONFLABS.md; rerun on 2026-11-02 against the commit before: no regression.)
 - **Tried first.** The same guards as static `instanceof` methods in every linker (`box2d` 10.1 s) or in the
   `DoubleLinker` only (11.4 s): `access-nbody` settled in its slow JIT state 5 and 3 times in 10, against 1.
 
@@ -907,6 +911,7 @@ on, and what it gained. It also records the experiments that measured no gain, s
 | The cached gets linked per site as a `MethodHandle` chain (2026-10-31): `PropertyCache.cached` folded into a `guardWithTest` between the found value and a miss method, so that each site has its own branch profile and keeps the miss path out of line; with or without the outer `ScriptableObject` guard | `box2d` → `richards` 43.9–46.6 s → 33.7–38.3 s, `crypto` → `deltablue` 32.9–38.6 → 25.1–36.7 s; but `deltablue` alone 24.4–24.8 → 26.9–28.0 s, and in the gate `v8-raytrace` +35% (both versions), `split` +13%, `v8-crypto` −11 to −18% | the chain at every inherited get site uses C2's inlining budget of the script methods: alone, `MHJSFunctionCode.execute` went from 9% to 16% of the samples and `EmbeddedSlotMap.modify` from 4% to 9%. `raytrace` alone was level, so the loss shows only in the gate sequence |
 | The cached inherited gets linked without the `Guards.isInstance(ScriptableObject)` guard, as for the double conversions (2026-11-01): `PropertyCache` already takes any receiver | `deltablue` alone +2.6% under `VERSION_ES6` over 8 alternating runs (level without it), `richards`, `box2d` and the sequences level | not profiled; unlike the double conversions, these sites are inlined in the files that use them, where the guard is a plain type check (which may also let C2 drop the casts in `PropertyCache.cached`) |
 | `getPropAndThis` with the same split, its lookup on objects inline and the string-method and primitive paths separate (2026-11-02) | `box2d` alone +8 to +16% (+25 to +29% with the other three helpers), the other files level | the lookup and the `LookupResult` allocation inlined into `getPropAndThisInner` made it larger; sending objects straight to the existing lookup, without inlining it, was level |
+| Objects created by `new` given their hash table in the constructor, made with the context `createObject` already holds, instead of the shared empty map from a `Context.getCurrentContext()` lookup and then `setMap` with a second (2026-11-02) | level over 6 alternating runs: `splay`, `deltablue`, `raytrace` alone (−1 to −2%, within its spread) and `crypto` → `deltablue` | the thread-local lookup and the assignment of the shared empty map cost the JIT almost nothing |
 | Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
 
 ## Second pass (M16)
