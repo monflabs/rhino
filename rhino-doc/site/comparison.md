@@ -396,8 +396,8 @@ To redo this:
      single cause found.
    - **The shared JVM.** The fork loses more than stock when the object-heavy files run after the others in one
      JVM (`deltablue` 95% alone, 132% in the run, under ES6). The cause is explained in [Caveats](#caveats).
-     Three fixes were tried and dropped; all three are in the "Tried and dropped" table of
-     [OPTIMIZATION.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION.md):
+     Three fixes were tried and dropped; all three are in the tried-and-dropped list,
+     [OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md):
      - the miss paths of `PropertyCache` moved out of line (2026-10-30): `crypto` → `deltablue` level, because
        the hit path is still too big to inline after other scripts;
      - the hot helpers forced inline through a compiler directive (2026-10-30): the gain depends on compile order;

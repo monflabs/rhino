@@ -461,8 +461,8 @@ The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime
 `-XX:InlineSmallCode=8000` takes the fork to 71% / 61% and `deltablue` to 107% / 104%, but slows down a few
 other files. Linking these helpers per site, as the array elements already are, was tried on 2026-10-31 and
 dropped: the `MethodHandle` chain at every get site used up C2's inlining budget in the script methods (see the
-"Tried and dropped" table of
-[OPTIMIZATION.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION.md)). Shared shapes
+tried-and-dropped list,
+[OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md)). Shared shapes
 are the remaining candidate.
 
 The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate

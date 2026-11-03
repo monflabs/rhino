@@ -14,9 +14,9 @@ The largest remaining gap with Nashorn is in property access. In the JavascriptP
 Nashorn ran `richards` in 5.7 s against 47 s for this fork, `deltablue` in 6.0 s against 33 s and `raytrace` in
 4.8 s against 39 s; the fork is level with Rhino 1.8.0 on these three. Own-property lookups are the largest
 compiled cost left (about 15%). Each object has its own slot map, so a call site cannot cache where a property is:
-the attempts to make the lookup itself cheaper are in the "Tried and dropped" table of
-[OPTIMIZATION.md](OPTIMIZATION.md): 16.5 and the direct slot-map calls gained alone and regressed `v8-richards` in
-the full run, and a per-site cache of own slots only hits for a single object.
+the attempts to make the lookup itself cheaper are in [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md): 16.5 and
+the direct slot-map calls gained alone and regressed `v8-richards` in the full run, and a per-site cache of own
+slots only hits for a single object.
 
 Nashorn shares a property map among the objects that have the same properties added in the same order, and its
 call sites link against the map, so a property read is a map check and a field load. An investigation would:
@@ -48,7 +48,7 @@ to inline after other scripts.
 - Octane compiled: `deltablue` after `crypto` −15% under `VERSION_ES6`, alone −3 to −4%; `richards`, `box2d`,
   `raytrace`, `splay` level. Perf gate: no regression, `v8-raytrace` compiled −33%. OPTIMIZATION.md "Named gets
   and sets on objects without the primitive paths".
-- Dropped: the same split of `getPropAndThis` (`box2d` +8 to +16%), OPTIMIZATION.md "Tried and dropped".
+- Dropped: the same split of `getPropAndThis` (`box2d` +8 to +16%), OPTIMIZATION_DROPPED.md.
 - Not observable, not gated. test262: no change (PropertyAccessPathsTest).
 
 ### The perf gate measured the working tree (2026-11-02)
@@ -85,7 +85,7 @@ looks `@@hasInstance` up twice. Java classes that override `hasInstance` keep th
   regression (the gate first run for this change measured a stale build). OPTIMIZATION.md "`instanceof` without
   calling the intrinsic `@@hasInstance`".
 - Dropped: linking the cached inherited gets without their `ScriptableObject` guard (`deltablue` +2.6%),
-  OPTIMIZATION.md "Tried and dropped".
+  OPTIMIZATION_DROPPED.md.
 - Docs: Rhino 1.9.1 also grows a new object's slot map from empty to a single entry to a hash table, so starting
   the objects of `new` with a hash table was a gain over it, not a catch-up (OPTIMIZATION.md, performance.md).
 - Not observable, not gated. test262: no change (SymbolHasInstanceTest).

@@ -2,7 +2,8 @@
 
 This document describes the performance work of this fork of Rhino: each optimization added to the engine, the
 mechanism behind it, the conditions under which it applies, how it stays correct when a script changes what it relied
-on, and what it gained. It also records the experiments that measured no gain, so that they are not tried again.
+on, and what it gained. The experiments that measured no gain are in
+[OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md), so that they are not tried again.
 [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) has the history and [MONFLABS_PLAN.md](MONFLABS_PLAN.md) the plan
 (milestones M14 and M16).
 
@@ -34,14 +35,15 @@ on, and what it gained. It also records the experiments that measured no gain, s
   several rounds, alternating the two jars.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of what
   runs next. A change can look neutral on a single benchmark and regress in the full run (see the prototype-chain
-  cache below): measure both ways.
+  cache in [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md)): measure both ways.
 - **Micro-benchmarks** for a single pattern: warm up, keep the best of several runs, and run each language version in
   its own JVM, since the second one in a JVM inherits the profile of the first.
 - **Method size.** A runtime method called from compiled scripts (through invokedynamic) must stay small enough for
   the JIT to inline it: adding a rare case to such a method can slow down the common one. Put the rare case in a
   method of its own (see the global `let` writes below).
 - **Profiles** with JFR (`-XX:StartFlightRecording=settings=profile`). Its attribution to inlined frames can mislead:
-  a hotspot removed from the profile does not always shorten the run (see the regexp experiment below). Trust the
+  a hotspot removed from the profile does not always shorten the run (see the regexp experiment in
+  [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md)). Trust the
   timing, not the profile.
 
 ## Optimizations in the engine
@@ -873,8 +875,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
   checks each property once replaced; the same scripts give the same results before and after the change.
 - **Matcher.** The characters outside the bitmap of a class (code points and ranges beyond the BMP, property
   escapes) are matched from `int` arrays set with the bitmap, rather than boxed lists. Alone this was level (see
-  "Tried and dropped"), but in the harness sequence `ArrayList.contains` took 14% of Octane `regexp.js` after
-  `gbemu`: its `equals` call site is shared by the whole JVM.
+  [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md)), but in the harness sequence `ArrayList.contains` took 14%
+  of Octane `regexp.js` after `gbemu`: its `equals` call site is shared by the whole JVM.
 - **Gain.** 200,000 calls, compiled, `VERSION_ECMASCRIPT`: `split` 268 ms → 146 ms, `replace` 166 ms → 108 ms,
   `exec` 119 ms → 96 ms (`VERSION_ES6` `split` 238 → 151 ms; Rhino 1.8.0: 120, 73, 68 ms). Octane `regexp.js`
   at steady state (best of 4 runs after one): 16.4 s → 14.7 s under `VERSION_ECMASCRIPT` (`VERSION_ES6` 14.2 s,
@@ -893,31 +895,8 @@ on, and what it gained. It also records the experiments that measured no gain, s
 
 ## Tried and dropped
 
-| Experiment | Result | Why |
-|---|---|---|
-| Skip the non-BMP code point list for BMP characters in regexp classes | level over 12 runs | JFR showed `ArrayList.contains` at 6–20%; the samples moved to the matcher's other frames |
-| `Number` fast path at the start of `ScriptRuntime.toNumeric` | level | the JIT already folds `toPrimitive` for numbers |
-| Cache the top-level scope of a function for its global `this` (`JSFunction.getThisObj`) | level, then +9% (`math-spectral-norm`) | the `getTopLevelScope` samples first moved to the method-handle call; once that was fixed, the larger `getThisObj` cost more than the walk it saved |
-| A BMP fast path in the regexp matcher | +2% | below noise; `v8-regexp` +5% interpreted comes from the matcher's growth, with no single hotspot |
-| Prototype-chain cache at every get site | richards 2× slower in the full run | code size and profile pollution at own-property sites; linked at inherited sites only |
-| Devirtualizing `EmbeddedSlotMap.query` (exact-class check) | level | the cost is the chain of dependent loads in the lookup |
-| Slot lookups without virtual calls: `EmbeddedSlotMap.query` called directly (at every lookup, or for reads only), `StandardSlot.keyMatches` called directly, string keys hashed and compared without a virtual call | `access-nbody` after the SunSpider files before it 3,150 → 2,300–2,900 ms, `v8-richards` +60–85% in the full gate run | after varied code the calls to `SlotMap.query` and `Slot.keyMatches` are megamorphic, so the lookup is no longer inlined (`access-nbody` is level with Rhino 1.8.0 alone, 2,090 ms, and 25% slower in the sequence); inlining it makes the runtime methods called from `v8-richards` too big to inline there (`propIncrDecr`, `getPropAndThis`). Every variant that helped `access-nbody` slowed `v8-richards`; the key part alone was level. Needs smaller lookups (shared shapes), not more inlining |
-| A per-site cache of own slots by map | not worth it | maps belong to objects, not to shared shapes: a site only hits for a single object |
-| Hash mixing of integral `Double` keys in `Map`/`Set` | slower | loses the locality of sequential keys |
-| `putProperty` with one lookup (M16, 16.5): the receiver's map queried once, an own writable data property written directly | richards +58–74% in the gate, three versions | an exact `NativeObject` check with or without the prototype walk for new properties, with or without a method split to keep `putProperty` inlinable; own writes 48 ms → 20 ms and constructors 155 ms → 86 ms alone, but `v8-richards` (and once `sort`) regressed in the full gate run every time |
-| Compiled functions called through a generated subclass of `OptJSFunctionCode` (as in Rhino 1.9.1) rather than the `JSCodeExec` lambda, so that the call from `MHJSFunctionCode.execute` is a virtual call instead of an interface call (2026-10-29) | `richards` +0.2%, `deltablue` −2.4%, `box2d` +4.6% (overlapping runs), others level; 3 rounds alone | JFR's 11% of `richards` in `MHJSFunctionCode.execute` includes the compiled bodies inlined into it, not only the dispatch; the remaining 2.5% to Rhino 1.9.1 has no single cause found |
-| `PropertyCache` with its miss paths (lookup and refill) in separate methods, to make the hit path small enough to inline after other scripts (2026-10-30) | `crypto` → `deltablue` level (33.1/33.3 s against 38.7/33.3 s); `box2d` → `richards` 37.5/40.1 s against 43.5/45.3 s | the hit path still inlines the slot-map query and the prototype check, so after other scripts it is refused as too big; forcing only `PropertyCache` back inline was level too (34.5 s). Only all five helpers together (cached gets, `setObjectProp`, `ScriptableObject.put`, `asScriptableOrThrowUndefWriteError`, `Constructable.construct`) helped (27.9 s) |
-| Forcing the hot helpers inline at startup through a compiler directive (`DiagnosticCommand` `compilerDirectivesAdd`, no JVM flags) (2026-10-30) | `crypto` → `deltablue` about 28 s in 2 of 6 runs, about 34 s in 4; about 33 s without; `box2d` → `richards` level | C2 does force-inline them (509 sites), but the gain depends on the order things get compiled in |
-| The cached gets linked per site as a `MethodHandle` chain (2026-10-31): `PropertyCache.cached` folded into a `guardWithTest` between the found value and a miss method, so that each site has its own branch profile and keeps the miss path out of line; with or without the outer `ScriptableObject` guard | `box2d` → `richards` 43.9–46.6 s → 33.7–38.3 s, `crypto` → `deltablue` 32.9–38.6 → 25.1–36.7 s; but `deltablue` alone 24.4–24.8 → 26.9–28.0 s, and in the gate `v8-raytrace` +35% (both versions), `split` +13%, `v8-crypto` −11 to −18% | the chain at every inherited get site uses C2's inlining budget of the script methods: alone, `MHJSFunctionCode.execute` went from 9% to 16% of the samples and `EmbeddedSlotMap.modify` from 4% to 9%. `raytrace` alone was level, so the loss shows only in the gate sequence |
-| The cached inherited gets linked without the `Guards.isInstance(ScriptableObject)` guard, as for the double conversions (2026-11-01): `PropertyCache` already takes any receiver | `deltablue` alone +2.6% under `VERSION_ES6` over 8 alternating runs (level without it), `richards`, `box2d` and the sequences level | not profiled; unlike the double conversions, these sites are inlined in the files that use them, where the guard is a plain type check (which may also let C2 drop the casts in `PropertyCache.cached`) |
-| `getPropAndThis` with the same split, its lookup on objects inline and the string-method and primitive paths separate (2026-11-02) | `box2d` alone +8 to +16% (+25 to +29% with the other three helpers), the other files level | the lookup and the `LookupResult` allocation inlined into `getPropAndThisInner` made it larger; sending objects straight to the existing lookup, without inlining it, was level |
-| Objects created by `new` given their hash table in the constructor, made with the context `createObject` already holds, instead of the shared empty map from a `Context.getCurrentContext()` lookup and then `setMap` with a second (2026-11-02) | level over 6 alternating runs: `splay`, `deltablue`, `raytrace` alone (−1 to −2%, within its spread) and `crypto` → `deltablue` | the thread-local lookup and the assignment of the shared empty map cost the JIT almost nothing |
-| No `MATH:TONUMERIC` site for an operand that is already a `Number` (a numeric literal, or the result of `-`, `*`, `/`, `%`, `**`, unary `-`/`+`, `~`, a bitwise or shift operator) (2026-11-02), to bring large methods under C1's limit of 10,000 virtual registers | 9 of the 24 sites of the gate's `arith` script removed, but it still fails C1; `arith.cmp.ecma` 12 ms → 17–37 ms in every JVM over 8 alternating runs, ES6 level | the site is a guard on the operand's exact class (`IntegerLinker`), which gives C2 the type the shared `subtract`/`remainder` helpers are inlined with. C1's limit is not a gap with Rhino 1.9.1: its code for the same script has more dynamic sites (111 against 108) and fails C1 too. Methods that fail it (Octane `regexp`'s `runBlock*`, `earley-boyer`'s `forw`, `crypto`'s `bnpDivRemTo`, `raytrace`'s `rayTrace`) run in the JVM interpreter until they reach C2's interpreter thresholds |
-| `JSFunction.getThisObj` returns a `ScriptableObject` `this` before testing strictness (2026-11-02), the cheap form of skipping the callee's `this` computation for method calls | level: `deltablue` 99.4% / 101.3%, `richards` 101.1% / 102.1% alone (6 alternating runs, ECMA / ES6); the `crypto` → `deltablue` and `box2d` → `richards` sequences within their noise, in both directions | the branches it skips are a few field loads that C2 already folds where `getThisObj` is inlined; what remains of the call cost is elsewhere |
-| `enterFunctionStrictness`/`exitFunctionStrictness` write `Context.isStrictMode` only when it changes (2026-11-02), the cheap form of strictness without a per-call write | level: `richards` 92.9% / 98.3%, `deltablue` 103.7% / 108.6%, `raytrace` 95.6% / 101.2% alone (6 alternating runs, ECMA / ES6); the shared sequences 94–102%; the spread between runs of one side was up to 50% in this session, wider than any difference | the stores it removes go to a field of a thread-confined object, about a cycle each; the read and compare stay. Deriving strictness from the executing function instead would change the 55 readers of `isStrictMode()` for no measured cost to remove |
-| The cache refills of `GlobalNameCache` (`ScriptRuntime.name`/`getNameAndThis` then `update`) in methods of their own (2026-11-02), so that a profile in which other scripts take them does not inline them into the hit paths. Found when `-XX:InlineSmallCode=8000` made `crypto-sha1` 55% slower after seven Octane files: C2 spent `core_sha1`'s `DesiredMethodLimit` on `nestedNameAndThis`, `update` and the `HashMap` lookup at every call site, and stopped inlining `rol` and `sha1_kt` | slower: the seven Octane files then SunSpider, ES6, 2 alternating runs, geometric mean 105% (default) and 107% (with the flag); `crypto-sha1` 108% / 92%, `access-nbody` 126% / 131% | the extracted methods are small, so C2 still inlines them where the profile says they are taken, behind one more call; the hit paths need to stop depending on a shared profile (plan P1, P3) |
-| A per-script copy of the inherited-property cache (2026-11-03): `ScriptPropertyCache` defined as a hidden class (`Lookup.defineHiddenClass`) once per compiled script, linked from the caller's lookup in `Bootstrapper`/`DefaultLinker`, so that each script has its own profile and compiled code for `cached`/`inherited`/`getPropAndThis`; epoch and cacheable classes stayed shared in `PropertyCache` | no gain: compiled, 4 alternating runs, ES6 / ECMA, `deltablue` alone 101% / 110%, after `crypto` 101% / 118%; `richards` alone 100% / 99%, after `box2d` 101% / 94%; `deltablue` is bimodal (about 25 s or 31 s on either jar), so the ECMA figures are within noise | the copies were inlined as intended (about 120 hot inlines of `cached`/`inherited`/`getPropAndThis` in `deltablue` where HEAD logs about 160 refusals of `getPropAndThis`), yet the times did not move: this cache's inlining is not what slows these files after others |
-| Hidden classes (shared shapes) | not attempted | the largest remaining compiled cost (own-property lookups, about 15%), but a rewrite of the object model |
+The experiments that measured no gain are in [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md), with the
+machine and the JVM they were measured on.
 
 ## Second pass (M16)
 
