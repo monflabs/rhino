@@ -46,6 +46,37 @@ on, and what it gained. The experiments that measured no gain are in
   [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md)). Trust the
   timing, not the profile.
 
+## Test context
+
+The gains below were measured on one machine and one JVM. Context of the measurements from 2026-11-03 on:
+
+| | |
+|---|---|
+| Machine | Apple M2 (8 cores: 4 performance, 4 efficiency), 24 GB, macOS 27.2 |
+| JDK | Azul Zulu 25.36+15-CA, OpenJDK 25.0.4+7-LTS, HotSpot 64-Bit Server VM, tiered C1/C2, G1, default flags |
+| Harnesses | the perf gate (`buildtools/perf-gate.sh`, [benchmarks/README.md](benchmarks/README.md)); JavascriptPerformance (Octane, SunSpider), compiled, `--warmup=1 --iterations=1`, both language versions in one JVM (`VERSION_ECMASCRIPT` first, then `VERSION_ES6`), the two jars alternating, one JVM per run, medians of wall time |
+
+The earlier sections were measured on the development machine before the context was recorded; the JDK used is not
+known for them.
+
+**The results depend on the JVM.** Most of these optimizations work by changing what the JIT does with the code:
+which runtime helpers C2 inlines into the compiled scripts, which allocations escape analysis removes, which call
+sites stay monomorphic. Those decisions follow thresholds compared with the size of the code already compiled
+(`InlineSmallCode`) and per-method budgets (`DesiredMethodLimit`, `LiveNodeCountInliningCutoff`), the order in which
+methods get hot, and the intrinsics and GC barriers available. They differ from one JVM to another:
+
+- **Vendor and JIT.** Another HotSpot build is close but not identical; a JVM with another compiler (OpenJ9, the
+  Graal compiler) uses other heuristics altogether, and a helper made small for C2 may not matter there.
+- **JDK version.** Thresholds, intrinsics and inlining heuristics change between releases.
+- **GC.** The barriers of a reference load or store (G1, ZGC, Parallel) are part of the compiled code and of its size.
+- **CPU architecture.** The size of the compiled code, which the thresholds are compared with, differs between
+  AArch64 and x86-64, and so do the intrinsics.
+- **JIT flags.** `-XX:InlineSmallCode=8000`, for example, made `crypto-sha1` 55% slower after seven Octane files.
+
+A gain measured here may be smaller, absent or reversed on another JVM, and an experiment dropped here may be
+worth retesting there. [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md) has examples of how close to these
+thresholds the property paths are (a compilation race that changes `deltablue` by 20%).
+
 ## Optimizations in the engine
 
 ### Cache of top-level names
