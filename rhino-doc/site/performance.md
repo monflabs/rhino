@@ -445,15 +445,11 @@ The rerun of 2026-10-30 (fork at `efc8516b1`, with the fixes below) gives 71% un
 its engine's JVM (95–105% under `VERSION_ES6`). The harness runs every file of a round in one JVM per engine; 1.9.1
 also slows down when these files run after the others, but the fork slows down more.
 
-A second rerun on 2026-10-31 (fork at `2ccfaeaa4`, the same engine code: only documentation changed) gives 72%
-and 65%. The means held, but single files did not: `richards` read 147–148% under both versions and
-`access-nbody` 183% under `VERSION_ECMASCRIPT`, and some of stock's own times moved by up to 47%. A single
-file's percentage in one session is not reliable; see
-[Variation between runs](comparison.md#variation-between-runs).
-
 The run of 2026-11-03 (fork at `5afb843a9`, with `instanceof` and the named gets and sets below) gives 70% and
 65%, Octane 85% / 78%. The object-heavy files are still behind in the run: `deltablue` 128% / 131%, `richards`
 135% / 137%, `gbemu` 127% / 113%, `raytrace` 119% / 109%, and `access-nbody` 193% under `VERSION_ECMASCRIPT`.
+A single file's percentage in one session is not reliable: stock's own times move by up to 91% between sessions
+with no code change; see [Variation between runs](comparison.md#variation-between-runs).
 
 The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
 - The files that run first compile the shared helpers on their own, into code larger than `InlineSmallCode`
