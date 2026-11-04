@@ -11,8 +11,8 @@ Three engines, measured on the same machine with the same harness:
 | **Monflabs ES6** | this fork, `Context.VERSION_ES6` (upstream's language level) | `RHINO_MONFLABS_ES6_COMPILED` / `_INTERPRETED` |
 | **Monflabs ECMASCRIPT** | this fork, `Context.VERSION_ECMASCRIPT` (ES2026) | `RHINO_MONFLABS_COMPILED` / `_INTERPRETED` |
 
-Compiled time measured 2026-10-31, fork at `2ccfaeaa4`; memory and the partial interpreted run measured
-2026-10-28/29, fork at `36f03fef4`.
+Compiled time and memory measured 2026-11-03/04, fork at `5afb843a9`; the partial interpreted run measured
+2026-10-28/29, fork at `36f03fef4`, and not rerun. All on one machine and one JVM, see [Test context](#test-context).
 
 Every figure is a percentage of stock. For time, 72% means the fork takes 72% of the time stock takes; above 100%
 it is slower. For memory, 83% means the fork uses 83% of what stock uses.
@@ -21,48 +21,47 @@ it is slower. For memory, 83% means the fork uses 83% of what stock uses.
 
 **Time, compiled mode (complete: 3 rounds).** Geometric mean over the 53 benchmarks that run on all three engines:
 
-| Suite | Benchmarks | Monflabs ES6 | Monflabs ECMASCRIPT | 2026-10-30 run (ES6 / ECMASCRIPT) |
+| Suite | Benchmarks | Monflabs ES6 | Monflabs ECMASCRIPT | 2026-10-31 run (ES6 / ECMASCRIPT) |
 | --- | --- | --- | --- | --- |
-| SunSpider 1.0.2 | 26 | 69% | 59% | 68% / 60% |
-| Octane | 11 | 89% | 82% | 88% / 83% |
-| ubench | 10 | 70% | 70% | 69% / 69% |
-| intrinsics (generators, async) | 6 | 60% | 56% | 65% / 58% |
-| **All** | **53** | **72%** | **65%** | **71% / 66%** |
+| SunSpider 1.0.2 | 26 | 69% | 61% | 69% / 59% |
+| Octane | 11 | 85% | 78% | 89% / 82% |
+| ubench | 10 | 61% | 62% | 70% / 70% |
+| intrinsics (generators, async) | 6 | 69% | 65% | 60% / 56% |
+| **All** | **53** | **70%** | **65%** | **72% / 65%** |
 
-- The fork takes about **72%** of stock's time under ES6 and **65%** under ECMASCRIPT. On the same engine,
-  ECMASCRIPT takes 90% of the time of ES6.
-- **This run repeats the previous one on the same engine.** Every commit between `efc8516b1` (the run of
-  2026-10-30) and `2ccfaeaa4` changes documentation only, so the two runs measure the variation between sessions,
-  not a change. See [Variation between runs](#variation-between-runs).
-  - The means agree within 1 point, and each suite within 2, except intrinsics, whose stock times are 140–610 ms.
-  - 39 to 42 of the 53 per-benchmark times agree within 10%, depending on the engine. The rest move by up to 55%,
-    in both directions and on either engine.
-- The run of 2026-10-28/29, at `36f03fef4`, gave 69% and 63%. The difference is ubench, whose stock times are
-  70–130 ms and moved by up to 45% between the two runs; Octane is level or better.
-- The gains are broad: numeric loops, bit operations, calls and closures, generators. The largest, at 17–31% of
-  stock's time under ECMASCRIPT, are `access-fannkuch`, `math-spectral-norm`, `controlflow-recursive`,
-  `bitops-nsieve-bits`, `bitops-3bit-bits-in-byte`, `navier-stokes`, `pdfjs` and `generator_nqueens`.
+- The fork takes about **70%** of stock's time under ES6 and **65%** under ECMASCRIPT. On the same engine,
+  ECMASCRIPT takes 93% of the time of ES6.
+- **Two engine changes since the run of 2026-10-31** (`2ccfaeaa4`): `instanceof` without calling the intrinsic
+  `@@hasInstance`, and named gets and sets on objects without the primitive paths. Octane moved from 89% / 82% to
+  85% / 78%. ubench gained 9 points and intrinsics lost 9, but both follow stock: its own times changed by up to
+  37% on these short benchmarks (20–600 ms) with no code change, for example `function-correct-args` 92 → 126 ms
+  (the fork's percentage falls) and `generator_nqueens` 532 → 355 ms (it rises). See
+  [Variation between runs](#variation-between-runs).
+- The gains are broad: numeric loops, bit operations, calls and closures, generators. The largest, at 16–26% of
+  stock's time under ECMASCRIPT, are `math-spectral-norm`, `access-fannkuch`, `controlflow-recursive`,
+  `bitops-3bit-bits-in-byte`, `bitops-nsieve-bits`, `navier-stokes` and `pdfjs`.
 - **Some benchmarks are slower on the fork:**
 
-  | Benchmark | In the run (ES6 / ECMASCRIPT) | 2026-10-30 run | Alone (ES6 / ECMASCRIPT) |
+  | Benchmark | In the run (ES6 / ECMASCRIPT) | 2026-10-31 run | Alone (ES6 / ECMASCRIPT) |
   | --- | --- | --- | --- |
-  | `deltablue` | 132% / 133% | 131% / 132% | 95% / 116% |
-  | `richards` | 147% / 148% | 121% / 132% | 104% / 104% |
-  | `raytrace` | 124% / 115% | 126% / 118% | 105% / 91% |
-  | `gbemu` | 132% / 119% | 131% / 143% | 105% / 85% |
-  | `access-nbody` | 128% / 183% | 118% / 138% | |
-  | `splay` | 128% / 111% | 115% / 105% | |
-  | `earley-boyer` | 112% / 96% | 115% / 99% | |
+  | `deltablue` | 128% / 131% | 132% / 133% | 95% / 116% |
+  | `richards` | 135% / 137% | 147% / 148% | 104% / 104% |
+  | `gbemu` | 127% / 113% | 132% / 119% | 105% / 85% |
+  | `raytrace` | 119% / 109% | 124% / 115% | 105% / 91% |
+  | `access-nbody` | 104% / 193% | 128% / 183% | |
+  | `regexp` | 106% / 116% | 106% / 119% | |
+  | `access-binary-trees` | 115% / 93% | 111% / 100% | |
+  | `splay` | 110% / 95% | 128% / 111% | |
+  | `string-unpack-code` | 111% / 108% | 110% / 109% | |
+  | `earley-boyer` | 106% / 88% | 112% / 96% | |
+  | `math-partial-sums` | 105% / 111% | 83% / 96% | |
 
-  These are all property-access-heavy object code. "Alone" is the same harness with `--octane-benchmarks=<file>`
-  and one round, so each engine's JVM runs that file only; it was measured at `efc8516b1`, the same engine code.
-  Most of the gap comes from running after the other files in one JVM: stock slows down there too (`richards`
-  27.3 s alone, 35.3 s in the run), but the fork slows down more.
-  - `richards`, and `access-nbody` under ECMASCRIPT, are the furthest behind in this run, but with no code change.
-    The fork's `richards` took 42.7 s (ES6) and 46.6 s (ECMASCRIPT) on 2026-10-30, and 52.1 s and 51.9 s here. Its
-    three rounds agree with each other in both runs (Octane scores 1080–1244 here), so the fork's JIT settles
-    differently from one session to the next, not from one JVM to the next.
-  - `box2d`, at 128–147% in the run of 2026-10-28/29, is faster than stock (70% / 66%).
+  Most are property-access-heavy object code. "Alone" is the same harness with `--octane-benchmarks=<file>` and
+  one round, so each engine's JVM runs that file only; it was measured at `efc8516b1`, before the two changes
+  above. Most of the gap comes from running after the other files in one JVM: stock slows down there too, but the
+  fork slows down more (see [Caveats](#caveats)).
+  - `access-nbody` under ECMASCRIPT and `math-partial-sums` have a fast and a slow JIT state from one session to
+    the next; `math-partial-sums` moved because stock's time did (2,201 → 1,645 ms).
 
   The analysis is in
   [Where the fork is slower than Rhino 1.9.1](performance.md#where-the-fork-is-slower-than-rhino-191).
@@ -72,38 +71,69 @@ it is slower. For memory, 83% means the fork uses 83% of what stock uses.
 
 **Time, interpreted mode: not measured.** The run was stopped after stock had finished one round, at about 2.5–3
 hours per engine per round, before either Monflabs engine had produced a result. Only stock's figures exist, in
-`performance-comparison/rhino-time-interpreted-partial.log`. Rerunning it is the first item of
-[What remains](#what-remains).
+`performance-comparison/rhino-time-interpreted-partial.log`. It was not rerun on 2026-11-03.
 
-**Memory (complete, one pass: geometric mean over 53 benchmarks; see the caveat on baselines below).**
+**Memory (complete, one pass, one JVM per engine and benchmark: geometric mean over 53 benchmarks).**
 
 | Metric | Compiled ES6 | Compiled ECMASCRIPT | Interpreted ES6 | Interpreted ECMASCRIPT |
 | --- | --- | --- | --- | --- |
-| Allocated by compile | 83% | 96% | 75% | 78% |
-| Live heap after compile | 59% | 53% | 61% | 60% |
-| Allocated per run | 64% | 60% | 100% | 98% |
-| Live heap after the runs | 91% | 81% | 65% | 64% |
-| Classes loaded by the benchmark | 55% | 57% | 107% | 102% |
+| Allocated by compile | 100% | 106% | 89% | 93% |
+| Live heap after compile | 86% | 85% | 64% | 63% |
+| Allocated per run | 59% | 58% | 100% | 98% |
+| Live heap after the runs | 99% | 96% | 102% | 102% |
+| Metaspace | 104% | 104% | 135% | 138% |
+| Classes loaded by the benchmark | 96% | 92% | 193% | 200% |
 
-- **Per benchmark, the fork uses less memory than stock almost everywhere.**
-  - The compiled script and its realm keep 53–59% of stock's live heap.
-  - The fork loads 55–57% of stock's generated classes.
-  - Compiled code allocates 60–64% of what stock allocates per run, which partly explains the time gains.
-- **The fork's fixed cost is higher.** An empty script costs 134–137% of stock's allocation, 153–154% of its live
-  heap, 139–143% of its metaspace and 130–135% of its classes (about 9 MB, 0.6 MB, 2.2 MB and 400 classes more).
+- **This run is the first without leaking baselines.** The run of 2026-10-28/29 measured every benchmark of an
+  engine in one JVM, so a benchmark's baseline included what the previous ones left, and some figures were
+  negative. Each benchmark now has a JVM of its own, which first loads the engine on an empty script; no figure is
+  negative. The two runs are not comparable: a fresh JVM counts the classes and the code the benchmark is the first
+  to use. The earlier figures (53–59% of stock's live heap after compile, 55–57% of its classes) are in
+  `rhino-memory-2026-10-29.csv`.
+- **Compiled, the fork allocates much less per run (58–59% of stock)**, which partly explains the time gains. The
+  live heap after compile is 85–86% of stock's, after the runs level, and the classes 92–96%.
+- **Interpreted, a benchmark loads more classes than on stock, but few.** After the empty script, stock's interpreted
+  benchmarks load 2 to 253 classes (62 on average), the fork's 16 to 390 (100 under ES6, 111 under ECMASCRIPT):
+  about 40–50 more per benchmark, presumably the built-ins the fork loads on first use rather than with the realm
+  (not confirmed). The geometric means are high because the counts are small; the metaspace behind them is
+  0.1–0.3 MB for most benchmarks.
+- **The fork's fixed cost is higher.** An empty script costs 134–137% of stock's allocation, 153–155% of its live
+  heap, 140–144% of its metaspace and 130–135% of its classes (about 9 MB, 0.6 MB, 2.2 MB and 400 classes more).
   That is the larger ES2026 runtime: more built-ins, `BigInt`, `Proxy`, iterator helpers and so on.
   - Under ECMASCRIPT, an empty script's run allocates about 0.45 MB where stock allocates almost nothing. This is
     presumably the extra per-realm setup.
   - The fixed cost matters for an embedder that creates many short-lived contexts.
-- **Compiling the large Octane sources under ECMASCRIPT can allocate much more than stock, transiently.** Examples:
-  `pdfjs` 304% (322 MB against 106 MB), `box2d` 200% (124 MB against 62 MB), `regexp` 204% (57 MB against 28 MB).
-  The likely cause is the splitting of functions too large for the JVM, not yet confirmed. The geometric mean is
-  still 96% and the live heap after compile is lower, so this is garbage and not retained memory.
+- **Compiling the large Octane sources under ECMASCRIPT allocates much more than stock, transiently.** `pdfjs` 328%
+  (326 MB against 99 MB), `regexp` 305% (65 MB against 21 MB), `box2d` 166% (122 MB against 73 MB). Under ES6 they
+  are 114%, 171% and below 110%. The likely cause is the splitting of functions too large for the JVM, not yet
+  confirmed. The live heap after compile is lower, so this is garbage and not retained memory.
+- **`pdfjs` loads twice stock's classes and metaspace** (1,323 classes against 601, 9.8 MB against 4.6 MB), and
+  `string-validate-input` keeps 2.3 MB after its runs against 0.9 MB, on both language versions.
 
 ## How the tests are run
 
 Everything runs from [JavascriptPerformance](https://github.com/monflabs/JavascriptPerformance). The changes that
 add the two ES6 engines and memory mode are listed in [Harness changes](#harness-changes) below.
+
+### Test context
+
+| | |
+| --- | --- |
+| Machine | Apple M2 (8 cores: 4 performance, 4 efficiency), 24 GB, macOS 27.2 |
+| JDK | Azul Zulu 25.36+15-CA, OpenJDK 25.0.4+7-LTS, HotSpot 64-Bit Server VM, tiered C1/C2 |
+| JVM options | `-Xms1g -Xmx1g -XX:+UseG1GC` for every engine's JVM, otherwise the defaults |
+| Fork | `5afb843a9` (2026-11-03) |
+| Stock | `org.mozilla:rhino` 1.9.1 from Maven Central |
+
+**These figures hold for this JVM and this machine.** Most of the fork's gains, and most of its losses, come from
+what the JIT does with the code: which runtime helpers C2 inlines into the compiled scripts, which allocations
+escape analysis removes. Those decisions follow thresholds compared with the size of the code already compiled
+(`InlineSmallCode`), per-method budgets and the order in which methods get hot, and they differ with the JVM vendor
+and its compiler (OpenJ9 or the Graal compiler use other heuristics altogether), the JDK version, the GC, the CPU
+architecture and the JIT flags. A percentage measured here may be smaller, absent or reversed elsewhere. The
+mechanisms are described in
+[OPTIMIZATION.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION.md#test-context) and
+[OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md).
 
 ### Engines
 
@@ -149,7 +179,7 @@ round. Every JVM gets `-Xms1g -Xmx1g -XX:+UseG1GC`.
 These are the rules the Nashorn performance gate uses: interleaving, minimum within a JVM, median across JVMs and
 a pinned heap. Each was introduced after it was seen to move results by 15–30%.
 
-- **Compiled run time:** 4h 16m on 2026-10-30, 4h 12m on 2026-10-31.
+- **Compiled run time:** 4h 16m on 2026-10-30, 4h 12m on 2026-10-31, 4h 8m on 2026-11-03.
 - **Interpreted run time:** about 25 hours projected, because stock Octane interpreted takes up to 6 minutes a
   run (`crypto`).
 
@@ -182,21 +212,24 @@ full GC (`System.gc()` repeated until the heap stops shrinking).
 | metaspace KB | Growth of the `Metaspace` memory pool |
 | classes | Growth of `ClassLoadingMXBean.getTotalLoadedClassCount` |
 
-The whole memory run took about 5 hours.
+The whole memory run took 5h 6m on 2026-11-03/04, with one JVM per engine and benchmark.
 
 ## Results in full
 
 The raw data is in
 [`performance-comparison/`](https://github.com/monflabs/rhino/tree/monflabs_enhancements/rhino-doc/site/performance-comparison):
 
-- [`rhino-time-compiled.csv`](performance-comparison/rhino-time-compiled.csv ':ignore'): the run of 2026-10-31.
+- [`rhino-time-compiled.csv`](performance-comparison/rhino-time-compiled.csv ':ignore'): the run of 2026-11-03.
 - [`rhino-time-compiled.html`](performance-comparison/rhino-time-compiled.html ':ignore'): the harness's chart
   report for it.
-- [`rhino-time-compiled-2026-10-30.csv`](performance-comparison/rhino-time-compiled-2026-10-30.csv ':ignore'): the
-  previous run, on the same engine code.
+- [`rhino-time-compiled-2026-10-31.csv`](performance-comparison/rhino-time-compiled-2026-10-31.csv ':ignore') and
+  [`rhino-time-compiled-2026-10-30.csv`](performance-comparison/rhino-time-compiled-2026-10-30.csv ':ignore'): the
+  two previous runs, on the same engine code as each other.
 - [`rhino-time-compiled-isc8000.csv`](performance-comparison/rhino-time-compiled-isc8000.csv ':ignore'): the run
   with `-XX:InlineSmallCode=8000` (see [Caveats](#caveats)).
-- [`rhino-memory.csv`](performance-comparison/rhino-memory.csv ':ignore')
+- [`rhino-memory.csv`](performance-comparison/rhino-memory.csv ':ignore'): the memory run of 2026-11-03/04.
+- [`rhino-memory-2026-10-29.csv`](performance-comparison/rhino-memory-2026-10-29.csv ':ignore'): the previous one,
+  with leaking baselines (see [Caveats](#caveats)).
 - [`rhino-time-interpreted-partial.log`](performance-comparison/rhino-time-interpreted-partial.log ':ignore')
 - the two summary scripts, `timesum.py` and `memsum.py`.
 
@@ -208,72 +241,72 @@ The stock column is wall time in ms; the other two columns are the fork's time a
 | --- | --- | --- | --- |
 | **intrinsics** | | | |
 | async_generator_stream | FAILED | FAILED | 202 ms |
-| async_promise_combinators | 144 | 80% | 75% |
-| async_request_handler | FAILED | FAILED | 252 ms |
-| generator_iterable_collection | 236 | 70% | 72% |
-| generator_nqueens | 532 | 32% | 31% |
-| generator_pipeline | 610 | 87% | 63% |
-| generator_tokenizer | 173 | 67% | 63% |
-| generator_tree_iterator | 370 | 46% | 48% |
+| async_promise_combinators | 144 | 80% | 74% |
+| async_request_handler | FAILED | FAILED | 248 ms |
+| generator_iterable_collection | 235 | 71% | 71% |
+| generator_nqueens | 355 | 48% | 47% |
+| generator_pipeline | 574 | 93% | 66% |
+| generator_tokenizer | 131 | 93% | 96% |
+| generator_tree_iterator | 368 | 46% | 48% |
 | **Octane** | | | |
-| box2d | 12963 | 70% | 66% |
-| crypto | 32430 | 78% | 75% |
-| deltablue | 28879 | 132% | 133% |
-| earley-boyer | 61224 | 112% | 96% |
-| gbemu-part1 | 6189 | 132% | 119% |
-| mandreel | FAILED | FAILED | 38315 ms |
-| navier-stokes | 21783 | 36% | 27% |
-| pdfjs | 13409 | 30% | 26% |
-| raytrace | 34029 | 124% | 115% |
-| regexp | 13878 | 106% | 119% |
-| richards | 35258 | 147% | 148% |
-| splay | 3698 | 128% | 111% |
+| box2d | 13259 | 68% | 62% |
+| crypto | 33061 | 76% | 73% |
+| deltablue | 29008 | 128% | 131% |
+| earley-boyer | 60544 | 106% | 88% |
+| gbemu-part1 | 6258 | 127% | 113% |
+| mandreel | FAILED | FAILED | 39053 ms |
+| navier-stokes | 22639 | 34% | 26% |
+| pdfjs | 13452 | 31% | 26% |
+| raytrace | 33730 | 119% | 109% |
+| regexp | 13650 | 106% | 116% |
+| richards | 37309 | 135% | 137% |
+| splay | 4150 | 110% | 95% |
 | **SunSpider** | | | |
-| 3d-cube | 346 | 68% | 59% |
-| 3d-morph | 2112 | 60% | 34% |
-| 3d-raytrace | 228 | 87% | 100% |
-| access-binary-trees | 1962 | 111% | 100% |
-| access-fannkuch | 1922 | 20% | 18% |
-| access-nbody | 2993 | 128% | 183% |
-| access-nsieve | 291 | 64% | 62% |
-| bitops-3bit-bits-in-byte | 20920 | 27% | 27% |
-| bitops-bits-in-byte | 3531 | 91% | 45% |
-| bitops-bitwise-and | 708 | 58% | 57% |
-| bitops-nsieve-bits | 1181 | 27% | 26% |
-| controlflow-recursive | 4578 | 43% | 21% |
-| crypto-aes | 649 | 65% | 48% |
-| crypto-md5 | 937 | 73% | 76% |
-| crypto-sha1 | 482 | 77% | 59% |
-| date-format-tofte | 308 | 74% | 75% |
-| date-format-xparb | 388 | 98% | 100% |
-| math-cordic | 2868 | 66% | 34% |
-| math-partial-sums | 2201 | 83% | 96% |
-| math-spectral-norm | 2853 | 43% | 17% |
-| regexp-dna | 287 | 103% | 107% |
-| string-base64 | 994 | 100% | 87% |
-| string-fasta | 153 | 91% | 92% |
-| string-tagcloud | 458 | 102% | 90% |
-| string-unpack-code | 219 | 110% | 109% |
-| string-validate-input | 592 | 96% | 87% |
+| 3d-cube | 353 | 67% | 57% |
+| 3d-morph | 1649 | 76% | 43% |
+| 3d-raytrace | 238 | 80% | 92% |
+| access-binary-trees | 1845 | 115% | 93% |
+| access-fannkuch | 1882 | 20% | 20% |
+| access-nbody | 2952 | 104% | 193% |
+| access-nsieve | 293 | 61% | 62% |
+| bitops-3bit-bits-in-byte | 23523 | 24% | 24% |
+| bitops-bits-in-byte | 3266 | 91% | 88% |
+| bitops-bitwise-and | 726 | 57% | 56% |
+| bitops-nsieve-bits | 1226 | 26% | 25% |
+| controlflow-recursive | 4589 | 43% | 21% |
+| crypto-aes | 658 | 50% | 49% |
+| crypto-md5 | 961 | 71% | 74% |
+| crypto-sha1 | 496 | 76% | 59% |
+| date-format-tofte | 280 | 82% | 85% |
+| date-format-xparb | 395 | 90% | 96% |
+| math-cordic | 2280 | 82% | 50% |
+| math-partial-sums | 1645 | 105% | 111% |
+| math-spectral-norm | 2941 | 42% | 16% |
+| regexp-dna | 299 | 100% | 100% |
+| string-base64 | 1018 | 95% | 83% |
+| string-fasta | 153 | 92% | 90% |
+| string-tagcloud | 463 | 102% | 86% |
+| string-unpack-code | 218 | 111% | 108% |
+| string-validate-input | 601 | 95% | 83% |
 | **ubench** | | | |
-| function-closure | 1198 | 58% | 60% |
-| function-correct-args | 92 | 75% | 75% |
-| function-excess-args | 91 | 76% | 76% |
-| function-missing-args | 115 | 80% | 80% |
-| interp_hot_closure | 96 | 88% | 89% |
-| interp_hot_property | 83 | 86% | 88% |
-| interp_recursive_fib | 103 | 83% | 87% |
-| loop-empty-resolve | 22 | 59% | 55% |
-| loop-empty | 185 | 55% | 53% |
-| loop-sum | 311 | 52% | 52% |
+| function-closure | 1225 | 56% | 58% |
+| function-correct-args | 126 | 55% | 55% |
+| function-excess-args | 125 | 55% | 55% |
+| function-missing-args | 140 | 65% | 66% |
+| interp_hot_closure | 101 | 82% | 83% |
+| interp_hot_property | 84 | 83% | 86% |
+| interp_recursive_fib | 134 | 63% | 62% |
+| loop-empty-resolve | 22 | 55% | 59% |
+| loop-empty | 190 | 51% | 53% |
+| loop-sum | 306 | 53% | 53% |
 
 ES6 against ECMASCRIPT on the same engine differ most where the language version changes the code generated:
 
 - `math-spectral-norm`, `controlflow-recursive`, `math-cordic` and `3d-morph` are much faster under ECMASCRIPT, in
-  both runs.
-- `math-partial-sums` and `access-nbody` are faster under ES6, in both runs.
+  all three runs.
+- `math-partial-sums` and `access-nbody` are faster under ES6, in all three runs.
 - `bitops-bits-in-byte` is not a language-version difference. It was faster under ES6 on 2026-10-30 (63% against
-  76%) and is faster under ECMASCRIPT here (91% against 45%); see below.
+  76%), under ECMASCRIPT on 2026-10-31 (91% against 45%), and level here (91% against 88%); see below.
 
 ### Variation between runs
 
@@ -309,32 +342,41 @@ largest moves, all without a code change:
 - **Conclusion.** To call a change on one benchmark, compare two sessions, or run that file alone with
   alternating runs, as the regression analysis does.
 
+The run of 2026-11-03 against 2026-10-31, each engine's own times. The fork changed in between (two engine
+changes), stock did not, so stock's row is variation alone:
+
+| Engine | Geometric mean of the 53 | Benchmarks within 10% |
+| --- | --- | --- |
+| Stock | 100% | 42 |
+| Monflabs ES6 | 98% | 51 |
+| Monflabs ECMASCRIPT | 100% | 48 |
+
+Stock's largest moves: `function-correct-args` and `function-excess-args` 137% (91–92 → 125–126 ms),
+`interp_recursive_fib` 130%, `generator_nqueens` 67% (532 → 355 ms), `math-partial-sums` 75%, `generator_tokenizer`
+76%, `3d-morph` 78%, `math-cordic` 79%. The fork's: `bitops-bits-in-byte` under ECMASCRIPT 181% (1,584 →
+2,867 ms), `crypto-aes` under ES6 77%, `access-nbody` under ES6 80%.
+
 ### Memory: the fixed cost of an engine (empty script)
 
 | Engine | Compile alloc KB | Retained KB | Alloc/run KB | Retained after run KB | Metaspace KB | Classes |
 | --- | --- | --- | --- | --- | --- | --- |
-| Stock compiled | 26,158 | 1,178 | 8 | 1,178 | 5,570 | 1,264 |
-| Monflabs ES6 compiled | 35,051 | 1,801 | 76 | 1,772 | 7,743 | 1,642 |
-| Monflabs ECMASCRIPT compiled | 35,763 | 1,813 | 477 | 1,882 | 7,980 | 1,704 |
-| Stock interpreted | 25,375 | 1,144 | 49 | 1,146 | 5,271 | 1,231 |
-| Monflabs ES6 interpreted | 33,973 | 1,765 | 43 | 1,735 | 7,370 | 1,600 |
-| Monflabs ECMASCRIPT interpreted | 34,680 | 1,777 | 456 | 1,846 | 7,600 | 1,662 |
+| Stock compiled | 26,209 | 1,178 | 8 | 1,178 | 5,552 | 1,264 |
+| Monflabs ES6 compiled | 35,102 | 1,802 | 76 | 1,773 | 7,767 | 1,643 |
+| Monflabs ECMASCRIPT compiled | 35,824 | 1,813 | 479 | 1,882 | 7,992 | 1,705 |
+| Stock interpreted | 25,423 | 1,144 | 49 | 1,146 | 5,280 | 1,231 |
+| Monflabs ES6 interpreted | 34,036 | 1,766 | 43 | 1,736 | 7,375 | 1,601 |
+| Monflabs ECMASCRIPT interpreted | 34,754 | 1,777 | 457 | 1,846 | 7,604 | 1,663 |
 
-The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmark and engine.
+They are within 0.3% of the run of 2026-10-28/29. The per-benchmark memory figures are in `rhino-memory.csv`, one
+row per benchmark and engine.
 
 ## Caveats
 
-- **Baselines leak in the memory run.** It ran one JVM per *engine*, so each benchmark's baseline includes what the
-  previous ones left reachable.
-  - The worst case: after the failed `mandreel`, `navier-stokes` on Monflabs ES6 compiled reads −65 MB retained
-    and −40 MB metaspace.
-  - Smaller negatives, of −0.1 to −0.75 MB, appear elsewhere.
-
-  That is why the summary gives geometric means and not totals, and why the metaspace figures are not summarised.
-  The harness now runs one JVM per *(engine, benchmark)*. Each child first loads the engine on an empty script,
-  without reporting it, so a benchmark's figures leave out the engine's fixed cost. The change has been
-  smoke-tested on ubench, where no figure is negative, but the full suites have not been rerun with it (see
-  [What remains](#what-remains)).
+- **Baselines leaked in the memory run of 2026-10-28/29.** It ran one JVM per *engine*, so each benchmark's
+  baseline included what the previous ones left reachable (the worst case: `navier-stokes` on Monflabs ES6 compiled
+  read −65 MB retained after the failed `mandreel`). The run of 2026-11-03/04 starts one JVM per *(engine,
+  benchmark)*; each child first loads the engine on an empty script, without reporting it, so a benchmark's figures
+  leave out the engine's fixed cost. No figure is negative.
 - **A percentage depends on the files run before it.** Each engine runs all the files in one JVM per round, so a
   file's profile, code cache and heap are those the previous files left. Object-heavy Octane files read much
   higher in the run than alone, for example `deltablue` 132% against 95% under ES6; see the table in the
@@ -345,6 +387,10 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
     wrappers that stay inlinable. The fork's per-site property cache (`PropertyCache.getPropAndThis`, about
     2.6 KB compiled) and its other typed links do not: after `crypto`, C2 refused to inline them 522 times, against
     135 when `deltablue` runs alone.
+  - **It also depends on compile order within one file.** `deltablue` under ECMASCRIPT takes either about 25 s or
+    about 31 s on the same jar, depending on whether `PropertyCache.getPropAndThis` gets compiled on its own at
+    2.9 KB or 3.4 KB, either side of `InlineSmallCode` (found 2026-11-03; see
+    [OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md)).
   - **With `-XX:InlineSmallCode=8000`** (all engines;
     [CSV](performance-comparison/rhino-time-compiled-isc8000.csv ':ignore'), 2026-10-31, same engine and settings
     as the run of 2026-10-30), All goes from 71% / 66% to 71% / 61%:
@@ -362,10 +408,11 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
     `access-fannkuch` 341 → 424 ms. It is a tuning option for embedders, not a fix. Given the
     [variation between runs](#variation-between-runs), the per-benchmark gains of one session with the flag are
     indicative only.
-- **The machine was not always idle.** The measurements ran on an Apple M2 (8 cores, 24 GB) under Azul Zulu
-  25.0.4. During the run of 2026-10-30, Chrome Remote Desktop used about a third of a core throughout. During the
-  run of 2026-10-31 its host was running but idle (2 s of CPU in all), and the per-benchmark variation was no
-  smaller. All three engines were exposed equally, since they were interleaved.
+- **The machine was not always idle.** During the run of 2026-10-30, Chrome Remote Desktop used about a third of a
+  core throughout. During the run of 2026-10-31 its host was running but idle (2 s of CPU in all), and the
+  per-benchmark variation was no smaller. During the runs of 2026-11-03/04, the Chrome Remote Desktop host and the
+  Microsoft Remote Desktop client were running; their CPU use was not measured. All three engines were exposed
+  equally, since they were interleaved.
 - **Octane is timed, not scored.** The harness reports the wall time of a run. The Octane score each benchmark
   prints is in the log, but not used.
 - **A failed benchmark is left out of the means.** Only the 53 that run on all three engines count. The ECMASCRIPT
@@ -375,12 +422,15 @@ The per-benchmark memory figures are in `rhino-memory.csv`, one row per benchmar
 
 To redo this:
 
-1. **Interpreted time.** Run the second time command, preferably with `--rounds=1`, overnight. Budget about 8 hours
-   per round for the three engines.
-2. **Memory, one JVM per benchmark.** Rerun the memory command, which now starts one JVM per (engine, benchmark).
-   Expect about 5 hours. Then check that no figure is negative and that the totals in `memsum.py` add up.
+1. **Interpreted time.** Not rerun on 2026-11-03. Run the second time command, preferably with `--rounds=1`,
+   overnight. Budget about 8 hours per round for the three engines.
+2. **Memory, one JVM per benchmark.** Done on 2026-11-03/04: no figure is negative and the `memsum.py` totals are
+   positive.
 3. **The regressions.** Analysed in [Where the fork is slower than Rhino 1.9.1](performance.md#where-the-fork-is-slower-than-rhino-191).
-   - **Done since the run of 2026-10-28/29**, and included in both later runs:
+   - **Done since the run of 2026-10-31**, and included in the run of 2026-11-03: `instanceof` without calling the
+     intrinsic `@@hasInstance` (`earley-boyer` −8% alone under ECMASCRIPT), and named gets and sets on objects
+     without the primitive paths (`deltablue` after `crypto` −15% under ES6).
+   - **Done since the run of 2026-10-28/29**, and included in all later runs:
      - slot keys are compared without `Objects.equals` (`deltablue` about 18% faster, `richards` 6–10%);
      - the double conversions are linked without a guard that calls the native `Class.isInstance` (`box2d`
        18.4 s → 9.1 s alone, 71% of stock's time);
@@ -396,7 +446,7 @@ To redo this:
      single cause found.
    - **The shared JVM.** The fork loses more than stock when the object-heavy files run after the others in one
      JVM (`deltablue` 95% alone, 132% in the run, under ES6). The cause is explained in [Caveats](#caveats).
-     Three fixes were tried and dropped; all three are in the tried-and-dropped list,
+     Several fixes were tried and dropped; all are in the tried-and-dropped list,
      [OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md):
      - the miss paths of `PropertyCache` moved out of line (2026-10-30): `crypto` → `deltablue` level, because
        the hit path is still too big to inline after other scripts;
@@ -404,17 +454,23 @@ To redo this:
      - the cached gets linked per site as a `MethodHandle` chain, as `NativeArrayLinker` does for elements
        (2026-10-31). It helped the shared sequences (`richards` after `box2d` about 20% faster), but cost
        `deltablue` alone 11% and `v8-raytrace` 35% in the gate, because the chain at every get site uses up C2's
-       inlining budget in the script methods.
+       inlining budget in the script methods;
+     - a per-script copy of the cache's hit path (2026-11-03): inconclusive, measured under the compilation race
+       below;
+     - the hit path made smaller (2026-11-03): `deltablue` under ECMASCRIPT 19% faster, but `box2d` 22–27%
+       slower, because the cache was then inlined at every site and used up the inlining budgets of its methods.
 
      A per-site fix has to add no bytecode to the site. Earlier attempts to inline the slot lookup made
      `v8-richards` 60–85% slower in the gate. Shared shapes (smaller lookups) are the remaining candidate.
-   - **Whether `deltablue` under ECMASCRIPT is at 116% alone**: measured in one round only.
+   - **`deltablue` under ECMASCRIPT at 116% alone** was measured in one round, and is explained by a compilation
+     race: the file takes about 25 s or about 31 s on the same jar, depending on the size of the standalone compile
+     of `PropertyCache.getPropAndThis` (see [Caveats](#caveats)).
    - **Which in-run figures to trust.** The run of 2026-10-31 repeated the engine of 2026-10-30 and moved
      `richards` from 121% / 132% to 147% / 148%, and `access-nbody` under ECMASCRIPT from 138% to 183%, with no
      code change (see [Variation between runs](#variation-between-runs)). Before reading them as a trend, measure
      each file alone in two sessions, or record which JIT state each session settles in.
-4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs`, `box2d` and `regexp` allocate about twice as
-   much as stock during compile.
+4. **ECMASCRIPT compile allocation.** Confirm what makes `pdfjs` (328%), `regexp` (305%) and `box2d` (166%)
+   allocate so much more than stock during compile, against 114%, 171% and under 110% under ES6.
 
 ## Harness changes
 

@@ -451,12 +451,19 @@ and 65%. The means held, but single files did not: `richards` read 147–148% un
 file's percentage in one session is not reliable; see
 [Variation between runs](comparison.md#variation-between-runs).
 
+The run of 2026-11-03 (fork at `5afb843a9`, with `instanceof` and the named gets and sets below) gives 70% and
+65%, Octane 85% / 78%. The object-heavy files are still behind in the run: `deltablue` 128% / 131%, `richards`
+135% / 137%, `gbemu` 127% / 113%, `raytrace` 119% / 109%, and `access-nbody` 193% under `VERSION_ECMASCRIPT`.
+
 The cause is [profile pollution](#pitfalls-the-gate-accounts-for) of the runtime helpers.
 - The files that run first compile the shared helpers on their own, into code larger than `InlineSmallCode`
   (2,500 bytes). Later files then call them instead of inlining them.
 - 1.9.1's method lookup is a chain of small wrappers that stay inlinable.
 - The fork's per-site property cache (`PropertyCache.getPropAndThis`, about 2.6 KB compiled) and its typed links
   do not. Those are what make it faster alone.
+- Which side of the threshold the cache lands on can depend on compile order within one file: `deltablue` under
+  `VERSION_ECMASCRIPT` takes about 25 s or about 31 s on the same jar. Making the cache small enough to always
+  inline fixed that, but cost `box2d` 22–27%, whose methods then ran out of C2's inlining budget (2026-11-03).
 
 `-XX:InlineSmallCode=8000` takes the fork to 71% / 61% and `deltablue` to 107% / 104%, but slows down a few
 other files. Linking these helpers per site, as the array elements already are, was tried on 2026-10-31 and
