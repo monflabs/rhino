@@ -40,6 +40,42 @@ a checkout of [monflabs/rhino](https://github.com/monflabs/rhino) (branch
 test262 is run in scope: ES2026 minus proper tail calls, `intl402/`, `staging/` and the proposals
 after ES2026, the same exclusions as the Nashorn fork.
 
+### What does not pass
+
+On Java 25, the reference JDK, 368 of the 42,616 tests in scope do not pass:
+
+| Tests | Area | Why |
+|---|---|---|
+| 320 | Unicode data | The engine takes its Unicode data from the JDK and bundles none. 269 RegExp property escape tests (`\p{...}`): `Script_Extensions` (175 of them), which `java.lang.Character` does not expose, the binary properties the JDK does not carry, and the code points added in Unicode 17. 39 tests of the properties of strings of the `v` flag (`\p{RGI_Emoji}`, ...), which need emoji sequence data the JDK does not have. 12 identifier tests: the identifier characters of Unicode 17 (8), and U+2E2F VERTICAL TILDE, a modifier letter that ECMAScript excludes from identifiers (4). |
+| 10 | Several realms | Errors thrown by built-ins, and `Function.prototype.bind` and `apply`, do not track the realm of their function: the fork supports several realms only as separate scopes. |
+| 35 | `IsHTMLDDA` | A browser host hook (`document.all`). Skipped. |
+| 2 | `CanBlockIsFalse` | Written for a host whose main thread cannot call `Atomics.wait`; every thread of a server can. Skipped. |
+| 1 | `import-text` | A proposal after ES2026. Skipped. |
+
+Each failing test is listed, with its reason, in
+[doc/CONFORMANCE_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/CONFORMANCE_MONFLABS.md).
+
+### Java version and Unicode
+
+test262 generates its Unicode tests from Unicode 17, and the result of these tests depends on the
+Unicode version of the JDK the engine runs on:
+
+| JDK | Unicode | Tests that do not pass | Pass rate |
+|---|---|---|---|
+| 21 | 15.0 | 398 | 99.1% (42,218) |
+| 25 (reference) | 16.0 | 368 | 99.1% (42,248) |
+| 27 | 17.0 | 327 | 99.2% (42,289) |
+
+- **Java 21** fails 30 more tests than Java 25: the identifier characters of Unicode 15.1 and 16.0
+  (16 tests), and 14 property escape tests of the scripts and categories added or extended since
+  Unicode 15.0 (`Script=Kawi`, `Script=Cyrillic`, `General_Category=Dash_Punctuation`, ...). A
+  script the JDK does not know, such as `\p{Script=Garay}` on Java 21, is a SyntaxError.
+- **Java 27** has the Unicode version of the tests, and passes 41 more than Java 25: the identifier
+  characters of Unicode 17 (8 tests), and 33 property escape tests of the scripts and categories
+  that gained code points in Unicode 17 (`Script=Sidetic`, `Script=Han`, `General_Category=Letter`,
+  ...). `Script_Extensions`, the binary properties the JDK does not carry, the emoji sequences and
+  the vertical tilde fail on every JDK.
+
 ## The language versions
 
 Rhino has always had a language version on its `Context`. The fork adds one more:
