@@ -123,6 +123,7 @@ changes.
 | 1.107 | The `next` method of a built-in iterator called on another kind of iterator | `VERSION_ECMASCRIPT` |
 | 1.108 | A Symbol on the left of `instanceof` | `VERSION_ECMASCRIPT` |
 | 1.109 | Unicode property escapes follow ECMA-262: binary properties, General_Category values, exact Script names | `VERSION_ECMASCRIPT` |
+| 1.110 | Identifier characters are ID_Start and ID_Continue: no Pattern_Syntax (U+2E2F) or control characters | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -249,12 +250,14 @@ function f() { let z; eval("var z"); }   // VERSION_ES6: fine   VERSION_ECMASCRI
 eval("let a = 1; const b = 2; class C {}");
 typeof a;                           // VERSION_ES6: "number"   VERSION_ECMASCRIPT: "undefined"
 eval("typeof c; let c;");           // VERSION_ES6: "undefined"   VERSION_ECMASCRIPT: ReferenceError
+eval("let d = 4; function f() { return d; }");
+typeof d; f();                      // VERSION_ES6: "number", 4   VERSION_ECMASCRIPT: "undefined", 4
 ```
 
 - The top-level `let`, `const` and `class` declarations of eval code (direct or indirect) belong to the eval code:
   they are in a block of their own, in their temporal dead zone until declared, and gone after the eval; its `var`s
-  and functions still go to the caller's variable scope. Not done when the eval code also declares functions at its
-  top level (they would not see the block), which keep the previous behavior.
+  and functions still go to the caller's variable scope. Its functions close over the block: they are created at
+  the start of the block and bound in the caller's variable scope, as Annex B hoists a block function.
 - **Why:** ECMA-262 2026, §19.2.1.1 PerformEval step 16 (a new declarative environment for the lexical declarations).
 
 ### 1.6 Byte order of typed arrays
@@ -1813,6 +1816,20 @@ Symbol() instanceof C.bind();   // before: Error: read (or a ClassCastException)
   `Soft_Dotted`, `Terminal_Punctuation`, `Script_Extensions` and the properties of strings.
 - **Why:** ECMA-262 2026, §22.2.2.9.1 UnicodeMatchProperty, UnicodeMatchPropertyValue,
   table-binary-unicode-properties.
+
+### 1.110 Identifier characters are ID_Start and ID_Continue
+
+```js
+var ⸯ = 1;             // (U+2E2F VERTICAL TILDE) VERSION_ES6: declares ⸯ   VERSION_ECMASCRIPT: SyntaxError
+eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERSION_ECMASCRIPT: SyntaxError
+/(?<ⸯ>a)/;             //                         VERSION_ES6: a group      VERSION_ECMASCRIPT: SyntaxError
+```
+
+- Identifiers, private names and RegExp group names, written directly or with `\u` escapes, use the Unicode
+  properties ID_Start and ID_Continue. The JDK's identifier characters, used before, also include the
+  `Pattern_Syntax` characters that are letters (U+2E2F, a modifier letter) and the ignorable control characters
+  (U+0000–U+0008, U+000E–U+001B, U+007F–U+009F) as identifier parts.
+- **Why:** ECMA-262 2026, §12.7 (Names and Keywords: `ID_Start`, `ID_Continue`); UAX #31.
 
 ---
 

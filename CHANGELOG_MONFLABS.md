@@ -39,6 +39,18 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Functions of eval code see its lexical declarations; identifier characters (2026-11-10)
+
+- Eval code that declares functions now also keeps its top-level `let`, `const` and `class` to itself (they leaked
+  into the caller, and a second `(0, eval)("const q = 1; function f() {}")` threw a redeclaration TypeError). Its
+  functions become block functions hoisted to the variable scope, as in Annex B.3.2: created at the start of the
+  eval's lexical block, which they close over, and bound in the caller's variable scope. IRFactory only, so both
+  backends. BACKWARD_COMPATIBILITY.md 1.5 (the limit is gone); FunctionEnvironmentTest.
+- Identifiers, private names and RegExp group names use ID_Start and ID_Continue (new `UnicodeIdentifiers`, shared
+  with `\p{ID_Start}`): the JDK's identifier characters also include U+2E2F VERTICAL TILDE (Pattern_Syntax) and the
+  ignorable control characters. BACKWARD_COMPATIBILITY.md 1.110; IdentifierCharactersTest.
+- Gated. test262 (Java 25): 42,267 → 42,271 of 42,616 (99.2%), the `vertical-tilde-*` identifier tests.
+
 ### Unicode property escapes derived from the JDK (2026-11-10)
 
 Under `VERSION_ECMASCRIPT`, `\p{...}` resolves the names and aliases of ECMA-262 exactly, with a new resolver in

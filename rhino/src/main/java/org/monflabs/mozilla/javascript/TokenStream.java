@@ -592,24 +592,50 @@ class TokenStream implements Parser.CurrentPositionReporter {
     }
 
     static boolean isValidIdentifierName(String str) {
+        return isValidIdentifierName(str, false);
+    }
+
+    /**
+     * Whether {@code str} is an IdentifierName, with the identifier characters of UAX #31 under
+     * VERSION_ECMASCRIPT ({@code ecmaScript}), or those of the JDK.
+     */
+    static boolean isValidIdentifierName(String str, boolean ecmaScript) {
         int i = 0;
         while (i < str.length()) {
             int c = str.codePointAt(i);
             if (i == 0) {
-                if (c != '$' && c != '_' && !Character.isUnicodeIdentifierStart(c)) {
+                if (c != '$' && c != '_' && !isIdentifierStart(c, ecmaScript)) {
                     return false;
                 }
             } else {
                 if (c != '$'
                         && c != '\u200c'
                         && c != '\u200d'
-                        && !Character.isUnicodeIdentifierPart(c)) {
+                        && !isIdentifierPart(c, ecmaScript)) {
                     return false;
                 }
             }
             i += Character.charCount(c);
         }
         return true;
+    }
+
+    private boolean isIdentifierStart(int c) {
+        return isIdentifierStart(c, parser.compilerEnv.isLatestEcmaScript());
+    }
+
+    private boolean isIdentifierPart(int c) {
+        return isIdentifierPart(c, parser.compilerEnv.isLatestEcmaScript());
+    }
+
+    static boolean isIdentifierStart(int c, boolean ecmaScript) {
+        return ecmaScript ? UnicodeIdentifiers.isIdStart(c) : Character.isUnicodeIdentifierStart(c);
+    }
+
+    static boolean isIdentifierPart(int c, boolean ecmaScript) {
+        return ecmaScript
+                ? UnicodeIdentifiers.isIdContinue(c)
+                : Character.isUnicodeIdentifierPart(c);
     }
 
     final String getSourceString() {
@@ -714,7 +740,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                     c = '\\';
                 }
             } else {
-                identifierStart = Character.isUnicodeIdentifierStart(c) || c == '$' || c == '_';
+                identifierStart = isIdentifierStart(c) || c == '$' || c == '_';
                 if (identifierStart) {
                     stringBufferTop = 0;
                     addToString(c);
@@ -784,7 +810,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                         } else {
                             if (c == EOF_CHAR
                                     || c == BYTE_ORDER_MARK
-                                    || !(Character.isUnicodeIdentifierPart(c) || c == '$')) {
+                                    || !(isIdentifierPart(c) || c == '$')) {
                                 break;
                             }
                             addToString(c);
@@ -846,7 +872,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
 
                 if (containsEscape
                         && parser.compilerEnv.getLanguageVersion() >= Context.VERSION_ES6
-                        && !isValidIdentifierName(str)) {
+                        && !isValidIdentifierName(str, parser.compilerEnv.isLatestEcmaScript())) {
                     parser.reportError("msg.invalid.escape");
                     return Token.ERROR;
                 }
@@ -970,7 +996,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
                             || c == '$'
                             || c == '_'
                             || isDigit(c)
-                            || (c != EOF_CHAR && Character.isUnicodeIdentifierStart(c))) {
+                            || (c != EOF_CHAR && isIdentifierStart(c))) {
                         // 3in []: a numeric literal cannot be followed by an identifier or digit
                         parser.addError("msg.ident.after.number");
                         return Token.ERROR;
@@ -1204,10 +1230,7 @@ class TokenStream implements Parser.CurrentPositionReporter {
             if (c == '#' && parser.compilerEnv.isLatestEcmaScript()) {
                 int hashBeg = tokenBeg;
                 int next = peekChar();
-                if (next == '\\'
-                        || next == '$'
-                        || next == '_'
-                        || Character.isUnicodeIdentifierStart(next)) {
+                if (next == '\\' || next == '$' || next == '_' || isIdentifierStart(next)) {
                     // PrivateIdentifier (12.7): # IdentifierName, which may be a reserved word
                     int tt = getToken();
                     if (tokenBeg == hashBeg + 1 && tt != Token.ERROR && this.string != null) {

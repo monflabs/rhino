@@ -43,6 +43,7 @@ import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.SymbolKey;
 import org.monflabs.mozilla.javascript.TopLevel;
 import org.monflabs.mozilla.javascript.Undefined;
+import org.monflabs.mozilla.javascript.UnicodeIdentifiers;
 import org.monflabs.mozilla.javascript.VarScope;
 import org.monflabs.mozilla.javascript.config.RhinoConfig;
 
@@ -2070,6 +2071,18 @@ public class NativeRegExp extends ScriptableObject {
         return prev;
     }
 
+    private static boolean isGroupNameStart(CompilerState state, int c) {
+        return state.cx.isLatestEcmaScript()
+                ? UnicodeIdentifiers.isIdStart(c)
+                : Character.isUnicodeIdentifierStart(c);
+    }
+
+    private static boolean isGroupNamePart(CompilerState state, int c) {
+        return state.cx.isLatestEcmaScript()
+                ? UnicodeIdentifiers.isIdContinue(c)
+                : Character.isUnicodeIdentifierPart(c);
+    }
+
     private static boolean extractCaptureGroupName(CompilerState state, StringBuilder builder) {
         char[] src = state.cpbegin;
         int termBegin = state.cp;
@@ -2118,8 +2131,8 @@ public class NativeRegExp extends ScriptableObject {
 
             if (!(codePoint == '$'
                     || (isStart && codePoint == '_')
-                    || (isStart && Character.isUnicodeIdentifierStart(codePoint))
-                    || (!isStart && Character.isUnicodeIdentifierPart(codePoint)))) {
+                    || (isStart && isGroupNameStart(state, codePoint))
+                    || (!isStart && isGroupNamePart(state, codePoint)))) {
                 state.cp = termBegin;
                 return false;
             }

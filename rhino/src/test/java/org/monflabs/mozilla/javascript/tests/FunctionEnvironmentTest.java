@@ -83,6 +83,23 @@ class FunctionEnvironmentTest {
     }
 
     @Test
+    void functionsOfEvalCodeCloseOverItsLexicalDeclarations() {
+        Utils.assertGatedBehavior(
+                "number|1|number 2|undefined|TypeError",
+                "undefined|1|undefined 2|ReferenceError|ok",
+                PRELUDE
+                        + " (0, eval)('let a1 = 1; function f1() { return a1; }');"
+                        + " r.push(typeof a1, f1());"
+                        + " t(function () { eval('let a2 = 2; function f2() { return a2; }');"
+                        + " return typeof a2 + ' ' + f2(); });"
+                        + " t(function () { return (0, eval)('g3(); let a3 = 3;"
+                        + " function g3() { return a3; }'); });"
+                        + " (0, eval)('const a4 = 1; function f4() {}');"
+                        + " t(function () { (0, eval)('const a4 = 2; function f4() {}'); return 'ok'; });"
+                        + " r.join('|')");
+    }
+
+    @Test
     void evalVarConflictsWithTheFunctionLexicals() {
         Utils.assertGatedBehavior(
                 "ok",

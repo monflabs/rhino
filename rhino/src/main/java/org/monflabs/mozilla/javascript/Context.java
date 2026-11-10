@@ -151,7 +151,8 @@ public class Context implements Closeable {
      *       declaration, is a SyntaxError; its global functions and vars are all checked before any
      *       is created (CanDeclareGlobalFunction).
      *   <li>The top-level {@code let}/{@code const}/{@code class} of eval code are bindings of the
-     *       eval code, not variables of the caller.
+     *       eval code, not variables of the caller, also when the eval code declares functions:
+     *       they close over these bindings.
      *   <li>The elements of typed arrays are stored little endian ({@link #FEATURE_LITTLE_ENDIAN}
      *       is true by default); under {@link #VERSION_ES6} big endian.
      *   <li>In a regular expression without the {@code u} flag, {@code \p} and {@code \P} are
@@ -217,6 +218,8 @@ public class Context implements Closeable {
      *       ({@code C}, {@code digit}, {@code LC}), exact Script names, and the Unicode definitions
      *       of {@code ID_Start}, {@code ID_Continue}, {@code White_Space}, {@code Hex_Digit} and
      *       {@code Case_Ignorable}.
+     *   <li>Identifier characters, of names, private names and RegExp group names, are ID_Start and
+     *       ID_Continue: not U+2E2F VERTICAL TILDE (Pattern_Syntax) or control characters.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

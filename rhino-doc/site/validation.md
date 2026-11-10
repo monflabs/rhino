@@ -27,7 +27,7 @@ Most of them run in both backends, the class compiler and the interpreter, and a
 `Test262SuiteTest` runs it from a git submodule (`git submodule update --init` fetches it).
 
 - **Scope.** ES2026, minus proper tail calls, `intl402/`, `staging/` and the proposals after ES2026: the same
-  exclusions as the Nashorn fork. 42,616 tests are in scope; the fork passes 99.2% of them (42,267) under
+  exclusions as the Nashorn fork. 42,616 tests are in scope; the fork passes 99.2% of them (42,271) under
   `VERSION_ECMASCRIPT`, where stock Rhino 1.9.1 passed 56.9%.
 - **Modes.** Each test runs compiled and interpreted, and in strict and sloppy mode unless it is flagged for one.
 - **Expected failures** are listed in `tests/testsrc/test262.properties`, and grouped with their reasons in

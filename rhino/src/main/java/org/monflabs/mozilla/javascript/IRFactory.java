@@ -1744,7 +1744,23 @@ public final class IRFactory {
         if (children != null) {
             Scope lexicals = evalLexicalScope(node);
             if (lexicals != null) {
-                lexicals.addChildrenToBack(children);
+                // the functions of the eval code are created first, in the block (Annex B
+                // hoisting puts them in the variable scope too)
+                List<Node> functions = new ArrayList<>();
+                List<Node> statements = new ArrayList<>();
+                for (Node kid = children; kid != null; kid = kid.getNext()) {
+                    (isFunctionOf(node, kid, FunctionNode.FUNCTION_BLOCK_SCOPED)
+                                    ? functions
+                                    : statements)
+                            .add(kid);
+                }
+                body.removeChildren();
+                for (Node kid : functions) {
+                    lexicals.addChildToBack(kid);
+                }
+                for (Node kid : statements) {
+                    lexicals.addChildToBack(kid);
+                }
                 node.addChildToBack(lexicals);
             } else {
                 node.addChildrenToBack(children);
@@ -1753,22 +1769,25 @@ public final class IRFactory {
         return node;
     }
 
+    private static boolean isFunctionOf(ScriptNode script, Node node, int functionType) {
+        return node.getType() == Token.FUNCTION
+                && script.getFunctionNode(node.getExistingIntProp(Node.FUNCTION_PROP))
+                                .getFunctionType()
+                        == functionType;
+    }
+
     /**
      * The lexical environment of eval code (ECMA-262 19.2.1.3 step 16, under VERSION_ECMASCRIPT): a
      * block around the code holding its top-level let/const/class, so that they do not become
-     * variables of the caller. Not done when the code declares functions, as they are created with
-     * the variable scope and would not see the bindings of the block.
+     * variables of the caller. The functions of the code close over that environment and are bound
+     * in the variable environment (19.2.1.3 step 17): they become block functions hoisted to the
+     * variable scope, as in Annex B.3.2, created at the start of the block.
      */
     private Scope evalLexicalScope(ScriptNode script) {
         if (!parser.compilerEnv.isInEval()
                 || !parser.compilerEnv.isLatestEcmaScript()
                 || script.getSymbolTable() == null) {
             return null;
-        }
-        for (int i = 0; i < script.getFunctionCount(); i++) {
-            if (script.getFunctionNode(i).getFunctionType() == FunctionNode.FUNCTION_STATEMENT) {
-                return null;
-            }
         }
         List<String> names = new ArrayList<>();
         for (Symbol symbol : script.getSymbolTable().values()) {
@@ -1793,6 +1812,16 @@ public final class IRFactory {
         script.addChildScope(block);
         for (String name : names) {
             script.moveSymbol(name, block);
+        }
+        for (int i = 0; i < script.getFunctionCount(); i++) {
+            FunctionNode fn = script.getFunctionNode(i);
+            if (fn.getFunctionType() == FunctionNode.FUNCTION_STATEMENT
+                    && fn.getFunctionName() != null) {
+                fn.setFunctionType(FunctionNode.FUNCTION_BLOCK_SCOPED);
+                fn.setAnnexBHoisted(true);
+                block.putSymbol(
+                        new Symbol(Symbol.Type.FUNCTION_LET, fn.getFunctionName().getIdentifier()));
+            }
         }
         return block;
     }

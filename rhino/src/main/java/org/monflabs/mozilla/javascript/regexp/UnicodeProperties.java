@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.IntPredicate;
 import java.util.regex.Matcher;
+import org.monflabs.mozilla.javascript.UnicodeIdentifiers;
 
 /**
  * Unicode properties handler for Java 11 Character class. Handles binary properties from ECMA-262
@@ -515,8 +516,8 @@ public class UnicodeProperties {
         Extended_Pictographic("ExtPict", Character::isExtendedPictographic),
         Hex_Digit(
                 "Hex", c -> isHexDigit(c) || in(c, 0xFF10, 0xFF19, 0xFF21, 0xFF26, 0xFF41, 0xFF46)),
-        ID_Continue("IDC", UnicodeProperties::isIdContinue),
-        ID_Start("IDS", UnicodeProperties::isIdStart),
+        ID_Continue("IDC", UnicodeIdentifiers::isIdContinue),
+        ID_Start("IDS", UnicodeIdentifiers::isIdStart),
         Ideographic("Ideo", Character::isIdeographic),
         Join_Control("Join_C", c -> c == 0x200C || c == 0x200D),
         Logical_Order_Exception(
@@ -527,8 +528,8 @@ public class UnicodeProperties {
                                 0xAAB5, 0xAAB6, 0xAAB9, 0xAAB9, 0xAABB, 0xAABC)),
         Lowercase("Lower", Character::isLowerCase),
         Noncharacter_Code_Point("NChar", c -> in(c, 0xFDD0, 0xFDEF) || (c & 0xFFFE) == 0xFFFE),
-        Pattern_Syntax("Pat_Syn", UnicodeProperties::isPatternSyntax),
-        Pattern_White_Space("Pat_WS", UnicodeProperties::isPatternWhiteSpace),
+        Pattern_Syntax("Pat_Syn", UnicodeIdentifiers::isPatternSyntax),
+        Pattern_White_Space("Pat_WS", UnicodeIdentifiers::isPatternWhiteSpace),
         Radical(c -> in(c, 0x2E80, 0x2E99, 0x2E9B, 0x2EF3, 0x2F00, 0x2FD5)),
         Regional_Indicator("RI", c -> in(c, 0x1F1E6, 0x1F1FF)),
         Unified_Ideograph("UIdeo", UnicodeProperties::isUnifiedIdeograph),
@@ -541,11 +542,11 @@ public class UnicodeProperties {
                                 c, 0x09, 0x0D, 0x20, 0x20, 0x85, 0x85, 0xA0, 0xA0, 0x1680, 0x1680,
                                 0x2000, 0x200A, 0x2028, 0x2029, 0x202F, 0x202F, 0x205F, 0x205F,
                                 0x3000, 0x3000)),
-        XID_Continue("XIDC", c -> isIdContinue(c) && !isNotXid(c)),
+        XID_Continue("XIDC", c -> UnicodeIdentifiers.isIdContinue(c) && !isNotXid(c)),
         XID_Start(
                 "XIDS",
                 c ->
-                        isIdStart(c)
+                        UnicodeIdentifiers.isIdStart(c)
                                 && !isNotXid(c)
                                 && !in(c, 0x0E33, 0x0E33, 0x0EB3, 0x0EB3, 0xFF9E, 0xFF9F));
 
@@ -585,36 +586,8 @@ public class UnicodeProperties {
         return false;
     }
 
-    private static boolean isPatternSyntax(int c) {
-        return in(
-                c, 0x21, 0x2F, 0x3A, 0x40, 0x5B, 0x5E, 0x60, 0x60, 0x7B, 0x7E, 0xA1, 0xA7, 0xA9,
-                0xA9, 0xAB, 0xAC, 0xAE, 0xAE, 0xB0, 0xB1, 0xB6, 0xB6, 0xBB, 0xBB, 0xBF, 0xBF, 0xD7,
-                0xD7, 0xF7, 0xF7, 0x2010, 0x2027, 0x2030, 0x203E, 0x2041, 0x2053, 0x2055, 0x205E,
-                0x2190, 0x245F, 0x2500, 0x2775, 0x2794, 0x2BFF, 0x2E00, 0x2E7F, 0x3001, 0x3003,
-                0x3008, 0x3020, 0x3030, 0x3030, 0xFD3E, 0xFD3F, 0xFE45, 0xFE46);
-    }
-
-    private static boolean isPatternWhiteSpace(int c) {
-        return in(c, 0x09, 0x0D, 0x20, 0x20, 0x85, 0x85, 0x200E, 0x200F, 0x2028, 0x2029);
-    }
-
     private static boolean isVariationSelector(int c) {
         return in(c, 0x180B, 0x180D, 0x180F, 0x180F, 0xFE00, 0xFE0F, 0xE0100, 0xE01EF);
-    }
-
-    // The JDK's identifier characters include Pattern_Syntax and Pattern_White_Space, which UAX #31
-    // excludes, and the ignorable characters, except ZWNJ and ZWJ (Other_ID_Continue).
-    private static boolean isIdStart(int c) {
-        return Character.isUnicodeIdentifierStart(c)
-                && !isPatternSyntax(c)
-                && !isPatternWhiteSpace(c);
-    }
-
-    private static boolean isIdContinue(int c) {
-        return Character.isUnicodeIdentifierPart(c)
-                && !isPatternSyntax(c)
-                && !isPatternWhiteSpace(c)
-                && (!Character.isIdentifierIgnorable(c) || c == 0x200C || c == 0x200D);
     }
 
     /** The identifier characters that are not stable under NFKC, removed from XID_*. */

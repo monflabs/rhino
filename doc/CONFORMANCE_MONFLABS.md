@@ -23,8 +23,7 @@ bundles no Unicode Character Database. On Java 25 (Unicode 16), this leaves:
 - `built-ins/RegExp/unicodeSets` (39 tests): the properties of strings of the `v` flag (`\p{RGI_Emoji}`,
   `Basic_Emoji`, `Emoji_Keycap_Sequence`, ...), which need emoji sequence data the JDK does not have; they are a
   SyntaxError.
-- `language/identifiers` (12 tests): the identifier characters of Unicode 17 (8), and U+2E2F VERTICAL TILDE (4),
-  which the JDK counts as an identifier character although it is `Pattern_Syntax`.
+- `language/identifiers` (8 tests): the identifier characters of Unicode 17, which pass on Java 27.
 
 ### Agents that cannot block (decision 3.4)
 
