@@ -122,6 +122,7 @@ changes.
 | 1.106 | A call stack that runs out is a `RangeError` | `VERSION_ECMASCRIPT` |
 | 1.107 | The `next` method of a built-in iterator called on another kind of iterator | `VERSION_ECMASCRIPT` |
 | 1.108 | A Symbol on the left of `instanceof` | `VERSION_ECMASCRIPT` |
+| 1.109 | Unicode property escapes follow ECMA-262: binary properties, General_Category values, exact Script names | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -1783,6 +1784,35 @@ Symbol() instanceof C.bind();   // before: Error: read (or a ClassCastException)
   which may itself be bound or have its own `@@hasInstance` (it cast the target, and threw a
   `ClassCastException` for a bound target).
 - **Why:** ECMA-262 2026, §7.3.21 OrdinaryHasInstance, steps 2 and 3.
+
+### 1.109 Unicode property escapes follow ECMA-262
+
+```js
+/\p{Any}/u.test("a")                  // VERSION_ES6: SyntaxError   VERSION_ECMASCRIPT: true
+/\p{General_Category=Other}/u.test("\u00AD")   // VERSION_ES6: false   VERSION_ECMASCRIPT: true (Cf is in C)
+/\p{gc=digit}/u.test("\u00B2")         // VERSION_ES6: true (N)   VERSION_ECMASCRIPT: false (digit is Nd)
+/\p{ID_Start}/u.test("\u2E2F")         // VERSION_ES6: true   VERSION_ECMASCRIPT: false (Pattern_Syntax)
+/\p{White_Space}/u.test("\u0085")      // VERSION_ES6: false   VERSION_ECMASCRIPT: true
+/\p{Script=latin}/u                   // VERSION_ES6: matches Latin   VERSION_ECMASCRIPT: SyntaxError
+```
+
+- The binary properties of ECMA-262 that can be derived from the JDK are supported, with their aliases: `Any`,
+  `Assigned`, `Bidi_Control`, `Bidi_Mirrored`, `Cased`, the six `Changes_When_*`, `Default_Ignorable_Code_Point`,
+  `Deprecated`, the Emoji properties and `Extended_Pictographic`, `Ideographic`, `Join_Control`,
+  `Logical_Order_Exception`, `Noncharacter_Code_Point`, `Pattern_Syntax`, `Pattern_White_Space`, `Radical`,
+  `Regional_Indicator`, `Unified_Ideograph`, `Variation_Selector`, `XID_Start` and `XID_Continue`. They were a
+  SyntaxError.
+- The properties that were approximated follow their Unicode definition: `Case_Ignorable`, `Hex_Digit` (not every
+  decimal digit), `ID_Start` and `ID_Continue` (without `Pattern_Syntax`, `Pattern_White_Space` and the ignorable
+  controls) and `White_Space`. General_Category `Other` (`C`) is Cc, Cf, Cn, Co and Cs (it was the `Other_*`
+  categories), `digit` is `Nd`, and `Cased_Letter` (`LC`) is supported.
+- Script values are matched exactly, as names or ISO 15924 codes (`Latin`, `Latn`), and `Qaac` and `Qaai` are
+  accepted; `forName` accepted any case.
+- Still a SyntaxError (no data in the JDK, decision 4.3): `Dash`, `Diacritic`, `Extender`, `Grapheme_Base`,
+  `Grapheme_Extend`, `IDS_Binary_Operator`, `IDS_Trinary_Operator`, `Math`, `Quotation_Mark`, `Sentence_Terminal`,
+  `Soft_Dotted`, `Terminal_Punctuation`, `Script_Extensions` and the properties of strings.
+- **Why:** ECMA-262 2026, §22.2.2.9.1 UnicodeMatchProperty, UnicodeMatchPropertyValue,
+  table-binary-unicode-properties.
 
 ---
 

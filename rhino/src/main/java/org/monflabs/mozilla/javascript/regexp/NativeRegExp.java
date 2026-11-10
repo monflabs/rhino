@@ -2362,7 +2362,7 @@ public class NativeRegExp extends ScriptableObject {
         }
 
         String content = new String(src, contentBegin, contentEnd - contentBegin - 1);
-        int encodedProp = UnicodeProperties.lookup(content);
+        int encodedProp = UnicodeProperties.lookup(content, state.cx.isLatestEcmaScript());
         if (encodedProp == -1) {
             reportError("msg.invalid.escape", "");
             return false;

@@ -212,6 +212,11 @@ public class Context implements Closeable {
      *       instead of iterating it.
      *   <li>A Symbol on the left of {@code instanceof} is not an instance of anything, instead of
      *       having its prototype chain walked.
+     *   <li>Unicode property escapes follow ECMA-262: the binary properties derived from the JDK
+     *       ({@code Any}, {@code Assigned}, the Emoji properties, ...), the General_Category values
+     *       ({@code C}, {@code digit}, {@code LC}), exact Script names, and the Unicode definitions
+     *       of {@code ID_Start}, {@code ID_Continue}, {@code White_Space}, {@code Hex_Digit} and
+     *       {@code Case_Ignorable}.
      *   <li>The features stock Rhino did not have are only available under this version: classes
      *       (fields, private names, static blocks), async functions and generators, {@code for
      *       await}, spread arguments, {@code import()}, modules, the RegExp {@code d} and {@code v}

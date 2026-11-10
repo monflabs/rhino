@@ -3,8 +3,8 @@
 Under `Context.VERSION_ECMASCRIPT`, this fork passes the test262 suite in its scope, ES2026 without the exclusions of
 [MONFLABS_PLAN.md](../MONFLABS_PLAN.md) (proper tail calls, `staging/`, `intl402/` and the proposals after ES2026),
 except for the tests listed here, each group with its documented reason. `tests/testsrc/test262.properties` lists
-every failing test; `python3 tests/test262-status.py` gives the current numbers (99.1% of 42,616 tests on
-2026-10-15).
+every failing test; `python3 tests/test262-status.py` gives the current numbers (99.2% of 42,616 tests on
+2026-11-10).
 
 ## Documented limits
 
@@ -13,12 +13,18 @@ every failing test; `python3 tests/test262-status.py` gives the current numbers 
 Unicode data (identifiers, case mapping, RegExp property escapes) comes from the running JDK, as in Nashorn; the fork
 bundles no Unicode Character Database. On Java 25 (Unicode 16), this leaves:
 
-- `built-ins/RegExp/property-escapes/generated` (269 tests): the code points added after the JDK's Unicode version,
-  the binary properties the JDK does not carry, and `Script_Extensions`, which `java.lang.Character` does not expose.
+- `built-ins/RegExp/property-escapes` (250 tests): `Script_Extensions` (176), which `java.lang.Character` does not
+  expose; the code points added after the JDK's Unicode version (55, which pass on Java 27); the binary properties
+  defined by lists that the JDK does not carry (12: `Dash`, `Diacritic`, `Extender`, `Grapheme_Base`,
+  `Grapheme_Extend`, `IDS_Binary_Operator`, `IDS_Trinary_Operator`, `Math`, `Quotation_Mark`, `Sentence_Terminal`,
+  `Soft_Dotted`, `Terminal_Punctuation`); and the 7 properties of strings. The other binary properties are derived
+  from the JDK's character properties, case mappings and normalization, and from the code point sets that the
+  Unicode stability policy keeps fixed (`regexp/UnicodeProperties`).
 - `built-ins/RegExp/unicodeSets` (39 tests): the properties of strings of the `v` flag (`\p{RGI_Emoji}`,
   `Basic_Emoji`, `Emoji_Keycap_Sequence`, ...), which need emoji sequence data the JDK does not have; they are a
   SyntaxError.
-- `language/identifiers` (12 tests): the identifier characters of Unicode 17.
+- `language/identifiers` (12 tests): the identifier characters of Unicode 17 (8), and U+2E2F VERTICAL TILDE (4),
+  which the JDK counts as an identifier character although it is `Pattern_Syntax`.
 
 ### Agents that cannot block (decision 3.4)
 

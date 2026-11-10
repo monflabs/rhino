@@ -14,7 +14,7 @@ optimizations in [Performance optimizations](performance.md).
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
 |---|---|---|
 | Language | ES2015 and later, partially | ES2026 |
-| test262 (in-scope tests) | 56.9% | 99.1% (42,248 of 42,616) |
+| test262 (in-scope tests) | 56.9% | 99.2% (42,267 of 42,616) |
 | Classes, async functions, ES modules | no | yes |
 | Default language version | `VERSION_ES6` (200) | `VERSION_ECMASCRIPT` (250) |
 | Maven group / Java packages | `org.mozilla` | `org.monflabs.mozilla` |
@@ -319,13 +319,13 @@ an array literal with a spread element, which fails with a `VerifyError` in Rhin
 
 ### Remaining test262 gaps
 
-Of the 42,616 in-scope tests, 42,248 pass. The rest are documented limits:
+Of the 42,616 in-scope tests, 42,267 pass on Java 25. The rest are documented limits:
 
 | Area | Tests | Reason |
 |---|---|---|
-| RegExp Unicode property escapes | 269 | code points newer than the JDK's Unicode version, binary properties and `Script_Extensions` the JDK does not expose |
+| RegExp Unicode property escapes | 250 | `Script_Extensions` and 12 binary properties the JDK does not expose, code points newer than the JDK's Unicode version |
 | RegExp `v` flag, properties of strings | 39 | no emoji sequence data in the JDK |
-| Identifiers | 12 | Unicode 17 identifier characters |
+| Identifiers | 12 | Unicode 17 identifier characters (8), U+2E2F VERTICAL TILDE (4) |
 | Cross-realm | about 10 | errors are created in the realm of the code that catches them |
 | `IsHTMLDDA` | 35, skipped | a browser-only host hook (`document.all`) |
 | `Atomics.wait` on a main thread that cannot block | 2, skipped | written for hosts whose main thread cannot block |

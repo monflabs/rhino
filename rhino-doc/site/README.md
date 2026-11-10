@@ -29,7 +29,7 @@ a checkout of [monflabs/rhino](https://github.com/monflabs/rhino) (branch
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
 |---|---|---|
 | Language | ES6 and parts of later editions | ES2026, measured by test262 |
-| test262 (in scope) | 56.9% (where the fork started) | 99.1% (42,248 of 42,616 tests) |
+| test262 (in scope) | 56.9% (where the fork started) | 99.2% (42,267 of 42,616 tests) |
 | Default language version | `VERSION_ES6` (200) | `VERSION_ECMASCRIPT` (250) |
 | Stock behavior | — | `VERSION_ES6`, selected explicitly |
 | Java packages | `org.mozilla.javascript` | `org.monflabs.mozilla.javascript` |
@@ -42,11 +42,11 @@ after ES2026, the same exclusions as the Nashorn fork.
 
 ### What does not pass
 
-On Java 25, the reference JDK, 368 of the 42,616 tests in scope do not pass:
+On Java 25, the reference JDK, 349 of the 42,616 tests in scope do not pass:
 
 | Tests | Area | Why |
 |---|---|---|
-| 320 | Unicode data | The engine takes its Unicode data from the JDK and bundles none. 269 RegExp property escape tests (`\p{...}`): `Script_Extensions` (175 of them), which `java.lang.Character` does not expose, the binary properties the JDK does not carry, and the code points added in Unicode 17. 39 tests of the properties of strings of the `v` flag (`\p{RGI_Emoji}`, ...), which need emoji sequence data the JDK does not have. 12 identifier tests: the identifier characters of Unicode 17 (8), and U+2E2F VERTICAL TILDE, a modifier letter that ECMAScript excludes from identifiers (4). |
+| 301 | Unicode data | The engine takes its Unicode data from the JDK and bundles none. 250 RegExp property escape tests (`\p{...}`): `Script_Extensions` (176), which `java.lang.Character` does not expose; the code points added in Unicode 17 (55); the 12 binary properties whose lists the JDK does not carry (`Math`, `Dash`, `Grapheme_Extend`, ...); and 7 properties of strings. 39 tests of the properties of strings of the `v` flag (`\p{RGI_Emoji}`, ...), which need emoji sequence data the JDK does not have. 12 identifier tests: the identifier characters of Unicode 17 (8), and U+2E2F VERTICAL TILDE, a modifier letter that ECMAScript excludes from identifiers (4). |
 | 10 | Several realms | Errors thrown by built-ins, and `Function.prototype.bind` and `apply`, do not track the realm of their function: the fork supports several realms only as separate scopes. |
 | 35 | `IsHTMLDDA` | A browser host hook (`document.all`). Skipped. |
 | 2 | `CanBlockIsFalse` | Written for a host whose main thread cannot call `Atomics.wait`; every thread of a server can. Skipped. |
@@ -62,18 +62,19 @@ Unicode version of the JDK the engine runs on:
 
 | JDK | Unicode | Tests that do not pass | Pass rate |
 |---|---|---|---|
-| 21 | 15.0 | 398 | 99.1% (42,218) |
-| 25 (reference) | 16.0 | 368 | 99.1% (42,248) |
-| 27 | 17.0 | 327 | 99.2% (42,289) |
+| 21 | 15.0 | 380 | 99.1% (42,236) |
+| 25 (reference) | 16.0 | 349 | 99.2% (42,267) |
+| 27 | 17.0 | 286 | 99.3% (42,330) |
 
-- **Java 21** fails 30 more tests than Java 25: the identifier characters of Unicode 15.1 and 16.0
-  (16 tests), and 14 property escape tests of the scripts and categories added or extended since
-  Unicode 15.0 (`Script=Kawi`, `Script=Cyrillic`, `General_Category=Dash_Punctuation`, ...). A
+- **Java 21** fails 31 more tests than Java 25: the identifier characters of Unicode 15.1 and 16.0
+  (16 tests), and 15 property escape tests of the scripts, categories and properties added or
+  extended since Unicode 15.0 (`Script=Kawi`, `General_Category=Dash_Punctuation`, `Bidi_Mirrored`,
+  ...). A
   script the JDK does not know, such as `\p{Script=Garay}` on Java 21, is a SyntaxError.
-- **Java 27** has the Unicode version of the tests, and passes 41 more than Java 25: the identifier
-  characters of Unicode 17 (8 tests), and 33 property escape tests of the scripts and categories
-  that gained code points in Unicode 17 (`Script=Sidetic`, `Script=Han`, `General_Category=Letter`,
-  ...). `Script_Extensions`, the binary properties the JDK does not carry, the emoji sequences and
+- **Java 27** has the Unicode version of the tests, and passes 63 more than Java 25: the identifier
+  characters of Unicode 17 (8 tests), and 55 property escape tests of the scripts, categories and
+  properties that gained code points in Unicode 17 (`Script=Sidetic`, `General_Category=Letter`,
+  `ID_Start`, ...). `Script_Extensions`, the binary properties the JDK does not carry, the emoji sequences and
   the vertical tilde fail on every JDK.
 
 ## The language versions

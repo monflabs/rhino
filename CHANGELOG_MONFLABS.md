@@ -39,6 +39,23 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Unicode property escapes derived from the JDK (2026-11-10)
+
+Under `VERSION_ECMASCRIPT`, `\p{...}` resolves the names and aliases of ECMA-262 exactly, with a new resolver in
+`regexp/UnicodeProperties`; `VERSION_ES6` keeps the stock table.
+
+- 31 more binary properties: from the JDK's character properties (`Any`, `Assigned`, `Bidi_Mirrored`,
+  `Ideographic`, the Emoji properties and `Extended_Pictographic`, `Unified_Ideograph`), its case mappings and
+  `Normalizer` (`Cased`, the six `Changes_When_*`), and the code point sets that the Unicode stability policy keeps
+  fixed (`Pattern_Syntax`, `Pattern_White_Space`, `Noncharacter_Code_Point`, `Join_Control`, `Bidi_Control`, ...).
+  Each was checked against the Unicode 17 data of test262 over every code point on Java 27.
+- Fixed approximations: `Case_Ignorable`, `Hex_Digit`, `ID_Start`, `ID_Continue`, `White_Space`; General_Category
+  `Other`, `digit` and `Cased_Letter`; Script values matched exactly, with `Qaac` and `Qaai`.
+- Still unsupported (decision 4.3, refined): the 12 binary properties defined by lists that change with each Unicode
+  version (`Math`, `Dash`, `Grapheme_Extend`, ...), `Script_Extensions` and the properties of strings.
+- Gated, BACKWARD_COMPATIBILITY.md 1.109. test262 (Java 25): 42,248 → 42,267 of 42,616 (99.2%), 19 property escape
+  tests; on Java 27, 41 more (RegExpPropertyEscapesTest).
+
 ### Named gets and sets on objects without the primitive paths (2026-11-02)
 
 `ScriptRuntime.getObjectProp`, `getObjectPropNoWarn` and `setObjectProp` handle an object receiver first and
