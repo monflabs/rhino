@@ -9,6 +9,7 @@
   - [Performance optimizations](/performance.md)
   - [Comparison with Rhino 1.9.1](/comparison.md)
   - [How the engine is validated](/validation.md)
+  - [Code complexity added](/complexity.md)
 
 - **Embedding**
   - [Asynchronous code](/async.md)

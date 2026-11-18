@@ -15,7 +15,9 @@ buildtools/build-doc.sh --serve    # and serves it on http://localhost:8000/ (--
   `validation.md` lists the test harnesses, from `tests/README.md`,
   `benchmarks/README.md` and the JavascriptPerformance project. `comparison.md`, the comparison with
   Rhino 1.9.1, is maintained here only, with its data and summary scripts in
-  `site/performance-comparison/`. `site/_sidebar.md` is the navigation.
+  `site/performance-comparison/`. `complexity.md` is a review of the code the fork added over upstream: its
+  size, the kinds of complexity and how hard each area is to follow; it is dated, and is redone, not patched.
+  `site/_sidebar.md` is the navigation.
 - `site/playground/index.html` runs the playground (`../rhino-playground`) in the browser with
   [CheerpJ](https://cheerpj.com), on its Java 21 runtime: the generated site has the playground's
   jar next to it, as `rhino-playground.jar`. CheerpJ maps `/app/` to the root of the web server,
