@@ -1447,7 +1447,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
+                    && na.isWritableDense()
                     && na.length > 0
                     && na.dense[(int) na.length - 1] != NOT_FOUND) {
                 na.length--;
@@ -1487,7 +1487,7 @@ public class NativeArray extends ScriptableObject implements List {
         if (o instanceof NativeArray) {
             NativeArray na = (NativeArray) o;
             if (na.denseOnly
-                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
+                    && na.isWritableDense()
                     && na.length > 0
                     && na.dense[(int) na.length - 1] != NOT_FOUND) {
                 na.length--;
@@ -1701,7 +1701,7 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (o instanceof NativeArray) {
             na = (NativeArray) o;
-            denseFrom = na.denseOnly && (!cx.isLatestEcmaScript() || na.isWritableDense());
+            denseFrom = na.denseOnly && na.isWritableDense();
         }
         if (result instanceof NativeArray) {
             nar = (NativeArray) result;
@@ -2266,9 +2266,7 @@ public class NativeArray extends ScriptableObject implements List {
         if ((o instanceof NativeArray) && (count <= Integer.MAX_VALUE)) {
             NativeArray na = (NativeArray) o;
             // the conversion of the arguments may have changed the array
-            if (na.denseOnly
-                    && (!cx.isLatestEcmaScript() || na.isWritableDense())
-                    && na.length == len) {
+            if (na.denseOnly && na.isWritableDense() && na.length == len) {
                 for (; count > 0; count--) {
                     na.dense[(int) to] = na.dense[(int) from];
                     from += direction;

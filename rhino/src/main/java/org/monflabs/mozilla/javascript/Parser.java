@@ -7186,30 +7186,23 @@ public class Parser {
                     transformer,
                     isFunctionParameter);
         }
-        boolean useIterator = true;
         int setOp = variableType == Token.CONST ? Token.SETCONST : Token.SETNAME;
         if (defaultValue != null) {
             setupDefaultValues(tempName, parent, defaultValue, setOp, transformer);
         }
-        String iteratorName = null;
-        if (useIterator) {
-            iteratorName = defineTemp();
-            Node open = new Node(Token.ITER_OPEN, createName(tempName));
-            if (bindsNamesOnly(array, variableType, isFunctionParameter)) {
-                // only the iterator itself can throw before it is done
-                open.putIntProp(Node.UNGUARDED_ITERATOR_PROP, 1);
-            }
-            parent.addChildToBack(
-                    new Node(Token.SETNAME, createName(Token.BINDNAME, iteratorName, null), open));
-            ++iteratorOpenCount;
+        String iteratorName = defineTemp();
+        Node open = new Node(Token.ITER_OPEN, createName(tempName));
+        if (bindsNamesOnly(array, variableType, isFunctionParameter)) {
+            // only the iterator itself can throw before it is done
+            open.putIntProp(Node.UNGUARDED_ITERATOR_PROP, 1);
         }
-        boolean empty = !useIterator;
+        parent.addChildToBack(
+                new Node(Token.SETNAME, createName(Token.BINDNAME, iteratorName, null), open));
+        ++iteratorOpenCount;
         int index = 0;
         for (AstNode n : array.getElements()) {
             if (n.getType() == Token.EMPTY) {
-                if (useIterator) {
-                    parent.addChildToBack(new Node(Token.ITER_STEP, createName(iteratorName)));
-                }
+                parent.addChildToBack(new Node(Token.ITER_STEP, createName(iteratorName)));
                 index++;
                 continue;
             }
@@ -7220,19 +7213,7 @@ public class Parser {
                     reportError("msg.parm.after.rest");
                 }
                 AstNode restTarget = ((Spread) n).getExpression();
-                Node restValue;
-                if (useIterator) {
-                    restValue = new Node(Token.ITER_REST, createName(iteratorName));
-                } else {
-                    restValue =
-                            new Node(
-                                    Token.CALL,
-                                    new Node(
-                                            Token.GETPROP,
-                                            createName(tempName),
-                                            Node.newString("slice")));
-                    restValue.addChildToBack(createNumber(index));
-                }
+                Node restValue = new Node(Token.ITER_REST, createName(iteratorName));
                 if (isMemberTarget(restTarget)) {
                     // the reference is evaluated before the remaining values are collected
                     parent.addChildToBack(simpleAssignment(restTarget, restValue, transformer));
@@ -7257,12 +7238,11 @@ public class Parser {
                                     isFunctionParameter));
                 }
                 index++;
-                empty = false;
                 continue;
             }
 
             AstNode target = n.getType() == Token.ASSIGN ? ((Assignment) n).getLeft() : n;
-            if (useIterator && isMemberTarget(target)) {
+            if (isMemberTarget(target)) {
                 // the reference (object and key) is evaluated before the iterator is stepped
                 Node step = new Node(Token.ITER_STEP, createName(iteratorName));
                 Node value = step;
@@ -7271,11 +7251,10 @@ public class Parser {
                 }
                 parent.addChildToBack(simpleAssignment(target, value, transformer));
                 index++;
-                empty = false;
                 continue;
             }
 
-            if (useIterator && n.getType() == Token.NAME) {
+            if (n.getType() == Token.NAME) {
                 // [x] = a: the binding is resolved before the iterator is stepped
                 String name = n.getString();
                 parent.addChildToBack(
@@ -7289,32 +7268,18 @@ public class Parser {
                     destructuringNames.add(name);
                 }
                 index++;
-                empty = false;
                 continue;
             }
 
-            Node rightElem;
-            if (useIterator) {
-                String elemName = defineTemp();
-                parent.addChildToBack(
-                        new Node(
-                                Token.SETNAME,
-                                createName(Token.BINDNAME, elemName, null),
-                                new Node(Token.ITER_STEP, createName(iteratorName))));
-                rightElem = createName(elemName);
-            } else {
-                rightElem = new Node(Token.GETELEM, createName(tempName), createNumber(index));
-            }
+            String elemName = defineTemp();
+            parent.addChildToBack(
+                    new Node(
+                            Token.SETNAME,
+                            createName(Token.BINDNAME, elemName, null),
+                            new Node(Token.ITER_STEP, createName(iteratorName))));
+            Node rightElem = createName(elemName);
 
-            if (n.getType() == Token.NAME) {
-                /* [x] = [1] */
-                String name = n.getString();
-                parent.addChildToBack(destructuringSet(setOp, name, rightElem, variableType));
-                if (variableType != -1) {
-                    defineSymbol(variableType, name, true);
-                    destructuringNames.add(name);
-                }
-            } else if (n.getType() == Token.ASSIGN) {
+            if (n.getType() == Token.ASSIGN) {
                 /* [x = 1] = [2] */
                 processDestructuringDefaults(
                         variableType,
@@ -7338,12 +7303,9 @@ public class Parser {
                                 isFunctionParameter));
             }
             index++;
-            empty = false;
         }
-        if (useIterator) {
-            parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
-        }
-        return empty;
+        parent.addChildToBack(new Node(Token.ITER_CLOSE, createName(iteratorName)));
+        return false;
     }
 
     /**

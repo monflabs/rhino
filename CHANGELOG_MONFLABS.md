@@ -39,6 +39,15 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Dead branches removed from array destructuring and four Array methods (2026-11-18)
+
+- `Parser.destructuringArray` carried a `useIterator` flag that was always true, since `VERSION_ES6` and older go to
+  `destructuringArrayLegacy` first: the flag, its index-based branches and the second, unreachable handling of a
+  plain name are gone, and the method returns `false` directly.
+- `pop`, `shift`, `splice` and `copyWithin` of `NativeArray` tested `!cx.isLatestEcmaScript()` in their dense fast
+  path after having returned through their `legacy` twin: the test is gone.
+- No behavior change, gated or not.
+
 ### Functions of eval code see its lexical declarations; identifier characters (2026-11-10)
 
 - Eval code that declares functions now also keeps its top-level `let`, `const` and `class` to itself (they leaked
