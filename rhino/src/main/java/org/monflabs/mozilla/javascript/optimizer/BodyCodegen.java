@@ -1091,12 +1091,12 @@ class BodyCodegen {
             case Token.GLOBAL_LEXICALS:
                 cfw.addALoad(contextLocal);
                 cfw.addALoad(variableObjectLocal);
-                cfw.addPush(node.getString());
+                cfw.addALoad(funObjLocal);
                 addScriptRuntimeInvoke(
                         "declareGlobalLexicals",
                         "(Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"
-                                + "Ljava/lang/String;)V");
+                                + "Ljava/lang/Object;)V");
                 break;
 
             case Token.COPY_SCOPE:
@@ -1710,12 +1710,13 @@ class BodyCodegen {
                         c = c.getNext();
                     }
                     cfw.addPush(node.getString());
+                    cfw.addPush(node.getIntProp(Node.CLASS_FLAGS_PROP, 0));
                     cfw.addALoad(contextLocal);
                     cfw.addALoad(variableObjectLocal);
                     addScriptRuntimeInvoke(
                             "defineClass",
                             "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;"
-                                    + "Ljava/lang/String;"
+                                    + "Ljava/lang/String;I"
                                     + "Lorg/monflabs/mozilla/javascript/Context;"
                                     + "Lorg/monflabs/mozilla/javascript/VarScope;"
                                     + ")Ljava/lang/Object;");
@@ -1744,12 +1745,12 @@ class BodyCodegen {
                 addScriptRuntimeInvoke(
                         type == Token.CLASS_STATIC
                                 ? "classStaticInit"
-                                : switch (node.getIntProp(Node.AWAIT_KIND_PROP, 0)) {
-                                    case 1 -> "classFieldKeyNamed";
-                                    case 2 -> "classMethodKey";
-                                    case 3 -> "newPrivateName";
-                                    case 4 -> "classStaticBlockKey";
-                                    case 5 -> "classElementKey";
+                                : switch (node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0)) {
+                                    case Node.FIELD_KEY_NAMED -> "classFieldKeyNamed";
+                                    case Node.FIELD_KEY_METHOD -> "classMethodKey";
+                                    case Node.FIELD_KEY_PRIVATE_NAME -> "newPrivateName";
+                                    case Node.FIELD_KEY_STATIC_BLOCK -> "classStaticBlockKey";
+                                    case Node.FIELD_KEY_ELEMENT -> "classElementKey";
                                     default -> "classFieldKey";
                                 },
                         "(Ljava/lang/Object;"
@@ -6152,7 +6153,7 @@ class BodyCodegen {
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             int var = child.getIntProp(Node.OUTER_VAR_PROP, -1);
             if (var != -1) {
-                depths.set(var >>> 24);
+                depths.set(FunctionNode.outerVarDepth(var));
             }
             collectOuterVarDepths(child, depths);
         }
@@ -6163,7 +6164,7 @@ class BodyCodegen {
         int end = cfw.acquireLabel();
         if (addOuterActivation(var, name, lookup)) {
             int stack = cfw.getStackTop();
-            cfw.addPush(var & ScriptRuntime.OUTER_VAR_INDEX);
+            cfw.addPush(FunctionNode.outerVarIndex(var));
             addScriptRuntimeInvoke(
                     "getActivationVar",
                     "(Lorg/monflabs/mozilla/javascript/VarScope;I)Ljava/lang/Object;");
@@ -6173,12 +6174,13 @@ class BodyCodegen {
         }
         cfw.addALoad(funObjLocal);
         cfw.addALoad(variableObjectLocal);
-        cfw.addPush(var);
+        cfw.addPush(FunctionNode.outerVarDepth(var));
+        cfw.addPush(FunctionNode.outerVarIndex(var));
         cfw.addPush(name);
         cfw.addALoad(contextLocal);
         addScriptRuntimeInvoke(
                 "getOuterVar",
-                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
+                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;II"
                         + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
                         + ")Ljava/lang/Object;");
         cfw.markLabel(end);
@@ -6190,7 +6192,7 @@ class BodyCodegen {
         int end = cfw.acquireLabel();
         if (addOuterActivation(var, name, lookup)) {
             int stack = cfw.getStackTop();
-            cfw.addPush(var & ScriptRuntime.OUTER_VAR_INDEX);
+            cfw.addPush(FunctionNode.outerVarIndex(var));
             addScriptRuntimeInvoke(
                     "setActivationVar",
                     "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I)"
@@ -6201,13 +6203,14 @@ class BodyCodegen {
         }
         cfw.addALoad(funObjLocal);
         cfw.addALoad(variableObjectLocal);
-        cfw.addPush(var);
+        cfw.addPush(FunctionNode.outerVarDepth(var));
+        cfw.addPush(FunctionNode.outerVarIndex(var));
         cfw.addPush(name);
         cfw.addALoad(contextLocal);
         addScriptRuntimeInvoke(
                 "setOuterVar",
                 "(Ljava/lang/Object;Ljava/lang/Object;"
-                        + "Lorg/monflabs/mozilla/javascript/VarScope;I"
+                        + "Lorg/monflabs/mozilla/javascript/VarScope;II"
                         + "Ljava/lang/String;Lorg/monflabs/mozilla/javascript/Context;"
                         + ")Ljava/lang/Object;");
         cfw.markLabel(end);
@@ -6219,7 +6222,7 @@ class BodyCodegen {
      * up; returns false, pushing nothing, when the function keeps no register for it.
      */
     private boolean addOuterActivation(int var, String name, int lookup) {
-        int depth = var >>> 24;
+        int depth = FunctionNode.outerVarDepth(var);
         if (outerActivationLocals == null
                 || depth >= outerActivationLocals.length
                 || outerActivationLocals[depth] == 0) {
@@ -6233,11 +6236,12 @@ class BodyCodegen {
         cfw.add(ByteCode.POP);
         cfw.addALoad(funObjLocal);
         cfw.addALoad(variableObjectLocal);
-        cfw.addPush(var);
+        cfw.addPush(depth);
+        cfw.addPush(FunctionNode.outerVarIndex(var));
         cfw.addPush(name);
         addScriptRuntimeInvoke(
                 "getOuterActivation",
-                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;I"
+                "(Ljava/lang/Object;Lorg/monflabs/mozilla/javascript/VarScope;II"
                         + "Ljava/lang/String;)Lorg/monflabs/mozilla/javascript/VarScope;");
         cfw.add(ByteCode.DUP);
         cfw.addAStore(local);

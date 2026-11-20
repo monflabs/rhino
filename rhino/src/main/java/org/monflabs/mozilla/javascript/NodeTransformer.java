@@ -1077,7 +1077,7 @@ public class NodeTransformer {
                 int index = fn.getSymbol(name).getIndex();
                 if (!declared.contains(name)
                         && !"arguments".equals(name)
-                        && index <= ScriptRuntime.OUTER_VAR_INDEX) {
+                        && index <= FunctionNode.MAX_OUTER_VAR_INDEX) {
                     outer.put(name, index);
                 }
             }
@@ -1208,7 +1208,7 @@ public class NodeTransformer {
      * nested functions resolve to it whenever they do not resolve them themselves.
      */
     private static void addOuterVars(ScriptNode fn, Map<String, Integer> vars, int depth) {
-        if (depth > 0x7F) {
+        if (depth > FunctionNode.MAX_OUTER_VAR_DEPTH) {
             return;
         }
         for (FunctionNode nested : fn.getFunctions()) {
@@ -1327,21 +1327,22 @@ public class NodeTransformer {
         if (tree.getSymbolTable() == null) {
             return;
         }
-        StringBuilder declarations = new StringBuilder();
+        List<Symbol> lexicals = new ArrayList<>();
         for (Symbol symbol : tree.getSymbolTable().values()) {
             if (isLexical(symbol)) {
-                if (declarations.length() > 0) {
-                    declarations.append(',');
-                }
-                declarations
-                        .append(symbol.getDeclType() == Symbol.Type.CONST ? 'C' : 'L')
-                        .append(symbol.getName());
+                lexicals.add(symbol);
             }
         }
-        if (declarations.length() > 0) {
+        if (!lexicals.isEmpty()) {
+            String[] names = new String[lexicals.size()];
+            boolean[] consts = new boolean[names.length];
+            for (int i = 0; i < names.length; i++) {
+                names[i] = lexicals.get(i).getName();
+                consts[i] = lexicals.get(i).getDeclType() == Symbol.Type.CONST;
+            }
             tree.removeLexicalVariables();
-            tree.putProp(Node.GLOBAL_LEXICALS_PROP, declarations.toString());
-            Node declare = Node.newString(Token.GLOBAL_LEXICALS, declarations.toString());
+            tree.putProp(Node.GLOBAL_LEXICALS_PROP, new GlobalLexicals(names, consts));
+            Node declare = new Node(Token.GLOBAL_LEXICALS);
             declare.setLineColumnNumber(Math.max(tree.getLineno(), 1), 1);
             tree.addChildToFront(declare);
         }

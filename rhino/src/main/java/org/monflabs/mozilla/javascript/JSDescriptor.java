@@ -61,7 +61,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     private final int functionType;
 
     /** A script's global let/const declarations (see Token#GLOBAL_LEXICALS), or null. */
-    private String globalLexicals;
+    private GlobalLexicals globalLexicals;
 
     /**
      * With an activation frame, the parameters and variables that live in registers instead of in
@@ -422,8 +422,8 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         return securityDomain;
     }
 
-    /** The global let/const declarations of a script, as in Token#GLOBAL_LEXICALS, or null. */
-    public String getGlobalLexicals() {
+    /** The global let/const declarations of a script, or null. */
+    GlobalLexicals getGlobalLexicals() {
         return globalLexicals;
     }
 
@@ -481,7 +481,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public SecurityController securityController;
         public Object securityDomain;
         public int functionType;
-        public String globalLexicals;
+        GlobalLexicals globalLexicals;
         public boolean[] paramIsRegister;
         public boolean[] paramIsActivationVar;
         public boolean ignoresThis;

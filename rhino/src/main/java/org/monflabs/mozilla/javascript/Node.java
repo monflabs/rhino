@@ -79,7 +79,7 @@ public class Node implements Iterable<Node> {
             STRICT_PROP = 39, // FN_NAME_ASSIGN in strict code (throws)
             // SETNAME of a destructuring assignment target (subject to the TDZ of its binding)
             DESTRUCTURING_TARGET_PROP = 40,
-            // SCRIPT: its global let/const declarations, as in Token#GLOBAL_LEXICALS
+            // SCRIPT: its global let/const declarations (GlobalLexicals)
             GLOBAL_LEXICALS_PROP = 41,
             // the value of a __proto__: v entry of an object literal (sets the prototype)
             PROTO_SETTER_PROP = 42,
@@ -94,8 +94,8 @@ public class Node implements Iterable<Node> {
             // object (NativeCall#getVar): the index of the variable
             ACTIVATION_VAR_PROP = 46,
             // NAME or SETNAME of a variable of an enclosing function at a fixed position of its
-            // activation object: the number of functions out (high byte) and the index of the
-            // variable (ScriptRuntime#getOuterVar)
+            // activation object: the number of functions out and the index of the variable
+            // (FunctionNode#outerVarDepth, FunctionNode#outerVarIndex)
             OUTER_VAR_PROP = 47,
             // ITER_OPEN of an array pattern that cannot complete abruptly while its iterator is
             // open: its statement does not guard it (IRFactory#guardIterators)
@@ -106,7 +106,11 @@ public class Node implements Iterable<Node> {
             // a direct call (DIRECTCALL_PROP) whose callee name resolves to the declaration of its
             // target: no binding of the name in between (OptTransformer)
             DIRECT_TARGET_PROP = 50,
-            LAST_PROP = DIRECT_TARGET_PROP,
+            // the kind of a FIELD_KEY (FIELD_KEY_*)
+            FIELD_KEY_KIND_PROP = 51,
+            // the flags of a CLASS (CLASS_*)
+            CLASS_FLAGS_PROP = 52,
+            LAST_PROP = CLASS_FLAGS_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -120,6 +124,24 @@ public class Node implements Iterable<Node> {
             AWAIT_ITER_NEXT = 3,
             AWAIT_ITER_CLOSE = 4,
             AWAIT_ITER_CLOSE_ABRUPT = 5;
+
+    /**
+     * The kinds of Token#FIELD_KEY: the computed key of a field, the name of a field, the key of a
+     * private method, a new private name, the key of a static block, and the computed key of an
+     * element evaluated in source order.
+     */
+    public static final int FIELD_KEY_COMPUTED = 0,
+            FIELD_KEY_NAMED = 1,
+            FIELD_KEY_METHOD = 2,
+            FIELD_KEY_PRIVATE_NAME = 3,
+            FIELD_KEY_STATIC_BLOCK = 4,
+            FIELD_KEY_ELEMENT = 5;
+
+    /**
+     * The flags of a Token#CLASS: it has an extends clause; it is named after the key of its
+     * property at runtime.
+     */
+    public static final int CLASS_DERIVED = 1, CLASS_NAMED_BY_LITERAL = 2;
 
     /** Values of DERIVED_THIS_PROP. */
     public static final int DERIVED_THIS_VALUE = 1, SUPER_CALLEE = 2;
@@ -548,6 +570,10 @@ public class Node implements Iterable<Node> {
                 return "jump_exit_prop";
             case DIRECT_TARGET_PROP:
                 return "direct_target_prop";
+            case FIELD_KEY_KIND_PROP:
+                return "field_key_kind_prop";
+            case CLASS_FLAGS_PROP:
+                return "class_flags_prop";
 
             default:
                 Kit.codeBug();

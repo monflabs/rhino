@@ -333,6 +333,25 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             case Icode.CLOSURE_STMT:
                 // hoisted indicator byte
                 return 1 + 1;
+
+            case Icode.ITER_OP:
+            case Icode.ITER_GUARD:
+            case Icode.CALL_SPREAD:
+            case Icode.ENUM_CLOSE:
+            case Icode.DERIVED_THIS:
+            case Icode.AWAIT:
+            case Icode.CLASS_ELEMENT_KEY:
+                // kind
+                return 1 + 1;
+
+            case Icode.CLASS_DEFINE:
+                // flags
+                return 1 + 1;
+
+            case Icode.OUTER_GETVAR:
+            case Icode.OUTER_SETVAR:
+                // number of functions out
+                return 1 + 1;
         }
         if (!Icode.validBytecode(bytecode)) throw Kit.codeBug();
         return 1;
@@ -789,41 +808,25 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
         instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
-        instructionObjs[base + Icode.ITER_OPEN] = new DoIterator(Icode.ITER_OPEN);
-        instructionObjs[base + Icode.ITER_STEP] = new DoIterator(Icode.ITER_STEP);
-        instructionObjs[base + Icode.ITER_REST] = new DoIterator(Icode.ITER_REST);
-        instructionObjs[base + Icode.ITER_CLOSE] = new DoIterator(Icode.ITER_CLOSE);
-        instructionObjs[base + Icode.REQUIRE_OBJECT] = new DoIterator(Icode.REQUIRE_OBJECT);
+        instructionObjs[base + Icode.ITER_OP] = new DoIterOp();
+        instructionObjs[base + Icode.ITER_GUARD] = new DoIteratorGuard();
+        instructionObjs[base + Icode.REQUIRE_OBJECT] = new DoRequireObject();
         instructionObjs[base + Icode.CALL_SPREAD] = new DoCallSpread();
-        instructionObjs[base + Icode.CALL_SPREAD_ON_SUPER] = new DoCallSpread();
-        instructionObjs[base + Icode.NEW_SPREAD] = new DoCallSpread();
         instructionObjs[base + Icode.ENUM_CLOSE] = new DoEnumClose();
         instructionObjs[base + Icode.CLASS_DEFINE] = new DoClassDefine();
         instructionObjs[base + Icode.DERIVED_THIS] = new DoDerivedThis();
         instructionObjs[base + Icode.FN_NAME_ASSIGN] = new DoFnNameAssign();
-        instructionObjs[base + Icode.SUPER_CALLEE] = new DoSuperCallee();
         instructionObjs[base + Icode.ELEM_KEY] = new DoElemKey();
         instructionObjs[base + Icode.BOUND_NAME] = new DoBoundName();
         instructionObjs[base + Icode.ACTIVATION_GETVAR] = new DoActivationGetVar();
         instructionObjs[base + Icode.ACTIVATION_SETVAR] = new DoActivationSetVar();
+        instructionObjs[base + Icode.OUTER_GETVAR] = new DoOuterGetVar();
+        instructionObjs[base + Icode.OUTER_SETVAR] = new DoOuterSetVar();
         instructionObjs[base + Icode.LITERAL_PROTO] = new DoLiteralProto();
         instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
-        instructionObjs[base + Icode.FIELD_KEY] = new DoIterator(Icode.FIELD_KEY);
-        instructionObjs[base + Icode.FIELD_KEY_NAMED] = new DoIterator(Icode.FIELD_KEY_NAMED);
-        instructionObjs[base + Icode.CLASS_STATIC] = new DoIterator(Icode.CLASS_STATIC);
-        instructionObjs[base + Icode.METHOD_KEY] = new DoIterator(Icode.METHOD_KEY);
-        instructionObjs[base + Icode.NEW_PRIVATE_NAME] = new DoIterator(Icode.NEW_PRIVATE_NAME);
-        instructionObjs[base + Icode.STATIC_BLOCK_KEY] = new DoIterator(Icode.STATIC_BLOCK_KEY);
-        instructionObjs[base + Icode.ELEMENT_KEY] = new DoIterator(Icode.ELEMENT_KEY);
-        for (int icode : Icode.AWAIT_ICODES) {
-            instructionObjs[base + icode] = new DoIterator(icode);
-        }
-        instructionObjs[base + Icode.ENUM_CLOSE_ABRUPT] = new DoEnumClose();
-        instructionObjs[base + Icode.ITER_OPEN_GUARDED] =
-                new DoIteratorGuard(Icode.ITER_OPEN_GUARDED);
-        instructionObjs[base + Icode.ITER_GUARD_INIT] = new DoIteratorGuard(Icode.ITER_GUARD_INIT);
-        instructionObjs[base + Icode.ITER_GUARD_CLOSE] =
-                new DoIteratorGuard(Icode.ITER_GUARD_CLOSE);
+        instructionObjs[base + Icode.AWAIT] = new DoAwait();
+        instructionObjs[base + Icode.CLASS_ELEMENT_KEY] = new DoClassElementKey();
+        instructionObjs[base + Icode.CLASS_STATIC] = new DoClassStatic();
         instructionObjs[base + Icode.GLOBAL_LEXICALS] = new DoGlobalLexicals();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
         instructionObjs[base + Icode.METHOD_EXPR] = new DoMethodExpr();
@@ -3534,12 +3537,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoActivationGetVar extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            int var = state.indexReg;
-            frame.stack[++frame.stackTop] =
-                    var >>> 24 == 0
-                            ? frame.activation.getVar(var)
-                            : ScriptRuntime.getOuterVar(
-                                    frame.fnOrScript, frame.scope, var, state.stringReg, cx);
+            frame.stack[++frame.stackTop] = frame.activation.getVar(state.indexReg);
             return null;
         }
     }
@@ -3551,14 +3549,44 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             if (value == DOUBLE_MARK) {
                 value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
             }
-            int var = state.indexReg;
-            if (var >>> 24 == 0) {
-                frame.activation.setVar(var, value);
-            } else {
-                frame.stack[frame.stackTop] =
-                        ScriptRuntime.setOuterVar(
-                                value, frame.fnOrScript, frame.scope, var, state.stringReg, cx);
+            frame.activation.setVar(state.indexReg, value);
+            return null;
+        }
+    }
+
+    private static class DoOuterGetVar extends KindInstruction {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            int depth = frame.compilerData.itsICode[frame.pc++];
+            frame.stack[++frame.stackTop] =
+                    ScriptRuntime.getOuterVar(
+                            frame.fnOrScript,
+                            frame.scope,
+                            depth,
+                            state.indexReg,
+                            state.stringReg,
+                            cx);
+            return null;
+        }
+    }
+
+    private static class DoOuterSetVar extends KindInstruction {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            int depth = frame.compilerData.itsICode[frame.pc++];
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK) {
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
             }
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.setOuterVar(
+                            value,
+                            frame.fnOrScript,
+                            frame.scope,
+                            depth,
+                            state.indexReg,
+                            state.stringReg,
+                            cx);
             return null;
         }
     }
@@ -3604,73 +3632,109 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
-    private static class DoIterator extends InstructionClass {
-        private final int icode;
-
-        DoIterator(int icode) {
-            this.icode = icode;
+    /** An instruction followed by one byte that tells its kind. */
+    private abstract static class KindInstruction extends InstructionClass {
+        @Override
+        void dumpICode(int op, String tname, ICodeDumpContext ctx) {
+            ctx.out.println(tname + " " + ctx.compilerData.itsICode[ctx.pc]);
+            ++ctx.pc;
         }
+    }
 
+    /** The value on the top of the stack, as an object. */
+    private static Object stackTopValue(CallFrame frame) {
+        Object value = frame.stack[frame.stackTop];
+        return value == DOUBLE_MARK
+                ? ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop])
+                : value;
+    }
+
+    private static class DoIterOp extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            Object value = frame.stack[frame.stackTop];
-            if (value == DOUBLE_MARK)
-                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            Object value = stackTopValue(frame);
             frame.stack[frame.stackTop] =
-                    switch (icode) {
+                    switch (frame.compilerData.itsICode[frame.pc++]) {
                         case Icode.ITER_OPEN -> ScriptRuntime.iteratorOpen(value, cx, frame.scope);
                         case Icode.ITER_STEP -> ScriptRuntime.iteratorStep(value, cx, frame.scope);
                         case Icode.ITER_REST -> ScriptRuntime.iteratorRest(value, cx, frame.scope);
-                        case Icode.REQUIRE_OBJECT ->
-                                ScriptRuntime.requireObject(value, cx, frame.scope);
-                        case Icode.AWAIT_REQUEST ->
-                                ScriptRuntime.awaitRequest(value, cx, frame.scope);
-                        case Icode.ASYNC_DELEGATE ->
-                                ScriptRuntime.asyncDelegate(value, cx, frame.scope);
-                        case Icode.FIELD_KEY -> ScriptRuntime.classFieldKey(value, cx, frame.scope);
-                        case Icode.FIELD_KEY_NAMED ->
-                                ScriptRuntime.classFieldKeyNamed(value, cx, frame.scope);
-                        case Icode.CLASS_STATIC ->
-                                ScriptRuntime.classStaticInit(value, cx, frame.scope);
-                        case Icode.METHOD_KEY ->
-                                ScriptRuntime.classMethodKey(value, cx, frame.scope);
-                        case Icode.NEW_PRIVATE_NAME ->
-                                ScriptRuntime.newPrivateName(value, cx, frame.scope);
-                        case Icode.STATIC_BLOCK_KEY ->
-                                ScriptRuntime.classStaticBlockKey(value, cx, frame.scope);
-                        case Icode.ELEMENT_KEY ->
-                                ScriptRuntime.classElementKey(value, cx, frame.scope);
-                        case Icode.ASYNC_ITER_OPEN ->
-                                ScriptRuntime.asyncIterOpen(value, cx, frame.scope);
-                        case Icode.ASYNC_ITER_NEXT ->
-                                ScriptRuntime.asyncIterNext(value, cx, frame.scope);
-                        case Icode.ASYNC_ITER_CLOSE ->
-                                ScriptRuntime.asyncIterClose(value, cx, frame.scope);
-                        case Icode.ASYNC_ITER_CLOSE_ABRUPT ->
-                                ScriptRuntime.asyncIterCloseAbrupt(value, cx, frame.scope);
                         default -> ScriptRuntime.iteratorClose(value, cx, frame.scope);
                     };
             return null;
         }
     }
 
-    /** The guard of a statement's iterators, kept in a local of its LOCAL_BLOCK. */
-    private static class DoIteratorGuard extends InstructionClass {
-        private final int icode;
-
-        DoIteratorGuard(int icode) {
-            this.icode = icode;
+    private static class DoRequireObject extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.requireObject(stackTopValue(frame), cx, frame.scope);
+            return null;
         }
+    }
 
+    private static class DoAwait extends KindInstruction {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = stackTopValue(frame);
+            frame.stack[frame.stackTop] =
+                    switch (frame.compilerData.itsICode[frame.pc++]) {
+                        case Node.AWAIT_DELEGATE ->
+                                ScriptRuntime.asyncDelegate(value, cx, frame.scope);
+                        case Node.AWAIT_ITER_OPEN ->
+                                ScriptRuntime.asyncIterOpen(value, cx, frame.scope);
+                        case Node.AWAIT_ITER_NEXT ->
+                                ScriptRuntime.asyncIterNext(value, cx, frame.scope);
+                        case Node.AWAIT_ITER_CLOSE ->
+                                ScriptRuntime.asyncIterClose(value, cx, frame.scope);
+                        case Node.AWAIT_ITER_CLOSE_ABRUPT ->
+                                ScriptRuntime.asyncIterCloseAbrupt(value, cx, frame.scope);
+                        default -> ScriptRuntime.awaitRequest(value, cx, frame.scope);
+                    };
+            return null;
+        }
+    }
+
+    private static class DoClassElementKey extends KindInstruction {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = stackTopValue(frame);
+            frame.stack[frame.stackTop] =
+                    switch (frame.compilerData.itsICode[frame.pc++]) {
+                        case Node.FIELD_KEY_NAMED ->
+                                ScriptRuntime.classFieldKeyNamed(value, cx, frame.scope);
+                        case Node.FIELD_KEY_METHOD ->
+                                ScriptRuntime.classMethodKey(value, cx, frame.scope);
+                        case Node.FIELD_KEY_PRIVATE_NAME ->
+                                ScriptRuntime.newPrivateName(value, cx, frame.scope);
+                        case Node.FIELD_KEY_STATIC_BLOCK ->
+                                ScriptRuntime.classStaticBlockKey(value, cx, frame.scope);
+                        case Node.FIELD_KEY_ELEMENT ->
+                                ScriptRuntime.classElementKey(value, cx, frame.scope);
+                        default -> ScriptRuntime.classFieldKey(value, cx, frame.scope);
+                    };
+            return null;
+        }
+    }
+
+    private static class DoClassStatic extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.classStaticInit(stackTopValue(frame), cx, frame.scope);
+            return null;
+        }
+    }
+
+    /** The guard of a statement's iterators, kept in a local of its LOCAL_BLOCK. */
+    private static class DoIteratorGuard extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             int local = state.indexReg + frame.compilerData.maxVars;
-            switch (icode) {
-                case Icode.ITER_OPEN_GUARDED -> {
-                    Object value = frame.stack[frame.stackTop];
-                    if (value == DOUBLE_MARK)
-                        value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
-                    Object record = ScriptRuntime.iteratorOpen(value, cx, frame.scope);
+            switch (frame.compilerData.itsICode[frame.pc++]) {
+                case Icode.ITER_GUARD_OPEN -> {
+                    Object record =
+                            ScriptRuntime.iteratorOpen(stackTopValue(frame), cx, frame.scope);
                     frame.stack[local] = ScriptRuntime.iteratorGuard(record, frame.stack[local]);
                     frame.stack[frame.stackTop] = record;
                 }
@@ -3691,23 +3755,24 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
      * A call or new with spread arguments: stack: lookup result (or constructor), array -> result.
      * Unlike other calls, an interpreted callee runs in a nested interpreter loop.
      */
-    private static class DoCallSpread extends InstructionClass {
+    private static class DoCallSpread extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             if (state.instructionCounting) {
                 cx.instructionCount += INVOCATION_COST;
             }
+            int kind = frame.compilerData.itsICode[frame.pc++];
             Object[] args = ScriptRuntime.spreadArguments(frame.stack[frame.stackTop]);
             --frame.stackTop;
             Object target = frame.stack[frame.stackTop];
-            if (op == Icode.NEW_SPREAD) {
+            if (kind == Icode.SPREAD_NEW) {
                 frame.stack[frame.stackTop] =
                         ScriptRuntime.newObject(target, cx, frame.scope, args);
             } else {
                 ScriptRuntime.LookupResult result = (ScriptRuntime.LookupResult) target;
                 Callable fun = result.getCallable();
                 Object thisObj =
-                        op == Icode.CALL_SPREAD_ON_SUPER
+                        kind == Icode.SPREAD_CALL_ON_SUPER
                                 ? ScriptRuntime.derivedThis(frame.thisObj)
                                 : result.getThisValue();
                 frame.stack[frame.stackTop] = fun.call(cx, frame.scope, thisObj, args);
@@ -3724,10 +3789,14 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
-    private static class DoDerivedThis extends InstructionClass {
+    private static class DoDerivedThis extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            frame.stack[frame.stackTop] = ScriptRuntime.derivedThis(frame.stack[frame.stackTop]);
+            Object value = frame.stack[frame.stackTop];
+            frame.stack[frame.stackTop] =
+                    frame.compilerData.itsICode[frame.pc++] == Node.SUPER_CALLEE
+                            ? ScriptRuntime.superCallee(value)
+                            : ScriptRuntime.derivedThis(value);
             return null;
         }
     }
@@ -3754,15 +3823,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         }
     }
 
-    private static class DoSuperCallee extends InstructionClass {
-        @Override
-        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            frame.stack[frame.stackTop] = ScriptRuntime.superCallee(frame.stack[frame.stackTop]);
-            return null;
-        }
-    }
-
-    private static class DoClassDefine extends InstructionClass {
+    private static class DoClassDefine extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             Object[] stack = frame.stack;
@@ -3775,17 +3836,19 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
                             stack[top + 2],
                             stack[top + 3],
                             state.stringReg,
+                            frame.compilerData.itsICode[frame.pc++],
                             cx,
                             frame.scope);
             return null;
         }
     }
 
-    private static class DoEnumClose extends InstructionClass {
+    private static class DoEnumClose extends KindInstruction {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             int local = state.indexReg + frame.compilerData.maxVars;
-            ScriptRuntime.enumClose(frame.stack[local], cx, op == Icode.ENUM_CLOSE_ABRUPT);
+            boolean abrupt = frame.compilerData.itsICode[frame.pc++] != 0;
+            ScriptRuntime.enumClose(frame.stack[local], cx, abrupt);
             return null;
         }
     }
@@ -3793,7 +3856,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoGlobalLexicals extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
-            ScriptRuntime.declareGlobalLexicals(cx, frame.scope, state.stringReg);
+            ScriptRuntime.declareGlobalLexicals(cx, frame.scope, frame.fnOrScript);
             return null;
         }
     }

@@ -178,79 +178,59 @@ abstract class Icode {
             // Global let/const declarations of a script
             GLOBAL_LEXICALS = CHECK_TDZ - 1,
 
-            // The iterator protocol of array destructuring
-            ITER_OPEN = GLOBAL_LEXICALS - 1,
-            ITER_STEP = ITER_OPEN - 1,
-            ITER_REST = ITER_STEP - 1,
-            ITER_CLOSE = ITER_REST - 1,
-            ITER_OPEN_GUARDED = ITER_CLOSE - 1,
-            ITER_GUARD_INIT = ITER_OPEN_GUARDED - 1,
-            ITER_GUARD_CLOSE = ITER_GUARD_INIT - 1,
-
+            // The iterator protocol of array destructuring; operand: an ITER_* kind
+            ITER_OP = GLOBAL_LEXICALS - 1,
+            // The guard of the iterators of a statement, in a local; operand: an ITER_GUARD_* kind
+            ITER_GUARD = ITER_OP - 1,
             // RequireObjectCoercible of an object pattern
-            REQUIRE_OBJECT = ITER_GUARD_CLOSE - 1,
-
-            // Calls with spread arguments: their only argument is the array of the arguments
+            REQUIRE_OBJECT = ITER_GUARD - 1,
+            // Calls with spread arguments: their only argument is the array of the arguments;
+            // operand: a SPREAD_* kind
             CALL_SPREAD = REQUIRE_OBJECT - 1,
-            CALL_SPREAD_ON_SUPER = CALL_SPREAD - 1,
-            NEW_SPREAD = CALL_SPREAD_ON_SUPER - 1,
-
-            // IteratorClose of a for-of loop
-            ENUM_CLOSE = NEW_SPREAD - 1,
-            ENUM_CLOSE_ABRUPT = ENUM_CLOSE - 1,
-
-            // Class definition: constructor, heritage, prototype and static members
-            CLASS_DEFINE = ENUM_CLOSE_ABRUPT - 1,
-            // this of a derived constructor, and the super constructor called by super(...)
+            // IteratorClose of a for-of loop; operand: 1 for an abrupt completion
+            ENUM_CLOSE = CALL_SPREAD - 1,
+            // Class definition: constructor, heritage, prototype and static members; operand: its
+            // Node#CLASS_FLAGS_PROP
+            CLASS_DEFINE = ENUM_CLOSE - 1,
+            // this of a derived constructor, or the super constructor called by super(...);
+            // operand: the Node#DERIVED_THIS_PROP of the this
             DERIVED_THIS = CLASS_DEFINE - 1,
-            SUPER_CALLEE = DERIVED_THIS - 1,
             // see Token#FN_NAME_ASSIGN
-            FN_NAME_ASSIGN = SUPER_CALLEE - 1,
+            FN_NAME_ASSIGN = DERIVED_THIS - 1,
             // ToPropertyKey of an object key, before the get and the set of a compound assignment
             ELEM_KEY = FN_NAME_ASSIGN - 1,
             // the value of a __proto__: v entry of an object literal
             LITERAL_PROTO = ELEM_KEY - 1,
-            // the operand of an await in an async generator, as yielded (Token#AWAIT)
-            AWAIT_REQUEST = LITERAL_PROTO - 1,
-            // the other kinds of Token#AWAIT (Node#AWAIT_KIND_PROP)
-            ASYNC_DELEGATE = AWAIT_REQUEST - 1,
-            ASYNC_ITER_OPEN = ASYNC_DELEGATE - 1,
-            ASYNC_ITER_NEXT = ASYNC_ITER_OPEN - 1,
-            ASYNC_ITER_CLOSE = ASYNC_ITER_NEXT - 1,
-            ASYNC_ITER_CLOSE_ABRUPT = ASYNC_ITER_CLOSE - 1,
+            // the operand of an await, as yielded (Token#AWAIT); operand: its Node#AWAIT_KIND_PROP
+            AWAIT = LITERAL_PROTO - 1,
             // import(): the referrer name, the specifier and the options (Token#IMPORT_CALL)
-            IMPORT_CALL = ASYNC_ITER_CLOSE_ABRUPT - 1,
-            // class fields (Token#FIELD_KEY, Token#CLASS_STATIC)
-            FIELD_KEY = IMPORT_CALL - 1,
-            FIELD_KEY_NAMED = FIELD_KEY - 1,
-            CLASS_STATIC = FIELD_KEY_NAMED - 1,
-            // private names (Token#FIELD_KEY kinds 2 and 3)
-            METHOD_KEY = CLASS_STATIC - 1,
-            NEW_PRIVATE_NAME = METHOD_KEY - 1,
-            // class static blocks (Token#FIELD_KEY kind 4)
-            STATIC_BLOCK_KEY = NEW_PRIVATE_NAME - 1,
-            // a computed key of a class element evaluated in source order (Token#FIELD_KEY kind 5)
-            ELEMENT_KEY = STATIC_BLOCK_KEY - 1,
+            IMPORT_CALL = AWAIT - 1,
+            // the key of a class element (Token#FIELD_KEY); operand: its kind
+            CLASS_ELEMENT_KEY = IMPORT_CALL - 1,
+            // the static elements of a class (Token#CLASS_STATIC)
+            CLASS_STATIC = CLASS_ELEMENT_KEY - 1,
             // the value of a name in the scope that a BINDNAME found (Node#BOUND_NAME_PROP)
-            BOUND_NAME = ELEMENT_KEY - 1,
-            // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP), or of
-            // the activation of an enclosing function (Node#OUTER_VAR_PROP, the name in the
-            // string register)
+            BOUND_NAME = CLASS_STATIC - 1,
+            // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP)
             ACTIVATION_GETVAR = BOUND_NAME - 1,
             ACTIVATION_SETVAR = ACTIVATION_GETVAR - 1,
+            // a variable at a fixed position of the activation of an enclosing function
+            // (Node#OUTER_VAR_PROP, the name in the string register); operand: the number of
+            // functions out
+            OUTER_GETVAR = ACTIVATION_SETVAR - 1,
+            OUTER_SETVAR = OUTER_GETVAR - 1,
 
             // Last icode
-            MIN_ICODE = ACTIVATION_SETVAR;
+            MIN_ICODE = OUTER_SETVAR;
 
-    /** The icode of a Token#AWAIT of a kind (Node#AWAIT_KIND_PROP), in the order of the kinds. */
-    static final int[] AWAIT_ICODES = {
-        AWAIT_REQUEST,
-        ASYNC_DELEGATE,
-        ASYNC_ITER_OPEN,
-        ASYNC_ITER_NEXT,
-        ASYNC_ITER_CLOSE,
-        ASYNC_ITER_CLOSE_ABRUPT
-    };
+    /** The operand of ITER_OP. */
+    static final int ITER_OPEN = 0, ITER_STEP = 1, ITER_REST = 2, ITER_CLOSE = 3;
+
+    /** The operand of ITER_GUARD. */
+    static final int ITER_GUARD_OPEN = 0, ITER_GUARD_INIT = 1, ITER_GUARD_CLOSE = 2;
+
+    /** The operand of CALL_SPREAD. */
+    static final int SPREAD_CALL = 0, SPREAD_CALL_ON_SUPER = 1, SPREAD_NEW = 2;
 
     static String bytecodeName(int bytecode) {
         if (!validBytecode(bytecode)) {
@@ -452,78 +432,44 @@ abstract class Icode {
                 return "CHECK_TDZ";
             case GLOBAL_LEXICALS:
                 return "GLOBAL_LEXICALS";
-            case ITER_OPEN:
-                return "ITER_OPEN";
-            case ITER_STEP:
-                return "ITER_STEP";
-            case ITER_REST:
-                return "ITER_REST";
-            case ITER_CLOSE:
-                return "ITER_CLOSE";
-            case ITER_OPEN_GUARDED:
-                return "ITER_OPEN_GUARDED";
-            case ITER_GUARD_INIT:
-                return "ITER_GUARD_INIT";
-            case ITER_GUARD_CLOSE:
-                return "ITER_GUARD_CLOSE";
+            case ITER_OP:
+                return "ITER_OP";
+            case ITER_GUARD:
+                return "ITER_GUARD";
             case REQUIRE_OBJECT:
                 return "REQUIRE_OBJECT";
             case CALL_SPREAD:
                 return "CALL_SPREAD";
-            case CALL_SPREAD_ON_SUPER:
-                return "CALL_SPREAD_ON_SUPER";
-            case NEW_SPREAD:
-                return "NEW_SPREAD";
             case ENUM_CLOSE:
                 return "ENUM_CLOSE";
-            case ENUM_CLOSE_ABRUPT:
-                return "ENUM_CLOSE_ABRUPT";
             case CLASS_DEFINE:
                 return "CLASS_DEFINE";
             case DERIVED_THIS:
                 return "DERIVED_THIS";
-            case SUPER_CALLEE:
-                return "SUPER_CALLEE";
             case FN_NAME_ASSIGN:
                 return "FN_NAME_ASSIGN";
             case ELEM_KEY:
                 return "ELEM_KEY";
             case LITERAL_PROTO:
                 return "LITERAL_PROTO";
-            case AWAIT_REQUEST:
-                return "AWAIT_REQUEST";
-            case ASYNC_DELEGATE:
-                return "ASYNC_DELEGATE";
-            case ASYNC_ITER_OPEN:
-                return "ASYNC_ITER_OPEN";
-            case ASYNC_ITER_NEXT:
-                return "ASYNC_ITER_NEXT";
-            case ASYNC_ITER_CLOSE:
-                return "ASYNC_ITER_CLOSE";
-            case ASYNC_ITER_CLOSE_ABRUPT:
-                return "ASYNC_ITER_CLOSE_ABRUPT";
+            case AWAIT:
+                return "AWAIT";
             case IMPORT_CALL:
                 return "IMPORT_CALL";
-            case FIELD_KEY:
-                return "FIELD_KEY";
-            case FIELD_KEY_NAMED:
-                return "FIELD_KEY_NAMED";
+            case CLASS_ELEMENT_KEY:
+                return "CLASS_ELEMENT_KEY";
             case CLASS_STATIC:
                 return "CLASS_STATIC";
-            case METHOD_KEY:
-                return "METHOD_KEY";
-            case NEW_PRIVATE_NAME:
-                return "NEW_PRIVATE_NAME";
-            case STATIC_BLOCK_KEY:
-                return "STATIC_BLOCK_KEY";
-            case ELEMENT_KEY:
-                return "ELEMENT_KEY";
             case BOUND_NAME:
                 return "BOUND_NAME";
             case ACTIVATION_GETVAR:
                 return "ACTIVATION_GETVAR";
             case ACTIVATION_SETVAR:
                 return "ACTIVATION_SETVAR";
+            case OUTER_GETVAR:
+                return "OUTER_GETVAR";
+            case OUTER_SETVAR:
+                return "OUTER_SETVAR";
         }
 
         // icode without name

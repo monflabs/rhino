@@ -39,6 +39,30 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Interpreter icodes folded into families with an operand (2026-11-20)
+
+The icode space was full: an icode is one signed byte, and the 40 icodes added for ES2026 had brought the count to
+129, the last one at -128. The variants of an operation now share one icode and take an operand byte, as
+`CALLSPECIAL` and the `*_INC_DEC` icodes already did: `ITER_OP` (open, step, rest, close), `ITER_GUARD`, `AWAIT`
+(the six kinds of `Token.AWAIT`), `CLASS_ELEMENT_KEY` (the six kinds of `Token.FIELD_KEY`), `CALL_SPREAD`,
+`ENUM_CLOSE` and `DERIVED_THIS`. There are 112 icodes, and 17 values are free; `IcodeSpaceTest` fails when fewer
+than 12 are left.
+
+Three encodings went away with it:
+
+- A variable of an enclosing function had its depth packed in the high byte of the index of `ACTIVATION_GETVAR` and
+  `ACTIVATION_SETVAR`. It has its own icodes, `OUTER_GETVAR` and `OUTER_SETVAR`, with the depth as an operand, and
+  `ScriptRuntime.getOuterVar`, `setOuterVar` and `getOuterActivation` take the depth and the index separately.
+- The string of a `Token.CLASS` node was a letter (`E` or `N`, lower case for a class named by its key) followed by
+  the class name. It is the name alone, with the flags in `Node.CLASS_FLAGS_PROP`.
+- The global let/const declarations of a script were a string such as `"LC,Lx"`, parsed when the script started.
+  They are a `GlobalLexicals` record on the descriptor of the script.
+
+The kind of a `Token.FIELD_KEY` has its own property, `Node.FIELD_KEY_KIND_PROP`; it reused `AWAIT_KIND_PROP`.
+
+No behavior change. `IrSizeTest` records the number of IR nodes of six constructs as a budget, and
+`ScopeEnvironmentTest` the seven scoping cases that are still wrong, disabled until they are fixed.
+
 ### Dead branches removed from array destructuring and four Array methods (2026-11-18)
 
 - `Parser.destructuringArray` carried a `useIterator` flag that was always true, since `VERSION_ES6` and older go to

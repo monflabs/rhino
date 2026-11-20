@@ -384,7 +384,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
 
             case Token.GLOBAL_LEXICALS:
                 updateLineNumber(node);
-                addStringOp(Icode.GLOBAL_LEXICALS, node.getString());
+                addIcode(Icode.GLOBAL_LEXICALS);
                 break;
 
             case Token.LOCAL_BLOCK:
@@ -597,20 +597,21 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 break;
 
             case Token.ITER_GUARD_INIT:
-                addIndexOp(Icode.ITER_GUARD_INIT, getLocalBlockRef(node));
+                addIndexOp(Icode.ITER_GUARD, getLocalBlockRef(node));
+                addUint8(Icode.ITER_GUARD_INIT);
                 break;
 
             case Token.ENUM_CLOSE:
             case Token.ENUM_CLOSE_ABRUPT:
-                addIndexOp(
-                        type == Token.ENUM_CLOSE ? Icode.ENUM_CLOSE : Icode.ENUM_CLOSE_ABRUPT,
-                        getLocalBlockRef(node));
+                addIndexOp(Icode.ENUM_CLOSE, getLocalBlockRef(node));
+                addUint8(type == Token.ENUM_CLOSE_ABRUPT ? 1 : 0);
                 break;
 
             case Token.ITER_GUARD_CLOSE:
                 // the completion in the local of the try: a throwable, or a return address
                 visitExpression(child, 0);
-                addIndexOp(Icode.ITER_GUARD_CLOSE, getLocalBlockRef(node));
+                addIndexOp(Icode.ITER_GUARD, getLocalBlockRef(node));
+                addUint8(Icode.ITER_GUARD_CLOSE);
                 stackChange(-1);
                 break;
 
@@ -770,12 +771,13 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                         addUint8(2);
                         addUint16(lineNumber & 0xFFFF);
                     } else if (node.getIntProp(Node.SPREAD_ARGS_PROP, 0) == 1) {
-                        addIcode(
+                        addIcode(Icode.CALL_SPREAD);
+                        addUint8(
                                 type == Token.NEW
-                                        ? Icode.NEW_SPREAD
+                                        ? Icode.SPREAD_NEW
                                         : node.getIntProp(Node.SUPER_PROPERTY_ACCESS, 0) == 1
-                                                ? Icode.CALL_SPREAD_ON_SUPER
-                                                : Icode.CALL_SPREAD);
+                                                ? Icode.SPREAD_CALL_ON_SUPER
+                                                : Icode.SPREAD_CALL);
                     } else if (type != Token.REF_CALL && callType != Node.NON_SPECIALCALL) {
                         // embed line number and source filename
                         addIndexOp(Icode.CALLSPECIAL, argCount);
@@ -987,9 +989,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             case Token.ITER_OPEN:
                 visitExpression(child, 0);
                 if (node.getProp(Node.LOCAL_BLOCK_PROP) != null) {
-                    addIndexOp(Icode.ITER_OPEN_GUARDED, getLocalBlockRef(node));
+                    addIndexOp(Icode.ITER_GUARD, getLocalBlockRef(node));
+                    addUint8(Icode.ITER_GUARD_OPEN);
                 } else {
-                    addIcode(Icode.ITER_OPEN);
+                    addIcode(Icode.ITER_OP);
+                    addUint8(Icode.ITER_OPEN);
                 }
                 break;
 
@@ -1007,6 +1011,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     child = child.getNext();
                 }
                 addStringOp(Icode.CLASS_DEFINE, node.getString());
+                addUint8(node.getIntProp(Node.CLASS_FLAGS_PROP, 0));
                 stackChange(-3);
                 break;
 
@@ -1018,38 +1023,33 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 stackChange(-2);
                 break;
 
-            case Token.FIELD_KEY:
             case Token.CLASS_STATIC:
+            case Token.REQUIRE_OBJECT:
                 visitExpression(child, 0);
-                addIcode(
-                        type == Token.CLASS_STATIC
-                                ? Icode.CLASS_STATIC
-                                : switch (node.getIntProp(Node.AWAIT_KIND_PROP, 0)) {
-                                    case 1 -> Icode.FIELD_KEY_NAMED;
-                                    case 2 -> Icode.METHOD_KEY;
-                                    case 3 -> Icode.NEW_PRIVATE_NAME;
-                                    case 4 -> Icode.STATIC_BLOCK_KEY;
-                                    case 5 -> Icode.ELEMENT_KEY;
-                                    default -> Icode.FIELD_KEY;
-                                });
+                addIcode(type == Token.CLASS_STATIC ? Icode.CLASS_STATIC : Icode.REQUIRE_OBJECT);
+                break;
+
+            case Token.FIELD_KEY:
+                visitExpression(child, 0);
+                addIcode(Icode.CLASS_ELEMENT_KEY);
+                addUint8(node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0));
+                break;
+
+            case Token.AWAIT:
+                visitExpression(child, 0);
+                addIcode(Icode.AWAIT);
+                addUint8(node.getIntProp(Node.AWAIT_KIND_PROP, 0));
                 break;
 
             case Token.ITER_STEP:
             case Token.ITER_REST:
             case Token.ITER_CLOSE:
-            case Token.REQUIRE_OBJECT:
-            case Token.AWAIT:
                 visitExpression(child, 0);
-                addIcode(
-                        type == Token.AWAIT
-                                ? Icode.AWAIT_ICODES[node.getIntProp(Node.AWAIT_KIND_PROP, 0)]
-                                : type == Token.REQUIRE_OBJECT
-                                        ? Icode.REQUIRE_OBJECT
-                                        : type == Token.ITER_STEP
-                                                ? Icode.ITER_STEP
-                                                : type == Token.ITER_REST
-                                                        ? Icode.ITER_REST
-                                                        : Icode.ITER_CLOSE);
+                addIcode(Icode.ITER_OP);
+                addUint8(
+                        type == Token.ITER_STEP
+                                ? Icode.ITER_STEP
+                                : type == Token.ITER_REST ? Icode.ITER_REST : Icode.ITER_CLOSE);
                 break;
 
             case Token.POS:
@@ -1170,8 +1170,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
                     visitExpression(child.getNext(), 0);
-                    addStringPrefix(child.getString());
-                    addIndexOp(Icode.ACTIVATION_SETVAR, node.getIntProp(Node.OUTER_VAR_PROP, -1));
+                    addOuterVarOp(
+                            Icode.OUTER_SETVAR,
+                            node.getIntProp(Node.OUTER_VAR_PROP, -1),
+                            child.getString());
                     break;
                 }
                 {
@@ -1226,8 +1228,10 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     break;
                 }
                 if (type == Token.NAME && node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
-                    addStringPrefix(node.getString());
-                    addIndexOp(Icode.ACTIVATION_GETVAR, node.getIntProp(Node.OUTER_VAR_PROP, -1));
+                    addOuterVarOp(
+                            Icode.OUTER_GETVAR,
+                            node.getIntProp(Node.OUTER_VAR_PROP, -1),
+                            node.getString());
                     stackChange(1);
                     break;
                 }
@@ -1288,13 +1292,9 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
             case Token.THIS:
                 addToken(type);
                 stackChange(1);
-                switch (node.getIntProp(Node.DERIVED_THIS_PROP, 0)) {
-                    case Node.DERIVED_THIS_VALUE:
-                        addIcode(Icode.DERIVED_THIS);
-                        break;
-                    case Node.SUPER_CALLEE:
-                        addIcode(Icode.SUPER_CALLEE);
-                        break;
+                if (node.getIntProp(Node.DERIVED_THIS_PROP, 0) != 0) {
+                    addIcode(Icode.DERIVED_THIS);
+                    addUint8(node.getIntProp(Node.DERIVED_THIS_PROP, 0));
                 }
                 break;
 
@@ -2168,6 +2168,13 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
         } else {
             addToken(op);
         }
+    }
+
+    /** An OUTER_GETVAR or OUTER_SETVAR of a Node#OUTER_VAR_PROP: the name, the index, the depth. */
+    private void addOuterVarOp(int op, int var, String name) {
+        addStringPrefix(name);
+        addIndexOp(op, FunctionNode.outerVarIndex(var));
+        addUint8(FunctionNode.outerVarDepth(var));
     }
 
     private void addIndexOp(int op, int index) {

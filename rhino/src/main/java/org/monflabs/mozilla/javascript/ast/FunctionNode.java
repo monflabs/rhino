@@ -367,10 +367,22 @@ public class FunctionNode extends ScriptNode {
         return outerVars != null;
     }
 
+    /** The limits of the two parts of a Node#OUTER_VAR_PROP. */
+    public static final int MAX_OUTER_VAR_INDEX = 0xFFFFFF, MAX_OUTER_VAR_DEPTH = 0x7F;
+
+    /** The number of functions out of a Node#OUTER_VAR_PROP. */
+    public static int outerVarDepth(int var) {
+        return var >>> 24;
+    }
+
+    /** The index of the variable of a Node#OUTER_VAR_PROP. */
+    public static int outerVarIndex(int var) {
+        return var & MAX_OUTER_VAR_INDEX;
+    }
+
     /**
      * A variable of an enclosing function that this function reads at a fixed position of its
-     * activation: the number of functions out (high byte) and the index of the variable (null:
-     * none).
+     * activation, as a Node#OUTER_VAR_PROP (null: none).
      */
     public Integer getOuterVar(String name) {
         if (outerVars != null) {

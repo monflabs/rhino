@@ -266,15 +266,18 @@ public class Token {
             // IteratorClose of a for-of loop left by a jump, or (abrupt) by a throw
             ENUM_CLOSE = REQUIRE_OBJECT + 1,
             ENUM_CLOSE_ABRUPT = ENUM_CLOSE + 1,
-            CLASS = ENUM_CLOSE_ABRUPT + 1, // a class; in the IR: ScriptRuntime.defineClass
+            CLASS =
+                    ENUM_CLOSE_ABRUPT
+                            + 1, // a class; in the IR: its name, ScriptRuntime.defineClass
             // strict assignment to the name of a function expression: evaluates, then throws
             FN_NAME_ASSIGN = CLASS + 1,
-            // await in an async function or a module (an identifier elsewhere); parser only
+            // await in an async function or a module (an identifier elsewhere); in the IR, what
+            // the body yields to its driver (Node#AWAIT_KIND_PROP)
             AWAIT = FN_NAME_ASSIGN + 1,
             // import(specifier [, options]): the referrer name, the specifier and the options
             IMPORT_CALL = AWAIT + 1,
-            // the key of a class field (ClassDefinition.FieldKey); its NAMED_FIELD_PROP: named by
-            // it
+            // the key of a class element (ClassDefinition.FieldKey), of a kind
+            // (Node#FIELD_KEY_KIND_PROP)
             FIELD_KEY = IMPORT_CALL + 1,
             // the static fields of a class, defined once its name is bound
             CLASS_STATIC = FIELD_KEY + 1,

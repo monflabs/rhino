@@ -2747,50 +2747,53 @@ public class ScriptRuntime {
 
     /**
      * A variable of an enclosing function, read at its fixed position in the activation
-     * (Node#OUTER_VAR_PROP: the number of functions out from fn and the index of the variable).
+     * (Node#OUTER_VAR_PROP): depth functions out from fn, at index.
      */
-    public static Object getOuterVar(Object fn, VarScope scope, int var, String name, Context cx) {
-        NativeCall activation = outerActivation(fn, scope, var, name);
-        return activation != null
-                ? activation.getVar(var & OUTER_VAR_INDEX)
-                : name(cx, scope, name);
+    public static Object getOuterVar(
+            Object fn, VarScope scope, int depth, int index, String name, Context cx) {
+        NativeCall activation = outerActivation(fn, scope, depth, index, name);
+        return activation != null ? activation.getVar(index) : name(cx, scope, name);
     }
 
     /** Assigns a variable of an enclosing function (see #getOuterVar); returns the value. */
     public static Object setOuterVar(
-            Object value, Object fn, VarScope scope, int var, String name, Context cx) {
-        NativeCall activation = outerActivation(fn, scope, var, name);
+            Object value,
+            Object fn,
+            VarScope scope,
+            int depth,
+            int index,
+            String name,
+            Context cx) {
+        NativeCall activation = outerActivation(fn, scope, depth, index, name);
         if (activation != null) {
-            activation.setVar(var & OUTER_VAR_INDEX, value);
+            activation.setVar(index, value);
             return value;
         }
         return setName(bind(cx, scope, name), value, cx, scope, name);
     }
 
-    /** The bits of Node#OUTER_VAR_PROP that hold the index of the variable. */
-    public static final int OUTER_VAR_INDEX = 0xFFFFFF;
-
     /**
      * The activation that owns a variable of an enclosing function (see #getOuterVar), which
      * compiled code keeps for the rest of the call (null: the name is looked up).
      */
-    public static VarScope getOuterActivation(Object fn, VarScope scope, int var, String name) {
-        return outerActivation(fn, scope, var, name);
+    public static VarScope getOuterActivation(
+            Object fn, VarScope scope, int depth, int index, String name) {
+        return outerActivation(fn, scope, depth, index, name);
     }
 
     /**
      * The activation of the enclosing function that owns a variable (null: not found, the name is
      * then looked up).
      */
-    private static NativeCall outerActivation(Object fn, VarScope scope, int var, String name) {
+    private static NativeCall outerActivation(
+            Object fn, VarScope scope, int depth, int index, String name) {
         if (!(fn instanceof ScriptOrFn)) {
             return null;
         }
         JSDescriptor<?> owner = ((ScriptOrFn<?>) fn).getDescriptor();
-        for (int depth = var >>> 24; depth > 0 && owner != null; --depth) {
+        for (; depth > 0 && owner != null; --depth) {
             owner = (JSDescriptor<?>) owner.getParent();
         }
-        int index = var & OUTER_VAR_INDEX;
         if (owner == null
                 || index >= owner.getParamAndVarCount()
                 || !owner.isActivationVar(index)
@@ -2991,21 +2994,21 @@ public class ScriptRuntime {
      * Declares the top-level let/const bindings of a script compiled for {@link
      * Context#VERSION_ECMASCRIPT} in the declarative record of the global environment (the {@link
      * TopLevel} scope), after checking that none of them is already declared (ECMA-262
-     * GlobalDeclarationInstantiation). Each entry of {@code declarations} is "L" (let) or "C"
-     * (const) followed by the name, separated by commas.
+     * GlobalDeclarationInstantiation).
      */
-    public static void declareGlobalLexicals(Context cx, VarScope scope, String declarations) {
+    public static void declareGlobalLexicals(Context cx, VarScope scope, Object script) {
         VarScope top = scope;
         while (top.getParentScope() != null) {
             top = top.getParentScope();
         }
-        String[] entries = declarations.split(",");
+        GlobalLexicals lexicals = ((ScriptOrFn<?>) script).getDescriptor().getGlobalLexicals();
+        String[] names = lexicals.names();
         if (!(top instanceof TopLevel)) {
             // an embedding with its own top scope: declare them on it, as before
-            for (String entry : entries) {
-                String name = entry.substring(1);
+            for (int i = 0; i < names.length; i++) {
+                String name = names[i];
                 if (!top.has(name, top)) {
-                    if (entry.charAt(0) == 'C') {
+                    if (lexicals.consts()[i]) {
                         top.defineConst(name, top);
                     } else {
                         ScriptableObject.defineProperty(
@@ -3016,9 +3019,9 @@ public class ScriptRuntime {
             return;
         }
         TopLevel topLevel = (TopLevel) top;
-        checkGlobalLexicals(topLevel, entries);
-        for (String entry : entries) {
-            topLevel.declareLexical(entry.substring(1), entry.charAt(0) == 'C');
+        checkGlobalLexicals(topLevel, names);
+        for (int i = 0; i < names.length; i++) {
+            topLevel.declareLexical(names[i], lexicals.consts()[i]);
         }
     }
 
@@ -3026,10 +3029,9 @@ public class ScriptRuntime {
      * GlobalDeclarationInstantiation (16.1.7) steps 3-4: a global let/const may not reuse the name
      * of a lexical declaration, a var, a function, or a non-configurable global property.
      */
-    private static void checkGlobalLexicals(TopLevel topLevel, String[] entries) {
+    private static void checkGlobalLexicals(TopLevel topLevel, String[] names) {
         ScriptableObject global = topLevel.getGlobalThis();
-        for (String entry : entries) {
-            String name = entry.substring(1);
+        for (String name : names) {
             if (topLevel.hasLexicalDeclaration(name)
                     || (global.has(name, global)
                             && (global.getAttributes(name) & ScriptableObject.PERMANENT) != 0)) {
@@ -4587,25 +4589,26 @@ public class ScriptRuntime {
     }
 
     /**
-     * A class (Token#CLASS): its constructor (or null), heritage, prototype and static members;
-     * {@code kind} is E or N (whether there is an extends clause) followed by the class name.
+     * A class (Token#CLASS): its constructor (or null), heritage, prototype and static members; its
+     * name and its flags (Node#CLASS_FLAGS_PROP).
      */
     public static Object defineClass(
             Object constructor,
             Object heritage,
             Object prototypeMembers,
             Object staticMembers,
-            String kind,
+            String name,
+            int flags,
             Context cx,
             VarScope scope) {
         return ClassDefinition.define(
                 constructor,
                 heritage,
-                Character.toUpperCase(kind.charAt(0)) == 'E',
-                Character.isLowerCase(kind.charAt(0)),
+                (flags & Node.CLASS_DERIVED) != 0,
+                (flags & Node.CLASS_NAMED_BY_LITERAL) != 0,
                 prototypeMembers,
                 staticMembers,
-                kind.substring(1),
+                name,
                 cx,
                 scope);
     }
@@ -6176,7 +6179,7 @@ public class ScriptRuntime {
             }
             if (top instanceof TopLevel) {
                 // the lexical declarations are checked before any var or function is created
-                checkGlobalLexicals((TopLevel) top, desc.getGlobalLexicals().split(","));
+                checkGlobalLexicals((TopLevel) top, desc.getGlobalLexicals().names());
             }
         }
 

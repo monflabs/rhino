@@ -18,7 +18,7 @@ somewhat later than the Rhino 1.9.1 release.
 | --- | --- | --- |
 | Engine source lines (`rhino/src/main/java`) | 129,086 | 158,021 |
 | test262 in-scope pass rate | 56.9% | 99.2% |
-| Interpreter icodes | 63 | 108 |
+| Interpreter icodes | 89 | 129 |
 | Version gates (`isLatestEcmaScript`) | 0 | 451 in 58 files |
 | New tokens / node properties | | 22 / 17 |
 | New engine source files | | 45 |

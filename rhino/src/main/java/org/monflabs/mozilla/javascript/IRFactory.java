@@ -10,7 +10,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
@@ -396,11 +395,11 @@ public final class IRFactory {
                     ClassFieldKey key = (ClassFieldKey) node;
                     Node fieldKey = new Node(Token.FIELD_KEY, transform(key.getKey()));
                     if (key.isNamed()) {
-                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 1);
+                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_NAMED);
                     } else if (key.isMethod()) {
-                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 2);
+                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_METHOD);
                     } else if (key.isStaticBlock()) {
-                        fieldKey.putIntProp(Node.AWAIT_KIND_PROP, 4);
+                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_STATIC_BLOCK);
                     }
                     return fieldKey;
                 }
@@ -1422,15 +1421,15 @@ public final class IRFactory {
         Scope outer = parser.currentScope;
         parser.currentScope = scope;
         try {
-            String kind = cls.getHeritage() != null ? "E" : "N";
+            int flags = cls.getHeritage() != null ? Node.CLASS_DERIVED : 0;
             if (cls.isNamedByLiteral()) {
-                // lower case: the class is named after the key of its property at runtime
-                kind = kind.toLowerCase(Locale.ROOT);
+                flags |= Node.CLASS_NAMED_BY_LITERAL;
                 if (cls.getConstructor() != null) {
                     cls.getConstructor().setNamedByLiteral();
                 }
             }
-            Node def = Node.newString(Token.CLASS, kind + name);
+            Node def = Node.newString(Token.CLASS, name);
+            def.putIntProp(Node.CLASS_FLAGS_PROP, flags);
             // the computed keys, evaluated in source order once the heritage is
             List<String> temps = new ArrayList<>();
             Node keys = hoistComputedKeys(cls, temps);
@@ -1468,7 +1467,7 @@ public final class IRFactory {
             for (String privateName : cls.getPrivateNames()) {
                 Node privateBinding = Node.newString(Token.NAME, privateName);
                 Node newName = new Node(Token.FIELD_KEY, Node.newString(privateName));
-                newName.putIntProp(Node.AWAIT_KIND_PROP, 3);
+                newName.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_PRIVATE_NAME);
                 privateBinding.addChildToBack(newName);
                 let.addChildToBack(privateBinding);
             }
@@ -1528,7 +1527,7 @@ public final class IRFactory {
                 value = transform(expr);
             } else {
                 value = new Node(Token.FIELD_KEY, transform(expr));
-                value.putIntProp(Node.AWAIT_KIND_PROP, 5);
+                value.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_ELEMENT);
             }
             String temp = parser.currentScriptOrFn.getNextTempName();
             parser.defineSymbol(Token.LET, temp, false);

@@ -557,7 +557,7 @@ public class TopLevel extends ScopeObject {
     /**
      * Declares a global let/const binding, in its temporal dead zone until its declaration runs.
      *
-     * @see ScriptRuntime#declareGlobalLexicals(Context, VarScope, String)
+     * @see ScriptRuntime#declareGlobalLexicals(Context, VarScope, Object)
      */
     void declareLexical(String name, boolean isConst) {
         hasLexicalDeclarations = true;

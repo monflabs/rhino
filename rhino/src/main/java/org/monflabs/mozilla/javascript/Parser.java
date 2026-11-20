@@ -8278,14 +8278,14 @@ public class Parser {
     }
 
     /**
-     * NamedEvaluation of an anonymous class (a CLASS node whose string has no name, see
+     * NamedEvaluation of an anonymous class (a CLASS node whose string is empty, see
      * IRFactory#transformClass): the class and its constructor, if any, are named.
      */
     void nameAnonymousClass(Node value, String name) {
-        if (value.getString().length() != 1) {
+        if (!value.getString().isEmpty()) {
             return;
         }
-        value.setString(value.getString() + name);
+        value.setString(name);
         Node ctor = value.getFirstChild();
         if (ctor.getType() == Token.FUNCTION) {
             FunctionNode fn =
@@ -8487,7 +8487,7 @@ public class Parser {
                     if (transformer != null) {
                         // ToPropertyKey before the target of the property is evaluated
                         keyExpr = new Node(Token.FIELD_KEY, keyExpr);
-                        keyExpr.putIntProp(Node.AWAIT_KIND_PROP, 5);
+                        keyExpr.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_ELEMENT);
                     }
                     Node setKey =
                             new Node(
