@@ -574,14 +574,10 @@ public class Parser {
         consumeToken();
         int asyncStart = ts.tokenBeg;
         mustMatchToken(Token.FUNCTION, "msg.syntax", true);
-        functionIsAsync = true;
-        FunctionNode fn = function(type);
+        FunctionNode fn = function(type, false, false, true);
         fn.setRawSourceBounds(asyncStart, fn.getRawSourceEnd());
         return fn;
     }
-
-    /** Set before function() parses an async function or method. */
-    private boolean functionIsAsync;
 
     /**
      * The async name just parsed before a ( on the same line: the call it starts is the cover of
@@ -624,8 +620,7 @@ public class Parser {
             reportError("msg.syntax");
         }
         consumeToken();
-        functionIsAsync = true;
-        return arrowFunction(param, startLine, startColumn, asyncStart);
+        return arrowFunction(param, startLine, startColumn, asyncStart, true);
     }
 
     /**
@@ -2108,15 +2103,16 @@ public class Parser {
     }
 
     private FunctionNode function(int type) throws IOException {
-        return function(type, false);
+        return function(type, false, false, false);
     }
 
-    private FunctionNode function(int type, boolean isMethodDefiniton) throws IOException {
-        // a generator method (*m() {}) is known before its body is parsed: yield is a keyword there
-        boolean isGenerator = isMethodDefiniton && methodIsGenerator;
-        methodIsGenerator = false;
-        boolean isAsync = functionIsAsync;
-        functionIsAsync = false;
+    /**
+     * A generator method (*m() {}) is known before its body is parsed (isGenerator): yield is a
+     * keyword there.
+     */
+    private FunctionNode function(
+            int type, boolean isMethodDefiniton, boolean isGenerator, boolean isAsync)
+            throws IOException {
         int syntheticType = type;
         int baseLineno = lineNumber(); // line number where source starts
         int functionSourceStart = ts.tokenBeg; // start of "function" kwd
@@ -2306,10 +2302,9 @@ public class Parser {
         }
     }
 
-    private AstNode arrowFunction(AstNode params, int startLine, int startColumn, int asyncStart)
+    private AstNode arrowFunction(
+            AstNode params, int startLine, int startColumn, int asyncStart, boolean isAsync)
             throws IOException {
-        boolean isAsync = functionIsAsync;
-        functionIsAsync = false;
         int baseLineno = lineNumber(); // line number where source starts
         int functionSourceStart =
                 asyncStart >= 0
@@ -4591,15 +4586,15 @@ public class Parser {
                     && asyncCallTarget != null
                     && ((FunctionCall) pn).getTarget() == asyncCallTarget) {
                 asyncCallTarget = null;
-                functionIsAsync = true;
                 pn =
                         arrowFunction(
                                 asyncArrowParams((FunctionCall) pn),
                                 startLine,
                                 startColumn,
-                                pn.getPosition());
+                                pn.getPosition(),
+                                true);
             } else {
-                pn = arrowFunction(pn, startLine, startColumn, -1);
+                pn = arrowFunction(pn, startLine, startColumn, -1, false);
             }
         } else if (pn.getIntProp(Node.OBJECT_LITERAL_DESTRUCTURING, 0) == 1
                 && !inDestructuringAssignment) {
@@ -6333,7 +6328,6 @@ public class Parser {
                         propertyName = null;
                     } else {
                         propertyName = ts.getString();
-                        functionIsAsync = isAsyncMethod;
                         // shorthand method definition
                         ObjectProperty objectProp =
                                 methodDefinition(
@@ -6342,6 +6336,7 @@ public class Parser {
                                         pname,
                                         entryKind,
                                         pname instanceof GeneratorMethodDefinition,
+                                        isAsyncMethod,
                                         true);
                         pname.setJsDocNode(jsdocNode);
                         elems.add(objectProp);
@@ -6560,10 +6555,15 @@ public class Parser {
             AstNode propName,
             int entryKind,
             boolean isGenerator,
+            boolean isAsync,
             boolean isShorthand)
             throws IOException {
-        methodIsGenerator = isGenerator && entryKind == METHOD_ENTRY;
-        FunctionNode fn = function(FunctionNode.FUNCTION_EXPRESSION, true);
+        FunctionNode fn =
+                function(
+                        FunctionNode.FUNCTION_EXPRESSION,
+                        true,
+                        isGenerator && entryKind == METHOD_ENTRY,
+                        isAsync);
         if (compilerEnv.isLatestEcmaScript()) {
             // the source text of a method starts with its get/set/* prefix and name
             fn.setRawSourceBounds(sourceStart, fn.getRawSourceEnd());
@@ -7781,7 +7781,7 @@ public class Parser {
             if (cls.getConstructor() != null) {
                 reportError("msg.class.dup.ctor");
             }
-            FunctionNode ctor = function(FunctionNode.FUNCTION_EXPRESSION, true);
+            FunctionNode ctor = function(FunctionNode.FUNCTION_EXPRESSION, true, false, false);
             ctor.setMethodDefinition(false);
             ctor.setClassConstructor();
             if (cls.getHeritage() != null) {
@@ -7791,7 +7791,6 @@ public class Parser {
             cls.setConstructor(ctor);
             return;
         }
-        functionIsAsync = isAsync;
         AstNode methodName =
                 pname instanceof GeneratorMethodDefinition
                         ? ((GeneratorMethodDefinition) pname).getMethodName()
@@ -7819,7 +7818,8 @@ public class Parser {
                 cls.setHasStaticElements();
             }
         }
-        ObjectProperty prop = methodDefinition(ppos, propStart, key, entryKind, isGenerator, true);
+        ObjectProperty prop =
+                methodDefinition(ppos, propStart, key, entryKind, isGenerator, isAsync, true);
         ((FunctionNode) prop.getValue()).setInStrictMode(true);
         elems.add(prop);
     }
@@ -8128,9 +8128,6 @@ public class Parser {
                 && compilerEnv.isLatestEcmaScript()
                 && (peekFlaggedToken() & TI_AFTER_EOL) == 0;
     }
-
-    /** Set by methodDefinition for function(): the method being parsed is a generator. */
-    private boolean methodIsGenerator;
 
     /** How many Token#ITER_OPEN have been created, see IRFactory#guardIterators. */
     int iteratorOpenCount;

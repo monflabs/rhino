@@ -39,6 +39,22 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### `NodeTransformer` split: the temporal dead zone and the allocation of variables (2026-11-20)
+
+`NodeTransformer` had grown from 605 to 1,640 lines, with the semantics of let/const and an optimization in the
+same tree walker. Two classes now hold them, and `NodeTransformer` is back to 996 lines:
+
+- `TemporalDeadZone`: which references to a let, const or class binding can be in its dead zone, and the checks
+  added to the tree (`classify`, `check`, the bindings of a function and of the clauses of a switch made
+  uninitialized).
+- `VariableAllocation`: where the variables of a function with an activation live (registers, a fixed position of
+  the activation, or by name), and the variables of enclosing functions that nested functions read by position.
+
+In `Parser`, the fields `functionIsAsync` and `methodIsGenerator`, set by a caller and reset by `function()`, are
+parameters of `function()`, `arrowFunction()` and `methodDefinition()`.
+
+Code moved, no behavior change.
+
 ### Interpreter icodes folded into families with an operand (2026-11-20)
 
 The icode space was full: an icode is one signed byte, and the 40 icodes added for ES2026 had brought the count to
