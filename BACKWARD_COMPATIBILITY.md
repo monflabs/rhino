@@ -1178,19 +1178,27 @@ function* g() { (x = yield) => x; }   // before: compiles   now: SyntaxError
 - In a generator, the parameters of an arrow function cannot contain a `yield` expression.
 - **Why:** ECMA-262 2026, §15.3.1 (ArrowFunction early errors: ArrowParameters Contains YieldExpression).
 
-### 1.68 Closures in parameter expressions do not see the `var` declarations of the body
+### 1.68 Parameter expressions do not see the declarations of the body
 
 ```js
 var x = "outside";
 function f(g = () => x) { var x = "inside"; return g(); }
 f();   // before: "inside"   now: "outside"
+function h(a = x) { var x = "inside"; return a; }
+h();   // before: undefined   now: "outside"
+function k(a, g = () => a) { var a; a = 2; return g(); }
+k(1);  // before: 2   now: 1
 ```
 
-- A function with parameter expressions (defaults, destructuring) has a separate environment for the `var`
-  declarations of its body: a closure created in the parameters resolves a name the body declares with `var` outside
-  the function. The parameters do not see the `let`/`const` declarations of the body either: `function f(a = x)
-  { let x; }` reads the outer `x` (before, the body's `x`, undefined), and `function g(a = arguments) { let
-  arguments; }` gets the arguments object. Not applied when the body uses a direct `eval` or `with`, which keep the former behavior.
+- A function with parameter expressions (defaults, destructuring) has a separate environment for the declarations
+  of its body: a parameter expression, or a closure created in one, resolves a name that the body declares with
+  `var`, `let`, `const` or as a function outside the function. `function g(a = arguments) { let arguments; }`
+  gets the arguments object. A `var` of the body with the name of a parameter is a binding of its own, which
+  starts with the value of the parameter. Also applied when the body uses a direct `eval` or `with`.
+- The declarations that the parameter expressions name live in a scope around the statements of the body. A
+  function declaration moved there is created when the body starts, after the parameters.
+- Not covered: a `var arguments` of the body of a non-arrow function, a `var` declared by a destructuring pattern,
+  and a `var` that a direct `eval` in the body creates, which stay in the environment of the parameters.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, step 28: a separate var environment when
   hasParameterExpressions is true).
 

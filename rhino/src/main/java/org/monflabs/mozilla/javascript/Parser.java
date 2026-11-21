@@ -644,14 +644,14 @@ public class Parser {
     }
 
     /**
-     * With parameter expressions, the body of a function has its own var environment, which the
-     * closures created by the parameters do not see (FunctionDeclarationInstantiation, step 28):
-     * the var bindings of the body that such a closure names are renamed, so that the closure
-     * resolves the name outside the function. Not done when the body may look names up dynamically
-     * (eval, with).
+     * With parameter expressions, the body of a function has its own environment, which the
+     * parameters do not see (FunctionDeclarationInstantiation, steps 28 and 30): the declarations
+     * of the body that the parameter expressions name move to a scope around its statements.
      */
     private void separateBodyVars(FunctionNode fnNode) {
-        if (!compilerEnv.isLatestEcmaScript() || fnNode.getSymbolTable() == null) {
+        if (!compilerEnv.isLatestEcmaScript()
+                || fnNode.getSymbolTable() == null
+                || !(fnNode.getBody() instanceof Block)) {
             return;
         }
         List<AstNode> paramExpressions = new ArrayList<>();
@@ -666,6 +666,9 @@ public class Parser {
             if (!(param instanceof Name)) {
                 paramExpressions.add(param);
             }
+        }
+        if (paramExpressions.isEmpty()) {
+            return;
         }
         Set<String> closureNames = new HashSet<>();
         Set<String> paramNames = new HashSet<>();
@@ -690,87 +693,139 @@ public class Parser {
         }
         // an arrow function has no arguments object: its body's arguments is a plain binding
         boolean arrow = fnNode.getFunctionType() == FunctionNode.ARROW_FUNCTION;
-        Set<String> renamed = new HashSet<>();
+        List<String> parameters = new ArrayList<>();
+        for (AstNode param : fnNode.getParams()) {
+            collectBoundNames(param, parameters);
+        }
+        List<String> separated = new ArrayList<>();
         Set<String> functionDecls = new HashSet<>();
         for (Symbol symbol : fnNode.getSymbolTable().values()) {
-            if (symbol.getDeclType() == Symbol.Type.VAR
-                    && closureNames.contains(symbol.getName())
-                    && (arrow || !"arguments".equals(symbol.getName()))) {
-                renamed.add(symbol.getName());
-            } else if (symbol.getDeclType() == Symbol.Type.FUNCTION_VAR
-                    && arrow
-                    && (paramNames.contains(symbol.getName())
-                            || closureNames.contains(symbol.getName()))) {
-                // a function declaration of the body, bound in its var environment
-                renamed.add(symbol.getName());
-                functionDecls.add(symbol.getName());
-            } else if ((symbol.getDeclType() == Symbol.Type.LET
-                            || symbol.getDeclType() == Symbol.Type.CONST)
-                    && (paramNames.contains(symbol.getName())
-                            || closureNames.contains(symbol.getName()))) {
-                // the lexical declarations of the body are not visible to the parameters either
-                renamed.add(symbol.getName());
+            String name = symbol.getName();
+            if ((!paramNames.contains(name) && !closureNames.contains(name))
+                    || parameters.contains(name)) {
+                continue;
+            }
+            Symbol.Type type = symbol.getDeclType();
+            // the var arguments of a function keeps the arguments object: not separated
+            boolean argumentsObject = !arrow && "arguments".equals(name);
+            if (type == Symbol.Type.FUNCTION_VAR && !argumentsObject) {
+                functionDecls.add(name);
+                separated.add(name);
+            } else if ((type == Symbol.Type.VAR && !argumentsObject)
+                    || type == Symbol.Type.LET
+                    || type == Symbol.Type.CONST) {
+                separated.add(name);
             }
         }
-        if (renamed.isEmpty() || mayLookUpNamesDynamically(fnNode.getBody())) {
+        // a var or a function of the body with the name of a parameter that a closure of the
+        // parameters keeps: a binding of its own, which starts with the value of the parameter
+        List<String> copied = new ArrayList<>();
+        AstNode body = fnNode.getBody();
+        Set<String> bodyFunctions = new HashSet<>();
+        for (String name : bodyVarNames(body, bodyFunctions)) {
+            if (parameters.contains(name)
+                    && closureNames.contains(name)
+                    && (arrow || !"arguments".equals(name))
+                    && !copied.contains(name)) {
+                copied.add(name);
+                if (bodyFunctions.contains(name)) {
+                    functionDecls.add(name);
+                }
+            }
+        }
+        if (separated.isEmpty() && copied.isEmpty()) {
             return;
         }
-        List<Name> uses = new ArrayList<>();
-        fnNode.getBody()
-                .visit(
-                        node -> {
-                            if (node instanceof Name
-                                    && renamed.contains(((Name) node).getIdentifier())
-                                    && !isPropertyName((Name) node)
-                                    && !isFunctionName((Name) node)
-                                    && !inOwnArgumentsScope((Name) node, fnNode)
-                                    && definingScope((Name) node) == fnNode) {
-                                uses.add((Name) node);
-                            }
-                            return true;
-                        });
-        for (String name : renamed) {
-            Symbol symbol = fnNode.getSymbolTable().remove(name);
-            symbol.setName(name + "$body");
-            fnNode.getSymbolTable().put(symbol.getName(), symbol);
+
+        List<AstNode> statements = new ArrayList<>();
+        for (Node n = body.getFirstChild(); n != null; n = n.getNext()) {
+            statements.add((AstNode) n);
         }
-        for (Name use : uses) {
-            use.setIdentifier(use.getIdentifier() + "$body");
+        body.removeChildren();
+        Scope scope = new Scope(body.getAbsolutePosition(), body.getLength());
+        scope.setLineColumnNumber(body.getLineno(), body.getColumn());
+        scope.setParent(body);
+        scope.setParentScope(fnNode);
+        for (AstNode statement : statements) {
+            scope.addChildToBack(statement);
+            statement.setParent(scope);
+            statement.visit(
+                    node -> {
+                        if (node instanceof ScriptNode) {
+                            return false;
+                        }
+                        if (node instanceof Scope && ((Scope) node).getParentScope() == fnNode) {
+                            ((Scope) node).setParentScope(scope);
+                        }
+                        return true;
+                    });
+        }
+        for (String name : separated) {
+            fnNode.moveSymbol(name, scope);
         }
         if (!functionDecls.isEmpty()) {
-            hoistFunctionDeclarations(fnNode, functionDecls);
+            hoistFunctionDeclarations(scope, functionDecls);
         }
+        for (int i = copied.size() - 1; i >= 0; i--) {
+            String name = copied.get(i);
+            scope.putSymbol(new Symbol(Symbol.Type.VAR, name));
+            String temp = fnNode.getNextTempName();
+            fnNode.putSymbol(new Symbol(Symbol.Type.VAR, temp));
+            body.addChildToBack(assignmentStatement(body, temp, name));
+            scope.addChildToFront(assignmentStatement(scope, name, temp));
+        }
+        body.addChildToBack(scope);
     }
 
-    /** The name of a function, rather than a reference to a binding. */
-    private static boolean isFunctionName(Name name) {
-        return name.getParent() instanceof FunctionNode
-                && ((FunctionNode) name.getParent()).getFunctionName() == name;
-    }
-
-    /** An arguments inside a non-arrow function nested in fnNode, its own arguments object. */
-    private static boolean inOwnArgumentsScope(Name name, FunctionNode fnNode) {
-        if (!"arguments".equals(name.getIdentifier())) {
-            return false;
-        }
-        for (AstNode node = name.getParent(); node != fnNode; node = node.getParent()) {
-            if (node instanceof FunctionNode
-                    && ((FunctionNode) node).getFunctionType() != FunctionNode.ARROW_FUNCTION) {
-                return true;
-            }
-        }
-        return false;
+    /** The statement target = source, of names, at the start of parent. */
+    private static ExpressionStatement assignmentStatement(
+            AstNode parent, String target, String source) {
+        int pos = parent.getAbsolutePosition();
+        Assignment assignment =
+                new Assignment(Token.ASSIGN, new Name(pos, target), new Name(pos, source), pos);
+        ExpressionStatement statement = new ExpressionStatement(assignment, false);
+        statement.setLineColumnNumber(parent.getLineno(), parent.getColumn());
+        statement.setParent(parent);
+        return statement;
     }
 
     /**
-     * The function declarations of the body that separateBodyVars renamed become assignments of
-     * function expressions to the renamed bindings, at the start of the body: the function keeps
-     * its name, and is bound in the var environment of the body only.
+     * The names that the var declarations and the function declarations of a function body bind
+     * (those of its functions also added to functions), not entering its nested functions.
      */
-    private static void hoistFunctionDeclarations(FunctionNode fnNode, Set<String> names) {
-        AstNode body = fnNode.getBody();
-        List<AstNode> declarations = new ArrayList<>();
+    private static List<String> bodyVarNames(AstNode body, Set<String> functions) {
+        List<String> names = new ArrayList<>();
         for (Node n = body.getFirstChild(); n != null; n = n.getNext()) {
+            if (n instanceof FunctionNode
+                    && ((FunctionNode) n).getFunctionType() == FunctionNode.FUNCTION_STATEMENT
+                    && ((FunctionNode) n).getName() != null) {
+                names.add(((FunctionNode) n).getName());
+                functions.add(((FunctionNode) n).getName());
+            }
+        }
+        body.visit(
+                node -> {
+                    if (node instanceof FunctionNode) {
+                        return false;
+                    }
+                    if (node instanceof VariableDeclaration && node.getType() == Token.VAR) {
+                        for (VariableInitializer vi : ((VariableDeclaration) node).getVariables()) {
+                            collectBoundNames(vi.getTarget(), names);
+                        }
+                    }
+                    return true;
+                });
+        return names;
+    }
+
+    /**
+     * The function declarations of the body that separateBodyVars separated become assignments of
+     * function expressions to their bindings, at the start of the scope of the body: the function
+     * keeps its name, and is bound in the environment of the body only.
+     */
+    private static void hoistFunctionDeclarations(Scope scope, Set<String> names) {
+        List<AstNode> declarations = new ArrayList<>();
+        for (Node n = scope.getFirstChild(); n != null; n = n.getNext()) {
             if (n instanceof FunctionNode
                     && ((FunctionNode) n).getFunctionType() == FunctionNode.FUNCTION_STATEMENT
                     && names.contains(((FunctionNode) n).getName())) {
@@ -779,53 +834,15 @@ public class Parser {
         }
         for (int i = declarations.size() - 1; i >= 0; i--) {
             FunctionNode fn = (FunctionNode) declarations.get(i);
-            body.removeChild(fn);
+            scope.removeChild(fn);
             fn.setFunctionType(FunctionNode.FUNCTION_EXPRESSION);
-            Name target = new Name(fn.getPosition(), fn.getName() + "$body");
+            Name target = new Name(fn.getPosition(), fn.getName());
             Assignment assignment = new Assignment(Token.ASSIGN, target, fn, fn.getPosition());
             ExpressionStatement statement = new ExpressionStatement(assignment, false);
             statement.setLineColumnNumber(fn.getLineno(), fn.getColumn());
-            body.addChildToFront(statement);
-            statement.setParent(body);
+            scope.addChildToFront(statement);
+            statement.setParent(scope);
         }
-    }
-
-    /** The innermost scope around a name that declares it, by the parents of the AST. */
-    private static Scope definingScope(Name name) {
-        for (AstNode node = name.getParent(); node != null; node = node.getParent()) {
-            if (node instanceof Scope && ((Scope) node).getSymbol(name.getIdentifier()) != null) {
-                return (Scope) node;
-            }
-        }
-        return null;
-    }
-
-    private static boolean mayLookUpNamesDynamically(AstNode body) {
-        boolean[] dynamic = {false};
-        body.visit(
-                node -> {
-                    if (node instanceof WithStatement
-                            || (node instanceof FunctionCall
-                                    && ((FunctionCall) node).getTarget() instanceof Name
-                                    && "eval"
-                                            .equals(
-                                                    ((Name) ((FunctionCall) node).getTarget())
-                                                            .getIdentifier()))) {
-                        dynamic[0] = true;
-                    }
-                    return !dynamic[0];
-                });
-        return dynamic[0];
-    }
-
-    /** A Name that is a property name or a label, not a reference to a binding. */
-    private static boolean isPropertyName(Name name) {
-        AstNode parent = name.getParent();
-        return (parent instanceof PropertyGet && ((PropertyGet) parent).getProperty() == name)
-                || (parent instanceof ObjectProperty && ((ObjectProperty) parent).getKey() == name)
-                || parent instanceof BreakStatement
-                || parent instanceof ContinueStatement
-                || parent instanceof Label;
     }
 
     /** ArrowParameters may not contain a YieldExpression (15.3.1, early errors). */

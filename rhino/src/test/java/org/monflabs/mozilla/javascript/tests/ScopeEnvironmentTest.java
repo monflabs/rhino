@@ -4,7 +4,6 @@
 
 package org.monflabs.mozilla.javascript.tests;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
@@ -108,7 +107,6 @@ class ScopeEnvironmentTest {
     }
 
     @Test
-    @Disabled("the body variables are renamed, not scoped: not with eval")
     void bodyVarWithEval() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 "outside",
@@ -117,14 +115,12 @@ class ScopeEnvironmentTest {
     }
 
     @Test
-    @Disabled("a body var with the name of a parameter is not separated")
     void bodyVarNamedAsParameter() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 1, "(function(a, g = () => a) { var a; a = 2; return g(); })(1)");
     }
 
     @Test
-    @Disabled("a function declaration of the body is not separated")
     void bodyFunctionDeclaration() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 "outside",
@@ -133,12 +129,56 @@ class ScopeEnvironmentTest {
     }
 
     @Test
-    @Disabled("the renamed body variable collides with a variable of that name")
     void bodyVarNameCollision() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 "inside/user",
                 "var x = 'outside';"
                         + " (function(g = () => x) {"
                         + " var x = 'inside'; var x$body = 'user'; return x + '/' + x$body; })()");
+    }
+
+    @Test
+    void bodyDeclarationsNamedByParameters() {
+        // read directly by a default value
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside",
+                "var x = 'outside'; (function(a = x) { var x = 'inside'; return a; })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/inside",
+                "var x = 'outside';"
+                        + " (function(g = () => x) { var x = 'inside'; return g() + '/' + x; })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/inside",
+                "var x = 'outside';"
+                        + " (function(g = () => x) { let x = 'inside'; return g() + '/' + x; })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/function",
+                "var x = 'outside';"
+                        + " (function(g = () => x) {"
+                        + " function x() {} return g() + '/' + typeof x; })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/inside",
+                "var x = 'outside';"
+                        + " ((g = () => x) => { var x = 'inside'; return g() + '/' + x; })()");
+        // the closures of the body see the binding of the body
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/inside",
+                "var x = 'outside';"
+                        + " (function(g = () => x) {"
+                        + " var x = 'inside'; var h = () => x; return g() + '/' + h(); })()");
+        // the var starts with the value of the parameter of its name
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1/1/2",
+                "(function(a, g = () => a) {"
+                        + " var a; var r = a; a = 2; return g() + '/' + r + '/' + a; })(1)");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1/function",
+                "(function(a, g = () => a) { function a() {} return g() + '/' + typeof a; })(1)");
+        // in a generator and in an async function
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outside/inside",
+                "var x = 'outside';"
+                        + " (function*(g = () => x) { var x = 'inside'; yield g() + '/' + x; })()"
+                        + ".next().value");
     }
 }

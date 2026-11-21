@@ -39,6 +39,33 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### A scope for the body of a function with parameter expressions (2026-11-20)
+
+The last renaming of the parser is gone. With parameter expressions, the declarations of the body that the
+parameters name were renamed to `x$body` (`Parser.separateBodyVars`), unless the body used a direct `eval` or
+`with`. They now move to a scope around the statements of the body, an ordinary block scope that both backends
+already support: no second activation was needed.
+
+Fixed under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.68):
+
+```js
+var x = "outside";
+(function (g = () => x) { var x = "inside"; eval("1"); return g(); })();     // before: "inside"   now: "outside"
+(function (a = x) { var x = "inside"; return a; })();                        // before: undefined  now: "outside"
+(function (a, g = () => a) { var a; a = 2; return g(); })(1);                // before: 2          now: 1
+(function (g = () => x) { function x() {} return g(); })();                  // before: the function  now: "outside"
+(function (g = () => x) { var x = "inside"; var x$body = "user"; return x; })(); // before: "user"  now: "inside"
+```
+
+- A `var` read directly by a default value is separated, not only one named in a closure.
+- A `var` or a function of the body with the name of a parameter that a closure of the parameters keeps is a
+  binding of its own, initialized with the value of the parameter.
+- Function declarations are separated in every kind of function, not only in arrow functions.
+- `ScriptRuntime.bindingName`, which removed the suffixes from two error messages, is gone, and so are
+  `mayLookUpNamesDynamically` and the helpers of the renaming.
+
+`ScopeEnvironmentTest` has no disabled case left.
+
 ### Scopes instead of renamed bindings for switch, catch and for-in/of heads (2026-11-20)
 
 The parser renamed bindings to keep code evaluated outside of a block from seeing its declarations: `x$block` for

@@ -326,6 +326,8 @@ files, of which destructured parameters go to 1.3, and async/class syntax to the
   (`scope-paramsbody-var-open`, also 12 class tests and the `arrow-fn-body-cntns-arguments-*` eval tests), which
   needs a second activation created after the parameters in both backends with hoisted functions created after it;
   the TDZ scope of a for-in/of head (`for-in/scope-body-lex-*`).
+  *2026-11-20:* the declarations of the body that the parameters name live in a block scope around the body, and
+  the head of a for-in/of loop keeps its bindings uninitialized (see the changelog); no second activation.
 
 **1.3 Destructuring everywhere.** Binding and assignment patterns in declarations, parameters, `catch`, `for` heads,
 nested defaults, holes (ignored in parameter patterns: `function f([x, , y])` binds `y` to the second element), rest elements; `IteratorClose` on abrupt completion; evaluation order
