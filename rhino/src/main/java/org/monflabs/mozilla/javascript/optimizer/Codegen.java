@@ -299,10 +299,7 @@ public class Codegen implements Evaluator {
 
         OptTransformer ot =
                 new OptTransformer(
-                        tree,
-                        declarations.isEmpty() ? null : declarations,
-                        directCallTargets,
-                        compilerEnv.isLatestEcmaScript());
+                        tree, declarations.isEmpty() ? null : declarations, directCallTargets);
         ot.transform(tree, compilerEnv);
 
         new Optimizer(compilerEnv).optimize(tree);

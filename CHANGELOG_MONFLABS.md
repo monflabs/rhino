@@ -39,6 +39,26 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Seven defects fixed in all language versions (2026-11-21)
+
+Seven fixes were active only under `VERSION_ECMASCRIPT`, which kept defects alive under `VERSION_ES6` that no
+script can rely on. Their gates are gone (`BACKWARD_COMPATIBILITY.md` 1.90, 1.92, 1.93, 1.94, 1.103, 1.107,
+1.108, now marked "all versions"):
+
+- compiled mode: `===` of a parameter of a direct call with a number gave the result of `!==`; a function with a
+  rest parameter called directly got its first argument instead of the rest array; arithmetic and relational
+  comparison on BigInt parameters, and BigInt results stored in a variable, threw a TypeError;
+- the `next` method of a built-in iterator called on an iterator of another kind; a Symbol on the left of
+  `instanceof`, which could throw a `ClassCastException` for a bound function.
+
+`AGENTS.md` records the exception to the gating rule. The legacy branches are deleted: the `bigIntSafe` parameter of
+the flow analysis in `Block`, the forced numeric comparison in `BodyCodegen`, and the version flag of
+`OptTransformer`.
+
+One visible effect on `VERSION_ES6` beyond the fixes: the optimizer no longer types the result of `-x`, `~x`,
+`++` and `--` of an operand of unknown type as a number, since it can be a BigInt (`Bug708801Test` updated). Such
+a variable is no longer kept in a double register.
+
 ### A scope for the body of a function with parameter expressions (2026-11-20)
 
 The last renaming of the parser is gone. With parameter expressions, the declarations of the body that the

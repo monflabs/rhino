@@ -5855,7 +5855,7 @@ public class ScriptRuntime {
         }
 
         // for primitive values on LHS, return false
-        if (!(a instanceof Scriptable) || (cx.isLatestEcmaScript() && isSymbol(a))) return false;
+        if (!(a instanceof Scriptable) || isSymbol(a)) return false;
 
         return ((Scriptable) b).hasInstance((Scriptable) a);
     }

@@ -103,11 +103,11 @@ changes.
 | 1.87 | Iterator results define own data properties | `VERSION_ECMASCRIPT` |
 | 1.88 | Code evaluated at runtime no longer sees the locals of functions with closures | `VERSION_ECMASCRIPT` |
 | 1.89 | Methods called on a primitive string receive the string as `this` | `VERSION_ECMASCRIPT` |
-| 1.90 | Arithmetic on BigInt parameters in compiled top-level functions | `VERSION_ECMASCRIPT` |
+| 1.90 | Arithmetic on BigInt parameters in compiled top-level functions | all versions |
 | 1.91 | A `let`/`const` of a `switch` clause is uninitialized in the clauses entered past it | `VERSION_ECMASCRIPT` |
-| 1.92 | A rest parameter of a function called directly in compiled code | `VERSION_ECMASCRIPT` |
-| 1.93 | A BigInt compared with a number in a compiled function | `VERSION_ECMASCRIPT` |
-| 1.94 | `===` of a parameter of a direct call with a number in compiled code | `VERSION_ECMASCRIPT` |
+| 1.92 | A rest parameter of a function called directly in compiled code | all versions |
+| 1.93 | A BigInt compared with a number in a compiled function | all versions |
+| 1.94 | `===` of a parameter of a direct call with a number in compiled code | all versions |
 | 1.95 | `console.log` of `Infinity` and `NaN` | `VERSION_ECMASCRIPT` |
 | 1.96 | Format characters outside literals and comments | `VERSION_ECMASCRIPT` |
 | 1.97 | `let` in a function of a single-statement body | `VERSION_ECMASCRIPT` |
@@ -116,12 +116,12 @@ changes.
 | 1.100 | `let` and `const` in a `catch` block or a `switch` that is the body of an `if` or a loop | `VERSION_ECMASCRIPT` |
 | 1.101 | A `-` after a class escape at the end of a character class with the `u` flag | `VERSION_ECMASCRIPT` |
 | 1.102 | A case-insensitive class range whose characters have case variants past its end | `VERSION_ECMASCRIPT` |
-| 1.103 | BigInt arithmetic stored in a variable of a compiled function | `VERSION_ECMASCRIPT` |
+| 1.103 | BigInt arithmetic stored in a variable of a compiled function | all versions |
 | 1.104 | The value of a `return` of a generator that leaves a scope, a loop or a `try` | `VERSION_ECMASCRIPT` |
 | 1.105 | A `yield*` in the `catch` or `finally` block that a `throw()` or a `return()` runs | `VERSION_ECMASCRIPT` |
 | 1.106 | A call stack that runs out is a `RangeError` | `VERSION_ECMASCRIPT` |
-| 1.107 | The `next` method of a built-in iterator called on another kind of iterator | `VERSION_ECMASCRIPT` |
-| 1.108 | A Symbol on the left of `instanceof` | `VERSION_ECMASCRIPT` |
+| 1.107 | The `next` method of a built-in iterator called on another kind of iterator | all versions |
+| 1.108 | A Symbol on the left of `instanceof` | all versions |
 | 1.109 | Unicode property escapes follow ECMA-262: binary properties, General_Category values, exact Script names | `VERSION_ECMASCRIPT` |
 | 1.110 | Identifier characters are ID_Start and ID_Continue: no Pattern_Syntax (U+2E2F) or control characters | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
@@ -1504,6 +1504,8 @@ String.prototype.toString = function () { return "X"; };
 
 ### 1.90 Arithmetic on BigInt parameters in compiled top-level functions
 
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
 ```js
 function mul(x, y) { return x * y; }
 mul(2n, 3n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: 6n
@@ -1539,6 +1541,8 @@ function f(k) {
 
 ### 1.92 A rest parameter of a function called directly in compiled code
 
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
 ```js
 function rest(...a) { return a; }
 function f() { return rest('xy'); }
@@ -1554,6 +1558,8 @@ f();   // compiled, before: 'xy'   now: ['xy']
 
 ### 1.93 A BigInt compared with a number in a compiled function
 
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
 ```js
 function f(x) { return x < 2; }
 f(1n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: true
@@ -1568,6 +1574,8 @@ f(1n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   no
   IsLessThan), §7.2.13 (IsLessThan compares a BigInt with a number by their mathematical values).
 
 ### 1.94 `===` of a parameter of a direct call with a number in compiled code
+
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
 
 ```js
 function f(n) { if (n === 0) return 0; return 1 + f(n - 1); }
@@ -1696,6 +1704,8 @@ if (ok) try { run(); } catch (e) { const message = e.message; log(message); }
 
 ### 1.103 BigInt arithmetic stored in a variable of a compiled function
 
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
 ```js
 function mod(a, b) { const r = a % b; return r >= 0n ? r : b + r; }
 mod(-9n, 7n);   // compiled, before: TypeError "Cannot convert BigInt to a number"   now: 5n
@@ -1706,8 +1716,7 @@ mod(-9n, 7n);   // compiled, before: TypeError "Cannot convert BigInt to a numbe
   threw when it was stored. The result is now a number only when an operand is one (two BigInts give a BigInt;
   a BigInt with a number throws either way), `-x`, `~x` and `++`/`--` take the type of their operand, and `++`
   and `--` of a variable in a register that is not a number keep a BigInt. `+x` and `>>>` are still numbers
-  (they throw for a BigInt). Under `VERSION_ES6`, a nested function, which stock Rhino did not optimize, has the
-  new typing too, but `++` and `--` still convert. The interpreter was not affected. noble-ed25519 (JetStream 3)
+  (they throw for a BigInt). The interpreter was not affected. noble-ed25519 (JetStream 3)
   failed on it.
 - **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator), §13.5.4 and §13.5.6 (unary `-` and `~`
   of a BigInt), §13.4.4 (postfix increment: BigInt::add).
@@ -1773,6 +1782,8 @@ try { f(); } catch (e) { print(e); }   // before: a Java StackOverflowError (com
 
 ### 1.107 The `next` method of a built-in iterator called on another kind of iterator
 
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
 ```js
 const next = Object.getPrototypeOf([][Symbol.iterator]()).next;
 next.call("ab"[Symbol.iterator]());   // before: { value: 'a', done: false }   now: TypeError
@@ -1785,6 +1796,8 @@ next.call("ab"[Symbol.iterator]());   // before: { value: 'a', done: false }   n
   (§23.1.5.2.1, §22.1.5.1.1, §24.1.5.2.1, §24.2.6.2.1, §22.2.9.2.1).
 
 ### 1.108 A Symbol on the left of `instanceof`
+
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
 
 ```js
 const C = () => {}; Object.defineProperty(C, "prototype", { get() { throw new Error("read"); } });

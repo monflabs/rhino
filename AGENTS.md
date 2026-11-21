@@ -69,6 +69,8 @@ constraints apply to every change made toward that goal:
 - **`VERSION_ECMASCRIPT` is the target.** The ultimate goal is to remove the language versions and always behave as
   `Context.VERSION_ECMASCRIPT` (plan milestone M15). Until then, **every behavior change is gated: only active under
   `VERSION_ECMASCRIPT`**, so that `VERSION_ES6` and the older versions keep their exact behavior, bug fixes included.
+  The one exception is a defect that no script can rely on (a miscompilation, an exception of the engine itself such
+  as a `NullPointerException`): it is fixed in all versions, and its entry in `BACKWARD_COMPATIBILITY.md` says so.
   Gate with `cx.isLatestEcmaScript()` at runtime and `compilerEnv.isLatestEcmaScript()` for syntax and early errors
   (so that `grep isLatestEcmaScript` lists every gated behavior), rather than ad-hoc flags, and test both sides with
   `Utils.assertGatedBehavior`.

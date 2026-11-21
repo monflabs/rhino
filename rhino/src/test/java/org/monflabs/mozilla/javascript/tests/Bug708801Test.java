@@ -292,9 +292,9 @@ public class Bug708801Test {
                         assertNumberVars("var b; var c=1; b=c&&c&&2", "b", "c");
                         // bit not:
                         assertNumberVars("var b = ~0", "b");
-                        assertNumberVars("var b = ~o", "b");
-                        assertNumberVars("var b = ~o.a", "b");
-                        assertNumberVars("var b = ~o[0]", "b");
+                        assertNumberVars("var b = ~o");
+                        assertNumberVars("var b = ~o.a");
+                        assertNumberVars("var b = ~o[0]");
                         assertNumberVars("var b; var c=1; b=~c", "b", "c");
                         // unary plus:
                         assertNumberVars("var b = +0", "b");
@@ -304,14 +304,15 @@ public class Bug708801Test {
                         assertNumberVars("var b; var c=1; b=+c", "b", "c");
                         // unary minus:
                         assertNumberVars("var b = -0", "b");
-                        assertNumberVars("var b = -o", "b");
-                        assertNumberVars("var b = -o.a", "b");
-                        assertNumberVars("var b = -o[0]", "b");
+                        assertNumberVars("var b = -o");
+                        assertNumberVars("var b = -o.a");
+                        assertNumberVars("var b = -o[0]");
                         assertNumberVars("var b; var c=1; b=-c", "b", "c");
                         // increment, function call:
                         assertNumberVars("var b; var g; b = (g=0,g++)", "b", "g");
                         assertNumberVars("var b; var x = fn(b=1)", "b");
-                        assertNumberVars("var b; var x = fn(b=1).p++", "b", "x");
+                        // the result of ++ on a property may be a BigInt
+                        assertNumberVars("var b; var x = fn(b=1).p++", "b");
                         assertNumberVars("var b; ({1:{}})[b=1].p++", "b");
                         assertNumberVars("var b; o[b=1]++", "b");
                         // destructuring

@@ -40,7 +40,7 @@ public abstract class ES6Iterator extends ScriptableObject {
         public Object execute(
                 Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
             ES6Iterator iterator = realThis(thisObj);
-            if (iterator.tag == null || (cx.isLatestEcmaScript() && !tag.equals(iterator.tag))) {
+            if (iterator.tag == null || !tag.equals(iterator.tag)) {
                 throw ScriptRuntime.typeErrorById("msg.incompat.call", NEXT_METHOD);
             }
             return iterator.next(cx, s);

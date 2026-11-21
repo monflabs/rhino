@@ -4946,7 +4946,7 @@ class BodyCodegen {
                         cfw.add(ByteCode.DUP2);
                     }
                     cfw.addDStore(reg + offset);
-                } else if (compilerEnv.isLatestEcmaScript()) {
+                } else {
                     // a BigInt stays a BigInt
                     if (varIsDirectCallParameter(varIndex)) {
                         dcpLoadAsObject(reg);
@@ -4963,30 +4963,6 @@ class BodyCodegen {
                         cfw.add(ByteCode.DUP);
                     }
                     cfw.addAStore(reg);
-                } else {
-                    if (varIsDirectCallParameter(varIndex)) {
-                        dcpLoadAsObject(reg);
-                    } else {
-                        cfw.addALoad(reg);
-                    }
-                    addObjectToDouble();
-                    if (post) {
-                        cfw.add(ByteCode.DUP2);
-                    }
-                    cfw.addPush(1.0);
-                    if ((incrDecrMask & Node.DECR_FLAG) == 0) {
-                        cfw.add(ByteCode.DADD);
-                    } else {
-                        cfw.add(ByteCode.DSUB);
-                    }
-                    addDoubleWrap();
-                    if (!post) {
-                        cfw.add(ByteCode.DUP);
-                    }
-                    cfw.addAStore(reg);
-                    if (post) {
-                        addDoubleWrap();
-                    }
                 }
                 break;
             case Token.NAME:
@@ -5448,33 +5424,7 @@ class BodyCodegen {
         int childNumberFlag = node.getIntProp(Node.ISNUMBER_PROP, -1);
         int left_dcp_register = nodeIsDirectCallParameter(child);
         int right_dcp_register = nodeIsDirectCallParameter(rChild);
-        if (childNumberFlag != -1 && !compilerEnv.isLatestEcmaScript()) {
-            // Force numeric context on both parameters and optimize
-            // direct call case as Optimizer currently does not handle it
-
-            if (childNumberFlag != Node.RIGHT) {
-                // Left already has number content
-                generateExpression(child, node);
-            } else if (left_dcp_register != -1) {
-                dcpLoadAsNumber(left_dcp_register);
-            } else {
-                generateExpression(child, node);
-                addObjectToDouble();
-            }
-
-            if (childNumberFlag != Node.LEFT) {
-                // Right already has number content
-                generateExpression(rChild, node);
-            } else if (right_dcp_register != -1) {
-                dcpLoadAsNumber(right_dcp_register);
-            } else {
-                generateExpression(rChild, node);
-                addObjectToDouble();
-            }
-
-            genSimpleCompare(type, trueGOTO, falseGOTO);
-
-        } else if (childNumberFlag == Node.BOTH) {
+        if (childNumberFlag == Node.BOTH) {
             generateExpression(child, node);
             generateExpression(rChild, node);
             genSimpleCompare(type, trueGOTO, falseGOTO);
@@ -5521,27 +5471,21 @@ class BodyCodegen {
                 cfw.addALoad(left_dcp_register);
                 cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
                 cfw.add(ByteCode.IF_ACMPNE, leftIsNotNumber);
-                boolean latest = compilerEnv.isLatestEcmaScript();
                 cfw.addDLoad(left_dcp_register + 1);
-                if (latest) {
-                    // a parameter that holds a BigInt compares as one
-                    int leftNumberStack = cfw.getStackTop();
-                    int rightIsObject = cfw.acquireLabel();
-                    cfw.addALoad(right_dcp_register);
-                    cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
-                    cfw.add(ByteCode.IF_ACMPNE, rightIsObject);
-                    cfw.addDLoad(right_dcp_register + 1);
-                    genSimpleCompare(type, trueGOTO, falseGOTO);
-                    cfw.markLabel(rightIsObject, leftNumberStack);
-                    cfw.addALoad(right_dcp_register);
-                    cfw.addPush(type);
-                    addOptRuntimeInvoke("compareNumberWith", "(DLjava/lang/Object;I)Z");
-                    cfw.add(ByteCode.IFNE, trueGOTO);
-                    cfw.add(ByteCode.GOTO, falseGOTO);
-                } else {
-                    dcpLoadAsNumber(right_dcp_register);
-                    genSimpleCompare(type, trueGOTO, falseGOTO);
-                }
+                // a parameter that holds a BigInt compares as one
+                int leftNumberStack = cfw.getStackTop();
+                int rightIsObject = cfw.acquireLabel();
+                cfw.addALoad(right_dcp_register);
+                cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
+                cfw.add(ByteCode.IF_ACMPNE, rightIsObject);
+                cfw.addDLoad(right_dcp_register + 1);
+                genSimpleCompare(type, trueGOTO, falseGOTO);
+                cfw.markLabel(rightIsObject, leftNumberStack);
+                cfw.addALoad(right_dcp_register);
+                cfw.addPush(type);
+                addOptRuntimeInvoke("compareNumberWith", "(DLjava/lang/Object;I)Z");
+                cfw.add(ByteCode.IFNE, trueGOTO);
+                cfw.add(ByteCode.GOTO, falseGOTO);
                 if (stack != cfw.getStackTop()) throw Codegen.badTree();
 
                 cfw.markLabel(leftIsNotNumber);
@@ -5550,17 +5494,11 @@ class BodyCodegen {
                 cfw.add(ByteCode.GETSTATIC, "java/lang/Void", "TYPE", "Ljava/lang/Class;");
                 cfw.add(ByteCode.IF_ACMPNE, rightIsNotNumber);
                 cfw.addALoad(left_dcp_register);
-                if (latest) {
-                    cfw.addDLoad(right_dcp_register + 1);
-                    cfw.addPush(type);
-                    addOptRuntimeInvoke("compareWithNumber", "(Ljava/lang/Object;DI)Z");
-                    cfw.add(ByteCode.IFNE, trueGOTO);
-                    cfw.add(ByteCode.GOTO, falseGOTO);
-                } else {
-                    addObjectToDouble();
-                    cfw.addDLoad(right_dcp_register + 1);
-                    genSimpleCompare(type, trueGOTO, falseGOTO);
-                }
+                cfw.addDLoad(right_dcp_register + 1);
+                cfw.addPush(type);
+                addOptRuntimeInvoke("compareWithNumber", "(Ljava/lang/Object;DI)Z");
+                cfw.add(ByteCode.IFNE, trueGOTO);
+                cfw.add(ByteCode.GOTO, falseGOTO);
                 if (stack != cfw.getStackTop()) throw Codegen.badTree();
 
                 cfw.markLabel(rightIsNotNumber);
@@ -5629,10 +5567,7 @@ class BodyCodegen {
                     cfw.addDLoad(child_dcp_register + 1);
                     cfw.addPush(convertChild.getDouble());
                     cfw.add(ByteCode.DCMPL);
-                    // === jumped on a difference, as !== does, before VERSION_ECMASCRIPT
-                    boolean equality =
-                            type == Token.EQ
-                                    || (type == Token.SHEQ && compilerEnv.isLatestEcmaScript());
+                    boolean equality = type == Token.EQ || type == Token.SHEQ;
                     if (equality) cfw.add(ByteCode.IFEQ, trueGOTO);
                     else cfw.add(ByteCode.IFNE, trueGOTO);
                     cfw.add(ByteCode.GOTO, falseGOTO);

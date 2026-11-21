@@ -197,8 +197,6 @@ public class Context implements Closeable {
      *       class is a character ({@code [\p{L}-]}), instead of a SyntaxError.
      *   <li>A case-insensitive character class whose range holds characters with case variants past
      *       its end matches them, instead of throwing a SyntaxError.
-     *   <li>In compiled mode, BigInt arithmetic stored in a variable keeps the BigInt, instead of a
-     *       TypeError.
      *   <li>The value of a {@code return} of a generator or an async function is evaluated before
      *       the scopes, loops and {@code finally} blocks it leaves, instead of after them.
      *   <li>A {@code yield*} in the {@code catch} or {@code finally} block that the {@code throw()}
@@ -208,11 +206,6 @@ public class Context implements Closeable {
      *       script can catch, instead of a Java {@code StackOverflowError}; the interpreter stops
      *       at 100,000 frames unless {@link #setMaximumInterpreterStackDepth} sets another limit,
      *       instead of exhausting the heap.
-     *   <li>The {@code next} method of a built-in iterator throws a TypeError for an iterator of
-     *       another kind, as {@code %ArrayIteratorPrototype%.next} called on a string iterator,
-     *       instead of iterating it.
-     *   <li>A Symbol on the left of {@code instanceof} is not an instance of anything, instead of
-     *       having its prototype chain walked.
      *   <li>Unicode property escapes follow ECMA-262: the binary properties derived from the JDK
      *       ({@code Any}, {@code Assigned}, the Emoji properties, ...), the General_Category values
      *       ({@code C}, {@code digit}, {@code LC}), exact Script names, and the Unicode definitions
@@ -321,19 +314,9 @@ public class Context implements Closeable {
      *   <li>A method called on a primitive string ({@code "abc".indexOf("b")}) receives the string
      *       itself as {@code this}, not a String object: the built-ins of {@code String.prototype}
      *       no longer call an overridden {@code toString} or {@code valueOf}.
-     *   <li>In compiled mode, arithmetic on two parameters of a top-level function ({@code x * y})
-     *       accepts BigInts instead of throwing a TypeError.
      *   <li>A {@code let} or {@code const} declared in a clause of a {@code switch} is in its
      *       temporal dead zone in the clauses entered past its declaration: reading or writing it
      *       there throws a ReferenceError.
-     *   <li>In compiled mode, a function with a rest parameter called directly ({@code f(1, 2)} in
-     *       another function) gets its rest array, instead of the arguments as they are.
-     *   <li>In compiled mode, a BigInt compared with a number in a function ({@code x < 2})
-     *       compares as one instead of throwing a TypeError, and the left operand is converted
-     *       after the right one is evaluated.
-     *   <li>In compiled mode, a parameter of a function called directly compared with a number by
-     *       {@code ===} ({@code n === 0}) gives the result of {@code ===}, instead of the one of
-     *       {@code !==} when a number was passed.
      *   <li>{@code console.log} prints {@code Infinity}, {@code -Infinity} and {@code NaN}, instead
      *       of {@code null}.
      * </ul>

@@ -477,11 +477,7 @@ class Optimizer {
         Node[] theStatementNodes = new Node[statementsArray.size()];
         statementsArray.toArray(theStatementNodes);
 
-        // an arithmetic operation on two BigInts gives a BigInt: before VERSION_ECMASCRIPT,
-        // top-level
-        // functions keep the legacy typing (their result as a number)
-        Block.runFlowAnalyzes(
-                theFunction, theStatementNodes, nested || compilerEnv.isLatestEcmaScript());
+        Block.runFlowAnalyzes(theFunction, theStatementNodes);
         statements.put(theFunction, theStatementNodes);
     }
 
@@ -489,8 +485,6 @@ class Optimizer {
         if (!hasRegisterVars(theFunction)) return;
 
         inDirectCallFunction = theFunction.isTargetOfDirectCall();
-        // nested functions were not optimized before, hence never had the legacy typing
-        bigIntSafeParameters = nested || compilerEnv.isLatestEcmaScript();
         this.theFunction = theFunction;
         Node[] theStatementNodes = statements.get(theFunction);
 
@@ -580,9 +574,6 @@ class Optimizer {
      * unknown type. A parameter and a number throw a TypeError either way.
      */
     private boolean mayBeBigIntOperation(Node lChild, int lType, Node rChild, int rType) {
-        if (!bigIntSafeParameters) {
-            return false;
-        }
         boolean lParam = isDirectCallParameter(lChild);
         boolean rParam = isDirectCallParameter(rChild);
         return (lParam && (rParam || rType != NumberType))
@@ -1037,7 +1028,6 @@ class Optimizer {
     private final CompilerEnvirons compilerEnv;
     private final Map<OptFunctionNode, Node[]> statements = new HashMap<>();
     private boolean inDirectCallFunction;
-    private boolean bigIntSafeParameters;
     OptFunctionNode theFunction;
     private boolean parameterUsedInNumberContext;
 }
