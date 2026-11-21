@@ -63,14 +63,15 @@ only meaningful relative to each other.
   - `run.v8-<benchmark>`: the V8 benchmark functions, normalized to one call.
 - **Method.** Inside a JVM a metric is the fastest of 10 runs after 20 warmup runs. The two sides run in
   alternating rounds (3 by default), one JVM per side and round, with a pinned heap (`-Xms1g -Xmx1g
-  -XX:+UseG1GC`); each side's result is the median across rounds.
+  -XX:+UseG1GC`) and blocking JIT compilation (`-Xbatch`, so that a slow background compilation cannot outlast the
+  warmup); each side's result is the median across rounds.
 - **Tolerances are measured, not chosen.** `buildtools/perf-calibrate.py` simulates the gate's 3-against-3
   comparison 5,000 times over 12 recordings of identical code and takes the 99th percentile of the apparent
-  regression, plus a 25% margin (minimum 10%). Most metrics have a 10–20% band. A deliberate regression of
-  `instanceof` was caught at +15–19%; one of +4–8% was not. Metrics with several JIT states are not seen in the
-  same proportions by every set of 12 recordings, so a recalibration only widens bands: each is the larger of
-  the previous one and the new one (2026-10-29: 11 bands widened, `sort.cmp.ecma` 15% → 30%,
-  `closures.cmp.es6` 10% → 15%, after both failed gates by chance).
+  regression, plus a 25% margin (minimum 10%). Since the calibration of 2026-11-21, the first with `-Xbatch`,
+  106 of the 114 metrics have the minimum band of 10%, and the widest are `instanceof.int` (30% and 40%). Until
+  then a third of the bands were above 20%, up to 250% for `wideobject.cmp`, because compiled-mode metrics settled
+  in one of several JIT states from one JVM to the next. A deliberate regression of `instanceof` was caught at
+  +15–19% with the earlier bands; one of +4–8% was not.
 - **Idle machine.** A full run takes about 18 minutes. The gate refuses to run during a Time Machine backup, and
   no build may run alongside it.
 
@@ -83,11 +84,12 @@ PERF_ROUNDS=7 PERF_JAVA_OPTS='-Dperf.only=instanceof -Dperf.tolerance=0.05' buil
 
 ### Pitfalls the gate accounts for
 
-- **Bimodal metrics.** Some compiled-mode metrics (`properties`, `v8-richards`, `closures`, `wideobject`,
-  `typedarray`, `split`, `v8-crypto`, `sort`) settle in one of two JIT states from one JVM to the next. A single
-  round can flag a regression that is not there; these are confirmed with several rounds, alternating the two
-  jars. `sort.cmp.ecma` (about 7.3 or 9 ms after the other scripts, a third of the runs slow on the same jar) has
-  a two-state gap wider than its 15% band, so a 3-round gate fails on it by chance.
+- **Background JIT compilation.** Until 2026-11-21 the JIT compiled in the background, and some compiled-mode
+  metrics (`properties`, `v8-richards`, `closures`, `wideobject`, `typedarray`, `split`, `v8-crypto`, `sort`)
+  settled in one of two states from one JVM to the next; `arith` could even be measured in the JVM interpreter,
+  ten times slower, while its compilation was still running after the warmup. With `-Xbatch` a compilation blocks
+  the script, the timings are steady from the fifth run on, and these metrics no longer split. A flag on a single
+  metric is still confirmed with more rounds before it is believed.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of
   what runs next. A change can look neutral on a benchmark alone and regress in the full run; several changes on
   this page were reshaped, or dropped, for that reason.

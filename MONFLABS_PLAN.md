@@ -212,7 +212,7 @@ rules. *(done)* `BACKWARD_COMPATIBILITY.md` (added 2026-10-07) lists every behav
   1. steady state: each script compiled once, run repeatedly in one scope;
   2. minimum within a JVM, median across JVMs;
   3. base and head interleaved round by round;
-  4. pinned heap (`-Xms1g -Xmx1g -XX:+UseG1GC`);
+  4. pinned heap (`-Xms1g -Xmx1g -XX:+UseG1GC`) and blocking JIT compilation (`-Xbatch`);
   5. **both** `EvaluationMethod.Interpreter` and compiled mode, and both `VERSION_ES6` and `VERSION_ECMASCRIPT`
      (to prove that the gated paths cost nothing to `VERSION_ES6` users);
   6. per-metric tolerances, measured rather than chosen (10 runs of identical code both ways, then set the band);
@@ -758,7 +758,8 @@ Findings recorded while building the perf gate (2026-10-07), to investigate in t
 
 - Top-level script code is often slower in compiled mode than in the interpreter (e.g. `wideobject`, `split`,
   `matchreplace`, `regexp` in `testsrc/perf`), most likely global variable access from compiled top-level code.
-- `run.wideobject.cmp` is bimodal across JVMs (19 ms or 60 ms): the JIT settles in one of two states.
+- `run.wideobject.cmp` is bimodal across JVMs (19 ms or 60 ms): the JIT settles in one of two states. (No longer
+  since 2026-11-21: the gate runs with `-Xbatch`.)
 - `run.properties.cmp` depends on what ran before it in the same JVM (profile pollution): 25 ms alone, 50 ms in the
   full run.
 

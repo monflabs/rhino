@@ -88,7 +88,12 @@ How it works:
     call.
 * Inside a JVM, each metric is the fastest of 10 runs after 20 warmup runs (noise only ever makes
   a run slower; with only 5 warmup runs, compiled-mode scripts settled in one of two JIT states from
-  one JVM to the next, e.g. 18 or 33 ms, which made the gate flaky). The two sides are measured in alternating rounds (3 by default, one JVM per side
+  one JVM to the next, e.g. 18 or 33 ms, which made the gate flaky). The JVMs run with `-Xbatch`, so
+  that a JIT compilation blocks the script instead of running in the background: the background
+  compilation of a large script method (`arith.js` in compiled mode) took 2 to 3 seconds, the
+  script ran ten times slower in the JVM interpreter meanwhile, and in about a quarter of the JVMs
+  that outlasted the warmup (108 ms measured instead of 12 ms). With `-Xbatch` the timings are
+  steady from the fifth run on. The two sides are measured in alternating rounds (3 by default, one JVM per side
   and round, heap pinned to 1 GB with G1), and each side's result is the median across rounds.
 * Tolerances are per metric, in `testsrc/perf-tolerances.properties`, measured rather than chosen:
   `buildtools/perf-calibrate.py` simulates the gate's 3-vs-3 comparison 5,000 times over
@@ -101,10 +106,11 @@ features the base revision supports.
 
 ### Sensitivity and calibration
 
-The bands were calibrated on 12 recordings on an Apple M-series MacBook Air (2026-10-07). Most
-metrics have a 10–20% band; a few are much noisier because the JIT settles in different states
-from one JVM to the next (`run.wideobject.cmp` is bimodal, 19 ms or 60 ms; `run.properties.cmp`
-depends on what ran before it), and they only detect cliffs. A deliberate regression of
+The bands were calibrated on 12 recordings on an Apple M-series MacBook Air (2026-11-21, the first
+calibration with `-Xbatch`). 106 of the 114 metrics have the minimum band of 10%; the widest are
+`run.instanceof.int` (30% and 40%). Before `-Xbatch`, compiled-mode metrics settled in different
+JIT states from one JVM to the next (`run.wideobject.cmp` at 19 or 60 ms, with a band of 250%) and
+only detected cliffs. A deliberate regression of
 `instanceof` was caught at +15–19%; one of +4–8% was not. For a considered judgement on a smaller
 difference, run the relevant subset with more rounds on an idle machine:
 
@@ -115,7 +121,7 @@ The bands are machine-specific. To recalibrate on another machine, record the sa
 
     cd benchmarks
     for i in $(seq 1 12); do
-      java -Xms1g -Xmx1g -XX:+UseG1GC -cp build/classes/java/perf:../rhino/build/libs/rhino-<version>.jar \
+      java -Xms1g -Xmx1g -XX:+UseG1GC -Xbatch -cp build/classes/java/perf:../rhino/build/libs/rhino-<version>.jar \
         org.monflabs.mozilla.javascript.perf.PerfBenchmark record build/perf-calib/run-$i.json
     done
     python3 ../buildtools/perf-calibrate.py --write testsrc/perf-tolerances.properties build/perf-calib/run-*.json

@@ -39,6 +39,24 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The perf gate compiles in the foreground, and its bands are recalibrated (2026-11-21)
+
+No engine change. The gate's JVMs now run with `-Xbatch`, so that a JIT compilation blocks the script that asked
+for it.
+
+- Cause: the compiled `arith` script ran at about 110 ms for 19 to 30 runs, then at 13 ms. The background
+  compilation of its method took 2 to 3 seconds; the warmup is 20 runs, so about a quarter of the JVMs measured
+  the JVM interpreter (108 ms against 12 ms, a "regression" of 844% on identical compiled code).
+- With `-Xbatch`, compiled `arith` and `instanceof` are steady from the fifth run on in 6 JVMs of 6. A full gate
+  of one engine against itself reported no regression, with every metric within 1.33x across its 6 JVMs.
+- The metrics that settled in one of two JIT states no longer do: `properties.cmp` (12 or 18 ms before) at 10.3
+  ms, `v8-richards.cmp` (2.3 or 4.5 ms) at 2.9 ms, `wideobject.cmp` (7 or 15 ms) at 7.1 to 8.9 ms.
+- Tolerances recalibrated from 12 recordings: 106 of 114 metrics at the minimum of 10% (27 before), none above
+  40% (`instanceof.int.es6`; 28 were above 25% before, up to 250%). The 6 recordings of the validation gate, not
+  used for the calibration, are within the new bands.
+- Absolute timings changed for some metrics (compiled `arith` 13 ms → about 9 to 11 ms), so results recorded
+  before this date do not compare with later ones.
+
 ### Sixteen fixes taken from upstream Rhino (2026-11-21)
 
 Upstream master has 77 commits that the fork lacks. Sixteen of its bug fixes apply to this tree without touching

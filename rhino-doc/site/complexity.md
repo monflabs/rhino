@@ -23,9 +23,10 @@ still describes the code as it was reviewed.
 | Scoping done by renaming variables to `name$body` and `name$block`, with bail-outs on `eval` and `with` | No renaming is left. The switch discriminant, the catch parameter, the head of a for-in/of loop and the body of a function with parameter expressions each have a scope, and the `eval` and `with` cases are conformant |
 | The class kind stored as a one-letter string prefix | A flags property on the node and an operand of the instruction. Classes are still lowered to two object literals |
 | `NodeTransformer`: semantics and optimization in one 1,640-line tree walker | 996 lines. `TemporalDeadZone` holds the dead-zone rules and `VariableAllocation` the placement of variables |
+| Modules re-emitted as `function*` source text and compiled a second time | A module is parsed once; its body is moved into a generator function at the AST level |
 | 19 parser fields added, mostly saved and restored by hand | 17: the two one-shot flags are parameters. The fields saved by hand remain |
 
-Still as reviewed: modules re-emitted as source text, the legacy twins and the version gates, the optimizer's
+Still as reviewed: the legacy twins and the version gates, the optimizer's
 number typing, `Splitter`, and the property cache rules.
 
 ## The size of the change

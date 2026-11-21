@@ -88,7 +88,11 @@ MAIN=org.monflabs.mozilla.javascript.perf.PerfBenchmark
 ROUNDS="${PERF_ROUNDS:-3}"
 # A pinned heap and collector: left to ergonomics, G1 sizes itself differently
 # in each JVM and allocation-heavy benchmarks move by double digits on that alone.
-JVM=(-Xms1g -Xmx1g -XX:+UseG1GC ${PERF_JAVA_OPTS:-})
+# -Xbatch makes a JIT compilation block the thread that asked for it. In the
+# background, the compilation of a large script method took 2 to 3 seconds, during
+# which the script kept running in the JVM interpreter, ten times slower: when that
+# outlasted the warmup, the interpreter is what got measured.
+JVM=(-Xms1g -Xmx1g -XX:+UseG1GC -Xbatch ${PERF_JAVA_OPTS:-})
 
 # Let the machine settle after the builds: measuring straight away catches it
 # hot and busy, which skews whichever side goes first.
