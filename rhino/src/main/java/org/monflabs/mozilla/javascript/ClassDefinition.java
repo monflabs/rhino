@@ -5,121 +5,143 @@
 package org.monflabs.mozilla.javascript;
 
 /**
- * ClassDefinitionEvaluation (ECMA-262 15.7.14) for the class compiled as a constructor (or none,
- * for the default constructor), an optional heritage, and two object literals holding the methods
- * of the prototype and of the constructor (static members).
+ * ClassDefinitionEvaluation (ECMA-262 15.7.14): {@link #define} creates the constructor and the
+ * prototype from the constructor of the class (or none, for the default constructor) and its
+ * heritage, then {@link #element} adds each element of the class body, in source order.
  */
 final class ClassDefinition {
 
     private ClassDefinition() {}
 
     /**
-     * The key of a field, in the literal of the members of a class (Token#FIELD_KEY): the entry is
-     * not a property of the literal but a field of the class, defined on each instance (or once on
-     * the constructor, for a static field). {@code named}: the initializer is an anonymous function
-     * definition, which the key names (NamedEvaluation). {@code method}: the entry is a private
-     * method or accessor, whose key is a PrivateName.
-     */
-    static final class FieldKey implements java.io.Serializable {
-        private static final long serialVersionUID = 1L;
-        final Object key;
-        final boolean named;
-        final boolean method;
-
-        FieldKey(Object key, boolean named, boolean method) {
-            this.key = key;
-            this.named = named;
-            this.method = method;
-        }
-    }
-
-    /**
-     * A field of a class (ClassFieldDefinition): its key and its initializer, or null; or a private
-     * method or accessor, whose initializer is the function, and getterSetter as in
-     * fillObjectLiteral.
+     * A field of a class (ClassFieldDefinition): its key and its initializer, or null; a static
+     * block has no key. {@code named}: the initializer is an anonymous function definition, which
+     * the key names (NamedEvaluation).
      */
     static final class Element implements java.io.Serializable {
         private static final long serialVersionUID = 1L;
         final Object key;
         final Object initializer;
         final boolean named;
-        final boolean method;
-        final int getterSetter;
 
-        Element(FieldKey key, Object initializer, int getterSetter) {
-            this.key = key.key;
+        Element(Object key, Object initializer, boolean named) {
+            this.key = key;
             this.initializer = initializer;
-            this.named = key.named;
-            this.method = key.method;
-            this.getterSetter = getterSetter;
+            this.named = named;
         }
-    }
-
-    private static final String ELEMENTS = "ClassDefinition.elements";
-
-    /** Records a field entry of the literal of the members of a class (fillObjectLiteral). */
-    @SuppressWarnings("unchecked")
-    static void addElement(Scriptable literal, FieldKey key, Object initializer, int getterSetter) {
-        ScriptableObject obj = (ScriptableObject) literal;
-        java.util.List<Element> elements =
-                (java.util.List<Element>) obj.getAssociatedValue(ELEMENTS);
-        if (elements == null) {
-            elements = new java.util.ArrayList<>();
-            obj.associateValue(ELEMENTS, elements);
-        }
-        elements.add(new Element(key, initializer, getterSetter));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Element[] takeElements(ScriptableObject literal) {
-        java.util.List<Element> elements =
-                (java.util.List<Element>) literal.getAssociatedValue(ELEMENTS);
-        if (elements == null || elements.isEmpty()) {
-            return null;
-        }
-        Element[] result = elements.toArray(new Element[0]);
-        elements.clear();
-        return result;
     }
 
     /**
-     * The private methods and accessors among elements, a getter and a setter of the same name
-     * combined; null if there are none.
+     * ClassElementEvaluation of an element of the class whose constructor is f: flags is its kind
+     * and its Node#ELEMENT_* flags, key its key as evaluated (a PrivateName for a private element,
+     * null for a static block), and value its function: the method, the accessor, the initializer
+     * of a field (null without one) or the static block.
      */
-    private static PrivateName.Method[] privateMethods(Element[] elements) {
-        if (elements == null) {
-            return null;
+    static void element(BaseFunction f, Object key, Object value, int flags, Context cx) {
+        boolean isStatic = (flags & Node.ELEMENT_STATIC) != 0;
+        Scriptable home = isStatic ? f : (Scriptable) f.getPrototypeProperty();
+        if (value instanceof JSFunction) {
+            ((JSFunction) value).initClassHomeObject(home);
         }
-        java.util.Map<Object, PrivateName.Method> methods = new java.util.LinkedHashMap<>();
-        for (Element element : elements) {
-            if (!element.method) {
-                continue;
-            }
-            PrivateName name = (PrivateName) element.key;
-            if (element.getterSetter == 0) {
-                methods.put(name, new PrivateName.Method(name, element.initializer, null, null));
-                continue;
-            }
-            PrivateName.Method accessor =
-                    methods.computeIfAbsent(
-                            name, k -> new PrivateName.Method(name, null, null, null));
-            if (element.getterSetter == -1) {
-                accessor.getter = element.initializer;
+        int kind = flags & Node.ELEMENT_KIND_MASK;
+        if (kind == Node.ELEMENT_STATIC_BLOCK) {
+            f.classStaticElements = append(f.classStaticElements, new Element(null, value, false));
+            return;
+        }
+        if (!(key instanceof PrivateName)) {
+            key = ScriptRuntime.toPropertyKey(key);
+        }
+        if (kind == Node.ELEMENT_FIELD) {
+            Element field = new Element(key, value, (flags & Node.ELEMENT_NAMED) != 0);
+            if (isStatic) {
+                f.classStaticElements = append(f.classStaticElements, field);
             } else {
-                accessor.setter = element.initializer;
+                f.classFields = append(f.classFields, field);
             }
+            return;
         }
-        return methods.isEmpty() ? null : methods.values().toArray(new PrivateName.Method[0]);
+        if ((flags & Node.ELEMENT_NAMED) != 0 && value instanceof BaseFunction) {
+            nameAfterKey(
+                    (BaseFunction) value,
+                    key,
+                    kind == Node.ELEMENT_GETTER
+                            ? "get "
+                            : kind == Node.ELEMENT_SETTER ? "set " : "");
+        }
+        if (key instanceof PrivateName) {
+            PrivateName name = (PrivateName) key;
+            if (isStatic) {
+                PrivateName.defineMethod(
+                        f, method(PrivateName.findMethod(f, name), name, value, kind));
+            } else {
+                f.classPrivateMethods = define(f.classPrivateMethods, name, value, kind);
+            }
+            return;
+        }
+        // DefineMethodProperty: not enumerable
+        ScriptableObject target = (ScriptableObject) home;
+        Object id = key;
+        if (key instanceof String) {
+            ScriptRuntime.StringIdOrIndex s = ScriptRuntime.toStringIdOrIndex(key);
+            id = s.stringId == null ? Integer.valueOf(s.index) : s.stringId;
+        }
+        Object none = Scriptable.NOT_FOUND;
+        ScriptableObject.DescriptorInfo desc =
+                kind == Node.ELEMENT_METHOD
+                        ? new ScriptableObject.DescriptorInfo(false, true, true, value)
+                        : new ScriptableObject.DescriptorInfo(
+                                Boolean.FALSE,
+                                none,
+                                Boolean.TRUE,
+                                kind == Node.ELEMENT_GETTER ? value : none,
+                                kind == Node.ELEMENT_SETTER ? value : none,
+                                none);
+        target.defineOwnProperty(cx, id, desc);
     }
 
-    /** The fields among elements, or null if there are none. */
-    private static Element[] fields(Element[] elements) {
+    private static Element[] append(Element[] elements, Element element) {
         if (elements == null) {
-            return null;
+            return new Element[] {element};
         }
-        Element[] fields =
-                java.util.Arrays.stream(elements).filter(e -> !e.method).toArray(Element[]::new);
-        return fields.length == 0 ? null : fields;
+        Element[] result = java.util.Arrays.copyOf(elements, elements.length + 1);
+        result[elements.length] = element;
+        return result;
+    }
+
+    /** A private method, or the accessor that existing is the other half of (null: none). */
+    private static PrivateName.Method method(
+            PrivateName.Method existing, PrivateName name, Object function, int kind) {
+        if (kind == Node.ELEMENT_METHOD) {
+            return new PrivateName.Method(name, function, null, null);
+        }
+        PrivateName.Method accessor =
+                existing != null ? existing : new PrivateName.Method(name, null, null, null);
+        if (kind == Node.ELEMENT_GETTER) {
+            accessor.getter = function;
+        } else {
+            accessor.setter = function;
+        }
+        return accessor;
+    }
+
+    /** The private methods of the instances with one more, a getter and a setter combined. */
+    private static PrivateName.Method[] define(
+            PrivateName.Method[] methods, PrivateName name, Object function, int kind) {
+        if (methods != null) {
+            for (PrivateName.Method m : methods) {
+                if (m.name == name) {
+                    method(m, name, function, kind);
+                    return methods;
+                }
+            }
+        }
+        PrivateName.Method added = method(null, name, function, kind);
+        if (methods == null) {
+            return new PrivateName.Method[] {added};
+        }
+        PrivateName.Method[] result = java.util.Arrays.copyOf(methods, methods.length + 1);
+        result[methods.length] = added;
+        return result;
     }
 
     /** InitializeInstanceElements (7.3.34) of the fields of a class, on a new instance. */
@@ -167,7 +189,7 @@ final class ClassDefinition {
                     ((Callable) field.initializer)
                             .call(cx, scope, receiver, ScriptRuntime.emptyArgs);
             if (field.named && value instanceof BaseFunction) {
-                nameAfterKey((BaseFunction) value, field.key);
+                nameAfterKey((BaseFunction) value, field.key, "");
             }
         }
         if (field.key == null) {
@@ -192,18 +214,18 @@ final class ClassDefinition {
         }
     }
 
-    /** SetFunctionName(F, key) of an anonymous function that a computed field key names. */
-    private static void nameAfterKey(BaseFunction f, Object key) {
+    /** SetFunctionName(F, key, prefix) of an anonymous function that its key names. */
+    private static void nameAfterKey(BaseFunction f, Object key, String prefix) {
         if (!"".equals(f.get("name", f))) {
             return;
         }
         if (key instanceof PrivateName) {
-            f.setFunctionName(((PrivateName) key).getDescription());
+            f.setFunctionName(prefix + ((PrivateName) key).getDescription());
         } else if (key instanceof Symbol) {
             String description = ((Symbol) key).getName();
-            f.setFunctionName(description.isEmpty() ? "" : "[" + description + "]");
+            f.setFunctionName(description.isEmpty() ? prefix : prefix + "[" + description + "]");
         } else {
-            f.setFunctionName(ScriptRuntime.toString(key));
+            f.setFunctionName(prefix + ScriptRuntime.toString(key));
         }
     }
 
@@ -212,8 +234,6 @@ final class ClassDefinition {
             Object heritage,
             boolean hasHeritage,
             boolean namedByLiteral,
-            Object prototypeMembers,
-            Object staticMembers,
             String name,
             Context cx,
             VarScope scope) {
@@ -249,66 +269,16 @@ final class ClassDefinition {
         }
         f.setPrototype(constructorParent);
 
-        // the object literal of the methods is the prototype (and the home object of its methods)
-        ScriptableObject proto = (ScriptableObject) prototypeMembers;
+        // the prototype is the home object of the constructor and of the methods
+        ScriptableObject proto = (ScriptableObject) cx.newObject(scope);
         proto.setPrototype(protoParent);
-        // the parser placed constructor first; a computed ['constructor'] member replaced it
-        ScriptableObject.DescriptorInfo ctorSlot =
-                proto.getOwnPropertyDescriptor(cx, "constructor");
-        if (ctorSlot != null
-                && ctorSlot.isDataDescriptor()
-                && Undefined.isUndefined(ctorSlot.value)) {
-            proto.defineProperty("constructor", f, 0);
-        }
-        // the methods are non-enumerable
-        makeNonEnumerable(proto);
+        proto.defineProperty("constructor", f, ScriptableObject.DONTENUM);
         if (f instanceof JSFunction) {
             ((JSFunction) f).initClassHomeObject(proto);
         }
         f.setPrototypeProperty(proto);
         f.setPrototypePropertyAttributes(
                 ScriptableObject.DONTENUM | ScriptableObject.READONLY | ScriptableObject.PERMANENT);
-
-        ScriptableObject statics = (ScriptableObject) staticMembers;
-        Element[] instanceElements = takeElements(proto);
-        f.classFields = fields(instanceElements);
-        f.classPrivateMethods = privateMethods(instanceElements);
-        Element[] staticElements = takeElements(statics);
-        if (staticElements != null) {
-            // the home object of a static initializer or private method is the constructor
-            for (Element element : staticElements) {
-                if (element.initializer instanceof JSFunction
-                        && ((JSFunction) element.initializer).getHomeObject() == statics) {
-                    ((JSFunction) element.initializer).initClassHomeObject(f);
-                }
-            }
-            PrivateName.Method[] staticMethods = privateMethods(staticElements);
-            if (staticMethods != null) {
-                for (PrivateName.Method method : staticMethods) {
-                    PrivateName.addMethod(f, method);
-                }
-            }
-            f.classStaticElements = fields(staticElements);
-        }
-        for (Object id : ownKeys(statics)) {
-            ScriptableObject.DescriptorInfo own = statics.getOwnPropertyDescriptor(cx, id);
-            var desc =
-                    new ScriptableObject.DescriptorInfo(
-                            Boolean.FALSE,
-                            own.writable,
-                            own.configurable,
-                            own.getter,
-                            own.setter,
-                            own.value);
-            // the home object of a static method is the constructor
-            for (Object method : new Object[] {desc.value, desc.getter, desc.setter}) {
-                if (method instanceof JSFunction
-                        && ((JSFunction) method).getHomeObject() == statics) {
-                    ((JSFunction) method).initClassHomeObject(f);
-                }
-            }
-            f.defineOwnProperty(cx, id, desc);
-        }
         return f;
     }
 
@@ -319,29 +289,8 @@ final class ClassDefinition {
                 : ScriptRuntime.toString(heritage);
     }
 
-    private static Object[] ownKeys(ScriptableObject obj) {
-        try (var map = obj.startCompoundOp(false)) {
-            return obj.getIds(map, true, true);
-        }
-    }
-
     private static boolean isConstructor(Object value) {
         return AbstractEcmaObjectOperations.isConstructor(Context.getCurrentContext(), value);
-    }
-
-    private static void makeNonEnumerable(ScriptableObject obj) {
-        for (Object id : ownKeys(obj)) {
-            if (id instanceof Symbol) {
-                obj.setAttributes(
-                        (Symbol) id, obj.getAttributes((Symbol) id) | ScriptableObject.DONTENUM);
-            } else if (id instanceof Integer) {
-                obj.setAttributes(
-                        (Integer) id, obj.getAttributes((Integer) id) | ScriptableObject.DONTENUM);
-            } else {
-                String key = id.toString();
-                obj.setAttributes(key, obj.getAttributes(key) | ScriptableObject.DONTENUM);
-            }
-        }
     }
 
     /**

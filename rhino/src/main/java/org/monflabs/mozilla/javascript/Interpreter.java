@@ -341,6 +341,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
             case Icode.DERIVED_THIS:
             case Icode.AWAIT:
             case Icode.CLASS_ELEMENT_KEY:
+            case Icode.CLASS_ELEMENT:
                 // kind
                 return 1 + 1;
 
@@ -826,6 +827,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.IMPORT_CALL] = new DoImportCall();
         instructionObjs[base + Icode.AWAIT] = new DoAwait();
         instructionObjs[base + Icode.CLASS_ELEMENT_KEY] = new DoClassElementKey();
+        instructionObjs[base + Icode.CLASS_ELEMENT] = new DoClassElement();
         instructionObjs[base + Icode.CLASS_STATIC] = new DoClassStatic();
         instructionObjs[base + Icode.GLOBAL_LEXICALS] = new DoGlobalLexicals();
         instructionObjs[base + Icode.CLOSURE_EXPR] = new DoClosureExpr();
@@ -3700,19 +3702,25 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             Object value = stackTopValue(frame);
             frame.stack[frame.stackTop] =
-                    switch (frame.compilerData.itsICode[frame.pc++]) {
-                        case Node.FIELD_KEY_NAMED ->
-                                ScriptRuntime.classFieldKeyNamed(value, cx, frame.scope);
-                        case Node.FIELD_KEY_METHOD ->
-                                ScriptRuntime.classMethodKey(value, cx, frame.scope);
-                        case Node.FIELD_KEY_PRIVATE_NAME ->
-                                ScriptRuntime.newPrivateName(value, cx, frame.scope);
-                        case Node.FIELD_KEY_STATIC_BLOCK ->
-                                ScriptRuntime.classStaticBlockKey(value, cx, frame.scope);
-                        case Node.FIELD_KEY_ELEMENT ->
-                                ScriptRuntime.classElementKey(value, cx, frame.scope);
-                        default -> ScriptRuntime.classFieldKey(value, cx, frame.scope);
-                    };
+                    frame.compilerData.itsICode[frame.pc++] == Node.FIELD_KEY_PRIVATE_NAME
+                            ? ScriptRuntime.newPrivateName(value, cx, frame.scope)
+                            : ScriptRuntime.classElementKey(value, cx, frame.scope);
+            return null;
+        }
+    }
+
+    private static class DoClassElement extends KindInstruction {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object[] stack = frame.stack;
+            frame.stackTop -= 2;
+            int top = frame.stackTop;
+            Object key = stack[top + 1];
+            if (key == DOUBLE_MARK) {
+                key = ScriptRuntime.wrapNumber(frame.doubleStack[top + 1]);
+            }
+            ScriptRuntime.classElement(
+                    stack[top], key, stack[top + 2], frame.compilerData.itsICode[frame.pc++], cx);
             return null;
         }
     }
@@ -3827,14 +3835,12 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             Object[] stack = frame.stack;
-            frame.stackTop -= 3;
+            frame.stackTop -= 1;
             int top = frame.stackTop;
             stack[top] =
                     ScriptRuntime.defineClass(
                             stack[top],
                             stack[top + 1],
-                            stack[top + 2],
-                            stack[top + 3],
                             state.stringReg,
                             frame.compilerData.itsICode[frame.pc++],
                             cx,

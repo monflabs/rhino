@@ -1005,14 +1005,25 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 break;
 
             case Token.CLASS:
-                // constructor, heritage, prototype members, static members
-                for (int i = 0; i < 4; i++) {
-                    visitExpression(child, 0);
-                    child = child.getNext();
-                }
+                // constructor, heritage, then the elements
+                visitExpression(child, 0);
+                child = child.getNext();
+                visitExpression(child, 0);
                 addStringOp(Icode.CLASS_DEFINE, node.getString());
                 addUint8(node.getIntProp(Node.CLASS_FLAGS_PROP, 0));
-                stackChange(-3);
+                stackChange(-1);
+                for (child = child.getNext(); child != null; child = child.getNext()) {
+                    if (child.getFirstChild() == child.getLastChild()) {
+                        addStringOp(Token.STRING, child.getString());
+                        stackChange(1);
+                    } else {
+                        visitExpression(child.getFirstChild(), 0);
+                    }
+                    visitExpression(child.getLastChild(), 0);
+                    addIcode(Icode.CLASS_ELEMENT);
+                    addUint8(child.getIntProp(Node.CLASS_ELEMENT_PROP, 0));
+                    stackChange(-2);
+                }
                 break;
 
             case Token.IMPORT_CALL:

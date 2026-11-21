@@ -110,7 +110,10 @@ public class Node implements Iterable<Node> {
             FIELD_KEY_KIND_PROP = 51,
             // the flags of a CLASS (CLASS_*)
             CLASS_FLAGS_PROP = 52,
-            LAST_PROP = CLASS_FLAGS_PROP,
+            // the kind and flags of a CLASS_ELEMENT (ELEMENT_*); on an element of the AST of a
+            // class (ObjectProperty), ELEMENT_STATIC
+            CLASS_ELEMENT_PROP = 53,
+            LAST_PROP = CLASS_ELEMENT_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -126,16 +129,24 @@ public class Node implements Iterable<Node> {
             AWAIT_ITER_CLOSE_ABRUPT = 5;
 
     /**
-     * The kinds of Token#FIELD_KEY: the computed key of a field, the name of a field, the key of a
-     * private method, a new private name, the key of a static block, and the computed key of an
-     * element evaluated in source order.
+     * The kinds of Token#FIELD_KEY: a new private name (its child is the description), and
+     * ToPropertyKey of a computed key evaluated ahead of its use.
      */
-    public static final int FIELD_KEY_COMPUTED = 0,
-            FIELD_KEY_NAMED = 1,
-            FIELD_KEY_METHOD = 2,
-            FIELD_KEY_PRIVATE_NAME = 3,
-            FIELD_KEY_STATIC_BLOCK = 4,
-            FIELD_KEY_ELEMENT = 5;
+    public static final int FIELD_KEY_PRIVATE_NAME = 3, FIELD_KEY_ELEMENT = 5;
+
+    /**
+     * The kind of a Token#CLASS_ELEMENT, and its flags: a static element; an element whose function
+     * (a method with a computed or private key, the anonymous function of a field initializer) is
+     * named after its key when the class is defined.
+     */
+    public static final int ELEMENT_METHOD = 0,
+            ELEMENT_GETTER = 1,
+            ELEMENT_SETTER = 2,
+            ELEMENT_FIELD = 3,
+            ELEMENT_STATIC_BLOCK = 4,
+            ELEMENT_KIND_MASK = 7,
+            ELEMENT_STATIC = 8,
+            ELEMENT_NAMED = 16;
 
     /**
      * The flags of a Token#CLASS: it has an extends clause; it is named after the key of its
@@ -574,6 +585,8 @@ public class Node implements Iterable<Node> {
                 return "field_key_kind_prop";
             case CLASS_FLAGS_PROP:
                 return "class_flags_prop";
+            case CLASS_ELEMENT_PROP:
+                return "class_element_prop";
 
             default:
                 Kit.codeBug();

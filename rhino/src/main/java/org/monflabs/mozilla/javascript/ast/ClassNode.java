@@ -4,6 +4,7 @@
 
 package org.monflabs.mozilla.javascript.ast;
 
+import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
 
 /**
@@ -17,8 +18,7 @@ public class ClassNode extends AstNode {
     private Name className;
     private AstNode heritage;
     private FunctionNode constructor;
-    private ObjectLiteral prototypeMembers;
-    private ObjectLiteral staticMembers;
+    private final java.util.List<ObjectProperty> elements = new java.util.ArrayList<>();
     private Scope scope;
     private int sourceStart;
     private int sourceEnd;
@@ -94,22 +94,26 @@ public class ClassNode extends AstNode {
         }
     }
 
-    public ObjectLiteral getPrototypeMembers() {
-        return prototypeMembers;
+    /**
+     * The elements of the class other than its constructor, in source order: methods and accessors,
+     * and, with a {@link ClassFieldKey} in a computed key, fields, private methods and static
+     * blocks. A static element has {@link Node#ELEMENT_STATIC} as its {@link
+     * Node#CLASS_ELEMENT_PROP}.
+     */
+    public java.util.List<ObjectProperty> getElements() {
+        return elements;
     }
 
-    public void setPrototypeMembers(ObjectLiteral members) {
-        this.prototypeMembers = members;
-        members.setParent(this);
+    public void addElement(ObjectProperty element, boolean isStatic) {
+        if (isStatic) {
+            element.putIntProp(Node.CLASS_ELEMENT_PROP, Node.ELEMENT_STATIC);
+        }
+        elements.add(element);
+        element.setParent(this);
     }
 
-    public ObjectLiteral getStaticMembers() {
-        return staticMembers;
-    }
-
-    public void setStaticMembers(ObjectLiteral members) {
-        this.staticMembers = members;
-        members.setParent(this);
+    public static boolean isStatic(ObjectProperty element) {
+        return element.getIntProp(Node.CLASS_ELEMENT_PROP, 0) == Node.ELEMENT_STATIC;
     }
 
     public Scope getScope() {
@@ -157,8 +161,9 @@ public class ClassNode extends AstNode {
             if (constructor != null) {
                 constructor.visit(v);
             }
-            prototypeMembers.visit(v);
-            staticMembers.visit(v);
+            for (ObjectProperty element : elements) {
+                element.visit(v);
+            }
         }
     }
 }

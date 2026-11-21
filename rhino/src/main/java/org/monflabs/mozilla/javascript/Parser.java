@@ -7599,15 +7599,6 @@ public class Parser {
     }
 
     private void classBody(ClassNode cls, int pos) throws IOException {
-        ObjectLiteral prototypeMembers = new ObjectLiteral(pos);
-        ObjectLiteral staticMembers = new ObjectLiteral(pos);
-        List<AbstractObjectProperty> protoElems = new ArrayList<>();
-        List<AbstractObjectProperty> staticElems = new ArrayList<>();
-        // constructor is the first property of the prototype (ClassDefinition sets its value)
-        ObjectProperty constructorSlot = new ObjectProperty(pos);
-        constructorSlot.setKeyAndValue(
-                new Name(pos, "constructor"), new KeywordLiteral(pos, 0, Token.UNDEFINED));
-        protoElems.add(constructorSlot);
         for (; ; ) {
             int tt = peekToken();
             if (tt == Token.SEMI) {
@@ -7627,13 +7618,13 @@ public class Parser {
                     if (escaped) {
                         reportError("msg.invalid.escape");
                     }
-                    staticBlock(cls, staticElems);
+                    staticBlock(cls);
                     continue;
                 }
                 if (next == Token.LP || isFieldEnd("static")) {
                     // a method or a field named static
                     Name name = new Name(staticPos, "static");
-                    classMember(cls, name, staticPos, protoElems, false, true);
+                    classMember(cls, name, staticPos, false, true);
                     continue;
                 }
                 if (escaped) {
@@ -7648,23 +7639,13 @@ public class Parser {
                 reportError("msg.bad.prop");
                 break;
             }
-            classMember(
-                    cls, pname, propStart, isStatic ? staticElems : protoElems, isStatic, false);
+            classMember(cls, pname, propStart, isStatic, false);
         }
-        prototypeMembers.setElements(protoElems);
-        staticMembers.setElements(staticElems);
-        cls.setPrototypeMembers(prototypeMembers);
-        cls.setStaticMembers(staticMembers);
     }
 
     /** A method, getter or setter of a class; pname is the peeked (or synthesized) key. */
     private void classMember(
-            ClassNode cls,
-            AstNode pname,
-            int propStart,
-            List<AbstractObjectProperty> elems,
-            boolean isStatic,
-            boolean keyConsumed)
+            ClassNode cls, AstNode pname, int propStart, boolean isStatic, boolean keyConsumed)
             throws IOException {
         int ppos = ts.tokenBeg;
         if (!keyConsumed) {
@@ -7684,7 +7665,7 @@ public class Parser {
         boolean escaped = ts.nameHadEscape;
         if (!(pname instanceof GeneratorMethodDefinition)
                 && isFieldEnd(escaped || !(pname instanceof Name) ? null : propertyName)) {
-            classField(cls, pname, propStart, elems, isStatic, propertyName);
+            classField(cls, pname, propStart, isStatic, propertyName);
             return;
         }
         if (peekToken() != Token.LP && pname instanceof Name) {
@@ -7771,7 +7752,7 @@ public class Parser {
         ObjectProperty prop =
                 methodDefinition(ppos, propStart, key, entryKind, isGenerator, isAsync, true);
         ((FunctionNode) prop.getValue()).setInStrictMode(true);
-        elems.add(prop);
+        cls.addElement(prop, isStatic);
     }
 
     private static final int PRIVATE_GETTER = 1, PRIVATE_SETTER = 2, PRIVATE_OTHER = 3;
@@ -7910,17 +7891,12 @@ public class Parser {
     private boolean inFieldInitializer;
 
     /**
-     * A field of a class (FieldDefinition, 15.7): an entry of the object literal of the members of
-     * the class whose key is a {@link ClassFieldKey}, and whose value is the initializer as a
-     * method, called with the instance (or the constructor) as this.
+     * A field of a class (FieldDefinition, 15.7): an element whose key is a {@link ClassFieldKey},
+     * and whose value is the initializer as a method, called with the instance (or the constructor)
+     * as this.
      */
     private void classField(
-            ClassNode cls,
-            AstNode pname,
-            int propStart,
-            List<AbstractObjectProperty> elems,
-            boolean isStatic,
-            String propertyName)
+            ClassNode cls, AstNode pname, int propStart, boolean isStatic, String propertyName)
             throws IOException {
         if (pname instanceof ComputedPropertyKey) {
             propertyName = null;
@@ -7966,7 +7942,7 @@ public class Parser {
         if (value instanceof FunctionNode) {
             prop.setIsNormalMethod();
         }
-        elems.add(prop);
+        cls.addElement(prop, isStatic);
         if (isStatic) {
             cls.setHasStaticElements();
         }
@@ -7979,7 +7955,7 @@ public class Parser {
      * A class static block (ClassStaticBlock, 15.7): a static element whose initializer is a method
      * with the statements of the block as body, called with the constructor as this.
      */
-    private void staticBlock(ClassNode cls, List<AbstractObjectProperty> elems) throws IOException {
+    private void staticBlock(ClassNode cls) throws IOException {
         int pos = ts.tokenBeg;
         int lineno = lineNumber(), column = columnNumber();
         FunctionNode fn = new FunctionNode(pos);
@@ -8011,7 +7987,7 @@ public class Parser {
         ObjectProperty prop = new ObjectProperty(pos);
         prop.setKeyAndValue(key, fn);
         prop.setIsNormalMethod();
-        elems.add(prop);
+        cls.addElement(prop, true);
         cls.setHasStaticElements();
     }
 

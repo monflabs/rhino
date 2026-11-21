@@ -189,8 +189,7 @@ abstract class Icode {
             CALL_SPREAD = REQUIRE_OBJECT - 1,
             // IteratorClose of a for-of loop; operand: 1 for an abrupt completion
             ENUM_CLOSE = CALL_SPREAD - 1,
-            // Class definition: constructor, heritage, prototype and static members; operand: its
-            // Node#CLASS_FLAGS_PROP
+            // Class definition: constructor and heritage; operand: its Node#CLASS_FLAGS_PROP
             CLASS_DEFINE = ENUM_CLOSE - 1,
             // this of a derived constructor, or the super constructor called by super(...);
             // operand: the Node#DERIVED_THIS_PROP of the this
@@ -205,10 +204,13 @@ abstract class Icode {
             AWAIT = LITERAL_PROTO - 1,
             // import(): the referrer name, the specifier and the options (Token#IMPORT_CALL)
             IMPORT_CALL = AWAIT - 1,
-            // the key of a class element (Token#FIELD_KEY); operand: its kind
+            // a new private name or ToPropertyKey (Token#FIELD_KEY); operand: its kind
             CLASS_ELEMENT_KEY = IMPORT_CALL - 1,
+            // an element of the class under it and its key on the stack (Token#CLASS_ELEMENT);
+            // operand: its Node#CLASS_ELEMENT_PROP
+            CLASS_ELEMENT = CLASS_ELEMENT_KEY - 1,
             // the static elements of a class (Token#CLASS_STATIC)
-            CLASS_STATIC = CLASS_ELEMENT_KEY - 1,
+            CLASS_STATIC = CLASS_ELEMENT - 1,
             // the value of a name in the scope that a BINDNAME found (Node#BOUND_NAME_PROP)
             BOUND_NAME = CLASS_STATIC - 1,
             // a variable at a fixed position of the activation (Node#ACTIVATION_VAR_PROP)
@@ -458,6 +460,8 @@ abstract class Icode {
                 return "IMPORT_CALL";
             case CLASS_ELEMENT_KEY:
                 return "CLASS_ELEMENT_KEY";
+            case CLASS_ELEMENT:
+                return "CLASS_ELEMENT";
             case CLASS_STATIC:
                 return "CLASS_STATIC";
             case BOUND_NAME:

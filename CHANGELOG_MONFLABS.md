@@ -39,6 +39,40 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### A class is lowered to its elements, not to two object literals (2026-11-21)
+
+No behavior change. A class was compiled as its constructor, its heritage and two object literals, one for the
+members of the prototype and one for the static members, which the runtime then took apart. It is now `CLASS`
+(constructor, heritage) followed by one `CLASS_ELEMENT` per element of the body, in source order: both backends
+evaluate the key and the function of an element and call `ScriptRuntime.classElement`, which defines the method or
+accessor, or records the field, the private method or the static block (`ClassDefinition.element`).
+
+- Removed with the literals: the placeholder `constructor: undefined` entry that the runtime replaced; the
+  `ClassDefinition.FieldKey` objects passed as literal keys and their diversions in `fillObjectLiteral` and
+  `NewLiteralStorage`; the copy of the static members from their literal to the constructor, and the pass that
+  made the methods non-enumerable; `IRFactory.hoistComputedKeys` and its temporaries, which restored the source
+  order of the computed keys across the two literals; four of the six kinds of `FIELD_KEY`. 347 lines added, 415
+  removed.
+- A method is defined as the specification does (DefineMethodProperty), an accessor by a property definition
+  that keeps the other half of the pair, and each key goes through ToPropertyKey when its element is evaluated.
+- The home object of a method is set when its element is defined: its function is created as any closure.
+- AST: `ClassNode.getElements()` replaces `getPrototypeMembers()` and `getStaticMembers()`; a static element
+  carries `Node.ELEMENT_STATIC`.
+- New: `Token.CLASS_ELEMENT`, `Icode.CLASS_ELEMENT` (16 icode values remain free), `Node.CLASS_ELEMENT_PROP`.
+- The IR of a class is the same size as before (46 nodes for the sample of `IrSizeTest`): the gain is in what the
+  nodes mean, not in their number.
+- test262: no change. Not gated: the result of every class is the same.
+- Perf gate: one flag, `run.forof.cmp.ecma` +13.2% (5.9 ms → 6.7 ms in all three rounds), on a script without a
+  class whose compiled code is byte-identical before and after. It depends on what ran before in the JVM: +16%
+  after the `startup` benchmark alone, −4% after the five scripts that precede it, level after the `compile`
+  benchmark and when run alone (+1.1% over 7 rounds). The JIT's inlining decisions on the runtime are the same in
+  both builds. Taken as a different JIT state for the same code, not as a cost of the change; with `-Xbatch` such
+  a state is stable for a given build, so the rounds of one gate agree with each other.
+- Stress mode (`rhino.splitWeight=3`, `rhino.classUnits=3`): 4 failures, none on a class. Three exist without
+  this change (`NewTargetDirectCallTest` twice and `RobustnessFixesTest`, which inspect generated code); the
+  fourth, test262 `built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js` in
+  compiled sloppy mode, was not checked without it.
+
 ### A verification mode for the caches and the positional variables (2026-11-21)
 
 `-Drhino.verifyCaches=true` compares every answer of a shortcut with the lookup it replaces, and stops the script

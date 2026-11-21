@@ -7,8 +7,8 @@ package org.monflabs.mozilla.javascript.ast;
 import org.monflabs.mozilla.javascript.Token;
 
 /**
- * The key of a class field, in the object literal of the members of its class (a computed key of
- * that literal): the entry is a field rather than a property. Node type is {@link Token#FIELD_KEY}.
+ * The key of a class field, a private method or a static block, in the computed key of an element
+ * of its class ({@link ClassNode#getElements()}). Node type is {@link Token#FIELD_KEY}.
  */
 public class ClassFieldKey extends AstNode {
 

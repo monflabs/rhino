@@ -268,7 +268,8 @@ public class Token {
             ENUM_CLOSE_ABRUPT = ENUM_CLOSE + 1,
             CLASS =
                     ENUM_CLOSE_ABRUPT
-                            + 1, // a class; in the IR: its name, ScriptRuntime.defineClass
+                            + 1, // a class; in the IR: its name, constructor, heritage and
+            // CLASS_ELEMENTs
             // strict assignment to the name of a function expression: evaluates, then throws
             FN_NAME_ASSIGN = CLASS + 1,
             // await in an async function or a module (an identifier elsewhere); in the IR, what
@@ -276,11 +277,15 @@ public class Token {
             AWAIT = FN_NAME_ASSIGN + 1,
             // import(specifier [, options]): the referrer name, the specifier and the options
             IMPORT_CALL = AWAIT + 1,
-            // the key of a class element (ClassDefinition.FieldKey), of a kind
-            // (Node#FIELD_KEY_KIND_PROP)
+            // a new private name, or ToPropertyKey of a computed key (Node#FIELD_KEY_KIND_PROP); in
+            // the AST, the key of a class field
             FIELD_KEY = IMPORT_CALL + 1,
+            // an element of a CLASS: its key (NULL for a static block; a written key is the string
+            // of the node) and its function (NULL for a field without initializer), of a kind
+            // (Node#CLASS_ELEMENT_PROP)
+            CLASS_ELEMENT = FIELD_KEY + 1,
             // the static fields of a class, defined once its name is bound
-            CLASS_STATIC = FIELD_KEY + 1,
+            CLASS_STATIC = CLASS_ELEMENT + 1,
             // #name: a private name of a class; parser only (its string includes the #)
             PRIVATE_NAME = CLASS_STATIC + 1,
             // the value of its first child, after evaluating its second (a CHECK_TDZ): the
@@ -677,6 +682,8 @@ public class Token {
                 return "IMPORT_CALL";
             case FIELD_KEY:
                 return "FIELD_KEY";
+            case CLASS_ELEMENT:
+                return "CLASS_ELEMENT";
             case CLASS_STATIC:
                 return "CLASS_STATIC";
             case PRIVATE_NAME:

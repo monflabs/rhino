@@ -4592,14 +4592,12 @@ public class ScriptRuntime {
     }
 
     /**
-     * A class (Token#CLASS): its constructor (or null), heritage, prototype and static members; its
-     * name and its flags (Node#CLASS_FLAGS_PROP).
+     * A class (Token#CLASS): its constructor (or null) and heritage; its name and its flags
+     * (Node#CLASS_FLAGS_PROP). Its elements follow (#classElement).
      */
     public static Object defineClass(
             Object constructor,
             Object heritage,
-            Object prototypeMembers,
-            Object staticMembers,
             String name,
             int flags,
             Context cx,
@@ -4609,11 +4607,15 @@ public class ScriptRuntime {
                 heritage,
                 (flags & Node.CLASS_DERIVED) != 0,
                 (flags & Node.CLASS_NAMED_BY_LITERAL) != 0,
-                prototypeMembers,
-                staticMembers,
                 name,
                 cx,
                 scope);
+    }
+
+    /** An element of a class being defined (Token#CLASS_ELEMENT), of a Node#CLASS_ELEMENT_PROP. */
+    public static void classElement(
+            Object constructor, Object key, Object value, int flags, Context cx) {
+        ClassDefinition.element((BaseFunction) constructor, key, value, flags, cx);
     }
 
     /** ToPropertyKey (7.1.19): a symbol, or a string (converting an object may run code). */
@@ -6694,41 +6696,14 @@ public class ScriptRuntime {
         return wrapException(re, realm, cx);
     }
 
-    /**
-     * The key of a class field (Token#FIELD_KEY): ToPropertyKey of the written or computed key, in
-     * the order of the elements of the class.
-     */
-    public static Object classFieldKey(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(fieldKey(key), false, false);
-    }
-
-    /** The key of a class field whose initializer is an anonymous function the key names. */
-    public static Object classFieldKeyNamed(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(fieldKey(key), true, false);
-    }
-
-    /** The key of a private method or accessor of a class: its PrivateName. */
-    public static Object classMethodKey(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(key, false, true);
-    }
-
-    /** ToPropertyKey of the computed key of a class method, in the order of the elements. */
+    /** ToPropertyKey of a computed key, ahead of its use (Token#FIELD_KEY). */
     public static Object classElementKey(Object key, Context cx, VarScope scope) {
         return toPropertyKey(key);
-    }
-
-    /** The key of a class static block: it defines no field. */
-    public static Object classStaticBlockKey(Object key, Context cx, VarScope scope) {
-        return new ClassDefinition.FieldKey(null, false, false);
     }
 
     /** A new Private Name, for a private identifier declared by a class being evaluated. */
     public static Object newPrivateName(Object description, Context cx, VarScope scope) {
         return new PrivateName((String) description);
-    }
-
-    private static Object fieldKey(Object key) {
-        return key instanceof PrivateName ? key : toPropertyKey(key);
     }
 
     /** The static fields of a class, once its name is bound (Token#CLASS_STATIC). */
@@ -7206,13 +7181,6 @@ public class ScriptRuntime {
             // -1 for property getter, 1 for property setter, 0 for a regular value property
             int getterSetter = getterSetters == null ? 0 : getterSetters[i];
             Object value = propertyValues[i];
-
-            if (id instanceof ClassDefinition.FieldKey) {
-                // a field of a class, not a property of the literal of its members
-                ClassDefinition.addElement(
-                        object, (ClassDefinition.FieldKey) id, value, getterSetter);
-                continue;
-            }
 
             if (getterSetter == 2) {
                 // __proto__: value (B.3.1): sets the prototype to an object or null

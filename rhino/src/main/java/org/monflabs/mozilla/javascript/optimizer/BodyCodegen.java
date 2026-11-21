@@ -1702,23 +1702,40 @@ class BodyCodegen {
 
             case Token.CLASS:
                 {
-                    // constructor, heritage, prototype members, static members
-                    Node c = child;
-                    for (int i = 0; i < 4; i++) {
-                        generateExpression(c, node);
-                        c = c.getNext();
-                    }
+                    // constructor, heritage, then the elements
+                    Node heritage = child.getNext();
+                    generateExpression(child, node);
+                    generateExpression(heritage, node);
                     cfw.addPush(node.getString());
                     cfw.addPush(node.getIntProp(Node.CLASS_FLAGS_PROP, 0));
                     cfw.addALoad(contextLocal);
                     cfw.addALoad(variableObjectLocal);
                     addScriptRuntimeInvoke(
                             "defineClass",
-                            "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;"
+                            "(Ljava/lang/Object;Ljava/lang/Object;"
                                     + "Ljava/lang/String;I"
                                     + "Lorg/monflabs/mozilla/javascript/Context;"
                                     + "Lorg/monflabs/mozilla/javascript/VarScope;"
                                     + ")Ljava/lang/Object;");
+                    int outerHomeObjectLocal = savedHomeObjectLocal;
+                    savedHomeObjectLocal = -1;
+                    for (Node e = heritage.getNext(); e != null; e = e.getNext()) {
+                        cfw.add(ByteCode.DUP);
+                        if (e.getFirstChild() == e.getLastChild()) {
+                            cfw.addPush(e.getString());
+                        } else {
+                            generateExpression(e.getFirstChild(), e);
+                        }
+                        generateExpression(e.getLastChild(), e);
+                        cfw.addPush(e.getIntProp(Node.CLASS_ELEMENT_PROP, 0));
+                        cfw.addALoad(contextLocal);
+                        addScriptRuntimeInvoke(
+                                "classElement",
+                                "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I"
+                                        + "Lorg/monflabs/mozilla/javascript/Context;"
+                                        + ")V");
+                    }
+                    savedHomeObjectLocal = outerHomeObjectLocal;
                     break;
                 }
 
@@ -1744,14 +1761,10 @@ class BodyCodegen {
                 addScriptRuntimeInvoke(
                         type == Token.CLASS_STATIC
                                 ? "classStaticInit"
-                                : switch (node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0)) {
-                                    case Node.FIELD_KEY_NAMED -> "classFieldKeyNamed";
-                                    case Node.FIELD_KEY_METHOD -> "classMethodKey";
-                                    case Node.FIELD_KEY_PRIVATE_NAME -> "newPrivateName";
-                                    case Node.FIELD_KEY_STATIC_BLOCK -> "classStaticBlockKey";
-                                    case Node.FIELD_KEY_ELEMENT -> "classElementKey";
-                                    default -> "classFieldKey";
-                                },
+                                : node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0)
+                                                == Node.FIELD_KEY_PRIVATE_NAME
+                                        ? "newPrivateName"
+                                        : "classElementKey",
                         "(Ljava/lang/Object;"
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"
@@ -2657,7 +2670,12 @@ class BodyCodegen {
         } else if (ofn.fnode.isMethodDefinition()) {
             cfw.add(ByteCode.ACONST_NULL);
             Codegen.pushUndefined(cfw);
-            cfw.addALoad(savedHomeObjectLocal);
+            if (savedHomeObjectLocal < 0) {
+                // an element of a class: ClassDefinition sets its home object
+                cfw.add(ByteCode.ACONST_NULL);
+            } else {
+                cfw.addALoad(savedHomeObjectLocal);
+            }
         } else {
             cfw.add(ByteCode.ACONST_NULL);
             Codegen.pushUndefined(cfw);

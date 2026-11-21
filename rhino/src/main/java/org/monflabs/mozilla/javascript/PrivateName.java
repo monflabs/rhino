@@ -105,6 +105,17 @@ public final class PrivateName implements java.io.Serializable {
         map.put(method.name, method);
     }
 
+    /** The private method or accessor that obj has for name, or null. */
+    static Method findMethod(Scriptable obj, PrivateName name) {
+        Object element = find(obj, name);
+        return element instanceof Method ? (Method) element : null;
+    }
+
+    /** A static private method; or an accessor, which may be the one obj has, with both halves. */
+    static void defineMethod(Scriptable obj, Method method) {
+        elements(obj, true).put(method.name, method);
+    }
+
     /** PrivateGet (7.3.31). */
     static Object get(Object obj, PrivateName name, Context cx, VarScope scope) {
         Object element = find(obj, name);

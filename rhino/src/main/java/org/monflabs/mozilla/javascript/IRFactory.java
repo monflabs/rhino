@@ -395,19 +395,6 @@ public final class IRFactory {
                 return transformYield((Yield) node);
             case Token.IMPORT_CALL:
                 return transformImportCall((ImportCall) node);
-            case Token.FIELD_KEY:
-                {
-                    ClassFieldKey key = (ClassFieldKey) node;
-                    Node fieldKey = new Node(Token.FIELD_KEY, transform(key.getKey()));
-                    if (key.isNamed()) {
-                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_NAMED);
-                    } else if (key.isMethod()) {
-                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_METHOD);
-                    } else if (key.isStaticBlock()) {
-                        fieldKey.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_STATIC_BLOCK);
-                    }
-                    return fieldKey;
-                }
             default:
                 if (node instanceof ExpressionStatement) {
                     return transformExprStmt((ExpressionStatement) node);
@@ -1411,9 +1398,9 @@ public final class IRFactory {
     }
 
     /**
-     * A class: CLASS(constructor or null, heritage or null, prototype members, static members), its
-     * string being E or N (whether there is an extends clause) and the class name; see
-     * ClassDefinition. A named class binds its name in a scope around the definition.
+     * A class: CLASS(constructor or null, heritage or null, CLASS_ELEMENT...), its string being the
+     * class name; see ClassDefinition. A named class binds its name in a scope around the
+     * definition.
      */
     private Node transformClass(ClassNode cls) {
         Name className = cls.getClassName();
@@ -1435,24 +1422,6 @@ public final class IRFactory {
             }
             Node def = Node.newString(Token.CLASS, name);
             def.putIntProp(Node.CLASS_FLAGS_PROP, flags);
-            // the computed keys, evaluated in source order once the heritage is
-            List<String> temps = new ArrayList<>();
-            Node keys = hoistComputedKeys(cls, temps);
-            if (keys != null) {
-                if (cls.getHeritage() == null) {
-                    heritage = new Node(Token.COMMA, keys, heritage);
-                } else {
-                    String temp = parser.currentScriptOrFn.getNextTempName();
-                    parser.defineSymbol(Token.LET, temp, false);
-                    temps.add(temp);
-                    Node saved = createAssignment(Token.ASSIGN, parser.createName(temp), heritage);
-                    heritage =
-                            new Node(
-                                    Token.COMMA,
-                                    new Node(Token.COMMA, saved, keys),
-                                    parser.createName(temp));
-                }
-            }
             def.addChildToBack(heritage);
             def.addChildToFront(
                     cls.getConstructor() != null
@@ -1463,8 +1432,9 @@ public final class IRFactory {
                 cls.getConstructor()
                         .setFunctionName(new Name(cls.getConstructor().getPosition(), name));
             }
-            def.addChildToBack(transformObjectLiteral(cls.getPrototypeMembers()));
-            def.addChildToBack(transformObjectLiteral(cls.getStaticMembers()));
+            for (ObjectProperty element : cls.getElements()) {
+                def.addChildToBack(transformClassElement(element));
+            }
             def.setLineColumnNumber(cls.getLineno(), cls.getColumn());
             boolean hasStaticElements = cls.hasStaticElements();
             // let (#x = new private name, ...): the class body closes over its private names
@@ -1475,9 +1445,6 @@ public final class IRFactory {
                 newName.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_PRIVATE_NAME);
                 privateBinding.addChildToBack(newName);
                 let.addChildToBack(privateBinding);
-            }
-            for (String temp : temps) {
-                let.addChildToBack(Node.newString(Token.NAME, temp));
             }
             if (className == null) {
                 // the static fields of an anonymous class are defined at once
@@ -1510,61 +1477,66 @@ public final class IRFactory {
     }
 
     /**
-     * The computed keys of the elements of a class, static and not, are evaluated in source order
-     * (15.7.14 ClassDefinitionEvaluation step 27), whereas each literal of members evaluates its
-     * own: when both have computed keys, each is evaluated into a temporary of the class scope, in
-     * order, and the literals read them. Returns the assignments of the temporaries, or null.
+     * An element of a class: CLASS_ELEMENT(key, function), evaluated in source order; a written key
+     * is the string of the node instead of a child. The key is the computed key, the private name,
+     * or NULL for a static block; the function is the method, the initializer of a field (NULL
+     * without one) or the static block.
      */
-    private Node hoistComputedKeys(ClassNode cls, List<String> temps) {
-        List<ComputedPropertyKey> protoKeys = computedKeys(cls.getPrototypeMembers());
-        List<ComputedPropertyKey> staticKeys = computedKeys(cls.getStaticMembers());
-        if (protoKeys.isEmpty() || staticKeys.isEmpty()) {
-            return null;
+    private Node transformClassElement(ObjectProperty prop) {
+        int flags = ClassNode.isStatic(prop) ? Node.ELEMENT_STATIC : 0;
+        AstNode key = prop.getKey();
+        if (key instanceof GeneratorMethodDefinition) {
+            key = ((GeneratorMethodDefinition) key).getMethodName();
         }
-        List<ComputedPropertyKey> all = new ArrayList<>(protoKeys);
-        all.addAll(staticKeys);
-        all.sort((a, b) -> Integer.compare(a.getAbsolutePosition(), b.getAbsolutePosition()));
-        Node result = null;
-        for (ComputedPropertyKey key : all) {
-            AstNode expr = key.getExpression();
-            Node value;
-            if (expr instanceof ClassFieldKey) {
-                value = transform(expr);
+        AstNode computed =
+                key instanceof ComputedPropertyKey
+                        ? ((ComputedPropertyKey) key).getExpression()
+                        : null;
+        Node keyNode = null;
+        String name = null;
+        if (computed instanceof ClassFieldKey) {
+            ClassFieldKey fieldKey = (ClassFieldKey) computed;
+            if (fieldKey.isStaticBlock()) {
+                flags |= Node.ELEMENT_STATIC_BLOCK;
+                keyNode = new Node(Token.NULL);
             } else {
-                value = new Node(Token.FIELD_KEY, transform(expr));
-                value.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_ELEMENT);
+                keyNode = transform(fieldKey.getKey());
+                if (fieldKey.isMethod()) {
+                    // a private method or accessor, named after its private name
+                    flags |= elementKind(prop) | Node.ELEMENT_NAMED;
+                } else {
+                    flags |= Node.ELEMENT_FIELD | (fieldKey.isNamed() ? Node.ELEMENT_NAMED : 0);
+                }
             }
-            String temp = parser.currentScriptOrFn.getNextTempName();
-            parser.defineSymbol(Token.LET, temp, false);
-            temps.add(temp);
-            Node assign = createAssignment(Token.ASSIGN, parser.createName(temp), value);
-            result = result == null ? assign : new Node(Token.COMMA, result, assign);
-            key.setExpression(new Name(key.getPosition(), temp));
+        } else if (computed != null) {
+            flags |= elementKind(prop) | Node.ELEMENT_NAMED;
+            keyNode = transform(computed);
+        } else {
+            flags |= elementKind(prop);
+            name = Objects.toString(Parser.getPropKey(key));
         }
-        return result;
+        Node value = transform(prop.getValue());
+        Node element;
+        if (name != null) {
+            Node inferrableName = parser.createName(name);
+            inferrableName.setLineColumnNumber(key.getLineno(), key.getColumn());
+            inferNameIfMissing(
+                    inferrableName,
+                    value,
+                    prop.isGetterMethod() ? "get " : prop.isSetterMethod() ? "set " : null);
+            element = Node.newString(Token.CLASS_ELEMENT, name);
+            element.addChildToBack(value);
+        } else {
+            element = new Node(Token.CLASS_ELEMENT, keyNode, value);
+        }
+        element.putIntProp(Node.CLASS_ELEMENT_PROP, flags);
+        return element;
     }
 
-    /** The computed keys of the members whose evaluation is observable. */
-    private static List<ComputedPropertyKey> computedKeys(ObjectLiteral members) {
-        List<ComputedPropertyKey> keys = new ArrayList<>();
-        for (AbstractObjectProperty prop : members.getElements()) {
-            if (!(prop instanceof ObjectProperty)
-                    || !(((ObjectProperty) prop).getKey() instanceof ComputedPropertyKey)) {
-                continue;
-            }
-            ComputedPropertyKey key = (ComputedPropertyKey) ((ObjectProperty) prop).getKey();
-            AstNode expr = key.getExpression();
-            if (expr instanceof ClassFieldKey
-                    && (((ClassFieldKey) expr).isMethod()
-                            || ((ClassFieldKey) expr).isStaticBlock()
-                            || ((ClassFieldKey) expr).getKey() instanceof StringLiteral
-                            || ((ClassFieldKey) expr).getKey() instanceof Name)) {
-                // a private name, a static block or a written name
-                continue;
-            }
-            keys.add(key);
-        }
-        return keys;
+    private static int elementKind(ObjectProperty prop) {
+        return prop.isGetterMethod()
+                ? Node.ELEMENT_GETTER
+                : prop.isSetterMethod() ? Node.ELEMENT_SETTER : Node.ELEMENT_METHOD;
     }
 
     private Node transformNumber(NumberLiteral node) {
