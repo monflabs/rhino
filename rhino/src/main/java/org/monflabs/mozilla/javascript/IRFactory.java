@@ -1870,6 +1870,15 @@ public final class IRFactory {
         //     goto breakLabel;
         // instead of:
         //     goto labelDefault;
+        //
+        // If the case block declares anything, then it has its own scope which
+        // the switch expression must not be evaluated in, so the expression is
+        // first stored in a temporary outside that scope:
+        //
+        // {
+        //     let $tmp = expr;
+        //     { switch ($tmp) { ... } ... }
+        // }
 
         Scope block = Scope.splitScope(node);
         block.setLineColumnNumber(node.getLineno(), node.getColumn());
@@ -1883,8 +1892,9 @@ public final class IRFactory {
         // block.
         Scope savedScope = parser.currentScope;
         parser.currentScope = node;
+        Node switchExpr;
         try {
-            Node switchExpr = transform(node.getExpression());
+            switchExpr = transform(node.getExpression());
             node.addChildToBack(switchExpr);
 
             for (SwitchCase sc : node.getCases()) {
@@ -1912,10 +1922,31 @@ public final class IRFactory {
                 }
             }
             closeSwitch(block);
-            return block;
         } finally {
             parser.currentScope = savedScope;
         }
+        if (block.getSymbolTable() == null || !parser.compilerEnv.isLatestEcmaScript()) {
+            return block;
+        }
+        int lineno = node.getLineno(), column = node.getColumn();
+        Scope outer = parser.createScopeNode(Token.BLOCK, lineno, column);
+        parser.pushScope(outer);
+        try {
+            String tempName = parser.currentScriptOrFn.getNextTempName();
+            parser.defineSymbol(Token.LET, tempName, false);
+            node.replaceChild(switchExpr, parser.createName(tempName));
+            outer.addChildToBack(
+                    new Node(
+                            Token.EXPR_VOID,
+                            createAssignment(Token.ASSIGN, parser.createName(tempName), switchExpr),
+                            lineno,
+                            column));
+        } finally {
+            parser.popScope();
+        }
+        block.setParentScope(outer);
+        outer.addChildToBack(block);
+        return outer;
     }
 
     private Node transformThrow(ThrowStatement node) {
@@ -1953,6 +1984,8 @@ public final class IRFactory {
                     //   catch ( {message} ) { body }
                     // into:
                     //   catch ( $tempname ) { let {message} = $tempname; body }
+                    // or, for VERSION_ECMASCRIPT:
+                    //   catch ( $tempname ) { let {message} = $tempname; { body } }
 
                     // The exception will be stored in the temp name
                     String tempVarName = parser.currentScriptOrFn.getNextTempName();
@@ -1973,8 +2006,24 @@ public final class IRFactory {
                     tempVarNameNode.setIdentifier(tempVarName);
                     letVar.setInitializer(tempVarNameNode);
 
-                    // Prepend the destructuring "let" to the catch body
-                    catchBody.addChildToFront(letStatement);
+                    if (parser.compilerEnv.isLatestEcmaScript()) {
+                        // the pattern is bound in a scope of its own, around the block: its
+                        // expressions do not see the declarations of the block (14.15.2)
+                        Scope patternScope =
+                                new Scope(catchBody.getAbsolutePosition(), catchBody.getLength());
+                        patternScope.setLineColumnNumber(
+                                catchBody.getLineno(), catchBody.getColumn());
+                        patternScope.setParent(catchBody.getParent());
+                        patternScope.setParentScope(catchBody.getParentScope());
+                        catchBody.setParent(patternScope);
+                        catchBody.setParentScope(patternScope);
+                        patternScope.addChildToBack(letStatement);
+                        patternScope.addChildToBack(catchBody);
+                        catchBody = patternScope;
+                    } else {
+                        // Prepend the destructuring "let" to the catch body
+                        catchBody.addChildToFront(letStatement);
+                    }
 
                     // Our non-standard condition is not supported for destructuring (we throw an
                     // error at parse time), so here we can simply force it to an empty expression
@@ -2627,6 +2676,9 @@ public final class IRFactory {
                 }
             }
 
+            // the let bindings of the head are uninitialized until an iteration assigns them: the
+            // iterated object is evaluated in their temporal dead zone (14.7.5.6)
+            boolean uninitializedHead = parser.compilerEnv.isLatestEcmaScript();
             Node localBlock = new Node(Token.LOCAL_BLOCK);
             // a pattern in a for-in head destructures the key (14.7.5); JavaScript 1.7 read
             // [key, value] from it
@@ -2692,8 +2744,9 @@ public final class IRFactory {
             if ((declType == Token.LET || declType == Token.CONST)
                     && parser.compilerEnv.isLatestEcmaScript()
                     && hasBindings(loop)
-                    && mayCapture(assign, body)) {
-                // a new binding for each iteration
+                    && mayCapture(obj, assign, body)) {
+                // a new binding for each iteration; a closure of the head keeps the scope it was
+                // created in, whose bindings are never initialized (14.7.5.6, TDZ names)
                 newBody.addChildToBack(new Node(Token.COPY_SCOPE));
             }
             newBody.addChildToBack(new Node(Token.EXPR_VOID, assign));
@@ -2708,7 +2761,9 @@ public final class IRFactory {
                 // the loop by its LOCAL_BLOCK_PROP), and a throw closes it in the finally
                 loop.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
                 loop.addChildToFront(init);
-                if (type == Token.VAR || type == Token.LET) loop.addChildToFront(lhs);
+                if (type == Token.VAR || (type == Token.LET && !uninitializedHead)) {
+                    loop.addChildToFront(lhs);
+                }
                 // the enumeration is null until GetIterator succeeds (nothing to close before)
                 Node clear = new Node(Token.ITER_GUARD_INIT);
                 clear.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
@@ -2739,7 +2794,9 @@ public final class IRFactory {
                 return localBlock;
             }
             loop.addChildToFront(init);
-            if (type == Token.VAR || type == Token.LET) loop.addChildToFront(lhs);
+            if (type == Token.VAR || (type == Token.LET && !uninitializedHead)) {
+                loop.addChildToFront(lhs);
+            }
             localBlock.addChildToBack(loop);
 
             return localBlock;

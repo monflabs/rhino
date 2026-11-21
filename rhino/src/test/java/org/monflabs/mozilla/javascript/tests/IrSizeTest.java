@@ -31,7 +31,7 @@ class IrSizeTest {
                 "46 | async function f(y) { for await (var x of y) { if (x) break; } }",
                 "46 | class C { constructor() {} m() {} f = 1; #p() {} static { 1; } }",
                 "15 | function f(a = 1) {}",
-                "19 | function f(x) { switch (x) { case 1: let y = 2; return y; } }",
+                "24 | function f(x) { switch (x) { case 1: let y = 2; return y; } }",
             })
     void irNodeCount(int budget, String source) {
         int count = irNodeCount(source);

@@ -1275,8 +1275,9 @@ try { throw []; } catch ([a = () => x]) { let x = "inside"; }  // a() before: "i
 ```
 
 - The discriminant of a `switch` is evaluated before the block of its cases, and the parameter of a `catch` (with
-  its defaults) outside the block: neither sees the `let`/`const` declarations of the block. Not applied when the
-  block uses a direct `eval` or `with`.
+  its defaults) outside the block: neither sees the `let`/`const` declarations of the block, also when the block
+  uses a direct `eval` or `with`. The discriminant is evaluated into a temporary of a block around the switch,
+  and the pattern of a catch parameter is bound in a scope around the block.
 - **Why:** ECMA-262 2026, §14.12.4 (SwitchStatement evaluation), §14.15.2 (CatchClauseEvaluation).
 
 ### 1.75 Closures in the head of `for (let/const ... in/of ...)` see the loop bindings in their TDZ
@@ -1288,8 +1289,8 @@ f();   // before: "outside"   now: ReferenceError (x is in its temporal dead zon
 ```
 
 - The expression after `in`/`of` is evaluated where the loop's `let`/`const` bindings exist but are not
-  initialized: a closure created there that reads them throws a ReferenceError (the parser points it to bindings of
-  a block around the loop that are never initialized).
+  initialized: a closure created there that reads them throws a ReferenceError, also through a direct `eval`. The
+  closure keeps the scope it was created in, which no iteration initializes: each iteration has its own copy.
 - **Why:** ECMA-262 2026, §14.7.5.6 (ForIn/OfHeadEvaluation, TDZnames).
 
 ### 1.76 `push` and `unshift` go through index properties of the prototypes

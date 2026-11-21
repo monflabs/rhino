@@ -21,6 +21,7 @@ import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.Name;
 import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.ast.SwitchStatement;
 import org.monflabs.mozilla.javascript.ast.Symbol;
 
 /**
@@ -979,13 +980,20 @@ public class NodeTransformer {
      * The innermost scope that defines name around reference, in its function or an enclosing one.
      */
     protected static Scope enclosingDefiningScope(Name reference, String name) {
+        AstNode child = reference;
         for (AstNode node = reference.getParent(); node != null; node = node.getParent()) {
-            if (node instanceof Scope) {
+            if (node instanceof SwitchStatement
+                    && ((SwitchStatement) node).getExpression() == child) {
+                // the discriminant is evaluated outside of the block of the clauses, which
+                // IRFactory#transformSwitch made the parent of the switch
+                node = node.getParent();
+            } else if (node instanceof Scope) {
                 Scope found = ((Scope) node).getDefiningScope(name);
                 if (found != null) {
                     return found;
                 }
             }
+            child = node;
         }
         return null;
     }

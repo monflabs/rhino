@@ -9,8 +9,6 @@ package org.monflabs.mozilla.javascript;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -790,140 +788,6 @@ public class Parser {
             body.addChildToFront(statement);
             statement.setParent(body);
         }
-    }
-
-    /**
-     * Renames the let and const bindings of a block scope that code evaluated outside of the block
-     * names (the discriminant of a switch, the parameter of a catch): the uses inside the block
-     * follow the new name, and the outside code resolves the name in the enclosing scopes.
-     */
-    private void hideBlockBindings(Scope scope, AstNode outside, Collection<String> keep) {
-        if (!compilerEnv.isLatestEcmaScript()
-                || outside == null
-                || scope.getSymbolTable() == null
-                || mayLookUpNamesDynamically(scope)) {
-            return;
-        }
-        Set<String> outsideNames = new HashSet<>();
-        outside.visit(
-                node -> {
-                    if (node instanceof Name) {
-                        outsideNames.add(((Name) node).getIdentifier());
-                    }
-                    return true;
-                });
-        Set<String> renamed = new HashSet<>();
-        for (Symbol symbol : scope.getSymbolTable().values()) {
-            if ((symbol.getDeclType() == Symbol.Type.LET
-                            || symbol.getDeclType() == Symbol.Type.CONST)
-                    && outsideNames.contains(symbol.getName())
-                    && !keep.contains(symbol.getName())) {
-                renamed.add(symbol.getName());
-            }
-        }
-        if (renamed.isEmpty()) {
-            return;
-        }
-        Set<AstNode> outsideNodes = new HashSet<>();
-        outside.visit(
-                node -> {
-                    outsideNodes.add(node);
-                    return true;
-                });
-        List<Name> uses = new ArrayList<>();
-        scope.visit(
-                node -> {
-                    if (outsideNodes.contains(node)) {
-                        return false;
-                    }
-                    if (node instanceof Name
-                            && renamed.contains(((Name) node).getIdentifier())
-                            && !isPropertyName((Name) node)
-                            && definingScope((Name) node) == scope) {
-                        uses.add((Name) node);
-                    }
-                    return true;
-                });
-        for (String name : renamed) {
-            Symbol symbol = scope.getSymbolTable().remove(name);
-            symbol.setName(name + "$block");
-            scope.getSymbolTable().put(symbol.getName(), symbol);
-        }
-        for (Name use : uses) {
-            use.setIdentifier(use.getIdentifier() + "$block");
-        }
-    }
-
-    /**
-     * The expression of a for-in/of head with let or const is evaluated where the bindings of the
-     * loop exist but are not initialized (ForIn/OfHeadEvaluation, TDZnames): a closure created
-     * there sees them in their temporal dead zone. Its references to them are renamed to bindings
-     * of a block around the loop that are never initialized.
-     */
-    private AstNode hideLoopHeadBindings(Loop loop) {
-        if (!(loop instanceof ForInLoop)
-                || !compilerEnv.isLatestEcmaScript()
-                || !(((ForInLoop) loop).getIterator() instanceof VariableDeclaration)) {
-            return loop;
-        }
-        ForInLoop forIn = (ForInLoop) loop;
-        VariableDeclaration decl = (VariableDeclaration) forIn.getIterator();
-        if (decl.getType() != Token.LET && decl.getType() != Token.CONST) {
-            return loop;
-        }
-        List<String> names = new ArrayList<>();
-        for (VariableInitializer vi : decl.getVariables()) {
-            collectBoundNames(vi.getTarget(), names);
-        }
-        List<Name> uses = new ArrayList<>();
-        forIn.getIteratedObject()
-                .visit(
-                        node -> {
-                            if (node instanceof FunctionNode) {
-                                node.visit(
-                                        inner -> {
-                                            if (inner instanceof Name
-                                                    && names.contains(
-                                                            ((Name) inner).getIdentifier())
-                                                    && !isPropertyName((Name) inner)
-                                                    && !isWithin(
-                                                            definingScope((Name) inner), node)) {
-                                                // not shadowed in the closure
-                                                uses.add((Name) inner);
-                                            }
-                                            return true;
-                                        });
-                                return false;
-                            }
-                            return true;
-                        });
-        if (uses.isEmpty()) {
-            return loop;
-        }
-        Scope block = new Scope(loop.getPosition(), loop.getLength());
-        block.setLineColumnNumber(loop.getLineno(), loop.getColumn());
-        block.setParentScope(loop.getParentScope());
-        loop.setParentScope(block);
-        block.addChild(loop);
-        for (Name use : uses) {
-            String tdzName = use.getIdentifier() + "$tdz";
-            if (block.getSymbol(tdzName) == null) {
-                Symbol symbol = new Symbol(Symbol.Type.LET, tdzName);
-                symbol.setNode(use);
-                block.putSymbol(symbol);
-            }
-            use.setIdentifier(tdzName);
-        }
-        return block;
-    }
-
-    private static boolean isWithin(AstNode node, AstNode ancestor) {
-        for (AstNode n = node; n != null; n = n.getParent()) {
-            if (n == ancestor) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** The innermost scope around a name that declares it, by the parents of the AST. */
@@ -2767,7 +2631,7 @@ public class Parser {
                 return doLoop();
 
             case Token.FOR:
-                return hideLoopHeadBindings(forLoop());
+                return forLoop();
 
             case Token.TRY:
                 return tryStatement();
@@ -3090,8 +2954,6 @@ public class Parser {
                 inSingleStatementContext = savedInSingleStatementContext;
                 inSingleStatementDeclContext = savedInSingleStatementDeclContext;
             }
-            // the discriminant is evaluated before the block of the cases (14.12.4)
-            hideBlockBindings(pn, pn.getExpression(), Collections.emptySet());
             return pn;
         } finally {
             popScope();
@@ -3560,10 +3422,6 @@ public class Parser {
                 }
                 if (varName != null && compilerEnv.isLatestEcmaScript()) {
                     checkCatchParameterRedeclaration(varName, catchScope);
-                    // the parameter is bound outside the block (14.15.2 CatchClauseEvaluation)
-                    List<String> paramNames = new ArrayList<>();
-                    collectBoundNames(varName, paramNames);
-                    hideBlockBindings(catchScope, varName, paramNames);
                 }
 
                 tryEnd = getNodeEnd(catchScope);

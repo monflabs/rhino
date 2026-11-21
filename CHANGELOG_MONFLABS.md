@@ -39,6 +39,32 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Scopes instead of renamed bindings for switch, catch and for-in/of heads (2026-11-20)
+
+The parser renamed bindings to keep code evaluated outside of a block from seeing its declarations: `x$block` for
+the discriminant of a `switch` and the parameter of a `catch`, `x$tdz` for the head of a `for (let ... in/of ...)`.
+The renaming was skipped when the block used a direct `eval` or `with`, which kept the old behavior, and the head
+of a loop had no such check at all. Each case has a scope now, and `Parser.hideBlockBindings` and
+`hideLoopHeadBindings` are gone:
+
+- **switch**: when the clauses declare a binding, the discriminant is evaluated into a temporary of a block around
+  the block of the clauses (`IRFactory.transformSwitch`), as upstream Rhino does since its commit `5a3d0b3d1`.
+- **catch**: the pattern of a destructured parameter is bound in a scope around the block of the clause, not at the
+  start of that block.
+- **for-in/of**: the `let` of the head no longer stores `undefined` before the iterated object is evaluated, and a
+  closure in that expression makes each iteration copy the scope: the closure keeps the original scope, which is
+  never initialized.
+
+Fixed under `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.74 and 1.75, which lose their exception):
+
+```js
+(function (x) { switch (x) { case 1: let x = 2; eval("1"); return x; } })(1);   // before: ReferenceError   now: 2
+var f; for (let q of (f = () => eval("q"), [1])) f();                           // before: 1   now: ReferenceError
+```
+
+`ScopeEnvironmentTest` covers them. The IR of a switch whose clauses declare a binding grows by five nodes (the
+block and the temporary), reflected in `IrSizeTest`.
+
 ### `NodeTransformer` split: the temporal dead zone and the allocation of variables (2026-11-20)
 
 `NodeTransformer` had grown from 605 to 1,640 lines, with the semantics of let/const and an optimization in the

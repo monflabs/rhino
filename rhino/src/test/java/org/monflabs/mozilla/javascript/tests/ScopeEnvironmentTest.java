@@ -16,21 +16,89 @@ import org.monflabs.mozilla.javascript.testutils.Utils;
 class ScopeEnvironmentTest {
 
     @Test
-    @Disabled("the switch discriminant is renamed, not scoped: not with eval")
+    void switchDiscriminant() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                2, "(function(x) { switch (x) { case 1: let x = 2; return x; } })(1)");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                2, "(function(x) { switch (x) { case 1: let x = 2; return (() => x)(); } })(1)");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "outer",
+                "(function() { var x = 'outer';"
+                        + " return (function() {"
+                        + " switch (x) { case 'outer': let x = 'inner'; } return x; })(); })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                1,
+                "(function(x) { switch ((() => x)()) { case 1: let x = 2; return 1; }"
+                        + " return 0; })(1)");
+        // the bindings of the clauses, declared by a pattern
+        Utils.assertWithAllModes_ECMASCRIPT(
+                3,
+                "(function(x) { switch (x) { case 1: let [x, y] = [1, 2]; return x + y; } })(1)");
+    }
+
+    @Test
     void switchDiscriminantWithEval() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 2, "(function(x) { switch (x) { case 1: let x = 2; eval('1'); return x; } })(1)");
     }
 
     @Test
-    @Disabled("the catch parameter is renamed, not scoped: not with eval")
+    void catchParameter() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                5, "var x = 'a'; try { throw {a: 5}; } catch ({[x]: v}) { let x; v; }");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                5,
+                "(function() { var x = 'a';"
+                        + " try { throw {a: 5}; } catch ({[x]: v}) { let x = 1; return v; } })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                6,
+                "(function() { var x = 'a';"
+                        + " try { throw {a: 5}; }"
+                        + " catch ({[x]: v, w = () => x}) { let x = 1; return v + x; } })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "a",
+                "(function() { var x = 'a';"
+                        + " try { throw {}; } catch ({w = () => x}) { let x = 1; return w(); } })()");
+        // leaving the two scopes of the catch by a jump
+        Utils.assertWithAllModes_ECMASCRIPT(
+                3,
+                "(function() { var n = 0;"
+                        + " for (var i = 0; i < 3; i++) {"
+                        + " try { throw [i]; } catch ([v]) { let f = () => v; n += f(); continue; }"
+                        + " } return n; })()");
+    }
+
+    @Test
     void catchParameterWithEval() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 5, "var x = 'a'; try { throw {a: 5}; } catch ({[x]: v}) { let x; eval('1'); v; }");
     }
 
     @Test
-    @Disabled("the for-of head is renamed, not scoped: not with eval")
+    void forOfHead() {
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError",
+                "(function() { var f;"
+                        + " try { for (let q of (f = () => q, [1])) return f(); }"
+                        + " catch (e) { return e.name; } })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError",
+                "(function() { var f;"
+                        + " try { for (let q in (f = () => q, {a: 1})) return f(); }"
+                        + " catch (e) { return e.name; } })()");
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "ReferenceError",
+                "(function() { try { for (let q of [q]) return 1; }"
+                        + " catch (e) { return e.name; } })()");
+        // the closures of the body see the binding of their iteration
+        Utils.assertWithAllModes_ECMASCRIPT(
+                "1,2",
+                "(function() { var f, g = [];"
+                        + " for (let q of (f = () => q, [1, 2])) g.push(() => q);"
+                        + " return g.map(h => h()).join(); })()");
+    }
+
+    @Test
     void forOfHeadWithEval() {
         Utils.assertWithAllModes_ECMASCRIPT(
                 "ReferenceError",

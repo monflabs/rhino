@@ -6881,9 +6881,6 @@ public class ScriptRuntime {
         if (name.endsWith("$block")) {
             return name.substring(0, name.length() - "$block".length());
         }
-        if (name.endsWith("$tdz")) {
-            return name.substring(0, name.length() - "$tdz".length());
-        }
         return name;
     }
 
