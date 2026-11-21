@@ -129,6 +129,7 @@ changes.
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
 | 2.4 | A script that compiled mode falls back to interpreting is logged | all |
 | 2.5 | Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups | all |
+| 2.6 | Sixteen bug fixes taken from upstream Rhino | all |
 
 ---
 
@@ -1911,3 +1912,22 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
   the heap while it is parsed.
 - **Why:** both are implementation limits, which ECMA-262 leaves to the host; reaching them must not take the host
   down.
+
+### 2.6 Sixteen bug fixes taken from upstream Rhino
+
+```js
+(-0.5).toString(2);          // before: "0.1"   now: "-0.1"
+"abc".indexOf("", -1);       // before: -1      now: 0
+(255n).toLocaleString(16);   // before: "ff"    now: "255" (the argument is a locale, not a radix)
+```
+
+- Bug fixes of upstream Rhino that this fork lacked, applied in all language versions as upstream does: three
+  compiled-mode fixes (a call on a variable typed as a number, a bare parameter statement in a function called
+  directly, the lookup of `f.prototype`), `super[k]++` in the interpreter, `Number.prototype.toString(radix)` and
+  `toPrecision` (padding zeros of some values below 0.1, as `(0.0625).toPrecision(10)`), `String.prototype.indexOf`, `BigInt.prototype.toLocaleString`, the `ArrayBuffer` transfer methods
+  (no species constructor), `TypedArray.prototype.with`, the `this` of a `FinalizationRegistry` callback, the
+  `stack` of an error with a null prototype, three source map fixes and the E4X constructor properties.
+- The list, with the upstream commit of each, is in [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md).
+- **Why:** each corrects a result that the specification or the source map format defines otherwise; none is a
+  behavior a script is expected to rely on.
+

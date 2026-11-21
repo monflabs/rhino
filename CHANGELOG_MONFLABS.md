@@ -39,6 +39,39 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Sixteen fixes taken from upstream Rhino (2026-11-21)
+
+Upstream master has 77 commits that the fork lacks. Sixteen of its bug fixes apply to this tree without touching
+a behavior that the fork gates, and were ported with their tests (upstream commit in parentheses). As upstream
+does, they apply to all language versions:
+
+- compiled mode: a call on a variable typed as a number (`82e0fa065`), a bare parameter statement in a function
+  called directly (`78a2696cd`), the lookup of `f.prototype` (`e50a44d7b`);
+- interpreter: `super[k]++` and `super.x++` wrote the key as the value (`0787cf250`);
+- numbers: `toString(radix)` between -1 and 0 lost the sign (`94d78da67`), `toPrecision` below 0.1 (`f5535d705`);
+- built-ins: `String.prototype.indexOf` with an empty search and a negative position (`6047d427e`),
+  `BigInt.prototype.toLocaleString` took its argument as a radix (`5f98a38f2`), `ArrayBuffer` transfer methods
+  used the species constructor (`55e638712`), `TypedArray.prototype.with` read the length after coercing its
+  arguments (`d790000aa`), `this` of a `FinalizationRegistry` callback (`0b17de15d`), a `NullPointerException`
+  reading `stack` of an error with a null prototype (`b196830ae`);
+- source maps: the VLQ decoder, the JSON parser and `ignoreList` (`9a9be8117`, `82ee1dc5b`, `7b358ed8d`);
+- E4X: constructor properties only on the XML constructor (`1ed72ea3f`).
+
+Not taken:
+
+- fixes that the fork already has under `VERSION_ECMASCRIPT` and keeps gated: numeric keys passed to JSON
+  callbacks, `++`/`--` on `super` properties with a BigInt or a key evaluated once, `subarray` with infinite
+  indexes, constructor proxies after revocation, `Object.fromEntries` with index keys, `trimLeft`/`trimRight`,
+  method names in `Function.prototype.toString`, noncharacters in URI decoding, multiplication of 0 by a
+  negative integer, the `prototype` of arrow functions in compiled mode (upstream's tests of the last four are
+  added: they pass);
+- what the fork implements itself: per-iteration scopes, const assignment errors, switch and catch scopes,
+  `SharedArrayBuffer`, the Uint8Array base64 and hex methods, class-file splitting and the constant pool limit;
+- the Math functions backported from V8 (`465152056`), which conflict in `NativeMath`: `Math.exp(1)` and a few
+  others differ from V8 in the last digit, which the specification allows;
+- `InterpreterV2`, the class-file dynamic constants, the Promise methods for Java and the serialization flag
+  (51 files, which conflicts in four engine files): left for a merge of upstream.
+
 ### Modules are parsed once (2026-11-21)
 
 A module was parsed twice. The first parse checked the early errors and recorded text edits (imports blanked out,
