@@ -85,6 +85,12 @@ on every script, and test262 and the Mozilla tests must then pass as without the
 - `-Drhino.classUnits=3` spreads the functions of every script over 3 classes;
 - `-Drhino.wideJumps=true` makes every branch wide.
 
+A fourth one checks rules that no assertion enforces otherwise:
+
+- `-Drhino.verifyCaches=true` compares every answer of the property cache, of the global name cache and of the
+  variables read at a fixed position with the lookup they replace, and stops the script when they differ. To run
+  after a change to the slot maps, the scopes or the allocation of variables.
+
 ```bash
 RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test -Drhino.splitWeight=3 -DupdateTest262properties
 git diff tests/testsrc/test262.properties   # a test that fails only split is a splitting bug

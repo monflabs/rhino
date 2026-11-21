@@ -108,11 +108,11 @@ public final class PropertyCache {
         if (own != null) {
             return own.getValue(receiver);
         }
-        return e.prototype == null ? Scriptable.NOT_FOUND : inherited(e, receiver);
+        return e.prototype == null ? Scriptable.NOT_FOUND : inherited(e, receiver, name);
     }
 
     /** {@link #cached} for a receiver without the property. */
-    private static Object inherited(Entry e, ScriptableObject receiver) {
+    private static Object inherited(Entry e, ScriptableObject receiver, String name) {
         Scriptable proto = e.prototype.get();
         if (e.epoch != epoch || proto == null || receiver.getPrototype() != proto) {
             return Scriptable.NOT_FOUND;
@@ -120,6 +120,9 @@ public final class PropertyCache {
         Slot s = e.slot.get();
         if (s == null || s.stale) {
             return Scriptable.NOT_FOUND;
+        }
+        if (CacheVerifier.ON) {
+            CacheVerifier.inheritedSlot(proto, name, s);
         }
         return s.getValue(receiver);
     }

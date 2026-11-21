@@ -114,6 +114,9 @@ public final class GlobalNameCache {
         if (slot == null || slot.stale || ((TopLevel) scope).getMap().size() != e.topSize) {
             return null;
         }
+        if (CacheVerifier.ON) {
+            CacheVerifier.globalSlot((TopLevel) scope, name, slot, e.lexical);
+        }
         return slot;
     }
 

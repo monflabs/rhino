@@ -1931,3 +1931,13 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
 - **Why:** each corrects a result that the specification or the source map format defines otherwise; none is a
   behavior a script is expected to rely on.
 
+### 2.7 `jsc` compiles a script with a `for-in` loop
+
+*Fixed in all language versions since 2026-11-21: the former result was a defect that no script can rely on.*
+
+```
+$ echo 'for (var k in {a: 1}) print(k);' > t.js && jsc t.js
+before: java.lang.NullPointerException (Context.getCurrentContext() is null)   now: t.class
+```
+
+- The class compiler read the language version from the current `Context`, and `jsc` compiles without one.

@@ -39,6 +39,37 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### A verification mode for the caches and the positional variables (2026-11-21)
+
+`-Drhino.verifyCaches=true` compares every answer of a shortcut with the lookup it replaces, and stops the script
+with an `IllegalStateException` when they differ (`CacheVerifier`). The rules these shortcuts rely on are enforced
+in other classes, and until now only by tests of values:
+
+- `PropertyCache`: the cached slot is the first one a walk of the prototype chain finds for the name (the rule:
+  every change to an object of a cached chain calls `invalidate()`, from 8 sites in the slot maps);
+- `GlobalNameCache`: the cached slot is the one the top scope, then the global object, has for the name;
+- a variable read at a fixed position of its activation: the slot is the one the activation has for its name;
+- a variable of an enclosing function read at a fixed position: no scope between the code and that activation
+  declares the name, and all of them are declarative scopes (the rule: `VariableAllocation` proved it when
+  compiling; nothing checked it for a binding created at run time).
+
+Off by default, as a constant the JIT folds away. With it on, the tests of `rhino`, test262 and the Mozilla tests
+pass, in compiled and interpreted mode: no rule is broken today. With `invalidate()` disabled on purpose, the mode
+reports the stale answers of `PropertyCacheTest`. It is a stress mode like `rhino.splitWeight`, to run after a
+change to the slot maps, the scopes or the allocation of variables.
+
+### `jsc` compiled no script with a `for-in` loop (2026-11-21)
+
+The class compiler read the language version from the current `Context` to choose how a `for-in` loop
+enumerates, and the `jsc` tool compiles without one: any script with a `for-in` loop failed with a
+`NullPointerException`. It now reads the version of the compiler environment, as the rest of the compiler does.
+Inherited from upstream; fixed in all language versions (BACKWARD_COMPATIBILITY.md 2.7).
+
+- `function f() { var x = 1; return x(); }` threw a `VerifyError` in compiled mode with a build of
+  2026-10-22 and stock Rhino 1.8.0 and 1.9.0; the current build throws the expected `TypeError` (which change fixed
+  it was not traced). A test now covers it.
+- Tests: `DefectsFixedInAllVersionsTest`.
+
 ### The perf gate compiles in the foreground, and its bands are recalibrated (2026-11-21)
 
 No engine change. The gate's JVMs now run with `-Xbatch`, so that a JIT compilation blocks the script that asked

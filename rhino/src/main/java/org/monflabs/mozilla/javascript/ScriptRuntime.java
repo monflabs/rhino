@@ -2802,6 +2802,9 @@ public class ScriptRuntime {
         }
         for (VarScope s = scope; s != null; s = s.getParentScope()) {
             if (s instanceof NativeCall && ((NativeCall) s).function.getDescriptor() == owner) {
+                if (CacheVerifier.ON) {
+                    CacheVerifier.outerVar(scope, (NativeCall) s, name);
+                }
                 return (NativeCall) s;
             }
         }

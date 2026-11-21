@@ -153,6 +153,8 @@ public final class NativeCall extends DeclarationScope {
             // copied into a promoted map, or a function declaration defined after the activation
             slot = getMap().query(function.getParamOrVarName(index), 0);
             vars[index] = slot;
+        } else if (CacheVerifier.ON) {
+            CacheVerifier.activationSlot(this, function.getParamOrVarName(index), slot);
         }
         return slot;
     }

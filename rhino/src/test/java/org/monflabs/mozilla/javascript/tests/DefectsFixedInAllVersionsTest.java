@@ -4,7 +4,13 @@
 
 package org.monflabs.mozilla.javascript.tests;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
+import org.monflabs.mozilla.javascript.CompilerEnvirons;
+import org.monflabs.mozilla.javascript.Context;
+import org.monflabs.mozilla.javascript.optimizer.ClassCompiler;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
 /**
@@ -59,5 +65,27 @@ class DefectsFixedInAllVersionsTest {
     void symbolOnTheLeftOfInstanceof() {
         assertInBothVersions(false, "function C() {} Symbol() instanceof C.bind()");
         assertInBothVersions(false, "function C() {} Symbol() instanceof C");
+    }
+
+    @Test
+    void callOfANumberVariable() {
+        assertInBothVersions(
+                "TypeError",
+                "function f() { var x = 1; return x(); }"
+                        + " try { f(); 'no error'; } catch (e) { e.name; }");
+    }
+
+    /** As the jsc tool does: there is no current Context while it compiles. */
+    @Test
+    void forInCompiledWithoutACurrentContext() {
+        assertNull(Context.getCurrentContext());
+        Object[] classes =
+                new ClassCompiler(new CompilerEnvirons())
+                        .compileToClassFiles(
+                                "var o = {a: 1}; for (var k in o) { o[k]; }",
+                                "forin.js",
+                                1,
+                                "ForIn");
+        assertTrue(classes.length >= 2);
     }
 }

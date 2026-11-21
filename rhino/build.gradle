@@ -11,6 +11,9 @@ dependencies {
 }
 
 tasks.withType(Test).configureEach {
+    if (System.getProperty('rhino.verifyCaches') != null) {
+        systemProperty 'rhino.verifyCaches', System.getProperty('rhino.verifyCaches')
+    }
     if (project.hasProperty('jfrTestRecording')) {
         def jfrDir = layout.buildDirectory.dir("jfr/${name}").get().asFile
         doFirst {

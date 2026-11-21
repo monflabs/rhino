@@ -112,7 +112,8 @@ Where a future edit can break things without any error:
   miscompiles (commit `7441cc4e2`).
 - `Splitter` and the compile retry ladder exist only because of the JVM's class-file and JIT size limits.
 
-None of these rules is enforced by assertions, only by tests.
+None of these rules was enforced by assertions, only by tests. Since 2026-11-21 the first two are checked by a
+stress mode, `-Drhino.verifyCaches=true` (see [Stress modes](validation.md#stress-modes)).
 
 ## Difficulty by area
 
