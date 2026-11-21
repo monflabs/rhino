@@ -51,6 +51,7 @@ import org.monflabs.mozilla.javascript.ast.GeneratorMethodDefinition;
 import org.monflabs.mozilla.javascript.ast.IdeErrorReporter;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
 import org.monflabs.mozilla.javascript.ast.ImportCall;
+import org.monflabs.mozilla.javascript.ast.ImportMeta;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
@@ -1082,10 +1083,79 @@ public class Parser {
      * export declarations, recorded in {@link #moduleInfo}.
      */
     AstRoot parseModule(String sourceString, String sourceURI, int lineno) {
-        moduleInfo = new ModuleInfo(sourceString);
+        moduleInfo = new ModuleInfo();
         AstRoot root = parse(sourceString, sourceURI, lineno);
         checkModuleExports(root);
-        return root;
+        return moduleFunction(root, sourceString.length(), sourceURI, lineno);
+    }
+
+    /**
+     * Makes the statements of a parsed module the body of the generator function that its {@link
+     * ModuleRecord} runs: the function and its prologue are parsed from {@link
+     * ModuleInfo#functionSource()}, then given the statements, the scopes and the bindings of the
+     * module. An imported binding is not one of the function: its name resolves in the {@link
+     * ModuleScope}.
+     */
+    private AstRoot moduleFunction(AstRoot module, int sourceLength, String sourceURI, int lineno) {
+        AstRoot wrapper =
+                new Parser(compilerEnv, errorReporter)
+                        .parse(moduleInfo.functionSource(), sourceURI, lineno);
+        FunctionNode fn = moduleFunctionNode(wrapper.getFirstChild());
+        AstNode body = fn.getBody();
+        List<AstNode> statements = new ArrayList<>();
+        for (Node n = module.getFirstChild(); n != null; n = n.getNext()) {
+            statements.add((AstNode) n);
+        }
+        module.removeChildren();
+        for (AstNode statement : statements) {
+            body.addChildToBack(statement);
+            statement.setParent(body);
+            statement.visit(
+                    node -> {
+                        if (node instanceof ScriptNode) {
+                            return false;
+                        }
+                        if (node.getType() == Token.EXPR_RESULT) {
+                            // a statement of a function: it has no completion value
+                            node.setType(Token.EXPR_VOID);
+                        }
+                        if (node instanceof Scope) {
+                            Scope scope = (Scope) node;
+                            if (scope.getParentScope() == module) {
+                                scope.setParentScope(fn);
+                            } else {
+                                scope.setTop(fn);
+                            }
+                        }
+                        return true;
+                    });
+        }
+        Set<String> imported = new HashSet<>();
+        for (ModuleInfo.ImportEntry ie : moduleInfo.importEntries) {
+            imported.add(ie.localName());
+        }
+        if (module.getSymbolTable() != null) {
+            for (Symbol symbol : module.getSymbolTable().values()) {
+                if (symbol.getDeclType() == Symbol.Type.FUNCTION_LET) {
+                    // lexically declared for the early errors of the module; in the function, a
+                    // function declaration like any other
+                    symbol.setDeclType(Symbol.Type.FUNCTION_VAR);
+                }
+            }
+        }
+        fn.adoptSymbols(module, imported);
+        fn.setRequiresActivation();
+        fn.setRawSourceBounds(0, sourceLength);
+        return wrapper;
+    }
+
+    /** The function of {@link ModuleInfo#functionSource()}: a parenthesized function expression. */
+    private static FunctionNode moduleFunctionNode(Node statement) {
+        AstNode expression = ((ExpressionStatement) statement).getExpression();
+        while (expression instanceof ParenthesizedExpression) {
+            expression = ((ParenthesizedExpression) expression).getExpression();
+        }
+        return (FunctionNode) expression;
     }
 
     /**
@@ -1376,12 +1446,8 @@ public class Parser {
             }
             if (moduleInfo == null) {
                 reportError("msg.import.meta");
-            } else {
-                // a call, which no assignment or destructuring can target
-                moduleInfo.replace(pos, ts.tokenEnd, ModuleInfo.RECORD_PARAM + ".importMeta()");
             }
-            // not an assignment target (the rewritten body reads the record's property)
-            KeywordLiteral meta = new KeywordLiteral(pos, ts.tokenEnd - pos, Token.THIS);
+            ImportMeta meta = new ImportMeta(pos, ts.tokenEnd - pos);
             meta.setLineColumnNumber(lineno, column);
             return meta;
         }
@@ -1469,7 +1535,7 @@ public class Parser {
         for (String[] b : bindings) {
             moduleInfo.importEntries.add(new ModuleInfo.ImportEntry(request, b[0], b[1]));
         }
-        return blankModuleItem(start, requestEnd);
+        return endModuleItem(start, requestEnd);
     }
 
     /** The end of the last module request parsed by #moduleRequest. */
@@ -1567,8 +1633,8 @@ public class Parser {
         }
     }
 
-    /** The end of an import or export: a semicolon, or ASI; the statement is blanked out. */
-    private AstNode blankModuleItem(int start, int end) throws IOException {
+    /** The end of an import or export: a semicolon, or ASI; nothing of it is left to run. */
+    private AstNode endModuleItem(int start, int end) throws IOException {
         int tt = peekFlaggedToken();
         if ((tt & CLEAR_TI_MASK) == Token.SEMI) {
             consumeToken();
@@ -1578,9 +1644,7 @@ public class Parser {
                 && (tt & TI_AFTER_EOL) == 0) {
             reportError("msg.no.semi.stmt");
         }
-        moduleInfo.blank(start, end);
-        EmptyStatement empty = new EmptyStatement(start, end - start);
-        return empty;
+        return new EmptyStatement(start, end - start);
     }
 
     private void addExport(
@@ -1615,7 +1679,7 @@ public class Parser {
                     request,
                     exportName == null ? ModuleInfo.ALL_BUT_DEFAULT : ModuleInfo.NAMESPACE,
                     null);
-            return blankModuleItem(start, requestEnd);
+            return endModuleItem(start, requestEnd);
         }
         if (tt == Token.LC) {
             consumeToken();
@@ -1638,7 +1702,7 @@ public class Parser {
                 for (String[] spec : specs) {
                     addExport(spec[1], request, spec[0], null);
                 }
-                return blankModuleItem(start, requestEnd);
+                return endModuleItem(start, requestEnd);
             } else {
                 for (int i = 0; i < specs.size(); i++) {
                     if (!localIsReference.get(i)) {
@@ -1647,7 +1711,7 @@ public class Parser {
                     }
                     addExport(specs.get(i)[1], null, null, specs.get(i)[0]);
                 }
-                return blankModuleItem(start, rcEnd);
+                return endModuleItem(start, rcEnd);
             }
         }
         if (tt == Token.DEFAULT) {
@@ -1658,7 +1722,6 @@ public class Parser {
             return exportDefault(start);
         }
         // export VariableStatement / Declaration: the declared names are exported
-        int keywordEnd = start + "export".length();
         AstNode decl;
         List<String> names = new ArrayList<>();
         if (tt == Token.VAR || tt == Token.CONST || tt == Token.LET) {
@@ -1689,13 +1752,11 @@ public class Parser {
         for (String name : names) {
             addExport(name, null, null, name);
         }
-        moduleInfo.blank(start, keywordEnd);
         return decl;
     }
 
     /** export default ... (16.2.3): a declaration, or an expression bound to *default*. */
     private AstNode exportDefault(int start) throws IOException {
-        int afterDefault = ts.tokenEnd;
         int tt = peekToken();
         boolean isAsync = tt == Token.NAME && isAsyncFunctionStart();
         if (tt == Token.FUNCTION || isAsync) {
@@ -1708,19 +1769,17 @@ public class Parser {
             }
             if (fn.getFunctionName() != null) {
                 addExport("default", null, null, fn.getFunctionName().getIdentifier());
-                moduleInfo.blank(start, afterDefault);
             } else {
                 // function () {}: a declaration of *default*, named "default"
                 addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
                 moduleInfo.anonymousDefaultFunction = true;
-                int lp = fn.getPosition() + fn.getLp();
-                moduleInfo.replace(
-                        start,
-                        lp,
-                        (fn.isAsync()
-                                        ? "async function "
-                                        : fn.isES6Generator() ? "function* " : "function ")
-                                + ModuleInfo.DEFAULT_BINDING);
+                Name name = new Name(fn.getAbsolutePosition(), ModuleInfo.DEFAULT_BINDING);
+                fn.setFunctionName(name);
+                defineFunctionSymbol(
+                        FunctionNode.FUNCTION_STATEMENT,
+                        FunctionNode.FUNCTION_STATEMENT,
+                        name,
+                        fn.isES6Generator());
             }
             return fn;
         }
@@ -1732,28 +1791,44 @@ public class Parser {
                 collectBoundNames(
                         ((VariableDeclaration) decl).getVariables().get(0).getTarget(), names);
                 addExport("default", null, null, names.get(0));
-                moduleInfo.blank(start, afterDefault);
                 return decl;
             }
             // class {}: a declaration of *default*, named "default"
             ClassNode cls = classDefinition(false);
             addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
-            int end = getNodeEnd(cls);
-            moduleInfo.replace(
-                    start, afterDefault, "const " + ModuleInfo.DEFAULT_BINDING + " = {default: ");
-            moduleInfo.insert(end, "}.default;");
-            return cls;
+            return defaultBinding(start, cls);
         }
         // export default AssignmentExpression;
         AstNode expr = assignExpr();
         addExport("default", null, null, ModuleInfo.DEFAULT_BINDING);
-        int end = getNodeEnd(expr);
-        moduleInfo.replace(
-                start, afterDefault, "const " + ModuleInfo.DEFAULT_BINDING + " = {default: (");
-        moduleInfo.insert(end, ")}.default");
-        ExpressionStatement stmt = new ExpressionStatement(expr, false);
-        autoInsertSemicolon(stmt);
-        return stmt;
+        VariableDeclaration decl = defaultBinding(start, expr);
+        autoInsertSemicolon(decl);
+        return decl;
+    }
+
+    /**
+     * const *default* = value: the binding of export default with an expression or an anonymous
+     * class, which IRFactory names "default" (NamedEvaluation).
+     */
+    private VariableDeclaration defaultBinding(int start, AstNode value) {
+        int length = getNodeEnd(value) - start;
+        VariableDeclaration decl = new VariableDeclaration(start, length);
+        decl.setType(Token.CONST);
+        decl.setLineColumnNumber(value.getLineno(), value.getColumn());
+        VariableInitializer vi = new VariableInitializer(start, length);
+        vi.setType(Token.CONST);
+        vi.setLineColumnNumber(value.getLineno(), value.getColumn());
+        vi.setTarget(new Name(start, ModuleInfo.DEFAULT_BINDING));
+        vi.setInitializer(value);
+        decl.addVariable(vi);
+        decl.setIsStatement(true);
+        defineSymbol(Token.CONST, ModuleInfo.DEFAULT_BINDING);
+        Symbol symbol = currentScope.getSymbol(ModuleInfo.DEFAULT_BINDING);
+        if (symbol != null) {
+            // the temporal dead zone of the binding ends with the declaration
+            symbol.setNode(vi);
+        }
+        return decl;
     }
 
     /**
@@ -2173,7 +2248,7 @@ public class Parser {
                     return;
                 }
             }
-            if (moduleInfo != null && currentScope == currentScriptOrFn) {
+            if (isModuleTopLevel() && currentScope == currentScriptOrFn) {
                 // the top-level functions of a module are lexically declared (16.2.1.1)
                 defineSymbol(Symbol.Type.FUNCTION_LET, name.getIdentifier());
                 return;

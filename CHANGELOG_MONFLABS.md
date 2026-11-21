@@ -39,6 +39,27 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Modules are parsed once (2026-11-21)
+
+A module was parsed twice. The first parse checked the early errors and recorded text edits (imports blanked out,
+`export default` and `import.meta` replaced); the edited text was then wrapped as the source of a generator
+function and compiled, which parsed it a second time as a script. The module is now parsed once, with the module
+goal, and `Parser.moduleFunction` makes its statements, scopes and bindings the body of the generator function:
+
+- only the function and its prologue (`record.init("a", () => a, ...); yield;`) are parsed from generated text;
+  the source of the module is never rewritten;
+- `import.meta` is a node (`ast/ImportMeta`), lowered to a read from the record; `export default` of an expression
+  or of an anonymous class is a `const` of the default binding, which `IRFactory` names `default`; an anonymous
+  default function is given the default binding as its name;
+- `ModuleRecord.load` compiles the module text through `Context` with the module goal set on the
+  `CompilerEnvirons`, so the compile retries of a large module work as for a script;
+- `ModuleInfo` no longer holds the source nor edits, and `generatorSource` is gone.
+
+Effects: a module is lexed with the module goal only (an HTML-like comment was accepted by the second parse), the
+source positions of its functions refer to the module text, and loading parses the text once.
+
+In a module, only the top-level function declarations are lexically declared; those of a function body were too.
+
 ### Seven defects fixed in all language versions (2026-11-21)
 
 Seven fixes were active only under `VERSION_ECMASCRIPT`, which kept defects alive under `VERSION_ES6` that no

@@ -3217,7 +3217,13 @@ public class Context implements Closeable {
             p.calledByCompileFunction = true;
         }
 
-        AstRoot ast = p.parse(sourceString, sourceName, lineno);
+        AstRoot ast;
+        if (compilerEnv.isModule()) {
+            ast = p.parseModule(sourceString, sourceName, lineno);
+            compilerEnv.setModuleInfo(p.moduleInfo);
+        } else {
+            ast = p.parse(sourceString, sourceName, lineno);
+        }
         if (returnFunction) {
             // parser no longer adds function to script node
             if (!(ast.getFirstChild() != null && ast.getFirstChild().getType() == Token.FUNCTION)) {

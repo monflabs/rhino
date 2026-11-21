@@ -307,6 +307,24 @@ public class CompilerEnvirons {
         this.inEval = inEval;
     }
 
+    /** Whether the source is a module (ECMA-262 16.2), compiled to the function of its body. */
+    boolean isModule() {
+        return module;
+    }
+
+    void setModule(boolean module) {
+        this.module = module;
+    }
+
+    /** What the parse of a module recorded, once it is parsed. */
+    ModuleInfo getModuleInfo() {
+        return moduleInfo;
+    }
+
+    void setModuleInfo(ModuleInfo moduleInfo) {
+        this.moduleInfo = moduleInfo;
+    }
+
     public boolean isInEval() {
         return inEval;
     }
@@ -512,6 +530,8 @@ public class CompilerEnvirons {
     private boolean allowNewTarget;
     Set<String> activationNames;
     private boolean inEval;
+    private boolean module;
+    private ModuleInfo moduleInfo;
     private Predicate<String> evalForbiddenVarNames;
     private Predicate<String> evalPrivateNames;
     private boolean evalInFieldInitializer;

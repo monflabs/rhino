@@ -43,6 +43,7 @@ import org.monflabs.mozilla.javascript.ast.GeneratorExpressionLoop;
 import org.monflabs.mozilla.javascript.ast.GeneratorMethodDefinition;
 import org.monflabs.mozilla.javascript.ast.IfStatement;
 import org.monflabs.mozilla.javascript.ast.ImportCall;
+import org.monflabs.mozilla.javascript.ast.ImportMeta;
 import org.monflabs.mozilla.javascript.ast.InfixExpression;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.KeywordLiteral;
@@ -344,9 +345,13 @@ public final class IRFactory {
             case Token.IF:
                 return transformIf((IfStatement) node);
 
+            case Token.THIS:
+                if (node instanceof ImportMeta) {
+                    return transformImportMeta((ImportMeta) node);
+                }
+            // fall through
             case Token.TRUE:
             case Token.FALSE:
-            case Token.THIS:
             case Token.NULL:
             case Token.UNDEFINED:
             case Token.DEBUGGER:
@@ -1730,7 +1735,7 @@ public final class IRFactory {
         if (parser.currentScope != null) Kit.codeBug();
         parser.currentScope = node;
         outerScopeIsStrict = node.isInStrictMode();
-        if (parser.moduleInfo == null && !parser.compilerEnv.isInEval()) {
+        if (!parser.compilerEnv.isModule() && !parser.compilerEnv.isInEval()) {
             splitIfTooLarge(node, Splitter.SCRIPT_KEY);
         }
         Node body = new Node(Token.BLOCK);
@@ -3566,10 +3571,26 @@ public final class IRFactory {
         return scope;
     }
 
+    /** import.meta: read from the record of the module, the parameter of its function. */
+    private Node transformImportMeta(ImportMeta node) {
+        int pos = node.getAbsolutePosition();
+        FunctionCall call = new FunctionCall(pos, node.getLength());
+        call.setTarget(
+                new PropertyGet(
+                        new Name(pos, ModuleInfo.RECORD_PARAM), new Name(pos, "importMeta")));
+        call.setLineColumnNumber(node.getLineno(), node.getColumn());
+        return transform(call);
+    }
+
     /** Infer function name is missing on rhs. In the future, should also handle class names. */
     private void inferNameIfMissing(Object left, Node right, String prefix) {
         if (parser.compilerEnv.getLanguageVersion() < Context.VERSION_ES6) {
             return;
+        }
+        if (left instanceof Name
+                && ModuleInfo.DEFAULT_BINDING.equals(((Name) left).getIdentifier())) {
+            // export default: an anonymous function or class is named "default"
+            left = new Name(((Name) left).getPosition(), "default");
         }
 
         if (right != null

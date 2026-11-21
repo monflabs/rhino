@@ -13,8 +13,8 @@ import java.util.Set;
 
 /**
  * What the module-goal parse of a source records: its import and export entries (ECMA-262 16.2.1.6
- * Source Text Module Records) and the edits that turn it into the body of a generator function (see
- * {@link ModuleRecord}).
+ * Source Text Module Records). The parser makes the statements of the module the body of a
+ * generator function (see {@link ModuleRecord}).
  */
 final class ModuleInfo {
     /** The binding name of the default export of an anonymous declaration or an expression. */
@@ -44,8 +44,6 @@ final class ModuleInfo {
     record ExportEntry(
             String exportName, ModuleRequest moduleRequest, String importName, String localName) {}
 
-    private record Edit(int start, int end, String text) {}
-
     final Set<ModuleRequest> requestedModules = new LinkedHashSet<>();
     final List<ImportEntry> importEntries = new ArrayList<>();
     final List<ExportEntry> localExportEntries = new ArrayList<>();
@@ -61,41 +59,8 @@ final class ModuleInfo {
     /** Whether the module awaits at its top level: its body is an async generator. */
     boolean hasTopLevelAwait;
 
-    private final String source;
-    private final List<Edit> edits = new ArrayList<>();
-
-    ModuleInfo(String source) {
-        this.source = source;
-        if (source.startsWith("#!")) {
-            // a hashbang comment is only one at the start of the source: blanked out of the body
-            int end = 2;
-            while (end < source.length() && !ScriptRuntime.isJSLineTerminator(source.charAt(end))) {
-                end++;
-            }
-            blank(0, end);
-        }
-    }
-
     void addRequest(ModuleRequest request) {
         requestedModules.add(request);
-    }
-
-    /** Replaces source[start, end) by blanks, keeping the line terminators. */
-    void blank(int start, int end) {
-        StringBuilder sb = new StringBuilder(end - start);
-        for (int i = start; i < end; i++) {
-            char c = source.charAt(i);
-            sb.append(c == '\n' || c == '\r' || c == ' ' || c == ' ' ? c : ' ');
-        }
-        edits.add(new Edit(start, end, sb.toString()));
-    }
-
-    void replace(int start, int end, String text) {
-        edits.add(new Edit(start, end, text));
-    }
-
-    void insert(int pos, String text) {
-        edits.add(new Edit(pos, pos, text));
     }
 
     /**
@@ -130,11 +95,11 @@ final class ModuleInfo {
     }
 
     /**
-     * The source of the generator function: the edited module body, with a prologue that hands the
-     * getters of the exported local bindings to the record, then yields (the end of
-     * InitializeEnvironment). The prologue is on the first line, so line numbers are kept.
+     * The source of the generator function that the body of the module runs in, with its prologue:
+     * it hands the getters of the exported local bindings to the record, then yields (the end of
+     * InitializeEnvironment). The parser moves the statements of the module after the prologue.
      */
-    String generatorSource() {
+    String functionSource() {
         Set<String> locals = new LinkedHashSet<>();
         for (ExportEntry ee : localExportEntries) {
             locals.add(ee.localName());
@@ -150,15 +115,7 @@ final class ModuleInfo {
             first = false;
             sb.append('"').append(local).append("\", () => ").append(local);
         }
-        sb.append("); yield; ");
-        edits.sort((a, b) -> Integer.compare(a.start, b.start));
-        int pos = 0;
-        for (Edit e : edits) {
-            sb.append(source, pos, e.start).append(e.text);
-            pos = e.end;
-        }
-        sb.append(source, pos, source.length());
-        sb.append("\n})");
+        sb.append("); yield; })");
         return sb.toString();
     }
 }

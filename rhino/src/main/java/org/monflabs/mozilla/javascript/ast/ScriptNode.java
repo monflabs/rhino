@@ -301,6 +301,30 @@ public class ScriptNode extends Scope {
         return symbols;
     }
 
+    /**
+     * Takes over the symbols of another script, whose code becomes the body of this function: its
+     * own bindings, except some, become bindings of this function, and those of its blocks
+     * variables of it.
+     */
+    public void adoptSymbols(ScriptNode other, java.util.Collection<String> except) {
+        if (variableNames != null) codeBug();
+        for (Symbol symbol : other.symbols) {
+            if (symbol.getContainingTable() == other) {
+                if (except.contains(symbol.getName())) {
+                    continue;
+                }
+                if (symbolTable == null) {
+                    symbolTable = new java.util.LinkedHashMap<>(5);
+                }
+                symbolTable.put(symbol.getName(), symbol);
+                symbol.setContainingTable(this);
+            }
+            symbols.add(symbol);
+        }
+        joinVarScopes(other, this);
+        tempNumber = Math.max(tempNumber, other.tempNumber);
+    }
+
     public void setSymbols(List<Symbol> symbols) {
         this.symbols = symbols;
     }

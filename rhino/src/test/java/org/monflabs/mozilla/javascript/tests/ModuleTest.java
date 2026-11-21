@@ -384,4 +384,27 @@ class ModuleTest {
                                             "m2"));
                 });
     }
+
+    @Test
+    void topLevelAwaitInStatements() throws IOException {
+        write(
+                "tla.js",
+                "var r = [];\n"
+                        + "try { r.push(await 1); } catch (e) { await null; } finally { r.push(await 2); }\n"
+                        + "for (var i = await 0; i < 1; i++) { r.push(await 3); }\n"
+                        + "for (var k in await { a: 1 }) { r.push(k); }\n"
+                        + "for (var v of await [4]) { r.push(v); }\n"
+                        + "{ r.push(await 5); }\n"
+                        + "export const result = r.join();\n");
+        inAllModes(
+                new PathModuleLoader(dir),
+                (cx, scope) -> {
+                    Path main = dir.resolve("tla.js");
+                    Scriptable ns =
+                            cx.evaluateModule(
+                                    scope,
+                                    Module.source(main.toString(), Files.readString(main), main));
+                    assertEquals("1,2,3,a,4,5", get(ns, "result"));
+                });
+    }
 }

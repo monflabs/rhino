@@ -134,19 +134,27 @@ public final class ModuleRecord {
             registry.put(module.name(), record);
             return record;
         }
-        CompilerEnvirons env = new CompilerEnvirons();
-        env.initFromContext(cx);
-        Parser parser = new Parser(env, env.getErrorReporter());
-        parser.parseModule(module.text(), module.name(), 1);
-        ModuleInfo info = parser.moduleInfo;
+        // the module is compiled to the generator function that its body runs in
+        CompilerEnvirons[] environs = new CompilerEnvirons[1];
+        ModuleScope scope = new ModuleScope(realm);
+        Callable generatorFunction =
+                (Callable)
+                        cx.evaluateScript(
+                                ScriptCompileSpec.fromSource(module.text())
+                                        .sourceName(module.name())
+                                        .lineno(1)
+                                        .compilerEnvironsProcessor(
+                                                env -> {
+                                                    env.setModule(true);
+                                                    environs[0] = env;
+                                                })
+                                        .build(),
+                                scope);
+        ModuleInfo info = environs[0].getModuleInfo();
         record = new ModuleRecord(module, realm, info);
         registry.put(module.name(), record);
         try {
-            ModuleScope scope = new ModuleScope(realm);
-            record.generatorFunction =
-                    (Callable)
-                            cx.evaluateString(
-                                    scope, info.generatorSource(), module.name(), 1, null);
+            record.generatorFunction = generatorFunction;
             record.scope = scope;
             for (ModuleInfo.ModuleRequest request : info.requestedModules) {
                 record.requested.put(
