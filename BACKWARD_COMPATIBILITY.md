@@ -1249,6 +1249,9 @@ Object.getOwnPropertyDescriptor(Function.prototype, "caller").get; // now %Throw
   arguments of the running call, as before) and `caller` (undefined: the caller is not tracked) properties; the
   others have neither, and reading
   them throws a TypeError.
+- During a call of `f` that made no arguments object (the body does not name `arguments` or `f.arguments`),
+  `Reflect.getOwnPropertyDescriptor(f, "arguments").value` is `null`, as outside of a call (before: `null` or
+  `undefined`, depending on whether the compiler gave the function an activation).
 - **Why:** ECMA-262 2026, §10.2.4 (AddRestrictedFunctionProperties), §17.1 (the own `caller` and `arguments` of a
   sloppy function are an allowed extension). Decision 2026-10-14.
 

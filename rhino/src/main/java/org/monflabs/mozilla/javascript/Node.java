@@ -113,7 +113,10 @@ public class Node implements Iterable<Node> {
             // the kind and flags of a CLASS_ELEMENT (ELEMENT_*); on an element of the AST of a
             // class (ObjectProperty), ELEMENT_STATIC
             CLASS_ELEMENT_PROP = 53,
-            LAST_PROP = CLASS_ELEMENT_PROP,
+            // a TRY whose finally block only runs when an exception leaves the try block: the
+            // code that completes it otherwise has done the work of the block already
+            FINALLY_ON_THROW_PROP = 54,
+            LAST_PROP = FINALLY_ON_THROW_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -587,6 +590,8 @@ public class Node implements Iterable<Node> {
                 return "class_flags_prop";
             case CLASS_ELEMENT_PROP:
                 return "class_element_prop";
+            case FINALLY_ON_THROW_PROP:
+                return "finally_on_throw_prop";
 
             default:
                 Kit.codeBug();

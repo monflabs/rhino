@@ -39,6 +39,36 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### `f.arguments` during a call that made no arguments object (2026-11-22)
+
+Read other than by a property access that names it (`Reflect.getOwnPropertyDescriptor(f, "arguments")`,
+`f["arg" + "uments"]`), the `arguments` property of a sloppy function gave `undefined` during a call of `f` that
+has an activation but no arguments object, and `null` during a call without an activation. Whether a function
+has an activation is a decision of the compiler: a function split into chunks (`Splitter`) always has one, so the
+value changed with the size of the function. Under `VERSION_ECMASCRIPT` it is now `null` in both cases, the value
+outside of a call (`BaseFunction.getArguments`; `BACKWARD_COMPATIBILITY.md` 1.71).
+
+- Found by the stress run `-Drhino.splitWeight=3`, where the test262 file
+  `built-ins/Object/internals/DefineOwnProperty/consistent-value-function-arguments.js` failed in compiled mode.
+- Test: `ConformanceResidualsTest.argumentsOfACallWithoutAnArgumentsObject`.
+
+### The `finally` of a `for-of` loop runs on a throw only (2026-11-22)
+
+No behavior change. A `for-of` loop is wrapped in a `try`/`finally` whose `finally` closes the iterator when the
+loop is left by a throw (`ENUM_CLOSE_ABRUPT`). A `break`, `continue` or `return` that leaves the loop closes the
+iterator itself (`ENUM_CLOSE`), and the `finally` then had nothing to do, but its code was still run, and in
+compiled mode inlined, at each of these exits and at the normal end of the loop. The `try` is now marked
+`Node.FINALLY_ON_THROW_PROP`: `IRFactory.createTryCatchFinally` adds no `JSR` for the normal end and
+`NodeTransformer` skips it when it unwinds a jump.
+
+- Class size of a compiled function: one loop with a `return` 6,714 to 6,684 bytes; four nested loops with three
+  `return`s 8,028 to 7,638; 16 nested loops 10,887 to 9,447 (about 180 bytes per level instead of 220 to 335).
+- Measured before the change: the size already grew linearly with the nesting, and no function fell back to the
+  interpreter up to 16 levels. The guard of destructuring (`ITER_GUARD`) is unchanged and stays a mechanism of
+  its own: merging the two would gain no more size.
+- Performance: perf gate against the previous commit, no metric outside its band; `forof` −0.6% to +1.1%.
+- Verification: full `check`, `test262.properties` unchanged.
+
 ### A class is lowered to its elements, not to two object literals (2026-11-21)
 
 No behavior change. A class was compiled as its constructor, its heritage and two object literals, one for the

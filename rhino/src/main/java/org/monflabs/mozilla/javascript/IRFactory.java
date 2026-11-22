@@ -2735,7 +2735,8 @@ public final class IRFactory {
                     && ast.getClass() == ForInLoop.class
                     && parser.compilerEnv.isLatestEcmaScript()) {
                 // IteratorClose: jumps out of the loop close the iterator (NodeTransformer finds
-                // the loop by its LOCAL_BLOCK_PROP), and a throw closes it in the finally
+                // the loop by its LOCAL_BLOCK_PROP), and a throw closes it in the finally, which
+                // has nothing to do on the other ways out: the iterator is done or closed
                 loop.putProp(Node.LOCAL_BLOCK_PROP, localBlock);
                 loop.addChildToFront(init);
                 if (type == Token.VAR || (type == Token.LET && !uninitializedHead)) {
@@ -2767,7 +2768,8 @@ public final class IRFactory {
                                 new Node(Token.BLOCK),
                                 new Node(Token.BLOCK, close),
                                 ast.getLineno(),
-                                ast.getColumn()));
+                                ast.getColumn(),
+                                true));
                 return localBlock;
             }
             loop.addChildToFront(init);
@@ -2798,6 +2800,20 @@ public final class IRFactory {
      */
     private Node createTryCatchFinally(
             Node tryBlock, Node catchBlocks, Node finallyBlock, int lineno, int column) {
+        return createTryCatchFinally(tryBlock, catchBlocks, finallyBlock, lineno, column, false);
+    }
+
+    /**
+     * onThrowOnly: the finally block is not run when the try block completes normally or is left by
+     * a jump (Node#FINALLY_ON_THROW_PROP).
+     */
+    private Node createTryCatchFinally(
+            Node tryBlock,
+            Node catchBlocks,
+            Node finallyBlock,
+            int lineno,
+            int column,
+            boolean onThrowOnly) {
         boolean hasFinally =
                 (finallyBlock != null)
                         && (finallyBlock.getType() != Token.BLOCK || finallyBlock.hasChildren());
@@ -2944,8 +2960,12 @@ public final class IRFactory {
             Node finallyTarget = Node.newTarget();
             pn.setFinally(finallyTarget);
 
-            // add jsr finally to the try block
-            pn.addChildToBack(makeJump(Token.JSR, finallyTarget));
+            if (onThrowOnly) {
+                pn.putIntProp(Node.FINALLY_ON_THROW_PROP, 1);
+            } else {
+                // add jsr finally to the try block
+                pn.addChildToBack(makeJump(Token.JSR, finallyTarget));
+            }
 
             // jump around finally code
             Node finallyEnd = Node.newTarget();

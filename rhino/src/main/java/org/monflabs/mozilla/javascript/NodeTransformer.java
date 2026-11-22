@@ -264,6 +264,9 @@ public class NodeTransformer {
                         // Iterate from the top of the stack (most recently inserted) and down
                         for (Node n : loops) {
                             int elemtype = n.getType();
+                            if (finallyOnThrowOnly(n)) {
+                                continue;
+                            }
                             if (elemtype == Token.TRY
                                     || elemtype == Token.WITH
                                     || elemtype == Token.SCOPE_BLOCK
@@ -369,7 +372,7 @@ public class NodeTransformer {
                                 Node leave = new Node(Token.LEAVE_SCOPE);
                                 leave.putIntProp(Node.JUMP_EXIT_PROP, 1);
                                 previous = addBeforeCurrent(parent, previous, node, leave);
-                            } else if (elemtype == Token.TRY) {
+                            } else if (elemtype == Token.TRY && !finallyOnThrowOnly(n)) {
                                 Jump tryNode = (Jump) n;
                                 Jump jsrFinally = new Jump(Token.JSR);
                                 jsrFinally.target = tryNode.getFinally();
@@ -658,6 +661,10 @@ public class NodeTransformer {
      */
     private static boolean isForOf(Node loop) {
         return loop.getType() == Token.LOOP && loop.getProp(Node.LOCAL_BLOCK_PROP) != null;
+    }
+
+    private static boolean finallyOnThrowOnly(Node n) {
+        return n.getType() == Token.TRY && n.getIntProp(Node.FINALLY_ON_THROW_PROP, 0) == 1;
     }
 
     private static Node enumClose(Node forOf, ScriptNode tree) {

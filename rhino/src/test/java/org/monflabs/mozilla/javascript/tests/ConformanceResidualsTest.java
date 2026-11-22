@@ -407,4 +407,14 @@ class ConformanceResidualsTest {
                         + " try { g.call(v); r.push('ok'); } catch (e) { r.push(e.name); } });\n"
                         + "r.push(g.call(/a/gi)); r.join()");
     }
+
+    @Test
+    void argumentsOfACallWithoutAnArgumentsObject() {
+        Utils.assertGatedBehavior(
+                "undefined",
+                "null",
+                "function f() { var x = 1; function h() { return x; }\n"
+                        + " return String(Reflect.getOwnPropertyDescriptor(f, 'arguments').value); }\n"
+                        + "f(1, 2)");
+    }
 }

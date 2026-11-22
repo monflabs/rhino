@@ -1155,6 +1155,10 @@ public class BaseFunction extends ScriptableObject implements Function {
             ScriptRuntime.ThrowTypeError.throwNotAllowed();
         }
         Object arguments = activation.get("arguments", activation);
+        if (arguments == NOT_FOUND && cx.isLatestEcmaScript()) {
+            // the running call made no arguments object: the value outside of a call
+            return null;
+        }
         if (arguments instanceof Arguments && cx.getLanguageVersion() >= Context.VERSION_ES6) {
             return new Arguments.ReadonlyArguments((Arguments) arguments, cx);
         }
