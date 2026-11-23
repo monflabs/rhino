@@ -9,6 +9,7 @@ package org.monflabs.mozilla.javascript;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -508,7 +509,48 @@ public class Parser {
         }
         currentToken = tt;
         currentFlaggedToken = tt | (sawEOL ? TI_AFTER_EOL : 0);
+        escapedKeyword =
+                ts.nameHadEscape && compilerEnv.isLatestEcmaScript() && isReservedWordToken(tt);
         return currentToken; // return unflagged token
+    }
+
+    /**
+     * Whether the peeked token is a ReservedWord written with a Unicode escape: an error when it is
+     * consumed (ECMA-262 12.7.1), unless it is an IdentifierName (see allowEscapedKeyword).
+     */
+    private boolean escapedKeyword;
+
+    /** The peeked token is an IdentifierName (a property name), where escapes are allowed. */
+    private void allowEscapedKeyword() {
+        escapedKeyword = false;
+    }
+
+    /**
+     * The tokens of the words that are reserved where they are peeked; the other contextual ones
+     * (let, await, static, ...) are checked where they are parsed.
+     */
+    private boolean isReservedWordToken(int tt) {
+        switch (tt) {
+            case Token.NAME:
+            case Token.UNDEFINED:
+            case Token.LET:
+            case Token.AWAIT:
+                return false;
+            case Token.RESERVED:
+                switch (ts.getString()) {
+                    case "class":
+                    case "enum":
+                    case "export":
+                    case "extends":
+                    case "import":
+                    case "super":
+                        return true;
+                    default:
+                        return false;
+                }
+            default:
+                return Token.keywordToName(tt) != null;
+        }
     }
 
     /**
@@ -649,13 +691,16 @@ public class Parser {
      * parameters do not see (FunctionDeclarationInstantiation, steps 28 and 30): the declarations
      * of the body that the parameter expressions name move to a scope around its statements.
      */
-    private void separateBodyVars(FunctionNode fnNode) {
+    private void separateBodyVars(FunctionNode fnNode, Collection<AstNode> patternDefaults) {
         if (!compilerEnv.isLatestEcmaScript()
                 || fnNode.getSymbolTable() == null
                 || !(fnNode.getBody() instanceof Block)) {
             return;
         }
         List<AstNode> paramExpressions = new ArrayList<>();
+        if (patternDefaults != null) {
+            paramExpressions.addAll(patternDefaults);
+        }
         if (fnNode.getDefaultParams() != null) {
             for (Object o : fnNode.getDefaultParams()) {
                 if (o instanceof AstNode) {
@@ -927,6 +972,10 @@ public class Parser {
     }
 
     private void consumeToken() {
+        if (escapedKeyword) {
+            escapedKeyword = false;
+            reportError("msg.invalid.escape");
+        }
         currentFlaggedToken = Token.EOF;
         lastTokenLineno = ts.getTokenStartLineno();
         lastTokenColumn = ts.getTokenColumn();
@@ -1552,6 +1601,7 @@ public class Parser {
             mustMatchToken(Token.LC, "msg.syntax", true);
             while (!matchToken(Token.RC, true)) {
                 int tt = peekToken();
+                allowEscapedKeyword();
                 consumeToken();
                 String key;
                 if (tt == Token.STRING || tt == Token.NAME || tt == Token.RESERVED) {
@@ -1592,6 +1642,7 @@ public class Parser {
     /** An IdentifierName or a string literal (16.2.2 ModuleExportName). */
     private String moduleExportName() throws IOException {
         int tt = peekToken();
+        allowEscapedKeyword();
         consumeToken();
         if (tt == Token.STRING) {
             String name = ts.getString();
@@ -1885,14 +1936,15 @@ public class Parser {
         return null;
     }
 
-    private void parseFunctionParams(FunctionNode fnNode) throws IOException {
+    /** Returns the default values of the destructuring parameters, or null. */
+    private Collection<AstNode> parseFunctionParams(FunctionNode fnNode) throws IOException {
         ++nestingOfFunctionParams;
         FunctionNode savedFunctionOfParams = functionOfParams;
         functionOfParams = fnNode;
         try {
             if (matchToken(Token.RP, true)) {
                 fnNode.setRp(ts.tokenBeg - fnNode.getPosition());
-                return;
+                return null;
             }
             // Would prefer not to call createDestructuringAssignment until codegen,
             // but the symbol definitions have to happen now, before body is parsed.
@@ -2052,6 +2104,7 @@ public class Parser {
             if (mustMatchToken(Token.RP, "msg.no.paren.after.parms", true)) {
                 fnNode.setRp(ts.tokenBeg - fnNode.getPosition());
             }
+            return destructuringDefault == null ? null : destructuringDefault.values();
         } finally {
             --nestingOfFunctionParams;
             functionOfParams = savedFunctionOfParams;
@@ -2097,8 +2150,16 @@ public class Parser {
                     && !isGenerator
                     && !inUseStrictDirective
                     && compilerEnv.isLatestEcmaScript()
-                    && matchToken(Token.YIELD, true)) {
+                    && peekToken() == Token.YIELD) {
                 // the name of a function expression is bound in that function: not a generator
+                allowEscapedKeyword();
+                consumeToken();
+                name = createNameNode(true, Token.NAME);
+                mustMatchToken(Token.LP, "msg.no.paren.parms", true);
+            } else if (!inUseStrictDirective
+                    && compilerEnv.isLatestEcmaScript()
+                    && matchToken(Token.LET, true)) {
+                // let is an identifier in sloppy code
                 name = createNameNode(true, Token.NAME);
                 mustMatchToken(Token.LP, "msg.no.paren.parms", true);
             } else if (type == FunctionNode.FUNCTION_EXPRESSION
@@ -2184,11 +2245,11 @@ public class Parser {
         boolean wasInsideMethod = insideMethod;
         insideMethod = isMethodDefiniton;
         try {
-            parseFunctionParams(fnNode);
+            Collection<AstNode> patternDefaults = parseFunctionParams(fnNode);
             AstNode body = parseFunctionBody(type, fnNode);
             fnNode.setBody(body);
             checkParamsAfterBody(fnNode, isMethodDefiniton);
-            separateBodyVars(fnNode);
+            separateBodyVars(fnNode, patternDefaults);
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);
@@ -2333,7 +2394,7 @@ public class Parser {
             AstNode body = parseFunctionBody(FunctionNode.ARROW_FUNCTION, fnNode);
             fnNode.setBody(body);
             checkParamsAfterBody(fnNode, false);
-            separateBodyVars(fnNode);
+            separateBodyVars(fnNode, destructuringDefault.values());
             int end = functionSourceStart + body.getPosition() + body.getLength();
             fnNode.setRawSourceBounds(functionSourceStart, end);
             fnNode.setLength(end - functionSourceStart);
@@ -2512,20 +2573,34 @@ public class Parser {
             if (strict && ("eval".equals(name) || "arguments".equals(name))) {
                 reportError("msg.bad.id.strict", name);
             }
+            if (i < firstParam && "let".equals(name)) {
+                // function let() { "use strict"; }
+                reportError("msg.reserved.id", name);
+            }
             if (i >= firstParam && checkDuplicates && !seen.add(name)) {
                 reportError("msg.dup.param.strict", name);
             }
         }
     }
 
-    /** catch (e) { let e; }: a lexical declaration of the block cannot redeclare a parameter. */
+    /**
+     * catch (e) { let e; }: a lexical declaration of the block cannot redeclare a parameter, nor a
+     * var the binding of a pattern (ECMA-262 14.15.1; B.3.4 allows the var of a simple parameter).
+     */
     private void checkCatchParameterRedeclaration(AstNode param, Scope block) {
+        List<String> names = new ArrayList<>();
+        collectBoundNames(param, names);
+        if (!(param instanceof Name)) {
+            for (String name : bodyVarNames(block, new HashSet<>())) {
+                if (names.contains(name)) {
+                    reportError("msg.var.redecl", name);
+                }
+            }
+        }
         Map<String, Symbol> symbols = block.getSymbolTable();
         if (symbols == null) {
             return;
         }
-        List<String> names = new ArrayList<>();
-        collectBoundNames(param, names);
         for (String name : names) {
             Symbol sym = symbols.get(name);
             if (sym != null && sym.getDeclType() != Symbol.Type.VAR) {
@@ -5314,7 +5389,9 @@ public class Parser {
         }
 
         AstNode ref = null; // right side of . or .. operator
-        int token = nextToken();
+        int token = peekToken();
+        allowEscapedKeyword();
+        consumeToken();
         switch (token) {
             case Token.THROW:
                 // needed for generator.throw();
@@ -6369,6 +6446,7 @@ public class Parser {
     private AstNode objliteralProperty() throws IOException {
         AstNode pname;
         int tt = peekToken();
+        allowEscapedKeyword();
         switch (tt) {
             case Token.NAME:
                 pname = createNameNode();

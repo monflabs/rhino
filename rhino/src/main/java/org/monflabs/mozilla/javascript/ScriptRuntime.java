@@ -5265,6 +5265,10 @@ public class ScriptRuntime {
                 // Object Environment Record SetMutableBinding (9.1.1.2.5)
                 throw notFoundError(target, id);
             }
+        } else if (target instanceof NativeCall
+                && ((NativeCall) target).isSelfName(id, result)
+                && Context.isCurrentContextStrict()) {
+            throw typeErrorById("msg.fn.name.assign", id);
         }
         target.put(id, target, result);
         if (post) {
@@ -7974,6 +7978,14 @@ public class ScriptRuntime {
 
     public static void throwDeleteOnSuperPropertyNotAllowed() {
         throw referenceError("msg.delete.super");
+    }
+
+    /**
+     * A yield that is not in a generator: before VERSION_ECMASCRIPT, one of the parameters of an
+     * arrow function is accepted, and fails when it is evaluated.
+     */
+    public static void throwYieldOutsideGenerator() {
+        throw constructError("SyntaxError", getMessageById("msg.bad.yield"));
     }
 
     /**

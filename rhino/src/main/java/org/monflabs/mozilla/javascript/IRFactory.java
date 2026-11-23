@@ -2575,10 +2575,7 @@ public final class IRFactory {
             if (loopType == LOOP_FOR) {
                 int initType = init.getType();
                 if (initType != Token.EMPTY) {
-                    if (initType != Token.VAR
-                            && initType != Token.LET
-                            && (initType != Token.CONST
-                                    || !parser.compilerEnv.isLatestEcmaScript())) {
+                    if (initType != Token.VAR && initType != Token.LET && initType != Token.CONST) {
                         init = new Node(Token.EXPR_VOID, init);
                     }
                     loop.addChildToFront(init);

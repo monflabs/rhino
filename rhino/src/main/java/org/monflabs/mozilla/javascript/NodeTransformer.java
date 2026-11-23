@@ -501,6 +501,27 @@ public class NodeTransformer {
                         break;
                     }
 
+                case Token.INC:
+                case Token.DEC:
+                    if (isSelfName(tree, node.getFirstChild(), Token.NAME, scope)) {
+                        // ++ or -- on the immutable binding of a function expression's name:
+                        // the value is computed on a copy, [name][0]++
+                        Node name = node.getFirstChild();
+                        node.removeChild(name);
+                        Node assign = Node.newString(Token.FN_NAME_ASSIGN, name.getString());
+                        Node copy = new Node(Token.ARRAYLIT, name);
+                        Node update =
+                                new Node(type, new Node(Token.GETELEM, copy, Node.newNumber(0.0)));
+                        update.putIntProp(
+                                Node.INCRDECR_PROP, node.getExistingIntProp(Node.INCRDECR_PROP));
+                        assign.addChildToBack(update);
+                        if (inStrictMode) {
+                            assign.putIntProp(Node.STRICT_PROP, 1);
+                        }
+                        node = replaceCurrent(parent, previous, node, assign);
+                    }
+                    break;
+
                 case Token.SETNAME:
                     if (isSelfNameAssignment(tree, node, scope)) {
                         // the binding of a function expression's name is immutable
@@ -635,13 +656,18 @@ public class NodeTransformer {
 
     /** An assignment to the name of the function expression being compiled, see IRFactory. */
     private static boolean isSelfNameAssignment(ScriptNode tree, Node setName, Scope scope) {
+        return setName.getIntProp(Node.TDZ_DECLARATION_PROP, 0) != 1
+                && isSelfName(tree, setName.getFirstChild(), Token.BINDNAME, scope);
+    }
+
+    /** Whether a node of this type names the function expression being compiled. */
+    private static boolean isSelfName(ScriptNode tree, Node nameNode, int type, Scope scope) {
         if (!(tree instanceof FunctionNode)
                 || !((FunctionNode) tree).hasSelfNameBinding()
-                || setName.getIntProp(Node.TDZ_DECLARATION_PROP, 0) == 1
-                || setName.getFirstChild().getType() != Token.BINDNAME) {
+                || nameNode.getType() != type) {
             return false;
         }
-        String name = setName.getFirstChild().getString();
+        String name = nameNode.getString();
         return name.equals(((FunctionNode) tree).getName()) && scope.getDefiningScope(name) == tree;
     }
 

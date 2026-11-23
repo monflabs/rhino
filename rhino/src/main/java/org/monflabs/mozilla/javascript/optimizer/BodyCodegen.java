@@ -2410,6 +2410,13 @@ class BodyCodegen {
     }
 
     private void generateYieldPoint(Node node, boolean exprContext) {
+        if (!isGenerator) {
+            addScriptRuntimeInvoke("throwYieldOutsideGenerator", "()V");
+            if (exprContext) {
+                Codegen.pushUndefined(cfw);
+            }
+            return;
+        }
         if (unnestedYields.containsKey(node)) {
             // Yield was previously moved up via the "nestedYield" code below.
             if (exprContext) {

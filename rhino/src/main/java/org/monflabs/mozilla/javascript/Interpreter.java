@@ -1324,6 +1324,9 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
     private static class DoYield extends InstructionClass {
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            if (state.generatorState == null) {
+                ScriptRuntime.throwYieldOutsideGenerator();
+            }
             /* This is both where we yield from and re-enter the
              * generator.
              */
