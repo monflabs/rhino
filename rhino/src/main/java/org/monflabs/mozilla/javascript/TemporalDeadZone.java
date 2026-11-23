@@ -5,15 +5,24 @@
 package org.monflabs.mozilla.javascript;
 
 import java.util.Set;
+import org.monflabs.mozilla.javascript.ast.AbstractObjectProperty;
+import org.monflabs.mozilla.javascript.ast.ArrayLiteral;
+import org.monflabs.mozilla.javascript.ast.Assignment;
 import org.monflabs.mozilla.javascript.ast.AstNode;
 import org.monflabs.mozilla.javascript.ast.ClassNode;
+import org.monflabs.mozilla.javascript.ast.ForInLoop;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.Name;
+import org.monflabs.mozilla.javascript.ast.ObjectLiteral;
+import org.monflabs.mozilla.javascript.ast.ObjectProperty;
 import org.monflabs.mozilla.javascript.ast.Scope;
 import org.monflabs.mozilla.javascript.ast.ScriptNode;
+import org.monflabs.mozilla.javascript.ast.Spread;
+import org.monflabs.mozilla.javascript.ast.SpreadObjectProperty;
 import org.monflabs.mozilla.javascript.ast.SwitchCase;
 import org.monflabs.mozilla.javascript.ast.SwitchStatement;
 import org.monflabs.mozilla.javascript.ast.Symbol;
+import org.monflabs.mozilla.javascript.ast.VariableDeclaration;
 import org.monflabs.mozilla.javascript.ast.VariableInitializer;
 
 /**
@@ -162,7 +171,35 @@ final class TemporalDeadZone {
         }
         AstNode declaration = (AstNode) symbol.getNode();
         int end = declaration.getAbsolutePosition() + declaration.getLength();
-        if (((Name) reference).getAbsolutePosition() < end) {
+        int position = ((Name) reference).getAbsolutePosition();
+        AstNode pattern = null;
+        if (declaration instanceof VariableInitializer
+                && ((VariableInitializer) declaration).isDestructuring()) {
+            VariableInitializer vi = (VariableInitializer) declaration;
+            AstNode init = vi.getInitializer();
+            if (init == null || position < init.getAbsolutePosition()) {
+                pattern = vi.getTarget();
+            }
+        } else if (declaration.getParent() instanceof ForInLoop
+                && position < declaration.getAbsolutePosition()) {
+            // the head of a for-in/of loop, whose declaration is the iterated object
+            AstNode iterator = ((ForInLoop) declaration.getParent()).getIterator();
+            if (iterator instanceof VariableDeclaration) {
+                for (VariableInitializer vi : ((VariableDeclaration) iterator).getVariables()) {
+                    if (vi.isDestructuring()) {
+                        pattern = vi.getTarget();
+                    }
+                }
+            }
+        }
+        if (pattern != null) {
+            // in the pattern: a name is initialized when its own element has been processed
+            int elementEnd = bindingElementEnd(pattern, name);
+            if (elementEnd >= 0) {
+                end = elementEnd;
+            }
+        }
+        if (position < end) {
             return THROW;
         }
         if (isSwitchScope(defining)
@@ -171,6 +208,52 @@ final class TemporalDeadZone {
             return RUNTIME;
         }
         return NONE;
+    }
+
+    /**
+     * The position where the element of a binding pattern that binds name ends (its default value
+     * included), or -1.
+     */
+    private static int bindingElementEnd(AstNode pattern, String name) {
+        if (pattern instanceof Name) {
+            return name.equals(((Name) pattern).getIdentifier())
+                    ? pattern.getAbsolutePosition() + pattern.getLength()
+                    : -1;
+        }
+        if (pattern instanceof Assignment) {
+            AstNode left = ((Assignment) pattern).getLeft();
+            if (left instanceof Name) {
+                return name.equals(((Name) left).getIdentifier())
+                        ? pattern.getAbsolutePosition() + pattern.getLength()
+                        : -1;
+            }
+            return bindingElementEnd(left, name);
+        }
+        if (pattern instanceof Spread) {
+            return bindingElementEnd(((Spread) pattern).getExpression(), name);
+        }
+        if (pattern instanceof ArrayLiteral) {
+            for (AstNode element : ((ArrayLiteral) pattern).getElements()) {
+                int end = bindingElementEnd(element, name);
+                if (end >= 0) {
+                    return end;
+                }
+            }
+        } else if (pattern instanceof ObjectLiteral) {
+            for (AbstractObjectProperty prop : ((ObjectLiteral) pattern).getElements()) {
+                AstNode value =
+                        prop instanceof ObjectProperty
+                                ? ((ObjectProperty) prop).getValue()
+                                : prop instanceof SpreadObjectProperty
+                                        ? ((SpreadObjectProperty) prop).getSpreadNode()
+                                        : null;
+                int end = value == null ? -1 : bindingElementEnd(value, name);
+                if (end >= 0) {
+                    return end;
+                }
+            }
+        }
+        return -1;
     }
 
     /** Whether the node is attached to its script's syntax tree, so its position is meaningful. */

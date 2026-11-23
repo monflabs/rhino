@@ -70,7 +70,7 @@ from 63 and 49 to 3.
 
 ### Differential fuzzing
 
-The generator writes programs of 10 to 30 top-level statements, each in a `try` of its own: classes with fields,
+The generator writes programs of 10 to 29 top-level statements, each in a `try` of its own: classes with fields,
 private members, accessors and inheritance, generators, closures, destructuring, spread, labeled loops, `switch`,
 getters, proxies, BigInt, regexps, iterator helpers, promises and about fifty built-in methods. Everything they
 print goes through a `__p` that depends on nothing an engine may choose, and implementation-defined corners (`Date`,

@@ -5,7 +5,7 @@ mechanism behind it, the conditions under which it applies, how it stays correct
 on, and what it gained. The experiments that measured no gain are in
 [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md), so that they are not tried again.
 [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) has the history and [MONFLABS_PLAN.md](MONFLABS_PLAN.md) the plan
-(milestones M14 and M16).
+(milestones M14, M16 and M17).
 
 ## Principles
 
@@ -19,20 +19,30 @@ on, and what it gained. The experiments that measured no gain are in
 - **Both backends.** Each optimization is done in compiled mode (`optimizer/Codegen`, `BodyCodegen`,
   `DefaultLinker`) and in the interpreter (`CodeGenerator`, `Interpreter`), unless it is noted otherwise.
 - **Measured.** Every change runs the perf gate (`buildtools/perf-gate.sh`, see
-  [benchmarks/README.md](benchmarks/README.md)) against the previous commit: 116 metrics, interpreted and compiled,
+  [benchmarks/README.md](benchmarks/README.md)) against the previous commit: 114 metrics, interpreted and compiled,
   under `VERSION_ES6` and `VERSION_ECMASCRIPT`, each with its own tolerance. A change that regresses a metric beyond
   its tolerance is reworked or dropped.
+- **Verified.** `-Drhino.verifyCaches=true` (`CacheVerifier`, 2026-11-21) compares every answer of `PropertyCache`,
+  of `GlobalNameCache` and of the variables read at a fixed position of an activation (`NativeCall.getVar`,
+  `ScriptRuntime.getOuterVar`) with the lookup it replaces, and stops the script with an `IllegalStateException`
+  when they differ. Off by default, as a constant that the JIT folds away. It is a stress mode, like
+  `-Drhino.splitWeight`, `-Drhino.classUnits` and `-Drhino.wideJumps` below: run the tests with it after a change
+  to the slot maps, the scopes or the allocation of variables.
 
 ## Measuring
 
 - **The perf gate** runs the base and the working tree in interleaved rounds with the same harness; only the engine jar
   differs. It takes about 18 minutes and needs an idle machine: no build, and no Time Machine backup (the gate refuses
   to run during one).
-- **Bimodal metrics.** `properties.cmp`, `v8-richards.cmp`, `closures.cmp`, `wideobject.cmp`, `typedarray.cmp` and
-  `split` settle in one of two JIT states from one JVM to the next, and `v8-splay.cmp` (about 1 ms) varies by ±30%:
-  a single round can flag a regression that is not there. `typedarray.cmp` (8.6 ms or 13.5 ms in the full run, the
-  same alone) has a 60% tolerance since M16 for that reason; run it alone to see a real change. Confirm with
-  several rounds, alternating the two jars.
+- **Bimodal metrics.** Until 2026-11-21, `properties.cmp`, `v8-richards.cmp`, `closures.cmp`, `wideobject.cmp`,
+  `typedarray.cmp` and `split` settled in one of two JIT states from one JVM to the next, and a single round could
+  flag a regression that was not there; their tolerances were widened for it (60% for `typedarray.cmp`, up to
+  250%). The gate's JVMs now run with `-Xbatch`, so that a JIT compilation blocks the script that asked for it
+  (see "The perf gate compiles in the foreground" in CHANGELOG_MONFLABS.md): those states are gone, 106 of the
+  114 tolerances are at the minimum of 10% and none is above 40%. The gate results quoted below were recorded
+  before that date, with the bands of their time, and their timings do not compare with later ones. A metric can
+  still depend on what ran before it in the JVM (next item): confirm a flag with several rounds, alternating the
+  two jars.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of what
   runs next. A change can look neutral on a single benchmark and regress in the full run (see the prototype-chain
   cache in [OPTIMIZATION_DROPPED.md](OPTIMIZATION_DROPPED.md)): measure both ways.
@@ -84,13 +94,18 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 - **What.** A name of top-level code (`x`, `Math`, `f()`) is resolved through a per-site `GlobalNameCache`: the slot
   of the global object, or of the global `let`/`const` declarations, in which the name was found. The next accesses
   read or write that slot directly while the lookup would still find it.
-- **Where.** Compiled code links these sites in the `GNAME` namespace (`GNAME:GET`, `BIND`, `SET`, `GETWITHTHIS`,
-  and `NAME:INCRDECR`) in `DefaultLinker`; the interpreter keeps one cache per name of each `InterpreterData`
-  (`nameCache`), used when the scope is the top scope. It also serves the functions of the script that keep all their
-  variables in registers, whose names are then always global.
+- **Where.** Compiled code links these sites in the `GNAME` namespace (`GNAME:GET`, `BIND`, `SET`, `GETWITHTHIS`
+  and `INCRDECR`) in `DefaultLinker`; the interpreter keeps one cache per name of each `InterpreterData`
+  (`nameCaches`), used when the scope is the top scope. It also serves the functions of the script (not nested in
+  another function) that keep all their variables in registers, whose names are then always global. The strict
+  and `const` assignments (`SETSTRICT`, `SETCONST`) are not cached.
 - **Invalidation.** A slot that leaves its map (removed, replaced, or copied into a larger map) is marked
   `Slot.stale`, which the cache checks. A global `let`/`const` that shadows a property of the global object is seen
   through the size of the top scope, which only grows. The cache holds the scope and the slot weakly.
+- **When it does not apply.** With dynamic scopes (`Context.useDynamicScope`), when the top scope or the global
+  object is of a class that overrides the lookup methods (`get`, `has`, `put`; checked once per class), or when
+  one of their slot maps is not a plain `EmbeddedSlotMap` or `HashSlotMap` (the thread-safe maps): the site then
+  stops trying.
 - **Writes of global `let` bindings** (M16, 16.1) go to the cached slot too, when the binding is initialized, its
   attributes are those of a `let` (not a `const`) and the top scope is not sealed. Otherwise the lookup runs and
   throws the TDZ or `const` error. Before, every write took the lookup: 3 million `G++` from a function cost 140 ms
@@ -103,7 +118,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   `protochain` −28% to −53%, `arith` −30% to −35%. It also removed a slowdown of 10–25% that only `VERSION_ECMASCRIPT`
   had on top-level code. All versions.
 - **Reads from nested functions** (M16, 16.14). The reads of a name in other code (`NAME:GET` and
-  `NAME:GETWITHTHIS`, and the interpreter's `NAME` and `NAMEANDTHIS` when the scope is not the top scope) walked
+  `NAME:GETWITHTHIS`, and the interpreter's `NAME` and `NAME_AND_THIS` when the scope is not the top scope) walked
   the scope chain by name, then looked the name up in the top scope and the global object. They now get a cache
   too: `GlobalNameCache.nestedName` walks up the activations and block scopes (`NativeCall`, `LocalScope`,
   `CatchScope`) and checks that none of them has the name, one query of a small map each, then reads the cached
@@ -165,7 +180,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 
 - **What.** The consumers of iterables in the engine (spread, `Array.from`, the `Map`/`Set`/`WeakMap`/`WeakSet`
   constructors, `Promise.all`, `for-of`, destructuring) step a built-in iterator whose `next` is the original one
-  (`ES6Iterator.isNextMethod`) through `ES6Iterator.step`, without calling `next` and without creating
+  (`ES6Iterator.isNextMethodOf`) through `ES6Iterator.step`, without calling `next` and without creating
   `{ value, done }` objects.
 - **Why it is correct.** It relies on the result objects being unobservable: `makeIteratorResult` creates ordinary
   objects of the intrinsic `%Object.prototype%` with own data properties, as the specification does
@@ -185,7 +200,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 ### Variables in registers in functions with closures
 
 - **What.** A function that needs an activation object (a closure, a `catch` clause, `super`, ...) used to keep all
-  its parameters and variables in it, where each access was a name lookup. `NodeTransformer.keepVarsInRegisters` now
+  its parameters and variables in it, where each access was a name lookup. `VariableAllocation` (called by
+  `NodeTransformer`; `NodeTransformer.keepVarsInRegisters` until the split of 2026-11-20) now
   leaves in the activation only the names that a nested function refers to, plus the catch parameters, function
   declarations, `let`/`const` and class bindings. The other `var`s and parameters become registers
   (`FunctionNode.isVarInRegister`), and `NativeCall` no longer defines them (`JSDescriptor.isParamOrVarInRegister`),
@@ -201,14 +217,16 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   171 ms → 115 ms compiled, 890 ms → 760 ms interpreted. A function with a `catch` clause and 7 variables, called
   3 million times: 592 ms → 87 ms compiled, 1,295 ms → 866 ms interpreted.
 - **`let` and `const`** (M16, 16.11). The let/const bindings of the function and of its blocks that no nested
-  function refers to are registers too: `keepVarsInRegisters` adds those of the blocks to the variables of the
+  function refers to are registers too: `VariableAllocation` adds those of the blocks to the variables of the
   function (`ScriptNode.addBlockVariables`), where they keep the scope of their block for name resolution, so that
-  two bindings of the same name stay apart (`NodeTransformer.registerLexicals`, converted by symbol). A block whose
+  two bindings of the same name stay apart (`VariableAllocation.registerLexicals`, converted by symbol in
+  `NodeTransformer`). A block whose
   bindings are all registers gets no scope object, nor do its per-iteration copies; the head of a `for` loop is
   initialized as variables when all its bindings are registers (`visitLet`), and in a scope object otherwise.
-  Their temporal dead zone is checked from the syntax, as in functions without an activation: only a declaration
-  of a single name, outside a `switch`, qualifies (not a destructuring, a class declaration or a catch
-  parameter). A const register keeps its flag local (`initRegisterVars`). Gain, 3 million iterations, compiled: a
+  Their temporal dead zone is checked from the syntax (`TemporalDeadZone`), as in functions without an activation:
+  only a declaration of a single name, outside a `switch`, qualifies (not a destructuring, a class declaration or
+  a catch parameter). Not in a generator, which keeps no register. A const register keeps its flag local
+  (`initRegisterVars`). Gain, 3 million iterations, compiled: a
   `let` in the body of a function with a closure 104 → 6 ms, a `let` loop 84 → 6 ms, a `const` in a loop body
   155 → 5 ms, a function with a `try`/`catch` 273 → 22 ms, a loop beside a captured `let` 259 → 88 ms (a `var`:
   9 ms); interpreted 1.5–2.9 times faster.
@@ -249,16 +267,19 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 
 - **What.** A nested function reads and writes a variable of an enclosing function at its slot in that function's
   activation (`Node.OUTER_VAR_PROP`: how many functions out, and the index; `ScriptRuntime.getOuterVar`/
-  `setOuterVar`), instead of walking the scope chain by name. This is resolved at compile time: `NodeTransformer`
-  hands the slot variables of a function down to its nested functions (`FunctionNode.getOuterVars`), limited to those
-  that no scope inside the function declares. Each nested function keeps a reference to the map of names of each
+  `setOuterVar`), instead of walking the scope chain by name. This is resolved at compile time:
+  `VariableAllocation` hands the slot variables of a function down to its nested functions
+  (`FunctionNode.addOuterVars`), limited to those that no scope inside the function declares (and not
+  `arguments`); `VariableAllocation.markOuterVar` then marks the reads and assignments of a name that no scope of
+  the nested function defines. Each nested function keeps a reference to the map of names of each
   enclosing function, with its depth, not a copy (`FunctionNode.getOuterVar`): a bundle of thousands of variables
   and thousands of nested functions (Prettier, in the Web Tooling Benchmark) copied 19 million entries, 900 MB, at
   each compilation, and ran out of memory with a 1 GB heap (2026-10-24).
 - **Correctness.** At runtime the owner's activation is the first `NativeCall` on the scope chain whose function has
   the owner's descriptor; the variable is checked by name, and looked up by name if anything does not match. The
-  interpreter reuses `ACTIVATION_GETVAR`/`ACTIVATION_SETVAR` (the depth in the high byte of the index), since no
-  icode values are left.
+  interpreter has `Icode.OUTER_GETVAR`/`OUTER_SETVAR`, with the number of functions out as an operand (until the
+  icodes were folded into families on 2026-11-20, it reused `ACTIVATION_GETVAR`/`ACTIVATION_SETVAR` with the depth
+  in the high byte of the index).
 - **Gain.** A closure reading and writing captured variables in a loop: 202 ms → 50 ms compiled, 571 ms → 517 ms
   interpreted. `VERSION_ECMASCRIPT`.
 
@@ -267,7 +288,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   finds their slot on first use), and a call of such a name in compiled code reads the position
   (`ScriptRuntime.getVarAndThis`) instead of `getNameAndThis`. A declaration is never in a register, since it is
   stored by name; the names of function expressions stay out, since they are bound inside the expression. The
-  interpreter reads the positions but still calls by name (no icode left). Gain: `math-spectral-norm` in the
+  interpreter reads the positions but still calls by name (`Icode.NAME_AND_THIS`). Gain: `math-spectral-norm` in the
   JavaScriptPerformance wrapper (four nested declarations called by name) 2,450 ms → 2,358 ms compiled; level when
   the activation holds only a few names, whose lookup costs about as much as `outerActivation`.
 
@@ -310,7 +331,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 
 - **What.** `StandardSlot.keyMatches` and `CompactSlot.keyMatches` compare the key by identity first, then call
   `equals` on the slot's name themselves, instead of calling `java.util.Objects.equals`.
-- **Why.** Upstream commit c1ac6c149 ("Start using the new scopes hierarchy internally", after Rhino 1.9.1) made
+- **Why.** Upstream commit c1ac6c149 ("Start using the new scopes hierarchy internally", after the Rhino 1.9.0 tag) made
   the scopes `ScopeObject`s that share `SlotMapOwner.get` with `ScriptableObject`. Octane `box2d` went from 12.9 s
   to 18.2 s at that commit (found by bisecting 270 upstream commits). JFR: the `Objects.equals` of the slot lookup
   no longer inlined (24 samples out of line before, 257 after, under `EmbeddedSlotMap.query`). Out of line,
@@ -444,8 +465,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 - **What** (M16, 16.6). `ScriptRuntime.toString(Object)` and `toString(double)` (string concatenation, `String()`,
   `join`, JSON, property keys) gave every number to `DoubleFormatter`, which computes the shortest decimal digits
   of a double (Ryu-like) and builds a `Decimal`: about 29 ns against 5 ns for `Long.toString`. An `Integer` now
-  takes `Integer.toString`, and an integral double whose magnitude is at most 2^53 − 1 (but `-0`, which prints as
-  `0` through the formatter) takes `Long.toString` (`integerOrNumberToString`).
+  takes `Integer.toString`, and an integral double other than zero whose magnitude is at most 2^53 − 1 takes
+  `Long.toString` (`integerOrNumberToString`); `0` and `-0`, which both print as `0`, stay with the formatter.
 - **Correctness.** Below 2^53, integers are exactly representable and spaced by at most 1, so no shorter decimal
   rounds to the same double: the integer's digits are the shortest ones. Above, they are not: `2**60` prints as
   `1152921504606847000`, which is why the fast path stops at 2^53. The bound is tested on the double:
@@ -544,6 +565,9 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   static method (`BodyCodegen.visitOptimizedCall`), guarded by a check that the name still holds that function,
   with a regular call otherwise. The arguments were generated in both branches; they are now evaluated once,
   before the guard, into locals (a `double` pair for a number), and each branch loads them.
+- **When it applies.** The call is in a function (top-level code makes no direct call), passes as many arguments
+  as the target has parameters, at most 32, without a spread, and the target has no activation object, no
+  `arguments` object and no rest parameter (`OptTransformer.detectDirectCall`).
 - **Why it matters.** Bytecode size decides inlining: C2 inlines a hot callee only up to `FreqInlineSize` (325
   bytes). Upstream's calling convention (strictness, `LookupResult`, `getThisObj`, `new.target`) had made a
   recursive `fib` 345 bytes against 291 in Rhino 1.8.0, so C2 stopped inlining its recursion.
@@ -589,8 +613,10 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   linked methods are small and per site, so they inline whatever other scripts did.
 - **When it applies.** The array holds only dense elements (no accessor or attribute on an index); a read
   needs an element at the index (a hole reads the prototypes on the general path); a write needs an existing
-  element below the length on an array that is not sealed, so growing, holes (where a prototype setter may
-  apply), frozen and non-extensible arrays take the general path.
+  element below the length on an array that is not sealed (`sealObject`), so growing and holes (where a prototype
+  setter may apply) take the general path. So do arrays frozen or sealed by `Object.freeze` and `Object.seal`,
+  whose elements get attributes and leave the dense storage. A non-extensible array keeps the fast path for its
+  existing elements, which stay writable.
 - **Gain.** SunSpider compiled, alone: `access-fannkuch` 1,319 ms → 830 ms, `access-nsieve` 320 → 244,
   `bitops-nsieve-bits` 1,175 → 934; `math-spectral-norm` after the other SunSpider files 2,222 → 2,046.
 
@@ -606,7 +632,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   converted them with ToNumber, so `mul(2n, 3n)` threw (an upstream bug, in top-level functions). An operation
   whose two operands can both be BigInts (two parameters, a parameter and an operand of unknown type) now takes
   the generic path; a parameter against a number keeps double arithmetic, since a BigInt there throws a TypeError
-  either way. Under `VERSION_ES6`, top-level functions keep the old typing (`BACKWARD_COMPATIBILITY.md` 1.90).
+  either way. In all language versions since 2026-11-21 (`BACKWARD_COMPATIBILITY.md` 1.90; until then,
+  top-level functions kept the old typing under `VERSION_ES6`).
 - **Gain.** SunSpider in one JVM, compiled: `math-spectral-norm` 1,839 ms → 745 ms, `bitops-3bit-bits-in-byte`
   18,804 → 6,086 ms (about 4,100 alone), `bitops-nsieve-bits` 919 → 312, `access-fannkuch` 741 → 414,
   `3d-morph` 1,258 → 765, `access-nbody` 4,333 → 3,154, `math-cordic` 1,628 → 1,142, `crypto-md5` 772 → 556,
@@ -626,8 +653,10 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 - **Recursion.** Functions that call themselves or each other cannot wait for their callers. They are assumed to
   take numbers everywhere, then `Optimizer.recursiveNumberArguments` drops each parameter that a call may pass
   something else, until nothing changes: a call from one of them passes a number when the argument is a number
-  literal, a number parameter that the caller never assigns, or an arithmetic operation on those (`fib(n - 1)`);
-  the operands must all be numbers, since the operation on BigInts gives a BigInt. A caller that is not
+  literal, a number parameter that the caller never assigns, or an arithmetic operation on those (`fib(n - 1)`):
+  one number operand is enough for `-`, `*`, `/`, `%`, `**` and the bitwise operators, since the operation on a
+  number and a BigInt throws; both operands of `+`, and the operand of `-x`, `~x`, `++` and `--`, must be numbers
+  (`Optimizer.isNumberExpression`). A caller that is not
   optimized (one that needs an activation, such as a function wrapping its declarations) gets the same check
   without parameters, so its literal arguments count as numbers. SunSpider `controlflow-recursive` alone
   1,130 ms → 1,000 ms (its `ack`, `fib` and `tak` inside the JavaScriptPerformance wrapper); `fib` and `tak` in a
@@ -750,7 +779,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   arrow functions called in place, of about 600 AST nodes (about 6 KB of bytecode, below HotSpot's
   8,000-byte limit for compiling a method), half as large on each new failure, up to 3 times.
 - **When it applies.** Compiled mode, only after a failure: code that fits is unchanged. Not split: generators and
-  async functions (a `yield` cannot cross a function), derived constructors (`super()`), functions with a direct
+  async functions before `VERSION_ECMASCRIPT` (under it they are split since 17.4, see "Functions too large for
+  the JIT"), generators of JavaScript 1.7, derived constructors (`super()`), functions with a direct
   `eval` or a `with`. Function declarations, statements holding a function declared in a block (Annex B), and
   the lexical declarations of blocks and scripts stay in place.
 - **How it stays correct.** An arrow function shares `this`, `arguments`, `new.target` and `super`. Names in a
@@ -760,11 +790,17 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   returns a state; a `break` or `continue` to a statement outside of the chunk returns a state of its own; the call
   site replays them. Chunk methods are named `_c_<function>_<n>-split`, and script stack traces show their frames as
   the function's, skipping the calls in between. The function gets an activation, as any function with a nested
-  function, so `f.arguments` while it runs is its arguments object. Validation: with `-Drhino.splitWeight=3`, compiled
+  function, so `f.arguments` while it runs is its arguments object. The variables that its chunks share are
+  captured, hence in the activation: code evaluated at runtime in the function's scope other than a direct eval
+  sees them, as those any closure captures, while it does not see them in the same function unsplit, where they
+  are registers (`BACKWARD_COMPATIBILITY.md` 1.88; `Script("w = 2")()` in a function with a closure leaves a
+  register `w` at 1, and sets it to 2 under `-Drhino.splitWeight=3`). Validation: with `-Drhino.splitWeight=3`, compiled
   mode splits every function it can into chunks of a few statements; test262 and the Mozilla tests then pass
-  except one test of `f.arguments` and two tests of the generated bytecode (`NewTargetDirectCallTest`). A chunk
-  of a script makes no direct call of a function with a rest parameter, as the top-level code it comes from:
-  under `VERSION_ES6`, a direct call passes the arguments as they are (BACKWARD_COMPATIBILITY.md 1.92).
+  except tests that inspect the generated code (`NewTargetDirectCallTest` twice, `RobustnessFixesTest`; changelog
+  of 2026-11-21). The test262 file on `f.arguments` that failed until 2026-11-22 passes: read other than by
+  name, `f.arguments` no longer depends on whether the function has an activation (BACKWARD_COMPATIBILITY.md
+  1.71). A function with a rest parameter is never the target of a direct call, from a chunk or from any other
+  function (all versions since 2026-11-21, BACKWARD_COMPATIBILITY.md 1.92).
 - **Scripts (17.2).** The top-level code of a script is split the same way. A chunk of a script takes the
   script's completion value as its parameter (`%completion`: at the top level, `BodyCodegen` reads the script's
   result register for that name) and returns the new value; `IRFactory` turns the statements that set the
@@ -811,7 +847,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   base 525, Rhino 1.8.0 538. Chunks of 300 or 1,200 nodes score the same. The JetStream 3 `threejs` workload runs compiled: 5.3 s per
   run, 14.2 s interpreted; Babylon.js's scene compiles, at about the speed of the interpreter (780 and 700 ms).
 
-### Functions too large for the JIT (2026-10-25)
+### Functions too large for the JIT (M17, 17.4, 2026-10-25)
 
 - **What.** HotSpot does not compile a method of more than 8,000 bytes of bytecode (`-XX:+DontCompileHugeMethods`,
   the default): it stays in the bytecode interpreter of the JVM, several times slower than the fork's own
@@ -832,7 +868,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   call, with the code that keeps its stack across a `yield` (values in a local, checkcasts) whether or not one
   held a `yield`: now only when one does (`BodyCodegen.maySuspend`), 12% of the tokenizer of `js-tokens`. Its
   nested functions read the variables they share with it at their position in its activation
-  (`NodeTransformer.keepVarsInRegisters`, `getOuterVar`), as those of a function; the generator itself reads them
+  (`VariableAllocation`, `getOuterVar`), as those of a function; the generator itself reads them
   by name, its registers not surviving a `yield`. An exception got its interpreter for the script stack by
   reflection (`RhinoException`), and the completion of a compiled generator, an exception, looked up the
   `@@toStringTag` of its value: both once per completion of the chunks of `js-tokens`.
@@ -874,7 +910,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 
 ### Literals of data compiled as data
 
-- **What.** A literal of more than 1,000 constants (numbers, strings, booleans, `null`, arrays and objects of
+- **What.** A literal of at least 1,000 constants (numbers, strings, booleans, `null`, arrays and objects of
   them, with no computed key, accessor, method, spread, hole or `__proto__`) is compiled as text: string constants
   of at most 20,000 characters, which `OptRuntime.parseConstantLiteral` parses once into a template cached in a
   static field of the class; each evaluation makes new objects from it with `ScriptRuntime.newArrayLiteral` and
@@ -885,7 +921,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 
 ### RegExp symbol methods on an ordinary regexp
 
-- **What.** `RegExp.prototype[@@split]` gets the flags of the regexp (`flags`, which calls nine getters), looks up
+- **What** (M16, 16.17). `RegExp.prototype[@@split]` gets the flags of the regexp (`flags`, which calls eight
+  getters), looks up
   its species constructor and constructs a sticky splitter, which compiles the pattern again, on every call;
   `@@replace`, `@@match` and `@@matchAll` read `flags` too. For an ordinary regexp, the flags come from the
   compiled pattern and the splitter is built once per pattern and flags (`NativeRegExp.splitterOf`), through the
@@ -914,10 +951,42 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   Rhino 1.8.0 13.2 s); after the Octane files before it, as in the harness (one run after one), 17.8 s → 16.7 s
   (Rhino 1.8.0 13.7 s). The rest of the gap is in the matcher, without a single hotspot.
 
+### The `finally` of a `for-of` loop runs on a throw only (2026-11-22)
+
+- **What.** Under `VERSION_ECMASCRIPT`, a `for-of` loop is wrapped in a `try`/`finally` whose `finally` closes the
+  iterator when the loop is left by a throw (`Token.ENUM_CLOSE_ABRUPT`). A `break`, `continue` or `return` that
+  leaves the loop closes the iterator itself (`ENUM_CLOSE`), and the `finally` then had nothing to do, but its
+  code was still run, and in compiled mode inlined, at each of these exits and at the normal end of the loop.
+  The `try` is now marked `Node.FINALLY_ON_THROW_PROP`: `IRFactory.createTryCatchFinally` adds no `JSR` for the
+  normal end, and `NodeTransformer` skips it when it unwinds a jump.
+- **Correctness.** On the other ways out, the iterator is done or already closed. The guard of destructuring
+  (`ITER_GUARD_INIT`/`ITER_GUARD_CLOSE`, see "Array patterns without temporaries and guards") is a mechanism of
+  its own and is unchanged.
+- **Gain** (changelog, "The `finally` of a `for-of` loop runs on a throw only"). The class of a compiled function:
+  one loop with a `return` 6,714 → 6,684 bytes, four nested loops with three `return`s 8,028 → 7,638, 16 nested
+  loops 10,887 → 9,447 (about 180 bytes per level instead of 220 to 335). Perf gate against the previous commit:
+  no metric outside its band, `forof` −0.6% to +1.1%. A gain of code size, which counts against the limits of
+  "Functions too large for a class file are split" and "Functions too large for the JIT".
+
+### The interpreter's code keeps no syntax tree (2026-10-25)
+
+- **What.** In interpreted mode, the keys of an object literal with a computed key kept the node of that key,
+  which the run time replaces in a copy of the keys. The AST nodes of the IR link to their parents, so the whole
+  syntax tree of the script stayed in memory as long as its code. `CodeGenerator` now stores the keys without the
+  nodes (`withoutComputedKeys`). The compiled code never kept a node.
+- **Gain** (changelog, "The syntax tree of an interpreted script kept alive"). The Babylon.js bundle of
+  JetStream 3, interpreted: 457 MB held after its first run → 178 MB (224 MB compiled); the tree was 280 MB, and
+  the workload ran out of memory in the harness's 1 GB heap within 8 runs. All versions.
+
 ### Algorithms of built-ins
 
+- **BigInt literals and `BigInt()` of long strings** (2026-10-26). `new BigInteger(String)` takes a time
+  quadratic in the number of digits. `ScriptRuntime.parseBigInteger`, used by the lexer and by the conversion of
+  a string, splits a string of more than 1,000 digits in halves, `high * radix^n + low`, which the multiplication
+  algorithms of `BigInteger` make subquadratic. A million digits: 38 s → 2.4 s (changelog, "Robustness fixes").
+  All versions.
 - **`Math.sumPrecise`** uses Shewchuk's algorithm (non-overlapping partials, with the overflow handling of the
-  proposal's polyfill) rather than an exact `BigDecimal` sum, Nashorn's choice: the same results on 300,000 random
+  proposal's polyfill) rather than the exact `BigDecimal` sum that Nashorn uses: the same results on 300,000 random
   and edge cases, 18 times faster on usual values (8 ms against 145 ms for a million values) and 2.7 times faster on
   values spread over the whole exponent range. `VERSION_ECMASCRIPT`.
 - **Dense fast paths** of the array methods write the elements of a dense array directly. Under

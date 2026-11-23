@@ -28,7 +28,19 @@ bundles no Unicode Character Database. On Java 25 (Unicode 16), this leaves:
 ### Agents that cannot block (decision 3.4)
 
 `built-ins/Atomics/wait/cannot-suspend-throws.js` and its BigInt variant are written for a host whose main agent
-cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wait`, as fits a server.
+cannot block (`CanBlockIsFalse`); every agent of this fork can call `Atomics.wait`, as fits a server. The two tests
+are skipped.
+
+### `IsHTMLDDA`
+
+The 35 tests of the `IsHTMLDDA` feature (an object that behaves as `undefined`, like `document.all`) need a
+`$262.IsHTMLDDA` host hook that this fork does not have; they are skipped (`UNSUPPORTED_FEATURES` in
+`Test262SuiteTest`).
+
+### A folder that is not run
+
+`test262.properties` skips the folder `language/expressions/member-expression` (`~`), as upstream's file did. Its
+one test, `computed-reference-null-or-undefined.js`, passes when it is run by hand, compiled and interpreted.
 
 ### Single realm per error (cross-realm tests)
 

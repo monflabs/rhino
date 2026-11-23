@@ -31,7 +31,8 @@ supports", currently ES2026.
   not. It is the default.
 - **`VERSION_ES6`** (200) and the older versions keep the behavior of stock Rhino, bug fixes included. The language
   features stock Rhino did not have (classes, async functions, modules, ...) are not available there: their syntax is
-  a SyntaxError, as in stock Rhino.
+  a SyntaxError, as in stock Rhino. The few fixes that apply to every version are listed in
+  [Changes and incompatibilities](changes.md#bug-fixes-for-every-version).
 
 Changes that cannot alter the result of existing code apply under every version. These are the compiler
 capabilities described under [Engine capabilities](#engine-capabilities) and the optimizations.
@@ -74,7 +75,7 @@ The table lists what the fork added or completed. Features that stock Rhino alre
 
 | Edition | Added | Completed to the specification |
 |---|---|---|
-| ES2015 | classes (`extends`, `super`, subclassing built-ins), spread arguments in the interpreter, ES modules | `let`/`const` (temporal dead zone, per-iteration bindings, global lexical scope), destructuring, iteration protocol, generators, function semantics, `arguments`, Proxy/Reflect, well-known symbols, RegExp `u`/`y`, Annex B |
+| ES2015 | classes (`extends`, `super`, subclassing built-ins), spread arguments in calls and `new`, ES modules | `let`/`const` (temporal dead zone, per-iteration bindings, global lexical scope), destructuring, iteration protocol, generators, function semantics, `arguments`, Proxy/Reflect, well-known symbols, RegExp `u`/`y`, Annex B |
 | ES2016 | | `**`, `Array.prototype.includes` |
 | ES2017 | async functions, arrows and methods, `SharedArrayBuffer`, `Atomics` | |
 | ES2018 | async generators, `for await`, `Symbol.asyncIterator` | object rest/spread, RegExp dotAll, named groups, Unicode property escapes |
@@ -150,7 +151,7 @@ Every built-in iterator, generator and Java collection iterator inherits `Iterat
 on all of them:
 
 ```js
-Iterator.from(javaList).filter(s => s.length > 3).map(s => s.toUpperCase()).toArray();
+Iterator.from(javaList).filter(s => s.length() > 3).map(s => s.toUpperCase()).toArray();  // Java strings
 Math.sumPrecise([1e20, 0.1, -1e20]);                       // 0.1
 new Map().getOrInsertComputed("k", key => key + "!");      // "k!"
 new Uint8Array([72, 105]).toBase64();                      // "SGk="
@@ -280,6 +281,8 @@ Rhino a script that reaches a limit runs entirely in the interpreter. The fork, 
 - splits top-level code the same way, keeping the script's completion value;
 - spreads the functions of a script over several classes, up to 256, when one class runs out of constants or
   call sites;
+- emits wide jumps (`goto_w`) when a jump spans more than 32 KB of bytecode in a function that cannot be split
+  further, such as a `switch` of hundreds of clauses;
 - compiles literals of more than 1,000 constants (large data tables) as data that is parsed once.
 
 Generated code and large libraries now run compiled: the Octane `mandreel` benchmark compiles into 16 classes, and
@@ -329,3 +332,4 @@ Of the 42,616 in-scope tests, 42,271 pass on Java 25. The rest are documented li
 | Cross-realm | about 10 | errors are created in the realm of the code that catches them |
 | `IsHTMLDDA` | 35, skipped | a browser-only host hook (`document.all`) |
 | `Atomics.wait` on a main thread that cannot block | 2, skipped | written for hosts whose main thread cannot block |
+| `language/expressions/member-expression` | 1, skipped | a folder that `test262.properties` does not run, as in upstream Rhino; its test passes when run by hand |

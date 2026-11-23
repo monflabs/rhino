@@ -32,6 +32,7 @@ This will lead to unexpected result - a 4-char long string "null" will be insert
 This happens because Rhino engine doesn't know how to infer parameter nullability from pure Java code,
 so it tries to convert `null` to String.
 
-Adding rhino-kotlin dependency fixes the problem, allowing JavaScript functions to have nullable parameters.
+Adding rhino-kotlin dependency (`org.monflabs.mozilla:rhino-kotlin`, next to `org.monflabs.mozilla:rhino`) fixes the problem,
+allowing JavaScript functions to have nullable parameters.
 
 At the moment, only parameter nullability is supported, but we might add more Kotlin-specific support in future.

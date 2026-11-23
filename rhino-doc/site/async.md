@@ -195,8 +195,9 @@ function, nor from inside a job.
 
 ### A host object for one context
 
-The class below wraps the four ways to run the loop. It is complete, and runs as is, but leaves out what a real
-host adds: the host functions themselves, a `ContextFactory`, error reporting.
+The class below wraps the three ways to run the loop (`poll`, `runToCompletion` and `await`). It is complete, and
+runs as is, but leaves out what a real host adds: the host functions themselves, a `ContextFactory`, error
+reporting.
 
 ```java
 /** One Context, its global scope and its event loop, used from one thread at a time. */
@@ -210,6 +211,10 @@ final class ScriptHost implements AutoCloseable {
         scope = cx.initStandardObjects();
         cx.setHostJobScheduler(loop);      // without this line, no host work can be started
         // define setTimeout, fetch, ... on scope here
+    }
+
+    TopLevel scope() {
+        return scope;
     }
 
     /** Runs a script and its microtasks. Host work it started may still be pending. */

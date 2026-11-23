@@ -12,7 +12,8 @@ The numbers in brackets on this page, such as **[1.3]**, refer to its sections.
 ## The rule: changes are gated by the language version
 
 The fork adds a language version, `Context.VERSION_ECMASCRIPT` (250), which targets ECMAScript 2026 and passes
-test262. Every change in the behavior of JavaScript code is active **only** under that version:
+test262. Every change in the behavior of JavaScript code is active **only** under that version, except the few
+[bug fixes that apply to every version](#bug-fixes-for-every-version):
 
 | Language version | Behavior |
 |------------------|----------|
@@ -23,7 +24,8 @@ test262. Every change in the behavior of JavaScript code is active **only** unde
 `VERSION_ES6`). This is the biggest incompatibility: an embedding that never calls `setLanguageVersion` gets every
 change of [Switching to VERSION_ECMASCRIPT](#switching-to-version_ecmascript). To keep stock behavior, select
 `VERSION_ES6` explicitly, as shown [below](#the-default-language-version-is-version_ecmascript-23); code then runs
-as on stock Rhino, and the only changes left are the platform and packaging ones of the next section.
+as on stock Rhino, and the only changes left are the platform and packaging ones of the next section, with the few
+[bug fixes that apply to every version](#bug-fixes-for-every-version).
 
 Inside the engine, every gated behavior tests `Context.isLatestEcmaScript()` (runtime) or
 `CompilerEnvirons.isLatestEcmaScript()` (compile time). The full list of gated behaviors is also in the Javadoc of
@@ -128,6 +130,25 @@ end of a very large loop. They are listed in
 "Fix (all versions)". Performance work also applies to every version and is not observable; see
 [Performance optimizations](performance.md).
 
+Three more groups of fixes apply to every version, `VERSION_ES6` included:
+
+- **Defects that no script can rely on [1.90, 1.92, 1.93, 1.94, 1.103, 1.107, 1.108, 2.7]**: wrong results and
+  TypeErrors of compiled code (see [Compiled-mode fixes](#compiled-mode-fixes)); the `next` method of a built-in
+  iterator called on an iterator of another kind, now a TypeError; a Symbol on the left of `instanceof`, which could
+  throw a `ClassCastException` for a bound function; and `jsc`, which failed with a `NullPointerException` on any
+  script with a `for-in` loop.
+- **Sixteen bug fixes taken from upstream Rhino [2.6]**, applied as upstream does:
+
+  ```js
+  (-0.5).toString(2);          // before: "0.1"   now: "-0.1"
+  "abc".indexOf("", -1);       // before: -1      now: 0
+  (255n).toLocaleString(16);   // before: "ff"    now: "255" (the argument is a locale, not a radix)
+  ```
+
+- **Limits [2.5]**: a string operation that would make a string of more than 2^29 - 24 characters throws
+  `RangeError: Invalid string length`, and a regular expression of more than 65,536 capture groups is a
+  SyntaxError, instead of exhausting the heap.
+
 ## Switching to VERSION_ECMASCRIPT
 
 The changes below only apply to code running under `VERSION_ECMASCRIPT`. "Before" is the behavior of stock Rhino
@@ -150,9 +171,9 @@ const k = 1;
 k = 2;        // before: ignored (TypeError in strict mode)   now: TypeError
 ```
 
-**Temporal dead zone [1.2, 1.2b, 1.75, 1.91].** Using a `let`/`const` before its declaration has run is a
+**Temporal dead zone [1.2, 1.2b, 1.75, 1.91, 1.99].** Using a `let`/`const` before its declaration has run is a
 ReferenceError, including from a closure, from a default parameter value, or from a `switch` clause entered past
-the declaration.
+the declaration. The names of a destructuring declaration (`let { a } = o`) follow the same rule.
 
 ```js
 function f() {
@@ -199,7 +220,8 @@ each iteration.
 | `var f = function g() { g = 1; return typeof g; }` | `"number"` | `"function"` (TypeError if strict) | 1.37 |
 | `function f(g = () => x) { var x = 1; return g(); }` | the body's `x` | the outer `x` | 1.68 |
 | `function f(x = arguments) { function arguments() {} }` | `x` is the function | `x` is the arguments object | 1.83 |
-| `switch (x) { case x: let x; }` | ReferenceError | the outer `x` | 1.74 |
+| `let x = "outside"; switch (x) { case "outside": let x = 1; }` | no clause runs (the discriminant reads the inner `x`) | the clause runs (the outer `x`) | 1.74 |
+| `switch (k) { default: let { a, b } = f(); return a + b; }` | ReferenceError: `a` is not defined | `a + b` | 1.98 |
 | `{ function* g() {} } typeof g` (sloppy) | `"function"` | `"undefined"` | 1.79 |
 | Completion value of `eval("1; if (true) {}")` | `1` | `undefined` | 1.8 |
 
@@ -220,11 +242,11 @@ function g() { yield 1; }    // before: a JavaScript 1.7 generator     now: Synt
 | Item | Before | Now | Ref |
 |------|--------|-----|-----|
 | Invalid assignment targets, `delete` of a name and octal escapes in strict code, escaped keywords, `08n`, `3in x` | various | SyntaxError | 1.12 |
-| A declaration as the body of `if`, a loop, `with` or a label | accepted | SyntaxError | 1.12 |
+| A function declaration as the body of `with`; a generator declaration as the body of `if` or of a label | accepted | SyntaxError | 1.12 |
 | `continue` to a label that is not a loop | continues | SyntaxError | 1.12 |
 | `let` redeclaring a parameter or a catch parameter | accepted | SyntaxError | 1.12 |
 | Duplicate parameters with defaults, in methods, or in a function whose body is strict | accepted | SyntaxError | 1.26 |
-| `"use strict"` in a function with non-simple parameters | accepted | SyntaxError | 1.26 |
+| `"use strict"` in a function with a destructuring parameter | accepted | SyntaxError | 1.26 |
 | Setter without exactly one parameter, rest parameter with a default, duplicate `__proto__` | accepted | SyntaxError | 1.32 |
 | Strict reserved words (`public`, `static`, …) right after `"use strict"` | accepted | SyntaxError | 1.32 |
 | `yield` inside the parameters of an arrow in a generator | accepted | SyntaxError | 1.67 |
@@ -235,6 +257,10 @@ function g() { yield 1; }    // before: a JavaScript 1.7 generator     now: Synt
 | `'use str\<newline>ict'` | strict | not a directive | 1.54 |
 | `*/ -->` after a multi-line comment | SyntaxError | HTML-like comment | 1.55 |
 | A raw ZWNJ/ZWJ inside an identifier | stripped (`a‌b` is `ab`) | part of the name | 1.16 |
+| Another format character (U+200B, U+180E, U+00AD, …) between tokens or inside an identifier or a number | stripped (`1<U+200B>2` is `12`) | SyntaxError | 1.96 |
+| An identifier with U+2E2F or a control character such as U+0001 | accepted | SyntaxError | 1.110 |
+| `if (ok) run(function () { let x = 1; });` (a `let` in a function inside a body without braces) | SyntaxError | valid | 1.97 |
+| `if (ok) try { … } catch (e) { const m = e.message; }` (also a `let`/`const` in a `switch` in that position) | SyntaxError | valid | 1.100 |
 | `for (var [k, v] in { ab: 1 })` | `k = "ab"`, `v = 1` | destructures the key: `"a"`, `"b"` | 1.9 |
 
 `eval?.()` and `eval` used as a tag are indirect evals, an indirect eval is never strict, and `eval(...args)` is a
@@ -259,14 +285,16 @@ result.
 |------|--------|-----|-----|
 | `(function (a, b) {}).arity` | `2` | `undefined` (use `length`) | 1.66 |
 | `strictFn.caller`, `Math.max.caller`, `strictFn.arguments` | `undefined` / `null` | TypeError | 1.23, 1.71 |
-| `Object.getOwnPropertyNames(sloppyFn)` | `length,name,prototype` | adds `arguments`, `caller` | 1.71 |
+| `Object.getOwnPropertyNames(sloppyFn)` | `length,name,arity,prototype` | `length,name,arguments,caller,prototype` | 1.66, 1.71 |
+| `Reflect.getOwnPropertyDescriptor(f, "arguments").value` during a call of `f` that made no arguments object | `undefined` or `null` | `null` | 1.71 |
 | `t.bind().name` with a redefined `name` | `"bound "` | `"bound target"` | 1.24 |
 | `function g(x, ...r) { x = 2; return arguments[0]; } g(1)` | `2` | `1` (unmapped `arguments`) | 1.25 |
-| `new (Object.getOwnPropertyDescriptor({ get a() {} }, "a").get)()` | an object | TypeError | 1.35 |
+| `"prototype" in Object.getOwnPropertyDescriptor({ get a() {} }, "a").get` | `true` | `false` | 1.35 |
 | `({ *g() {} }).g.toString()` | `"() {}"` | `"*g() {}"` | 1.27 |
 | `String(Function("a", "return a"))` | `function anonymous(a) {…}` | spec text; error line numbers in the body are 2 higher | 1.27 |
 | `function f(g = function () {}) { return g.name; }` | `""` | `"g"` | 1.30, 1.34 |
 | `({ get foo() {}, foo: 1 }).foo` (strict) | TypeError | `1` | 1.70 |
+| `function f() { return f() + 1; } try { f(); } catch (e) {}` (a call stack that runs out) | a Java `StackOverflowError` that the `catch` does not see (compiled), an exhausted heap (interpreted) | the `catch` gets `RangeError: Maximum call stack size exceeded` | 1.106 |
 
 ### Destructuring and iteration
 
@@ -297,25 +325,28 @@ Iterator.from(javaList).map(…)      // now: Java iterables get the helpers
 | Order of evaluation in `({ [k()]: t()[tk()] } = s())` | reads the source first | targets first | 1.30, 1.77 |
 | Generator `return()` with `yield` in a `finally` | TypeError or wrong value | completes as specified | 1.59, 1.73 |
 | A strict generator resumed from sloppy code | runs sloppy | runs strict | 1.58 |
+| `async function first(a) { for (const x of a) { return x; } }` (a `return` that leaves a loop or a scope in a generator or an async function) | ReferenceError: `x` is not defined | `x` | 1.104 |
+| `function* g() { try { return v(); } finally { f(); } }` | `f()` runs before `v()` | `v()`, then `f()` | 1.104 |
+| A `yield*` in the `catch` or `finally` block that `throw()` or `return()` runs | the delegation does not start | delegates, as after `next()` | 1.105 |
 
 ### Objects, properties, Proxy and Reflect
 
 | Item | Before | Now | Ref |
 |------|--------|-----|-----|
 | `Object.getPrototypeOf({ ['__proto__']: p }) === p` | `true` | `false` (own property) | 1.14 |
-| `Object.defineProperty(o, "x", { value: 2 })` on a non-configurable writable `x` | TypeError | allowed | 1.38 |
+| `Object.defineProperty(o, "x", { value: 2 })` on a non-configurable, writable and enumerable `x` | TypeError | allowed | 1.38 |
 | `Reflect.set(Object.freeze({x: 1}), "x", 2)` | `true` | `false` | 1.40 |
 | A proxy `set` trap returning `false`, in strict code | ignored | TypeError | 1.40 |
 | Proxy invariant violations (`getOwnPropertyDescriptor`, `defineProperty`, …) | allowed | TypeError | 1.40 |
-| `Object.prototype.toString.call(new Proxy([], {}))` | `"[object Object]"` | `"[object Array]"` | 1.43, 1.78 |
-| `Object.assign(Object.freeze({ a: 1 }), { a: 2 })` | ignored | TypeError | 1.44 |
-| `Object.setPrototypeOf(Object.prototype, {})` | allowed | TypeError | 1.47 |
+| `Object.prototype.toString.call(proxy)`, for a proxy of an array whose `get` trap revokes it | TypeError | `"[object Array]"` | 1.78 |
+| `Object.assign({ get a() { return 1; } }, { a: 2 })` | ignored | TypeError | 1.44 |
+| `Object.setPrototypeOf(Object.prototype, Object.create(null))` | allowed | TypeError | 1.47 |
 | `with` and `Symbol.unscopables` | ignored | honored | 1.51 |
 | `o.p &&= 1` with a read-only `o.p = 0` | write attempted | no write | 1.51 |
 | `1 instanceof Math` | `false` | TypeError | 1.52 |
 | `a?.b[0]` with `a` undefined | TypeError | `undefined` | 1.57 |
 | `for-in` over a key shadowed by a non-enumerable own property | listed | skipped | 1.54 |
-| `Reflect.ownKeys` of a proxy | integer keys first | the trap's order | 1.78 |
+| `Reflect.ownKeys` of a proxy | strings first, then symbols | the trap's order | 1.78 |
 
 ### Built-ins
 
@@ -337,13 +368,13 @@ a.length = 0;                             // before: length 0   now: length 2
 | `Promise.allSettled([Promise.reject(1)])` status | `" rejected"` | `"rejected"` | 1.46 |
 | `BigInt.asIntN(8, 1)` | `1n` | TypeError | 1.48 |
 | `Object.prototype.toString.call(TypeError.prototype)` | `"[object Error]"` | `"[object Object]"` | 1.48 |
-| Date setter on an invalid date | may store a value | date left invalid | 1.43 |
+| Date setter on an invalid date, whose argument conversion sets the date (`d.setDate({ valueOf() { d.setTime(0); return 1; } })`) | stores its result (`NaN`) | stores nothing (the time stays `0`) | 1.43 |
 | `__defineGetter__` on a frozen object | ignored | TypeError | 1.43 |
 | `decodeURI("%EF%BF%BE")` | U+FFFD | U+FFFE | 1.65 |
 | `Math.log2(8)` | `2.9999999999999996` | `3` | 1.65 |
 | Final sigma in `toLowerCase` after supplementary characters | `σ` | `ς` | 1.65 |
 | `String.prototype.trimLeft === trimStart` | `false` | `true` | 1.55 |
-| `new F()` with `F.prototype` not an object | `F.prototype` / `Error.prototype` | `Object.prototype` / the error's own prototype | 1.62 |
+| `Reflect.construct(F, [], nt)` / `Reflect.construct(TypeError, [], nt)` with `nt.prototype` not an object | `F.prototype` / `Error.prototype` | `Object.prototype` / `TypeError.prototype` | 1.62 |
 | `console.log(Infinity, NaN)` | `null null` | `Infinity NaN` | 1.95 |
 
 ### Typed arrays
@@ -362,9 +393,8 @@ adapt that code or keep the old order by overriding `hasFeature(cx, Context.FEAT
 | Item | Before | Now | Ref |
 |------|--------|-----|-----|
 | `Reflect.ownKeys(new Int8Array(2))` | `[]` | `["0", "1"]` | 1.39 |
-| `Object.getOwnPropertyDescriptor(ta, "0")` | TypeError | a data descriptor | 1.39 |
+| `Object.getOwnPropertyDescriptor(ta, "0")` | `undefined` | a data descriptor | 1.39 |
 | `ta["-0"]`, `ta.NaN = 3; ta.NaN` | read through the prototype / `3` | `undefined` | 1.39, 1.80 |
-| `new Int8Array(-1)` | Error "invalid argument" | RangeError | 1.49 |
 | `new BigInt64Array([1])` | `[1n]` | TypeError | 1.49 |
 | `Float64Array.from([, 1])[0]` | `0` | `NaN` | 1.49 |
 | `new Int16Array(2)` after `ArrayBuffer = null` | InternalError | works (intrinsic constructors) | 1.86 |
@@ -391,7 +421,13 @@ adapt that code or keep the old order by overriding `hasFeature(cx, Context.FEAT
 | `RegExp.lastMatch` read through a subclass | the last match | TypeError | 1.36 |
 | Legacy statics (`RegExp.$1`, …) enumerable | `true` | `false` | 1.55 |
 | `/(?<=x\d\|y\d)z/.exec("y1z")` | `null` | `["z"]` | 1.63 |
-| `flags` getter called on a primitive | `""` | TypeError | 1.85 |
+| `flags` getter called on a primitive | `"gimsyu"` | TypeError | 1.85 |
+| `/[\p{L}-]/u` (a `-` after a class escape at the end of a class) | SyntaxError | the letters and `-` | 1.101 |
+| `/[Α-ω]/i.test("α")` | SyntaxError | `true` | 1.102 |
+| `/\p{Any}/u`, and the other binary properties of ECMA-262 that can be derived from the JDK | SyntaxError | supported | 1.109 |
+| `/\p{Script=latin}/u` (a script value in another case) | matches Latin | SyntaxError | 1.109 |
+| `/\p{gc=digit}/u.test("²")` | `true` | `false` (`digit` is `Nd`) | 1.109 |
+| `/(?<ⸯ>a)/` (a group name with U+2E2F) | a group | SyntaxError | 1.110 |
 
 ### Java interop and embedding
 
@@ -404,6 +440,7 @@ These are the changes most likely to affect the Java side of an embedding.
 | A `let`/`const` read from Java before its declaration has run | `undefined` | `UniqueTag.UNINITIALIZED` | 1.2 |
 | `Iterator(javaCollection)` | iterates it | TypeError; use `for-of` or `Iterator.from` | 1.64 |
 | `Context.getElements`, `f.apply` with a huge array-like | `IllegalArgumentException` | RangeError | 1.61 |
+| A script that runs out of call stack | `StackOverflowError` (compiled), heap exhausted by the interpreter's frames | an `EcmaError` (`RangeError`); the interpreter stops at 100,000 frames unless `Context.setMaximumInterpreterStackDepth` sets a limit | 1.106 |
 | A custom top scope that is not a `TopLevel` | n/a | global `let`/`const` are defined on that scope, as before | 1.3 |
 | Code run at runtime in a function's scope (a legacy `Script` called as a function, a host function evaluating code in its caller's scope) | sees all the locals of a function with closures | sees only the variables a nested function refers to | 1.88 |
 | Assigning the name of a function compiled with `Context.compileFunction` (event handlers) | mutable variable, `name = null` stores `this.name` | unchanged (JavaScript 1.x semantics kept) | 1.37 |
@@ -414,7 +451,9 @@ the shared `x` **[1.14]**.
 ### Compiled-mode fixes
 
 These fix bugs of stock Rhino's class compiler (`optimizationLevel` 0 and above) where compiled code gave a
-different result than the interpreter. Under `VERSION_ES6`, compiled code keeps the stock bugs.
+different result than the interpreter.
+
+The first five are defects that no script can rely on, and are fixed in every language version:
 
 | Item | Before (compiled) | Now | Ref |
 |------|-------------------|-----|-----|
@@ -422,6 +461,12 @@ different result than the interpreter. Under `VERSION_ES6`, compiled code keeps 
 | `function rest(...a) { return a; }` called directly as `rest('xy')` | `'xy'` | `['xy']` | 1.92 |
 | `function f(x) { return x < 2; } f(1n)` | TypeError | `true` | 1.93 |
 | `function mul(x, y) { return x * y; } mul(2n, 3n)` | TypeError | `6n` | 1.90 |
+| `function mod(a, b) { const r = a % b; return r >= 0n ? r : b + r; } mod(-9n, 7n)` | TypeError | `5n` | 1.103 |
+
+The others apply under `VERSION_ECMASCRIPT` only; under `VERSION_ES6`, compiled code keeps these stock bugs:
+
+| Item | Before (compiled) | Now | Ref |
+|------|-------------------|-----|-----|
 | An exception in a `finally` inlined for a `return` in a `try`/`catch` | `finally` runs twice | runs once | 1.53 |
 | A `let` read in a later `switch` clause | `0` or the previous value | ReferenceError | 1.91 |
 | `super[k()]++` | key evaluated twice | once, ToNumeric | 1.82 |

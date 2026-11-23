@@ -13,11 +13,12 @@ Most of them run in both backends, the class compiler and the interpreter, and a
 | [Doctests and script tests](#doctests-and-script-tests) | `tests/testsrc` | Regressions, Rhino extensions | `./gradlew :tests:test` |
 | [Compiled against interpreted](#compiled-against-interpreted) | `tests/testsrc/jstests/compiled-interpreted` | The two backends compute the same results | `./gradlew :tests:test` |
 | [Java unit tests](#java-unit-tests) | every module | The embedding API, `javax.script`, source maps | `./gradlew test` |
-| [Stress modes](#stress-modes) | `tests/` | The splitting of large functions and wide jumps | `-Drhino.splitWeight=3`, ... |
+| [Stress modes](#stress-modes) | `tests/` | The splitting of large functions, class units, wide jumps; the caches against the lookups they replace | `-Drhino.splitWeight=3`, ... |
 | [Playground samples](#playground-samples) | `rhino-playground` | Every bundled sample runs | `./gradlew :rhino-playground:test` |
 | [The perf gate](#the-perf-gate) | `buildtools/perf-gate.sh` | No performance regression | `buildtools/perf-gate.sh` |
 | [JMH benchmarks](#jmh-benchmarks) | `benchmarks/` | Performance of single areas | `./gradlew jmh` |
 | [JavascriptPerformance](#javascriptperformance) | [external project](https://github.com/monflabs/JavascriptPerformance) | Real programs, checked results, against other engines | `java -jar ...` |
+| [Robustness harnesses](#robustness-harnesses) | the same external project | Crashes and wrong results, with V8 as the reference | see its README |
 
 ## In the build
 
@@ -28,14 +29,15 @@ Most of them run in both backends, the class compiler and the interpreter, and a
 
 - **Scope.** ES2026, minus proper tail calls, `intl402/`, `staging/` and the proposals after ES2026: the same
   exclusions as the Nashorn fork. 42,616 tests are in scope; the fork passes 99.2% of them (42,271) under
-  `VERSION_ECMASCRIPT`, where stock Rhino 1.9.1 passed 56.9%.
+  `VERSION_ECMASCRIPT`, where upstream Rhino at the fork point passed 56.9%.
 - **Modes.** Each test runs compiled and interpreted, and in strict and sloppy mode unless it is flagged for one.
 - **Expected failures** are listed in `tests/testsrc/test262.properties`, and grouped with their reasons in
   [doc/CONFORMANCE_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/CONFORMANCE_MONFLABS.md).
   A listed test that starts to pass **fails the run**, so conformance only moves forward: the file is regenerated
   in the same change.
-- **Async tests** run: the microtask queue is drained after the test, and it passes only if `$DONE` reported
-  completion. Every test has a 60-second limit, so a test that never ends fails instead of hanging the run.
+- **Async tests** run: an `EventLoop` runs after the test (the microtasks, then the timers and posted jobs), and
+  it passes only if `$DONE` reported completion. Every test has a 60-second limit, so a test that never ends fails
+  instead of hanging the run.
 - **Reference JDK.** Unicode data comes from the JDK, so the expectations are generated on Java 25. On another JDK
   the Unicode-dependent tests run, but their outcome is not checked.
 
@@ -70,7 +72,7 @@ compute. A script is added there for each shape that the class compiler speciali
 
 ### Java unit tests
 
-About 530 JUnit test classes across the modules test the engine from Java: the embedding API (`Context`, scopes,
+About 560 JUnit test classes across the modules test the engine from Java: the embedding API (`Context`, scopes,
 Java interop, the language versions), the `javax.script` engine (`rhino-engine`), the stack traces of the
 different formats, the source maps (`SourceMapSpecSuiteTest`, the
 [source map specification's](https://github.com/tc39/source-map-tests) test cases), CommonJS modules and E4X.
@@ -109,11 +111,11 @@ describes the method in detail.
 
 ### The perf gate
 
-`buildtools/perf-gate.sh [base-ref]` compares the working tree with an earlier revision (by default the upstream
-base, tagged `perf-baseline`) on 116 metrics: startup, compilation, and steady-state execution of scripts that each
-guard a hot path, in both backends and both language versions. The two revisions are measured on the same machine,
-in alternating rounds, against tolerances measured on that machine. It runs before every engine change, and takes
-about 18 minutes.
+`buildtools/perf-gate.sh [base-ref]` compares the working tree with an earlier revision (by default the
+`perf-baseline` tag, the last commit before the ES2026 work started) on 114 metrics: startup, compilation, and
+steady-state execution of scripts that each guard a hot path, in both backends and both language versions. The two
+revisions are measured on the same machine, in alternating rounds, against tolerances measured on that machine. It
+runs before every engine change, and takes about 18 minutes.
 
 ### JMH benchmarks
 
@@ -127,14 +129,14 @@ maps, property access and built-in object creation (`./gradlew jmh`; `BENCHMARK=
 
 [JavascriptPerformance](https://github.com/monflabs/JavascriptPerformance) is a separate project that runs the same
 benchmarks on several engines: the fork (under `VERSION_ECMASCRIPT` and `VERSION_ES6`, compiled and interpreted),
-stock Rhino 1.9.1, the [Monflabs Nashorn](https://github.com/monflabs/nashorn) fork, OpenJDK Nashorn, GraalJS and
-V8. Each engine runs in its own JVM, in interleaved rounds. Its timings against Rhino 1.9.1 are in
-[Comparison with Rhino 1.9.1](comparison.md).
+stock Rhino 1.9.1, the [Monflabs Nashorn](https://github.com/monflabs/nashorn) fork, OpenJDK Nashorn, GraalJS,
+Monflabs GaltaJS and V8. Each engine runs in its own JVM, in interleaved rounds. Its timings against Rhino 1.9.1
+are in [Comparison with Rhino 1.9.1](comparison.md).
 
 It is a correctness harness as much as a performance one. **A benchmark that throws, does not compile, or fails its
 own result check is reported as FAILED**, not timed: Octane's and the V8 benchmarks' checksums (mandreel's, for
 example), the results of the `intrinsics` programs, and fingerprints of the Web Tooling results computed on V8.
-Running the same file on six engines also shows which failures belong to the engine and which to the benchmark.
+Running the same file on seven engines also shows which failures belong to the engine and which to the benchmark.
 
 | Suite | What it runs | Why it matters for validation |
 |---|---|---|
@@ -143,7 +145,7 @@ Running the same file on six engines also shows which failures belong to the eng
 | `v8-benchmarks` | The V8 Benchmark Suite, version 6 | Checked results |
 | `ubench` | Micro-benchmarks of single operations | Hot paths, compared with the other engines |
 | `intrinsics` | Generators, iterators, promises, async functions and async generators in small programs | ES2015+ features, each checked against its expected result |
-| `web-tooling` | The [Web Tooling Benchmark](https://github.com/v8/web-tooling-benchmark): Acorn, Babel, Prettier, TypeScript, Terser, ... | Real modern libraries of 1 to 8 MB, checked against V8's results |
+| `web-tooling` | The [Web Tooling Benchmark](https://github.com/v8/web-tooling-benchmark): Acorn, Babel, Prettier, TypeScript, Terser, ... | Real modern libraries of 0.5 to 8 MB, checked against V8's results |
 | `jetstream3` | The JavaScript workloads of [JetStream 3.0](https://github.com/WebKit/JetStream): ARES-6, class fields, BigInt, Proxy (MobX, Vue), three.js, Babylon.js, React server-side rendering, ... | Recent language features and large bundles |
 
 `web-tooling` and `jetstream3` reach code that no other harness does: classes, destructuring, generators and very
@@ -165,3 +167,13 @@ java -jar target/javascript-performance-1.0.0-SNAPSHOT-all.jar \
 
 The `RHINO` group is the fork and stock Rhino, both compiled. The project's README describes the options, the
 reports (CSV and HTML) and the method.
+
+### Robustness harnesses
+
+The same project runs three harnesses that look for crashes and wrong results instead of time, with V8 as the
+reference: the stress tests of JavaScriptCore (`JSTests/stress`), differential fuzzing with generated programs, and
+coverage-guided fuzzing of the parser, the compilers, the regular expressions and `JSON.parse` with
+[Jazzer](https://github.com/CodeIntelligenceTesting/jazzer). The bugs they found are kept as regression tests in
+this repository (`tests/testsrc/jstests/robustness/robustness-fixes.js`, run by `RobustnessFixesTest` under
+`VERSION_ECMASCRIPT`, compiled and interpreted). See
+[doc/ROBUSTNESS_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/ROBUSTNESS_MONFLABS.md).

@@ -7,7 +7,7 @@ Three engines, measured on the same machine with the same harness:
 
 | Name here | What it is | Engine id in the harness |
 | --- | --- | --- |
-| **Stock** | `org.mozilla:rhino` 1.9.1 from Maven Central, default language version | `RHINO_COMPILED` / `RHINO_INTERPRETED` |
+| **Stock** | `org.mozilla:rhino` 1.9.1 from Maven Central, `Context.VERSION_ES6` (set by the harness) | `RHINO_COMPILED` / `RHINO_INTERPRETED` |
 | **Monflabs ES6** | this fork, `Context.VERSION_ES6` (upstream's language level) | `RHINO_MONFLABS_ES6_COMPILED` / `_INTERPRETED` |
 | **Monflabs ECMASCRIPT** | this fork, `Context.VERSION_ECMASCRIPT` (ES2026) | `RHINO_MONFLABS_COMPILED` / `_INTERPRETED` |
 
@@ -67,8 +67,9 @@ it is slower. For memory, 83% means the fork uses 83% of what stock uses.
   language-level limit and not a regression.
 
 **Time, interpreted mode: not measured.** The run was stopped after stock had finished one round, at about 2.5–3
-hours per engine per round, before either Monflabs engine had produced a result. Only stock's figures exist, in
-`performance-comparison/rhino-time-interpreted-partial.log`. It was not rerun on 2026-11-03.
+hours per engine per round, when Monflabs ES6 had only finished `box2d` (28,127 ms against 30,466 ms for stock).
+Stock's 53 figures and that one are in `performance-comparison/rhino-time-interpreted-partial.log`. It was not
+rerun on 2026-11-03.
 
 **Memory (complete, one pass, one JVM per engine and benchmark: geometric mean over 53 benchmarks).**
 
@@ -90,10 +91,10 @@ hours per engine per round, before either Monflabs engine had produced a result.
 - **Compiled, the fork allocates much less per run (58–59% of stock)**, which partly explains the time gains. The
   live heap after compile is 85–86% of stock's, after the runs level, and the classes 92–96%.
 - **Interpreted, a benchmark loads more classes than on stock, but few.** After the empty script, stock's interpreted
-  benchmarks load 2 to 253 classes (62 on average), the fork's 16 to 390 (100 under ES6, 111 under ECMASCRIPT):
-  about 40–50 more per benchmark, presumably the built-ins the fork loads on first use rather than with the realm
-  (not confirmed). The geometric means are high because the counts are small; the metaspace behind them is
-  0.1–0.3 MB for most benchmarks.
+  benchmarks load 2 to 253 classes (62 on average), the fork's 16 to 356 under ES6 and 16 to 390 under ECMASCRIPT
+  (100 and 103 on average over the same 53 benchmarks): about 40 more per benchmark, presumably the built-ins the
+  fork loads on first use rather than with the realm (not confirmed). The geometric means are high because the
+  counts are small; the metaspace behind them is 0.1–0.3 MB for most benchmarks.
 - **The fork's fixed cost is higher.** An empty script costs 134–137% of stock's allocation, 153–155% of its live
   heap, 140–144% of its metaspace and 130–135% of its classes (about 9 MB, 0.6 MB, 2.2 MB and 400 classes more).
   That is the larger ES2026 runtime: more built-ins, `BigInt`, `Proxy`, iterator helpers and so on.
@@ -137,8 +138,8 @@ mechanisms are described in
 - Only one `org.mozilla:rhino` fits on the classpath, so the harness pom pins `rhino.version` to **1.9.1**.
 - The fork comes from the `org.monflabs.mozilla:rhino` in `~/.m2`. Publish it with
   `./gradlew :rhino:publishToMavenLocal -x test`.
-- `MonflabsRhinoExecutor(compiled, ecmascript)` sets `VERSION_ECMASCRIPT` or `VERSION_ES6`, and either
-  optimization level 9 (compiled) or the interpreter. Each pair of engines is the same jar.
+- `MonflabsRhinoExecutor(compiled, ecmascript)` sets `VERSION_ECMASCRIPT` or `VERSION_ES6`, and compiled or
+  interpreted mode (`setInterpretedMode`). Each pair of engines is the same jar.
 - The group `--engines=RHINO_VERSIONS` selects all six engines.
 
 ### Suites
@@ -341,7 +342,7 @@ mean of the 53 benchmarks is 99%, but only 32 of them are within 10%. The larges
 | Monflabs ES6 interpreted | 34,036 | 1,766 | 43 | 1,736 | 7,375 | 1,601 |
 | Monflabs ECMASCRIPT interpreted | 34,754 | 1,777 | 457 | 1,846 | 7,604 | 1,663 |
 
-They are within 0.3% of the run of 2026-10-28/29. The per-benchmark memory figures are in `rhino-memory.csv`, one
+They are within 0.5% of the run of 2026-10-28/29. The per-benchmark memory figures are in `rhino-memory.csv`, one
 row per benchmark and engine.
 
 ## Caveats
@@ -377,7 +378,7 @@ row per benchmark and engine.
     | gbemu | 131% / 143% | 134% / 127% |
     | access-nbody | 118% / 138% | 105% / 96% |
 
-    The flag shortens each engine's own times overall: stock's to 97%, the fork's to 97% under ES6 and 90% under
+    The flag shortens each engine's own times overall: stock's to 97%, the fork's to 97% under ES6 and 91% under
     ECMASCRIPT. Some ES6 files got slower: `crypto-sha1` 364 → 614 ms, `generator_tokenizer` 135 → 210 ms,
     `access-fannkuch` 341 → 424 ms. It is a tuning option for embedders, not a fix. Given the
     [variation between runs](#variation-between-runs), the per-benchmark gains of one session with the flag are

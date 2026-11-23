@@ -32,7 +32,7 @@ import org.monflabs.mozilla.javascript.tools.shell.ShellContextFactory;
  * <p>Not all tests in the suite are run. Since the mozilla.org tests are designed and maintained
  * for the SpiderMonkey engine, tests in the suite may not pass due to feature set differences and
  * known bugs. To make sure that this unit test is stable in the midst of changes to the mozilla.org
- * suite, we maintain a list of passing tests in files opt-1.tests, opt0.tests, and opt9.tests. This
+ * suite, we maintain a list of passing tests in files interpreted.tests and compiled.tests. This
  * class also implements the ability to run skipped tests, see if any pass, and print out a script
  * to modify the *.tests files. (This approach doesn't handle breaking changes to existing passing
  * tests, but in practice that has been very rare.)

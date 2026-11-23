@@ -17,7 +17,7 @@ Three reference points appear in the figures below:
 
 | Name | What it is |
 |---|---|
-| **Upstream base** | The upstream Rhino code the fork started from, tagged `perf-baseline` in the repository: upstream `master` of 2026-10-05 (`a2fd8fe11`), about 270 commits after the 1.9.1 release. The perf gate compares against it. |
+| **Upstream base** | The upstream Rhino code the fork started from: upstream `master` of 2026-10-05 (`a2fd8fe11`), 270 commits after the 1.9.0 release tag; the 1.9.1 release (February 2026) is not on that line of history. The `perf-baseline` tag is this code with its packages renamed, and the perf gate compares against it. |
 | **Rhino 1.9.1** | The upstream release, from Maven Central. It is older than the upstream base, and faster on some object-heavy benchmarks (see [Where the fork is slower than Rhino 1.9.1](#where-the-fork-is-slower-than-rhino-191)). |
 | **Previous commit** | Most figures on this page are before/after a single change, measured against the commit before it. |
 
@@ -54,7 +54,8 @@ only meaningful relative to each other.
 - **Same harness, different engine.** The base revision is checked out in a temporary git worktree and only its
   engine jar is built. The harness and the benchmark scripts come from the working tree, so the two sides differ
   only in the engine.
-- **116 metrics**, each in interpreted and compiled mode, and under `VERSION_ES6` and `VERSION_ECMASCRIPT`:
+- **114 metrics**, each under `VERSION_ES6` and `VERSION_ECMASCRIPT` and, except the first, in interpreted and
+  compiled mode:
   - `startup.50scopes`: 50 `initStandardObjects()` calls;
   - `compile.earley-boyer`: compiling a 195 KB script;
   - `run.<script>`: steady-state execution of each script in `testsrc/perf` (ported from Nashorn's gate; each
@@ -88,8 +89,15 @@ PERF_ROUNDS=7 PERF_JAVA_OPTS='-Dperf.only=instanceof -Dperf.tolerance=0.05' buil
   metrics (`properties`, `v8-richards`, `closures`, `wideobject`, `typedarray`, `split`, `v8-crypto`, `sort`)
   settled in one of two states from one JVM to the next; `arith` could even be measured in the JVM interpreter,
   ten times slower, while its compilation was still running after the warmup. With `-Xbatch` a compilation blocks
-  the script, the timings are steady from the fifth run on, and these metrics no longer split. A flag on a single
-  metric is still confirmed with more rounds before it is believed.
+  the script, the timings are steady from the fifth run on, and these metrics no longer split: over the 12
+  calibration recordings each stays within 17% from its fastest JVM to its slowest.
+- **JIT states that are stable for a build.** With `-Xbatch` the rounds of one gate agree with each other, so
+  more rounds of the full gate do not clear a flag. A flagged metric can be another JIT state of the same code,
+  which depends on what ran before it in the JVM: on 2026-11-21 a change that left the compiled code of the `forof`
+  script byte-identical was flagged on `run.forof.cmp.ecma` at +13.2%, in all three rounds. The metric read +16%
+  after the `startup` benchmark alone, −4% after the five scripts that precede it, and level alone (+1.1% over 7
+  rounds). A flag is therefore checked alone (`-Dperf.only`) and after other predecessors before it is taken as
+  a cost of the change.
 - **Profile pollution.** The gate runs all benchmarks in one JVM, so what ran before changes the JIT profile of
   what runs next. A change can look neutral on a benchmark alone and regress in the full run; several changes on
   this page were reshaped, or dropped, for that reason.
@@ -102,10 +110,11 @@ PERF_ROUNDS=7 PERF_JAVA_OPTS='-Dperf.only=instanceof -Dperf.tolerance=0.05' buil
 
 - **JMH benchmarks** in `benchmarks/` (`./gradlew jmh`): SunSpider, the V8 benchmarks, and micro-benchmarks of
   slot maps, property access and built-in object creation. `BENCHMARK=<regex>` and `EVALMODE=Compiler` or
-  `Interpreter` narrow a run.
-- **JavascriptPerformance**, an external harness, runs Octane, SunSpider, ubench and the V8 benchmarks on the
+  `Interpreter` narrow a run. The script benchmarks set `VERSION_ES6`: they do not measure `VERSION_ECMASCRIPT`.
+- **JavascriptPerformance**, an external harness, runs Octane, SunSpider, ubench and the V8 benchmarks (and, on
+  request, its generator and async `intrinsics`, the Web Tooling Benchmark and the JetStream 3 workloads) on the
   fork (under `VERSION_ECMASCRIPT` and `VERSION_ES6`), Rhino 1.9.1, the Monflabs Nashorn fork, OpenJDK Nashorn,
-  GraalJS and V8, each in its own JVM, in interleaved rounds. It wraps every SunSpider file in a function, which
+  GraalJS, V8 and GaltaJS, each in its own JVM, in interleaved rounds. It wraps every SunSpider file in a function, which
   is how several of the optimizations below were found: code inside a function took slower paths than top-level
   code. Its results against Rhino 1.9.1 are in [Comparison with Rhino 1.9.1](comparison.md).
 
@@ -149,9 +158,9 @@ global object; for a primitive, a wrapper object. A function whose body (and arr
 
 ### Function objects created with their properties laid out
 
-Creating a function installed `length`, `name`, `arguments`, `caller` and `prototype` one by one, through several
-maps, and created the prototype object eagerly. A function now gets its final property map at once, and its
-prototype object is created when `prototype` is first read.
+Creating a function installed `length`, `name`, `prototype` and, under `VERSION_ECMASCRIPT`, `arguments` and
+`caller` one by one, through several maps, and created the prototype object eagerly. A function now gets its
+final property map at once, and its prototype object is created when `prototype` is first read.
 
 - **Applies to:** both modes. The single layout: functions created under `VERSION_ECMASCRIPT`, and non-strict code
   under `VERSION_ES6`. The lazy prototype: every ordinary function that is not a generator.
@@ -180,9 +189,10 @@ top-level functions of a script only; it now runs on every function, and goes fu
 | A nested declaration that always returns a number returns an unboxed double to its direct calls | `fib` and `tak` in a wrapper 74 → 61 ms | all |
 | Number variables of functions with an activation object (the ones in registers) | `controlflow-recursive` in sequence 1,143 → 925 ms | `VERSION_ECMASCRIPT` |
 
-These apply in compiled mode only, and only to nested function declarations that nothing but direct calls can
-reach: not a top-level declaration (a global that other scripts and the host can call), a function used as a
-value, called with a spread or another number of arguments, or one with a rest or destructured parameter.
+These apply in compiled mode only. Number parameters and return values are given only to nested function
+declarations that nothing but direct calls can reach: not a top-level declaration (a global that other scripts and
+the host can call), a function used as a value, called with a spread or another number of arguments, or one with a
+rest or destructured parameter.
 
 ### Compiled generators complete without a stack trace
 
@@ -218,7 +228,8 @@ stay in the activation now; the rest, `let` and `const` included, become registe
 are all registers gets no scope object.
 
 - **Does not apply** with a direct `eval` or `with` in the function or a nested function, a mapped `arguments`
-  object, in generators, or past 256 such variables (the JVM's local limit).
+  object, in generators, or past 256 such variables (a variable takes up to three of the 1,024 JVM locals that a
+  compiled method may use).
 - **Applies to:** both modes, `VERSION_ECMASCRIPT` only: code evaluated at runtime in the function's scope other
   than a direct `eval` (a legacy `Script` object, a host function) no longer sees register variables (see
   [Changes](changes.md)).
@@ -350,10 +361,11 @@ stops there.
 
 ### RegExp symbol methods on an ordinary regexp
 
-`split` read nine flag getters, looked up the species constructor and compiled a new sticky splitter on every
-call; `replace`, `match` and `matchAll` read `flags` too. For an ordinary regexp (same criteria as Nashorn: its
-own prototype, no own property but `lastIndex`, and the relevant `RegExp.prototype` properties unchanged), the
-flags come from the compiled pattern and the splitter is built once per pattern and flags.
+`split` read `flags` (a getter that reads every flag getter, eight under `VERSION_ECMASCRIPT`), looked up the
+species constructor and compiled a new sticky splitter on every call; `replace`, `match` and `matchAll` read
+`flags` too. For an ordinary regexp (same criteria as Nashorn: its own prototype, no own property but `lastIndex`,
+and the relevant `RegExp.prototype` properties unchanged), the flags come from the compiled pattern and the
+splitter is built once per pattern and flags.
 
 - **Applies to:** both modes, all versions (the `lastIndex` shortcut: `VERSION_ECMASCRIPT`).
 - **Gain:** 200,000 calls, compiled: `split` 268 → 146 ms, `replace` 166 → 108 ms, `exec` 119 → 96 ms. Octane
@@ -366,8 +378,8 @@ flags come from the compiled pattern and the splitter is built once per pattern 
   `Promise`, `Proxy`, typed arrays, ...), about 45% of the initialization. They are built on first use again:
   `startup.50scopes` −33% (`VERSION_ECMASCRIPT`) and −42% (`VERSION_ES6`). This matters to embedders that create
   many scopes.
-- **`Math.sumPrecise`** uses Shewchuk's algorithm rather than an exact `BigDecimal` sum, as Nashorn does: 18 times
-  faster on usual values (8 ms against 145 ms for a million values).
+- **`Math.sumPrecise`** (`VERSION_ECMASCRIPT`) uses Shewchuk's algorithm rather than the exact `BigDecimal` sum
+  that Nashorn uses: 18 times faster on usual values (8 ms against 145 ms for a million values).
 
 ## Large scripts and generated code
 
@@ -382,13 +394,20 @@ instead:
 | A function or the top-level code is too large | Re-parses with that function split into chunks of about 600 nodes, each an arrow function called in place; halves the size on each new failure, up to 3 times | Octane `regexp.js` compiled again: score 460 → 606 |
 | The class is too large (constant pool, invokedynamic sites) | Spreads the functions over several classes, doubling the count on each failure, up to 256 | Octane `mandreel` over 16 classes: score 628 → 826 |
 | A literal of more than 1,000 constants | Compiles it as text parsed once into a cached template | Octane `pdfjs` compiles under `VERSION_ECMASCRIPT`: score 2,100 → 4,505 |
+| A jump over 32 KB in a function that cannot be split further (a `switch` of hundreds of clauses) | Compiles the function again with wide jumps (`goto_w`) | Lebab, in the Web Tooling Benchmark, compiled instead of interpreted: about 1,250 → 780 ms per run |
+| A function over 8,000 bytes of bytecode, which HotSpot does not JIT-compile (`VERSION_ECMASCRIPT`, not top-level code) | Splits it once, even though it fits in a class file | `js-tokens` compiled: 5.8 → 4.75 s per run (3.2 s interpreted) |
 
-- **Applies to:** compiled mode, all versions, only after a failure: code that fits is compiled as before.
-- **Not split:** generators and async functions, derived constructors, functions with a direct `eval` or `with`.
+- **Applies to:** compiled mode, all versions (the last row: `VERSION_ECMASCRIPT`), only after a failure: code
+  that fits is compiled as before.
+- **Not split:** derived constructors, functions with a direct `eval` or `with`, and generators and async
+  functions before `VERSION_ECMASCRIPT`. Under `VERSION_ECMASCRIPT` they are split too: no chunk holds a `yield` or
+  an `await`, and in a generator that is not async a run of statements that yield becomes a generator called with
+  `yield*`.
 - **Invisible to scripts:** chunks share `this`, `arguments`, `new.target` and `super`; `return`, `break` and
   `continue` across a chunk are replayed at its call site; script stack traces show chunk frames as the
-  function's. With splitting forced on every function, test262 and the Mozilla tests pass except one test of
-  `f.arguments` and two bytecode tests.
+  function's. With splitting forced on every function (`-Drhino.splitWeight=3`), the run of 2026-11-21 failed
+  three tests that inspect the generated code (`NewTargetDirectCallTest` twice, `RobustnessFixesTest`) and one
+  test262 file on `f.arguments`, fixed on 2026-11-22.
 - A remaining fallback to the interpreter is reported as a warning rather than silent.
 
 ## Practical guidance
@@ -398,8 +417,10 @@ instead:
   from the others (name and property caches, registers, iterators, built-ins), and starts faster.
 - **The default version is the fast one for modern code.** `VERSION_ECMASCRIPT` gets the optimizations that rely
   on its semantics: closures, `arguments`, destructuring, spread and iteration, string method calls and
-  per-iteration bindings. On top-level code both versions run the gate scripts at the same speed. It is not faster
-  everywhere: Octane `regexp.js` runs at 14.7 s under `VERSION_ECMASCRIPT` against 14.2 s under `VERSION_ES6`.
+  per-iteration bindings. In compiled mode, 14 of the 20 gate scripts run within about 5% of each other under the
+  two versions (calibration recordings of 2026-11-21); under `VERSION_ECMASCRIPT`, `forof` takes 45% of the
+  `VERSION_ES6` time, `stringmethods` 63%, `regexptest` 87% and `wideobject` 94%, `instanceof` 108% and `arraymap`
+  110%. It is not faster everywhere: Octane `regexp.js` runs at 14.7 s under `VERSION_ECMASCRIPT` against 14.2 s under `VERSION_ES6`.
 - **Code shapes that benefit most:**
   - functions wrapped in a function (module pattern, IIFE): nested declarations get direct calls and unboxed
     numbers like top-level ones;
@@ -470,7 +491,7 @@ tried-and-dropped list,
 [OPTIMIZATION_DROPPED.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/OPTIMIZATION_DROPPED.md)). Shared shapes
 are the remaining candidate.
 
-The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, about 270 commits later. To separate
+The fork does not start from 1.9.1 but from upstream `master` of 2026-10-05, 270 commits after the 1.9.0 tag. To separate
 the two, each file was run alone (one JVM, best of 2 runs after 1, `VERSION_ES6`) on 1.9.1, on that upstream base
 and on the fork, before the fixes below, in milliseconds:
 
@@ -486,8 +507,8 @@ and on the fork, before the fixes below, in milliseconds:
 ### The upstream commit
 
 Bisecting the upstream commits on `box2d` finds a single step: c1ac6c149, "Start using the new scopes hierarchy
-internally" (2025-12-07), 12.9 s → 18.2 s. It made scopes `ScopeObject`s, apart from `ScriptableObject`. Two
-effects were measured:
+internally" (written 2025-12-07, committed 2026-04-02), 12.9 s → 18.2 s. It made scopes `ScopeObject`s, apart from
+`ScriptableObject`. Two effects were measured:
 
 - **The key comparison of the slot lookup.** `SlotMapOwner.get` now serves both kinds of object, and the
   `Objects.equals` of `EmbeddedSlotMap.query` is no longer inlined (24 JFR samples out of line before, 257

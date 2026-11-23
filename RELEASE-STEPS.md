@@ -4,7 +4,7 @@
 
 Update the version in gradle.properties to the new release version.
 
-Update RELEASE_NOTES.md to include at least a summary of the major features
+Update RELEASE-NOTES.md to include at least a summary of the major features
 of the release. (This is historical, but many find it helpful to have a single
 file in the repo that lists the major changes.)
 
@@ -17,7 +17,7 @@ published JARs as a sanity check.
 
 ## Update Native Compatibility Table
 
-The offial Kangax "compat table" now supports Rhino, but it's convenient
+The official Kangax "compat table" now supports Rhino, but it's convenient
 to have our own that shows progress across all releases. Here's how to
 update it:
 
@@ -44,14 +44,14 @@ Update to that branch and create a tag for the release, where XX is a number
 like "1_7_14":
 
     git pull origin master
-    git tag Rhino_XX_Release
-    git push origin Rhino_XX_Release
+    git tag RhinoXX_Release
+    git push origin RhinoXX_Release
 
 Now, on the Rhino "Releases" tab in GitHub, create a release that corresponds
 to the new tag. Include the following:
 
-* A cut and paste of the part of RELEASE_NOTES.md added for the release
-* The three JARs created by "./gradlew.jar"
+* A cut and paste of the part of RELEASE-NOTES.md added for the release
+* The JARs created by "./gradlew jar"
 * The ZIP file created by "./gradlew distZip"
 * A ZIP of the source will be included automatically by GitHub
 
@@ -62,7 +62,7 @@ involves the web interface at https://central.sonatype.com.
 
 Notes on this process:
 
-* Set ORG_GRADLE_PROJECT_SIGNINGKEY and ORG_GRADLE_PROJECT_SIGNINGPASSWORD to the GPT key to use.
+* Set ORG_GRADLE_PROJECT_SIGNINGKEY and ORG_GRADLE_PROJECT_SIGNINGPASSWORD to the GPG key to use.
 * Run ./gradlew publishToMavenLocal to generate the artifacts
 * If .md5, .sha1, and .sha256 checksums are not generated, generate them using "shasum".
 

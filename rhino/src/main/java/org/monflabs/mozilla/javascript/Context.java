@@ -282,7 +282,15 @@ public class Context implements Closeable {
      *       {@code Proxy.revocable} is not a constructor.
      *   <li>Functions have no {@code arity} property (JavaScript 1.2); use {@code length}.
      *   <li>A {@code yield} expression in the parameters of an arrow function is an early error.
-     *   <li>Closures in parameter expressions do not see the {@code var} declarations of the body.
+     *   <li>Parameter expressions, and closures created in them, do not see the {@code var}, {@code
+     *       let}, {@code const} and function declarations of the body.
+     *   <li>A data property of an object literal replaces an accessor of the same name defined
+     *       before it.
+     *   <li>{@code new ArrayBuffer} reads the prototype of newTarget before allocating the data
+     *       block.
+     *   <li>A generator's {@code return()} inside an array destructuring pattern closes the
+     *       pattern's iterator as a return: an error of its {@code return} method, or a result that
+     *       is not an object, is thrown.
      *   <li>Strict methods called on a primitive, and the built-ins whose spec says so, receive the
      *       primitive as {@code this}.
      *   <li>{@code Function.prototype.caller}/{@code arguments} are %ThrowTypeError%; sloppy

@@ -5,7 +5,7 @@ The documentation of the fork, a [docsify](https://docsify.js.org) site like the
 to `monflabs_enhancements`: https://monflabs.github.io/rhino/
 
 ```sh
-buildtools/build-doc.sh            # generates the site in rhino-doc/build/site
+buildtools/build-doc.sh            # generates the site in rhino-doc/build/site (./gradlew :rhino-doc:site)
 buildtools/build-doc.sh --serve    # and serves it on http://localhost:8000/ (--serve <port>)
 ```
 

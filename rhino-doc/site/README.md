@@ -50,7 +50,7 @@ On Java 25, the reference JDK, 345 of the 42,616 tests in scope do not pass:
 | 10 | Several realms | Errors thrown by built-ins, and `Function.prototype.bind` and `apply`, do not track the realm of their function: the fork supports several realms only as separate scopes. |
 | 35 | `IsHTMLDDA` | A browser host hook (`document.all`). Skipped. |
 | 2 | `CanBlockIsFalse` | Written for a host whose main thread cannot call `Atomics.wait`; every thread of a server can. Skipped. |
-| 1 | `import-text` | A proposal after ES2026. Skipped. |
+| 1 | A folder that is not run | `test262.properties` skips the folder `language/expressions/member-expression`, as the file of upstream Rhino did. Its one test passes when it is run by hand. |
 
 Each failing test is listed, with its reason, in
 [doc/CONFORMANCE_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/CONFORMANCE_MONFLABS.md).
@@ -88,7 +88,11 @@ Rhino has always had a language version on its `Context`. The fork adds one more
 - **`Context.VERSION_ES6` (200)** keeps the exact behavior of stock Rhino, bugs included: the
   features that stock Rhino did not have, the new syntax, the module API and the new globals, are
   `VERSION_ECMASCRIPT` only. What cannot change a result, such as the optimizations and the
-  compiler's handling of large scripts, applies to every version.
+  compiler's handling of large scripts, applies to every version. So do a few fixes: defects that
+  no script can rely on (a miscompilation, a Java exception of the engine itself), sixteen bug
+  fixes taken from upstream Rhino, and the limits on the length of a string and on the capture
+  groups of a regular expression. They are listed in
+  [Changes and incompatibilities](changes.md#bug-fixes-for-every-version).
 
 ```java
 try (Context cx = Context.enter()) {
@@ -140,6 +144,9 @@ JavaScript.
 - [Changes and incompatibilities](changes.md): what behaves differently, and how to migrate.
 - [Performance optimizations](performance.md): what was made faster, and how performance is
   guarded.
+- [Comparison with Rhino 1.9.1](comparison.md): time and memory on the JavascriptPerformance
+  suites.
+- [Code complexity added](complexity.md): what the ES2026 work added to the engine's source.
 - [Asynchronous code](async.md): generators, promises and the optional event loop, and how to
   write host functions such as `setTimeout()` and `fetch()` in Java.
 - [How the engine is validated](validation.md): the harnesses that check the engine, from test262

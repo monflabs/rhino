@@ -13,9 +13,13 @@ SourceMapV3 mapper = SourceMapV3.parse(mapJsonString);
 Script script = cx.compileScript(
     ScriptCompileSpec.fromSource(transpiledSource)
         .sourceName("bundle.js")
+        .lineno(1)
         .sourceMapper(mapper)
         .build());
 ```
+
+`lineno(1)` matters: a compile spec numbers the first line 0 by default, and the mapper is asked
+for 1-indexed lines, so without it every position is looked up one line too early.
 
 From that point on, `RhinoException.lineNumber()` reports the original source line,
 parser error messages quote the original source text, and the debugger receives the
@@ -31,9 +35,9 @@ The classes in `org.monflabs.mozilla.javascript.sourcemap`:
 | `SourceMapV3` | `public final class` | ECMA-426 plain source map; implements `SourceMapper` |
 | `SourceMapJsonParser` | package-private | Strict JSON parser; no external dependencies |
 | `MappingsDecoder` | package-private | Base64-VLQ mappings decoder |
-| `Segment` | package-private record | One decoded mappings segment |
+| `Segment` | package-private class | One decoded mappings segment |
 | `SourceMapException` | `public class` | Unchecked parse/decode error |
-| `Position` | `public record` | `(sourcePath, line, column)` in original source |
+| `Position` | `public final class` | `(sourcePath, line, column)` in original source |
 
 ### SourceMapper interface
 
@@ -75,7 +79,7 @@ any JSON library. It produces:
 - integers → `Long`; floats/exponents → `Double`
 - booleans → `Boolean`; null → `null`
 
-All errors throw `SourceMapException` with the byte offset.
+All errors throw `SourceMapException` with the character offset.
 
 ### Mappings decoder
 
@@ -126,4 +130,4 @@ after fixing bugs:
 |---|---|
 | `Parser.mapLocation` | Remaps error position and fetches original source line text |
 | `Context` debugger handoff | Passes `getPrimarySourceContent()` to the debugger at compile time |
-| `CodeGenerator` / `BodyCodegen` | Consume only `position.line()`; unaffected by the `sourcePath` addition |
+| `CodeGenerator` / `BodyCodegen` | Consume only `position.getLine()`; unaffected by the `sourcePath` addition |

@@ -13,9 +13,18 @@ Rhino is licensed under the [MPL 2.0](./LICENSE.txt).
 Rhino requires Java 21 or higher to run and to build. Java 25 is highly recommended.
 This fork targets embedding in Java server applications; Android and micro JVMs are not supported.
 
+This is the Monflabs fork of [mozilla/rhino](https://github.com/mozilla/rhino). Its Java packages are
+`org.monflabs.mozilla.*` and its Maven group is `org.monflabs.mozilla`, and a new `Context` uses
+`Context.VERSION_ECMASCRIPT` (ES2026) unless another language version is set. What the fork changes is in
+[CHANGELOG_MONFLABS.md](./CHANGELOG_MONFLABS.md), what differs from stock Rhino in
+[BACKWARD_COMPATIBILITY.md](./BACKWARD_COMPATIBILITY.md), its test262 results in
+[doc/CONFORMANCE_MONFLABS.md](./doc/CONFORMANCE_MONFLABS.md), its robustness testing in
+[doc/ROBUSTNESS_MONFLABS.md](./doc/ROBUSTNESS_MONFLABS.md) and its optimizations in
+[OPTIMIZATION.md](./OPTIMIZATION.md).
+
 To build and run a Rhino shell:
 
-    ./gradlew run -q --console=plain
+    ./gradlew :rhino-tools:run -q --console=plain
 
 To run the tests:
 
@@ -25,7 +34,8 @@ To run the tests:
 
 ## Releases
 
-The current release is <a href="https://github.com/mozilla/rhino/releases/tag/Rhino1_9_1_Release">Rhino 1.9.1</a>. Please see the [Release Notes](./RELEASE-NOTES.md).
+The current release of upstream Rhino is <a href="https://github.com/mozilla/rhino/releases/tag/Rhino1_9_1_Release">Rhino 1.9.1</a>. Please see the [Release Notes](./RELEASE-NOTES.md).
+The version of this fork is 2026.0 (`gradle.properties`); its changes are in [CHANGELOG_MONFLABS.md](./CHANGELOG_MONFLABS.md).
 
 <details><summary>Releases</summary>
 <table>
@@ -69,13 +79,13 @@ Information for script builders and embedders:
 
 Rhino 1.7.15 and before were primarily used in a single JAR called "rhino.jar".
 
-Newer releases now organize the code using Java modules. There are four primary modules and one auxiliary module for Kotlin developers:
+Newer releases now organize the code using Java modules. There are five primary modules and one auxiliary module for Kotlin developers:
 
 * **rhino**: The primary codebase necessary and sufficient to run JavaScript code. Required by everything that uses Rhino. In releases *after* 1.7.15, this module does not contain the "tools" or the XML implementation.
 * **rhino-tools**: Contains the shell, debugger, and the "Global" object, which many tests and other Rhino-based tools use. Note that adding Global gives Rhino the ability to print to stdout, open files, and do other things that may be considered dangerous in a sensitive environment, so it only makes sense to include if you will use it.
 * **rhino-xml**: Adds the implementation of the E4X XML standard. Only required if you are using that.
 * **rhino-engine**: Adds the Rhino implementation of the standard Java *ScriptEngine* interface. Some projects use this to be able to switch between script execution engines, but for anything even moderately complex it is almost always easier and always more flexible to use Rhino's API directly.
-* **rhino-all**: This creates an "all-in-one" JAR that includes *rhino-runtime*, *rhino-tools*, and *rhino-xml*. This is what's used if you want to run Rhino using "java jar".
+* **rhino-all**: This creates an "all-in-one" JAR that includes *rhino*, *rhino-tools*, and *rhino-xml*. This is what's used if you want to run Rhino using "java -jar".
 
 * **rhino-kotlin**: Enhanced support for code written in Kotlin, [see the details.](./rhino-kotlin/README.md)
 
@@ -85,6 +95,7 @@ testing but which are not published to Maven Central:
 * **tests**: The tests that depend on all of Rhino and also the external tests, including the Mozilla legacy test scripts and the test262 tests.
 * **benchmarks**: Runs benchmarks using JMH.
 * **examples**: Surprisingly, this contains example code.
+* **testutils**: Library code shared by the tests of the other modules.
 * **rhino-playground**: A desktop playground: samples, an editor and a console, with the language version and the execution mode to choose (`./gradlew :rhino-playground:run`).
 * **rhino-doc**: The documentation site of the fork, with the playground running in the browser (`buildtools/build-doc.sh --serve`; published to GitHub Pages).
 
@@ -106,8 +117,7 @@ an implementation of the "console" object that you may want to use instead.)
 ### Requirements
 
 It's recommended to build Rhino using Java 25. However, it will build with Java 21
-and up. The "spotless" tool, which enforces code formatting, will not
-run on older Java versions -- it will emit a warning.
+and up. The "spotless" tool, which enforces code formatting, runs on all of them.
 
 Rhino runs on Java 21 and higher. The build tools use the "--release" flag to ensure that only
 features from Java 21 are used in the product.
@@ -127,7 +137,7 @@ For normal development, you can build the code, run the static checks, and run a
 
 To just run the Rhino shell, you can do this from the top-level directory:
 
-    ./gradlew run -q --console=plain
+    ./gradlew :rhino-tools:run -q --console=plain
 
 Alternately, you can build an all-in-one JAR and run that:
 
@@ -136,15 +146,20 @@ Alternately, you can build an all-in-one JAR and run that:
 
 And finally, you can extract the classpath and use it in a variety of ways:
 
-    export CLASSPATH=$(./gradlew -q printClasspath)
+    export CLASSPATH=$(./gradlew -q printClassPath)
     java org.monflabs.mozilla.javascript.tools.shell.Main
+
+To use the fork from another build, install the JARs in the local Maven repository, as
+`org.monflabs.mozilla:rhino:2026.0`, `org.monflabs.mozilla:rhino-tools:2026.0` and the like:
+
+    ./gradlew publishToMavenLocal
 
 ### JLine-Based Console
 
 If the JLine library is present, the Rhino shell will use it for command-line
 editing. The commands above will all include JLine. However, the Gradle wrapper
 interferes with JLine's ability to manipulate the terminal. For the best CLI
-experience, use either of the last two options, instead of ./gradlew run.
+experience, use either of the last two options, instead of ./gradlew :rhino-tools:run.
 
 ### Benchmarking
 
@@ -155,7 +170,7 @@ You can also run the benchmarks:
 When running the benchmarks you may find a couple of environment variables useful.
 * `BENCHMARK` if set will limit the benchmarks run to those matching
   the regular expression given.
-* `INTERPRETED` can be set to `true` or `false` to only run the
+* `EVALMODE` can be set to `Interpreter` or `Compiler` to only run the
   benchmarks in interpreted or compiled mode.
 * `PROFILERS` can be set to `cpu` or `alloc` to run the async profiler
   for cpu time or memory allocations, or can be set to any other
@@ -180,7 +195,7 @@ It is a good idea to test major changes on Java 21 before assuming that they wil
 tests. To do this, set the environment variable RHINO_TEST_JAVA_VERSION to the version that you
 want to test. For example:
 
-    RHINO_TEST_JAVA_VERSION=17 ./gradlew check
+    RHINO_TEST_JAVA_VERSION=21 ./gradlew check
 
 This will only work if Gradle can find a JDK of the appropriate version. You can troubleshoot
 this using the command:
@@ -252,7 +267,7 @@ To submit a new PR, please use the following process:
 code formatting and style checks and runs the tests.
 * Please write tests for what you fixed, unless you can show us that existing
 tests cover the changes. Use existing tests, such as those in
-"testsrc/org/monflabs/mozilla/javascript/tests", as a guide.
+"tests/src/test/java/org/monflabs/mozilla/javascript/tests", as a guide.
 * If you fixed ECMAScript spec compatibility, take a look at test262.properties and see
 if you can un-disable some tests.
 * Push your change to GitHub and open a pull request.
@@ -263,7 +278,7 @@ some time to get back to you.
 ## Updating Test262 tests
 
 If you are adding new capabilities to Rhino, you may be making more test262 tests pass, which is
-a good thing. Please [see the instructions](./tests/testsrc/README.md) on how to update our test262 configuration.
+a good thing. Please [see the instructions](./tests/README.md) on how to update our test262 configuration.
 
 Unicode data (identifiers, case mapping, RegExp property escapes) comes from the JDK the tests run on,
 so test262.properties is generated on the reference JDK, Java 25 (RHINO_TEST_JAVA_VERSION=25).

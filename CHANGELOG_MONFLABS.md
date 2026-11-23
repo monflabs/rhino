@@ -2,7 +2,8 @@
 
 Changes made in the `org.monflabs.mozilla` fork of Rhino, newest first. Each entry says what changed, why, which
 test262 slice moved, which behavior is gated by `Context.VERSION_ECMASCRIPT`, and the performance impact when
-relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
+relevant. The plan these changes follow is in [MONFLABS_PLAN.md](MONFLABS_PLAN.md). The entries before plan G
+(2026-10-13) cite `BACKWARD_COMPATIBILITY.md` 2.1 to 2.46 by the numbers of the time: these are 1.17 to 1.62 today.
 
 ## Potential future changes
 
@@ -38,6 +39,23 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 ## 2026.0
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
+
+### A default value of a `let`/`const` pattern reads the names bound before it (2026-11-22)
+
+Under `VERSION_ECMASCRIPT`, `const {a, b = a} = {a: 1}`, `let [i, n = i] = [0]` and
+`for (let [a, b = a] of list)` threw `ReferenceError: Cannot access "a" before initialization`: since the
+temporal dead zone of destructuring declarations (2026-10-25, `BACKWARD_COMPATIBILITY.md` 1.99), every name of
+a pattern was treated as uninitialized until the end of the whole declaration. A name is initialized when its
+own element has been processed (ECMA-262 §14.3.3, BindingInitialization), so a later default reads it.
+`TemporalDeadZone.classify` now ends the static dead zone of a name at the end of its element in the pattern
+(`bindingElementEnd`), default value included; the initializer of the declaration, and the iterated object of a
+`for-in`/`for-of` head, stay in the dead zone of every name. `VERSION_ES6` is unchanged.
+
+- Found by the documentation review of 2026-11-22, which ran every example of `BACKWARD_COMPATIBILITY.md`;
+  test262 has no test of it that failed.
+- Test: `ConformanceResidualsTest.patternDefaultsSeeEarlierBindings`.
+- Verification: full `check`, `test262.properties` unchanged; perf gate against the previous commit, no metric
+  outside its band.
 
 ### `f.arguments` during a call that made no arguments object (2026-11-22)
 
@@ -110,7 +128,8 @@ with an `IllegalStateException` when they differ (`CacheVerifier`). The rules th
 in other classes, and until now only by tests of values:
 
 - `PropertyCache`: the cached slot is the first one a walk of the prototype chain finds for the name (the rule:
-  every change to an object of a cached chain calls `invalidate()`, from 8 sites in the slot maps);
+  every change to an object of a cached chain calls `invalidate()`, from 7 sites: 5 in the slot maps,
+  `SlotMapOwner.setMap` and `ScriptableObject.setPrototype`);
 - `GlobalNameCache`: the cached slot is the one the top scope, then the global object, has for the name;
 - a variable read at a fixed position of its activation: the slot is the one the activation has for its name;
 - a variable of an enclosing function read at a fixed position: no scope between the code and that activation
@@ -431,7 +450,7 @@ no guard.
 - Octane `box2d` compiled, alone: 18.4 s → 9.1 s (Rhino 1.9.1: 12.8 s); `access-nbody`, `richards`, `deltablue`,
   `raytrace` level. Perf gate: the second run passed (the first flagged the bimodal `sort.cmp.ecma`).
   OPTIMIZATION.md "Double conversions linked without a guard".
-- Docs: the fork starts from upstream `master` of 2026-10-05 (`perf-baseline`), about 270 commits after 1.9.1,
+- Docs: the fork starts from upstream `master` of 2026-10-05 (`perf-baseline`), 270 commits after the 1.9.0 tag,
   not from 1.9.1 (site README, features, performance). performance.md "Where the fork is slower than Rhino
   1.9.1": each regressed file alone on 1.9.1, the upstream base and the fork, and the upstream commit found by
   bisection for `box2d` (c1ac6c149). `sort` and `v8-crypto` added to the bimodal metrics of the perf gate.
@@ -2806,7 +2825,7 @@ Bug fixes, for every language version from `VERSION_ES6` on (decided 2026-10-07)
 ### Performance gate (2026-10-07)
 
 - `buildtools/perf-gate.sh [base-ref]` compares the working tree with a base revision (default: the `perf-baseline`
-  tag) on 116 metrics, and fails on a regression beyond each metric's tolerance: startup, compile time of a large
+  tag) on 114 metrics, and fails on a regression beyond each metric's tolerance: startup, compile time of a large
   script, and steady-state runs of 20 micro-benchmarks (ported from Nashorn's perf gate) and 7 V8 benchmarks, each in
   interpreted and compiled mode and under `VERSION_ES6` and `VERSION_ECMASCRIPT`. Base and head run the same
   harness (`benchmarks/src/perf`) in interleaved rounds; only the engine jar differs.

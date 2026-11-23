@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Derives perf-gate tolerances from recordings of identical code.
 
-Record the same engine several times (at least 8 JVMs; see benchmarks/README.md),
+Record the same engine several times (at least twice the rounds, 12 JVMs in practice; see benchmarks/README.md),
 then run:
 
     python3 buildtools/perf-calibrate.py [--rounds 3] [--write <file>] <recording.json>...

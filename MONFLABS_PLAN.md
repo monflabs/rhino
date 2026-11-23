@@ -57,6 +57,7 @@ existing code and without slowing the engine down.
 | 2026-10-19 | **M16: second performance pass** (user decision): the 16 items of a code analysis, the small ones first; every optimization documented in `OPTIMIZATION.md`. |
 | 2026-10-22 | **M17: method splitting** (user decision, rather than a compact retry without the fork's larger code forms, smaller forms everywhere or long jumps in the class writer): a function too large for a class file is split into nested arrow functions, as Nashorn's `SplitIntoFunctions`, only after the class writer rejects it; P0 (the 64 KB check, the class-size fallback reported) first. |
 | 2026-10-23 | **M17, 17.3: several classes per script** (user decision, rather than loading the numbers and strings of a class from static tables, which would fit the measured scripts but not lift the invokedynamic limit): the functions of a script spread over more classes on a class limit, as Nashorn's compile units; literals of data compiled as data. |
+| 2026-11-20 | **Exception to the gating rule: a defect that no script can rely on** (a miscompilation, an exception of the engine itself such as a `NullPointerException`) **is fixed in all versions** (`AGENTS.md`), and its `BACKWARD_COMPATIBILITY.md` entry says so: 1.90, 1.92–1.94, 1.103, 1.107, 1.108 and 2.7 (the upstream fixes of 2.6 apply to all versions too). |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
@@ -89,6 +90,9 @@ These restate and extend the constraints in `AGENTS.md`.
    2026-10-13), every behavior change is only active under `VERSION_ECMASCRIPT` (`cx.isLatestEcmaScript()` at
    runtime, `compilerEnv.isLatestEcmaScript()` for syntax and early errors, tested with
    `Utils.assertGatedBehavior`): the other versions keep their exact behavior, bug fixes included.
+   The one exception (2026-11-20, `AGENTS.md`) is a defect that no script can rely on (a miscompilation, an
+   exception of the engine itself such as a `NullPointerException`): it is fixed in all versions, and its entry in
+   `BACKWARD_COMPATIBILITY.md` says so.
    Every change whose result differs from `VERSION_ES6` behavior is documented in
    `BACKWARD_COMPATIBILITY.md` (before/after example, spec section) and `CHANGELOG_MONFLABS.md`; gated ones are also
    named in the Javadoc of `Context.VERSION_ECMASCRIPT`.
@@ -114,8 +118,9 @@ These restate and extend the constraints in `AGENTS.md`.
 
 - [ ] Spec sections read in the ES2026 PDF; Nashorn implementation reviewed for approach and pitfalls.
 - [ ] Implemented in parser/IR as needed, and in **both** backends.
-- [ ] Behavior changes compared to `VERSION_ES6` identified; each one gated or applied to all versions, whichever is
-      easier; gated ones listed in the `VERSION_ECMASCRIPT` Javadoc and tested with `Utils.assertGatedBehavior`.
+- [ ] Behavior changes compared to `VERSION_ES6` identified; each one gated (the one exception: a defect that no
+      script can rely on, fixed in all versions); gated ones listed in the `VERSION_ECMASCRIPT` Javadoc and tested
+      with `Utils.assertGatedBehavior`.
 - [ ] Every behavior change compared to `VERSION_ES6` (gated or not) documented in `BACKWARD_COMPATIBILITY.md`.
 - [ ] Relevant test262 slice passes; feature tags removed from `UNSUPPORTED_FEATURES` and `~` folders un-skipped.
 - [ ] `test262.properties` regenerated on the reference JDK (`RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test
@@ -150,9 +155,10 @@ seven Nashorn implemented: `Error.isError`, `Math.sumPrecise`, `Map`/`WeakMap` `
 `Iterator.concat`, `Uint8Array` base64/hex, JSON source access (`JSON.rawJSON`, `JSON.isRawJSON`, reviver `context`),
 and `Array.fromAsync`. The only Temporal content in ES2026 is the date-time string grammar used by `Date.parse`.
 
-`UNSUPPORTED_FEATURES` in `Test262SuiteTest` will shrink to the out-of-scope tags only (plus `IsHTMLDDA`, which needs
-a host hook Rhino does not have, and `u180e`, which is a pre-Unicode-6.3 behavior: both to be confirmed as decisions
-when reached).
+`UNSUPPORTED_FEATURES` in `Test262SuiteTest` has shrunk to out-of-scope tags (`tail-call-optimization`, `Temporal`,
+`import-text`, `import-bytes`; the other out-of-scope tests are skipped or listed in `test262.properties`), plus
+`IsHTMLDDA`, which needs a host hook Rhino does not have (35 tests), and `CanBlockIsFalse` (decision 3.4, 2 tests).
+`u180e` is no longer in it: its 25 tests pass since 2026-10-24.
 
 ## Baseline (2026-10-07)
 
@@ -285,10 +291,12 @@ Split into separately committed steps:
   lookups; `let x;` initializes. Only bindings declared by a let/const statement start uninitialized (parameters,
   catch parameters and desugared bindings are initialized before their scope runs). Known gaps: destructuring
   declarations (to do with 1.3), switch cases in functions without closures, and a closure write is checked before
-  its right-hand side.
+  its right-hand side. (All three closed since: 16.8 on 2026-10-19, the switch clauses on 2026-10-22, the
+  destructuring declarations on 2026-10-25; see the changelog.)
 - *1.1e (done)* global lexical scope: a `GLOBAL_LEXICALS` operation at the start of a script declares its
   top-level let/const in `TopLevel`'s own map (GlobalDeclarationInstantiation checks); they are removed from the
-  script's variables. Gap: a script whose `var`s and `let`s conflict may create its `var`s before the SyntaxError.
+  script's variables. Gap: a script whose `var`s and `let`s conflict may create its `var`s before the SyntaxError
+  (closed by 1.10d).
 
 **1.2 Function semantics.** Mapped/unmapped `arguments` (`language/arguments-object`), strict-mode completeness,
 function `name` inference and `length` with default/rest parameters, default parameter scope (separate environment
@@ -392,7 +400,9 @@ Steps:
 - *1.7a (done)* class syntax and ClassDefinitionEvaluation: `ClassNode` desugared by `IRFactory` into a `CLASS`
   node (constructor, heritage, prototype and static members as object literals) evaluated by
   `ClassDefinition.define`; class constructors throw when called; default constructors; inner name binding;
-  `class` removed from `UNSUPPORTED_FEATURES`.
+  `class` removed from `UNSUPPORTED_FEATURES`. *2026-11-21:* the `CLASS` node holds the constructor and the
+  heritage only, followed by one `CLASS_ELEMENT` per element of the body (`ClassDefinition.element`); no object
+  literals.
 - *1.7b (done)* `super()`, derived-constructor `this` bound by `super()`, `super.x` in methods and static
   methods (home object of statics), `new.target`.
 - *1.7c (done)* subclassing built-ins via `NewTarget`: most built-ins already took the prototype from
@@ -412,7 +422,8 @@ Steps (2026-10-10, from a run of the in-scope built-ins failures: 435 files):
 - *1.8b* `[[Set]]` returning a boolean (`Reflect.set`, receivers, Proxy `set`), Proxy invariants and trap order.
   Part 1 (done): [[Set]], proxy `set`/`getOwnPropertyDescriptor`, proxies in prototype chains. Part 2 (done):
   `deleteProperty`/`defineProperty`/`setPrototypeOf` results, proxies as targets, `get` receiver. Left: `with` and
-  proxies (name resolution through the `has` trap), `ownKeys` order of a proxy target.
+  proxies (name resolution through the `has` trap), `ownKeys` order of a proxy target (both done since: no in-scope
+  test262 failure is left in `built-ins/Proxy` or `language/statements/with`).
 - *1.8c (done)* `Object.*`, `Array.prototype`, `String.prototype`, `Function.prototype`, `JSON`, `Date`, `Promise`
   residuals, by directory, in 9 parts (Set methods, typed arrays, BigInt, Error included).
 - Left for other items: the primitive `this` of methods called on primitives (`"a".f()` and
@@ -455,7 +466,7 @@ Steps:
 - *1.10g (done)* nested CoverInitializedName in patterns (the misuse gated), `for-in` shadowing, exact Use Strict
   Directives. Left for later (scope residuals, with the for-in/of head TDZ and paramsbody scopes): the switch
   discriminant and catch parameter evaluated outside the block's lexical scope; completion value of a `break`
-  in `finally`.
+  in `finally` (all done since: M13, 2026-10-15 and 2026-11-20).
 
 **1.11 Annex B (ES2015 parts).** Block-level function declarations in sloppy mode (B.3.3), `__proto__`,
 `__defineGetter__` and kin, HTML-like comments, legacy octal, `RegExp` legacy syntax (`annexB/language`,
@@ -487,7 +498,9 @@ generator function. The first `next()` instantiates it: declarations are hoisted
 exported bindings are registered (InitializeEnvironment). The second `next()` evaluates the body. The
 generator's scope is a `ModuleScope` whose parent is the global: it resolves imported names to the exporting
 module's getters (live bindings, TDZ, immutable). `ModuleRecord` links (ResolveExport, ambiguity, cycles),
-builds the namespace object and evaluates the graph depth first.
+builds the namespace object and evaluates the graph depth first. *2026-11-21:* the source is no longer rewritten:
+the module is parsed once and `Parser.moduleFunction` makes its statements the body of the generator function
+(see the changelog); the two `next()` steps, `ModuleScope` and `ModuleRecord` are unchanged.
 
 Steps:
 - *1.12a (done)* API (`modules` package, `ContextFactory`/`Context` registration, `Context.evaluateModule`),
@@ -501,7 +514,8 @@ Steps:
 - *1.12c (done)* `super.x = v` with a namespace receiver follows OrdinarySetWithOwnDescriptor (the binding is
   read: ReferenceError before initialization, TypeError after). 1.12 is done. Residual, not covered by test262:
   `arguments` at the top level of a module is the generator's `arguments` object rather than an unresolvable
-  reference. `await` as an identifier in scripts belongs to M3.
+  reference (no longer since modules are parsed once, 2026-11-21: `typeof arguments` is `"undefined"` there).
+  `await` as an identifier in scripts belongs to M3.
 
 ### M2 — ES2016
 
@@ -568,6 +582,10 @@ Status (2026-10-12, done): every ES2019 feature passes its in-scope tests. Resid
 `this` reaches callbacks and accessors as a wrapper object (`Callable.call` takes a `Scriptable` this), e.g. a strict
 `thisArg` callback of `flatMap`/`map`, the getter of `BigInt.prototype.toJSON` in `JSON.stringify`, `Symbol.asyncIterator`
 called on a primitive, the flag getters of RegExp on a primitive. To be fixed with the engine-wide call path, before M15.
+*2026-11-22:* M13 fixed method calls, `call`/`apply`, accessors, `flatMap` and `toJSON`, without an engine-wide
+change; still open, and not covered by test262: a strict callback receives a primitive `thisArg` of `map`, `forEach`,
+`find`, `Array.from` and the typed array methods as a wrapper object, as does a strict function called through
+`Reflect.apply` or `bind`.
 
 ### M6 — ES2020
 
@@ -582,7 +600,8 @@ module-loader API).
 Status (2026-10-12, done): 6.1-6.5 pass but for later features and the primitive `this` residual (see M5).
 6.6: `import()` is an IR node (Token#IMPORT_CALL) whose promise job loads, links and evaluates; `import.meta` is
 rewritten in module code to an object the module record hands to the body, with a `url` (origin, or name) as in
-Nashorn, rather than populated by the host.
+Nashorn, rather than populated by the host (since 2026-11-21 a node, `ast/ImportMeta`, lowered to a read from the
+record: the source is not rewritten).
 
 ### M7 — ES2021
 
@@ -606,10 +625,11 @@ representation; Nashorn uses a per-object slot). **8.3** Class static blocks (23
 Steps:
 - *8.1 (done)* public instance and static fields (entries of the member literals keyed by a ClassFieldKey, recorded
   on the constructor; Token#FIELD_KEY, Token#CLASS_STATIC). Limits: static and instance computed keys are not
-  interleaved in source order; `eval('arguments')` in an initializer (fixed in 8.2).
+  interleaved in source order (fixed in 8.6); `eval('arguments')` in an initializer (fixed in 8.2). *2026-11-21:*
+  a field is a `CLASS_ELEMENT` of the class, no longer an entry of a member literal.
 - *8.2 (done)* private names (a const binding `#x` of the class scope holding a PrivateName; an element access with
   it as the key; per-object identity map), direct eval early errors, ZWNJ/ZWJ identifier parts (gated). Limit: a
-  destructuring target `this.#x` is evaluated after the value is read (as for public members).
+  destructuring target `this.#x` is evaluated after the value is read (as for public members; fixed in M13).
 - *8.3 (done)* class static blocks (a static element whose initializer is a synthetic method holding the block).
 - *8.4 (done)* RegExp `d` flag (`hasIndices`, `indices`); the one remaining test needs the `v` flag (10.2).
 - *8.5 (done)* top-level await (a module with it is an async generator; ES2022 async module evaluation in
@@ -719,7 +739,8 @@ Status (2026-10-15, done): 99.1% of the in-scope tests pass (42,223 of 42,616). 
 documented limits of `doc/CONFORMANCE_MONFLABS.md`: Unicode data from the JDK (decision 4.3), agents that can block
 (decision 3.4) and a single realm per error. The stricter expectations are already in place: a test listed as failing
 that passes fails the run (0.3). 2026-10-24: the format-control characters of the source (the 25 `u180e` tests, no
-longer skipped): 42,248.
+longer skipped): 42,248. 2026-11-10: the Unicode property escapes derived from the JDK and the identifier
+characters: 42,271 (99.2%; 305 files fail, 2 in strict or sloppy mode only, 38 are skipped), the current figure.
 
 ### M15 — A single language version
 
@@ -735,15 +756,16 @@ declarations last across scripts) and `BindingsObject` stores defined data prope
 
 Future work (user decision, 2026-10-19: documented, not scheduled):
 
-- **Remove the gates.** Delete the `isLatestEcmaScript()` checks (407 in 54 files, runtime and compiler) and their
-  `VERSION_ES6` branches, keeping the ES2026 code only. Every change of section 1 of `BACKWARD_COMPATIBILITY.md`
+- **Remove the gates.** Delete the `isLatestEcmaScript()` checks (438 in 57 files on 2026-11-22, runtime and
+  compiler) and their `VERSION_ES6` branches, keeping the ES2026 code only. Every change of section 1 of
+  `BACKWARD_COMPATIBILITY.md`
   then applies to every version: selecting `VERSION_ES6` no longer restores the stock behavior. The
   `assertGatedBehavior` tests check a single result. Trade-off: the opt-out for existing embeddings against one code
   path per feature.
 - **Decide what remains of the JavaScript 1.x versions** (`VERSION_1_0` to `VERSION_1_8`, `VERSION_DEFAULT`): drop
   them as Nashorn did (`setLanguageVersion` deprecated and without effect, the 1.x-only features such as `for each`,
   JavaScript 1.7 destructuring and legacy getters removed, the Mozilla legacy tests that need them updated), or keep
-  a legacy 1.x mode. These features are behind `getLanguageVersion()` checks (144), independent of the gates.
+  a legacy 1.x mode. These features are behind `getLanguageVersion()` checks (145), independent of the gates.
 
 ### M14 — Performance (continuous, with a final dedicated pass)
 
@@ -869,7 +891,8 @@ Design, after Nashorn (`Splitter`, `SplitIntoFunctions`):
   body) are split recursively. A `return` stores its value in a hidden variable of the function and returns a
   state; `break` and `continue` to a target outside the chunk return their own states, which the call site
   replays. Not split: generators and async functions, direct `eval`, `with`, blocks with block-level function
-  declarations.
+  declarations. (Since 17.4, generators and async functions are split under `VERSION_ECMASCRIPT`; not split today:
+  derived constructors, generators of JavaScript 1.7, functions with a direct `eval` or a `with` statement.)
 - **Invisible.** Chunk methods have a recognizable name that script stack traces skip.
 - **Validation.** A property forces splitting at a tiny threshold, for one run of test262 and the Mozilla tests
   with every function split.
@@ -882,12 +905,13 @@ Design, after Nashorn (`Splitter`, `SplitIntoFunctions`):
 | 17.3 | Huge literals (`pdfjs`); scripts beyond one class (constant pool)                        | M–L    | both     |
 | 17.4 | Generators and async functions: the chunks without `yield` or `await`                    | S–M    | both     |
 
-Order: 17.0, then 17.1; 17.2 to 17.4 on demand.
+Order: 17.0, then 17.1; 17.2 to 17.4 on demand. All five are done.
 
 Status: **17.0 (done)** the 64 KB limit checks the bytecode only, and class-size fallbacks are reported: 26 test262
 scripts and 14 Mozilla tests in that case. **17.1 (done)** functions split on failure, Octane `regexp.js` compiled
 again, score 460 → 606 (`VERSION_ES6`); with every function split (`-Drhino.splitWeight=3`), test262 and the Mozilla
-tests pass except one test of `f.arguments` (any function with an activation) and two bytecode tests. Still
+tests pass except one test of `f.arguments` (any function with an activation; fixed 2026-11-22) and two bytecode
+tests. Still
 interpreted: the 26 test262 scripts and 7 of the Mozilla tests (top-level code, 17.2), 2 Mozilla tests (constant
 pool, 17.3), and a `switch` with 3,010 cases (its cases cannot be split). **17.2 (done)** top-level code split,
 with the completion value passed through the chunks: the 12 test262 shift tests and 4 Mozilla tests compile; the
@@ -898,7 +922,10 @@ a function with a rest parameter does not collect it (fixed separately, 2026-10-
 functions of a script spread over several classes on a class limit (user decision, rather than literal tables:
 it lifts the invokedynamic limit too), and literals of more than 1,000 constants compiled as data: `mandreel`
 compiles over 16 classes (score 628 → 826), `pdfjs` under `VERSION_ECMASCRIPT` (2,100 → 4,505), the 2 Mozilla
-tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upstream bug).
+tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upstream bug). **17.4 (done,
+2026-10-25)** under `VERSION_ECMASCRIPT`, generators and async functions are split too, with no `yield` or `await`
+in a chunk; in a generator that is not async, statements that yield move to a generator called with `yield*`
+(changelog, "Functions too large for the JIT": a function whose method exceeds 8,000 bytes is also split once).
 
 ---
 
@@ -907,11 +934,11 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 | #    | Feature                                         | Status      | test262 slice before → after | Commit |
 |------|-------------------------------------------------|-------------|------------------------------|--------|
 | 0.1  | Plan, changelog, status tooling                 | done        | baseline 56.9% (JDK 25)      | 7ed50a954 |
-| 0.2  | Perf gate                                       | done        | n/a (116 metrics)            | (this) |
+| 0.2  | Perf gate                                       | done        | n/a (114 metrics)            | (this) |
 | 0.3  | test262 harness upgrades                        | done        | 56.9% → 57.6% (async runs)   | (this) |
 | 0.4  | Gating plumbing                                 | done        | n/a                          | (this) |
 | 1.1  | Lexical declarations                            | done        | 57.6% → 57.8% (1.1a–e)       | 1434be149+ |
-| 1.2  | Function semantics                              | done        | 57.8% → 58.7% (1.2a–g; parameter/body environments deferred) | (this) |
+| 1.2  | Function semantics                              | done        | 57.8% → 58.7% (1.2a–g; parameter/body environments done 2026-11-20) | (this) |
 | 1.3  | Destructuring                                   | done        | 58.7% → 60.3% (1.3a–d)       | 45615e120 |
 | 1.4  | Iteration protocol                              | done        | 60.3% → 60.5% (1.4a)         | b04e5d7a9 |
 | 1.5  | Object literal extensions                       | done        | 60.5% (1.5a–b)               | d3ae8ef1c |
@@ -938,4 +965,5 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 | 14   | Performance pass                                | done        | 99.1% (14.1–14.8)            | 07cf0f966 |
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |
-| 17   | Method splitting                                | in progress | 99.1% (17.0–17.3)            | (this) |
+| 17   | Method splitting                                | done        | 99.1% (17.0–17.4)            | 789550b8d |
+| —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616, current) | 397cd54b5 |

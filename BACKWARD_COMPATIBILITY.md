@@ -6,10 +6,12 @@ differently from **stock Rhino 1.9.0**, so that upgrading is a deliberate, infor
 change; [CHANGELOG_MONFLABS.md](CHANGELOG_MONFLABS.md) has the full history.
 
 The target is the language version `Context.VERSION_ECMASCRIPT`, the default language version since plan M15 (2.3).
-Every behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSION_ES6` and the older versions keep
-the behavior of stock Rhino, bug fixes included, so an embedding that needs it selects `VERSION_ES6`
-(`cx.setLanguageVersion(Context.VERSION_ES6)`, or `-version 200` in the shell). Section 2 lists platform and API
-changes.
+A behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSION_ES6` and the older versions keep
+the behavior of stock Rhino, so an embedding that needs it selects `VERSION_ES6`
+(`cx.setLanguageVersion(Context.VERSION_ES6)`, or `-version 200` in the shell). The exception is a defect that no
+script can rely on (a miscompilation, an exception of the engine itself): it is fixed in all versions, and the
+"Applies to" column of its row says so (1.90, 1.92 to 1.94, 1.103, 1.107, 1.108 in section 1; 2.5 to 2.7).
+Section 2 lists platform and API changes.
 
 | # | Change | Applies to |
 |---|--------|-----------|
@@ -81,7 +83,7 @@ changes.
 | 1.65 | `decodeURI` noncharacters, `Math.log2`, final sigma, `Proxy.revocable` | `VERSION_ECMASCRIPT` |
 | 1.66 | Functions have no `arity` property | `VERSION_ECMASCRIPT` |
 | 1.67 | A yield expression in arrow parameters is an early error | `VERSION_ECMASCRIPT` |
-| 1.68 | Closures in parameter expressions do not see the `var` declarations of the body | `VERSION_ECMASCRIPT` |
+| 1.68 | Parameter expressions do not see the declarations of the body | `VERSION_ECMASCRIPT` |
 | 1.69 | Strict methods called on a primitive receive the primitive as `this` | `VERSION_ECMASCRIPT` |
 | 1.70 | A data property of an object literal replaces an accessor of the same name | `VERSION_ECMASCRIPT` |
 | 1.71 | `caller` and `arguments`: %ThrowTypeError% on `Function.prototype`, own properties of sloppy functions | `VERSION_ECMASCRIPT` |
@@ -122,18 +124,19 @@ changes.
 | 1.106 | A call stack that runs out is a `RangeError` | `VERSION_ECMASCRIPT` |
 | 1.107 | The `next` method of a built-in iterator called on another kind of iterator | all versions |
 | 1.108 | A Symbol on the left of `instanceof` | all versions |
-| 1.109 | Unicode property escapes follow ECMA-262: binary properties, General_Category values, exact Script names | `VERSION_ECMASCRIPT` |
-| 1.110 | Identifier characters are ID_Start and ID_Continue: no Pattern_Syntax (U+2E2F) or control characters | `VERSION_ECMASCRIPT` |
+| 1.109 | Unicode property escapes follow ECMA-262 | `VERSION_ECMASCRIPT` |
+| 1.110 | Identifier characters are ID_Start and ID_Continue | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
 | 2.4 | A script that compiled mode falls back to interpreting is logged | all |
 | 2.5 | Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups | all |
 | 2.6 | Sixteen bug fixes taken from upstream Rhino | all |
+| 2.7 | `jsc` compiles a script with a `for-in` loop | all |
 
 ---
 
-## 1. Changes under `VERSION_ECMASCRIPT` only
+## 1. Changes of language behavior (under `VERSION_ECMASCRIPT` unless marked "all versions")
 
 Code running under `VERSION_ES6` is not affected. `VERSION_ECMASCRIPT` is the default (2.3): to keep the previous
 behavior, select `VERSION_ES6`. Each change is also listed in the Javadoc of `Context.VERSION_ECMASCRIPT`, and every place in
@@ -147,7 +150,7 @@ Entries 1.17 to 1.62 were numbered 2.1 to 2.46 (the CHANGELOG uses these numbers
 
 ```js
 const k = 1;
-k = 2;       // VERSION_ES6: no effect (TypeError in strict mode)
+k = 2;       // VERSION_ES6: no effect (TypeError in a strict script or in a strict function with closures)
              // VERSION_ECMASCRIPT: TypeError: Assignment to constant variable "k".
 ```
 
@@ -178,9 +181,8 @@ function f() {
   envRec has not yet been initialized, throw a ReferenceError").
 - **Cost:** none for `VERSION_ES6`. Under `VERSION_ECMASCRIPT`, references that can be proven safe at compile time
   (in the same function, after the declaration) are not checked; others are checked by one comparison.
-- **Not covered yet:** bindings of a destructuring declaration
-  (`let [a, b] = …`, plan 1.3); a read that a `switch` case reaches by
-  jumping over a declaration in a function without closures.
+- The bindings of a destructuring declaration (`let [a, b] = …`) are covered too (1.99), and so is a read that a
+  `switch` clause reaches by jumping over a declaration (1.91).
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 
@@ -219,10 +221,9 @@ const c = 2;                                     // VERSION_ECMASCRIPT: SyntaxEr
 - **Embedding notes:** Java code reads such a binding from the scope (`scope.get("x", scope)`,
   `ScriptableObject.getProperty(scope, "x")`), not from `scope.getGlobalThis()`. An application that runs the same
   script twice in one scope (a REPL re-running `let x = …`) gets a SyntaxError the second time. `let`/`const` in
-  `eval` code are not affected (as before, they become variables of the eval's caller; plan 1.2g). With a custom top
-  scope that is not a `TopLevel`, the declarations are made on that scope as before.
-- **Not covered yet:** if a script declares both `var`s and a conflicting `let`, its `var`s may have been created on
-  the global object before the SyntaxError.
+  `eval` code are local to the eval code (1.5). With a custom top scope that is not a `TopLevel`, the declarations are
+  made on that scope as before.
+- A script that declares both `var`s or functions and a conflicting `let` creates none of them (1.11).
 
 ### 1.4 Declarations of eval code
 
@@ -238,9 +239,10 @@ function f() { let z; eval("var z"); }   // VERSION_ES6: fine   VERSION_ECMASCRI
   a global lexical declaration. A catch parameter or a `with` object does not count.
 - When eval code declares global functions and vars, it checks them all before creating any: a function whose name
   is a non-configurable global that is read-only or non-enumerable (`NaN`, `undefined`, …), or a new name on a
-  non-extensible global object, throws a TypeError and declares nothing (before, the functions preceding it were
-  created). A function replacing a configurable global property redefines it as writable, enumerable and
-  configurable (before, a read-only one was kept, or threw in strict mode).
+  non-extensible global object, throws a TypeError and declares nothing (before, a writable non-enumerable one was
+  replaced, and a new name on a non-extensible global was dropped without an error). A function replacing a
+  configurable global property redefines it as writable, enumerable and configurable (before, a read-only one was
+  kept).
 - **Why:** ECMA-262 2026, §19.2.1.3 EvalDeclarationInstantiation steps 3 and 10–11, §9.1.1.4.16
   CanDeclareGlobalFunction and §9.1.1.4.18 CreateGlobalFunctionBinding, §10.2.11 FunctionDeclarationInstantiation
   step 30 (the separate lexical environment of a non-strict function).
@@ -248,7 +250,7 @@ function f() { let z; eval("var z"); }   // VERSION_ES6: fine   VERSION_ECMASCRI
 ### 1.5 Lexical declarations of eval code
 
 ```js
-eval("let a = 1; const b = 2; class C {}");
+eval("let a = 1; const b = 2;");
 typeof a;                           // VERSION_ES6: "number"   VERSION_ECMASCRIPT: "undefined"
 eval("typeof c; let c;");           // VERSION_ES6: "undefined"   VERSION_ECMASCRIPT: ReferenceError
 eval("let d = 4; function f() { return d; }");
@@ -258,7 +260,8 @@ typeof d; f();                      // VERSION_ES6: "number", 4   VERSION_ECMASC
 - The top-level `let`, `const` and `class` declarations of eval code (direct or indirect) belong to the eval code:
   they are in a block of their own, in their temporal dead zone until declared, and gone after the eval; its `var`s
   and functions still go to the caller's variable scope. Its functions close over the block: they are created at
-  the start of the block and bound in the caller's variable scope, as Annex B hoists a block function.
+  the start of the block and bound in the caller's variable scope, as Annex B hoists a block function. (`class` is a
+  SyntaxError under `VERSION_ES6`, in eval code as elsewhere.)
 - **Why:** ECMA-262 2026, §19.2.1.1 PerformEval step 16 (a new declarative environment for the lexical declarations).
 
 ### 1.6 Byte order of typed arrays
@@ -305,6 +308,8 @@ for (var [k, v] in { ab: 1 }) print(k, v);   // VERSION_ES6: ab 1   VERSION_ECMA
 
 - The pattern destructures the key, a string, like any other value; the JavaScript 1.7 `[key, value]` reading is
   kept for `VERSION_ES6` (`for each` and `for-of` are not affected).
+- Any pattern is accepted (`for (var [a] in o)`, `for (var {length} in o)`); under `VERSION_ES6`, a pattern that is
+  not an array of two elements is a SyntaxError.
 - **Why:** ECMA-262 2026, §14.7.5 (ForIn/OfBodyEvaluation with a ForDeclaration or AssignmentPattern).
 
 ### 1.10 `let` as an identifier
@@ -325,7 +330,7 @@ x = 1;                    // VERSION_ES6: SyntaxError (let declaration)   VERSIO
 
 ```js
 var NaN;                  // VERSION_ES6: TypeError (redeclaration of const)   VERSION_ECMASCRIPT: allowed
-// a script `var x; let undefined;`: VERSION_ES6 creates x then fails; VERSION_ECMASCRIPT fails before creating x
+// a script `let undefined; var x;`: VERSION_ES6 creates x then fails; VERSION_ECMASCRIPT fails before creating x
 ```
 
 - The declarations of a script are validated before any of them is created; a `var` may name an existing
@@ -336,7 +341,7 @@ var NaN;                  // VERSION_ES6: TypeError (redeclaration of const)   V
 
 ```js
 f() &&= 1;                 // VERSION_ES6: ReferenceError at run time   VERSION_ECMASCRIPT: SyntaxError
-"use strict"; delete x;    // VERSION_ES6: false or true                VERSION_ECMASCRIPT: SyntaxError
+"use strict"; delete x;    // VERSION_ES6: false, true or a TypeError   VERSION_ECMASCRIPT: SyntaxError
 const x;                   // VERSION_ES6: x is undefined               VERSION_ECMASCRIPT: SyntaxError
 l: { for (;;) continue l; } // VERSION_ES6: continues the loop          VERSION_ECMASCRIPT: SyntaxError
 var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES6: 'l'   VERSION_ECMASCRIPT: 'g'
@@ -361,7 +366,7 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
 
 ```js
 /\xa/.test('\n');              // VERSION_ES6: true (\xa is \x0a)   VERSION_ECMASCRIPT: false (matches "xa")
-/\0022/.test('\x02');          // VERSION_ES6: true                  VERSION_ECMASCRIPT: false (\x02 then 2)
+/\0022/.test('\x12');          // VERSION_ES6: true (octal 22)       VERSION_ECMASCRIPT: false (\x02 then 2)
 f() = 1;                       // VERSION_ES6: ReferenceError, f not called   VERSION_ECMASCRIPT: f called first
 ```
 
@@ -476,8 +481,10 @@ f.call(1);      // before: "object"   now: "number" (call/apply no longer box a 
 ```
 
 - **Why:** in strict code, `this` is not coerced (ECMA-262 2026, §10.2.1.2 OrdinaryCallBindThis). A non-strict
-  function still receives an object. **Not covered yet:** a strict getter or method called on a primitive (`(5).x`,
-  `"s".m()`) still receives the wrapper object; so does a strict function bound to a primitive with `bind`.
+  function still receives an object. A strict getter or method called on a primitive (`(5).x`, `"s".m()`) receives
+  the primitive too (1.69, 1.81). **Not covered yet:** a strict function still receives the wrapper object when it is
+  bound to a primitive with `bind`, called with `Reflect.apply(f, 1, [])`, or given a primitive `thisArg` by an Array
+  method (`[1].map(f, 1)`, `Array.from(a, f, 1)`).
 
 ### 1.23 `caller` of strict functions throws
 
@@ -551,8 +558,8 @@ Object.getOwnPropertySymbols(Map.prototype).length;               // before: 3 (
 - The `Function` and `GeneratorFunction` constructors build their source as the spec does: a line feed ends the
   parameters, and the body sits between two line feeds. Line numbers reported for errors in such a function's body
   are 2 higher than before (the body starts on line 3 of the generated source). The generator prefix is `function*`.
-- A callable proxy gives a NativeFunction string. A built-in whose name is not an identifier (`RegExp`'s `$*`, …)
-  leaves the name out of its source text.
+- A callable proxy gives a NativeFunction string. A built-in whose name is not an identifier (`RegExp`'s `$*`, a
+  bound function: before `function bound f() {…}`, now `function () {…}`) leaves the name out of its source text.
 - `Map.prototype` and `Set.prototype` no longer have an own, internal `[Symbol.getSize]` symbol property.
 - **Why:** ECMA-262 2026, §20.2.3.5 Function.prototype.toString (source text of a MethodDefinition, NativeFunction
   syntax) and §20.2.1.1.1 CreateDynamicFunction; §24.1.3 (the properties of `Map.prototype`).
@@ -685,11 +692,11 @@ var [h = () => 1] = []; h.name;                      // before: ""   now: "h"
 ```js
 var d = Object.getOwnPropertyDescriptor({ get a() { return 1; } }, "a");
 "prototype" in d.get;   // before: true   now: false
-new d.get();            // before: an object   now: TypeError
+d.get.hasOwnProperty("prototype");   // before: true   now: false (`new d.get()` is a TypeError in both)
 ```
 
 - The getters and setters of object literals (and classes) are method definitions: they have
-  no `prototype` property and are not constructors, like the methods of an object literal already were.
+  no `prototype` property, like the methods of an object literal already were (they already were not constructors).
 - **Why:** ECMA-262 2026, §15.4.4 (MethodDefinition: DefineMethodProperty without MakeConstructor).
 
 ### 1.36 Legacy static properties of RegExp read through another object
@@ -738,7 +745,7 @@ Object.defineProperty(o, "x", { value: 2 });   // before: TypeError   now: o.x i
 ```js
 var ta = new Int8Array(2);
 Reflect.ownKeys(ta);                          // before: []   now: ["0", "1"]
-Object.getOwnPropertyDescriptor(ta, "0");     // before: TypeError   now: {value: 0, writable, enumerable, configurable}
+Object.getOwnPropertyDescriptor(ta, "0");     // before: undefined   now: {value: 0, writable, enumerable, configurable}
 "use strict"; delete ta[0];                   // before: false   now: TypeError
 Object.defineProperty(ta, "0", {configurable: false});   // before: fine (no effect)   now: TypeError
 ta["-0"];                                     // before: from the prototype   now: undefined
@@ -801,7 +808,7 @@ Array.prototype.pop.call("abc");               // before: "c"   now: TypeError (
 var d = new Date(NaN); d.setDate({ valueOf() { d.setTime(0); return 1; } });
 d.getTime();                                       // before: NaN   now: 0 (an invalid date is left unchanged)
 Object.prototype.__defineGetter__.call(Object.freeze({}), "x", f);   // before: ignored   now: TypeError
-Object.prototype.toString.call(new Proxy([], {}));                  // before: "[object Object]"   now: "[object Array]"
+delete Math[Symbol.toStringTag]; Object.prototype.toString.call(Math);  // before: "[object Math]"   now: "[object Object]"
 ```
 
 - A Date setter does not store a new value when the date was invalid before its arguments were
@@ -810,7 +817,11 @@ Object.prototype.toString.call(new Proxy([], {}));                  // before: "
   TypeError on a frozen or non-extensible object) and convert `this` with ToObject; `__lookupGetter__`/`Setter__`
   use the [[GetOwnProperty]] of each object; `hasOwnProperty`, `propertyIsEnumerable` and `isPrototypeOf` follow
   the order of their spec steps; `Object.prototype.toString` gives `Object` for a standard object whose
-  `Symbol.toStringTag` was removed (before, its class name) and `Array` for a proxy of an array.
+  `Symbol.toStringTag` was removed (before, its class name); a proxy of an array is `Array` in both versions.
+- The time value of a Date is an integer that is never `-0` (`Object.is(new Date(-0.5).getTime(), -0)`: before
+  true, now false); `Date.parse("-000000-01-01T00:00:00Z")` is `NaN` (before, the time of year 0); MakeTime adds
+  its terms in the order of the specification (`Date.UTC(1970, 0, 1, 80063993375, 29, 1, -288230376151711740)`:
+  before 29248, now 29312).
 - **Why:** ECMA-262 2026, §21.4.4 (Date setters), §20.1.3 (Object.prototype), Annex B.2.2.
 
 ### 1.44 JSON revivers and replacers, Object.hasOwn, Object.assign
@@ -818,13 +829,15 @@ Object.prototype.toString.call(new Proxy([], {}));                  // before: "
 ```js
 JSON.parse("[1]", function (k, v) { return typeof k; });     // before: "string" for "", "number" for 0   now: "string"
 JSON.stringify([1], (k, v) => typeof k === "number" ? 2 : v); // before: "[2]"   now: "[1]"
-Object.assign(Object.freeze({ a: 1 }), { a: 2 });             // before: ignored   now: TypeError
+Object.assign({ get a() {} }, { a: 2 });                      // before: ignored   now: TypeError
 ```
 
 - The keys passed to a `JSON.parse` reviver and a `JSON.stringify` replacer are always strings;
   a revived value is defined with CreateDataProperty (it replaces a read-only configurable property, before ignored);
   the replacer gets `undefined` for a property deleted while serializing; `Object.assign` throws a TypeError when a
-  target property cannot be written; `Object.hasOwn` converts its first argument before the key.
+  target property cannot be written (before, only for a read-only data property or a non-extensible plain object: an
+  accessor without a setter and a frozen array were ignored); `Object.hasOwn` converts its first argument before the
+  key.
 - `JSON.stringify` treats a proxy of an array as an array; `Date.prototype.toJSON` no longer throws when
   `toISOString` returns an object.
 - **Why:** ECMA-262 2026, §25.5.1 (JSON.parse), §25.5.2 (JSON.stringify), §20.1.2.1 (Object.assign), §20.1.2.13
@@ -834,7 +847,7 @@ Object.assign(Object.freeze({ a: 1 }), { a: 2 });             // before: ignored
 
 ```js
 Array.prototype.toString.call({ join() { return "x"; } });   // before: ""   now: "x"
-Array.prototype.push.call({ length: 2 ** 53 - 1 }, 1);       // before: length unchanged   now: TypeError
+Array.prototype.push.call({ length: 2 ** 53 - 1 }, 1);       // before: length becomes 2^53   now: TypeError
 Reflect.has([1], "0");                                        // before: false   now: true
 ```
 
@@ -843,8 +856,9 @@ Reflect.has([1], "0");                                        // before: false  
   ArraySpeciesCreate sees through proxies; `Object.prototype.toString` of a non-array proxy is `[object Object]` or
   `[object Function]` (before, the class of the target).
 - `flat`/`flatMap` no longer write `length` on the result at the end; `splice()` with no argument reads
-  and writes `length`; `reverse`, `splice` and `flat` call HasProperty before Get; typed array iteration skips
-  indexes out of bounds after a resize; `Reflect.has` converts its key (index keys given as strings are found).
+  and writes `length`; `reverse`, `splice` and `flat` call HasProperty before Get; a generic Array method applied
+  to a typed array (`Array.prototype.forEach.call(ta, f)`) skips the indexes out of bounds after a resize;
+  `Reflect.has` converts its key (index keys given as strings are found).
 - **Why:** ECMA-262 2026, §23.1.3 (Array.prototype), §10.4.2.3 (ArraySpeciesCreate), §10.4.2.4 (ArraySetLength),
   §28.1.9 (Reflect.has), §20.1.3.6 (Object.prototype.toString).
 
@@ -871,7 +885,7 @@ Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now:
 ```js
 var a = [0, 1, 2]; Object.defineProperty(a, "1", { configurable: false });
 a.length = 0;                               // before: length 0   now: length 2 (TypeError in strict mode)
-Object.setPrototypeOf(Object.prototype, {}); // before: allowed   now: TypeError
+Object.setPrototypeOf(Object.prototype, Object.create(null)); // before: allowed   now: TypeError
 "use strict"; new String("ab")[0] = "x";     // before: ignored   now: TypeError
 ```
 
@@ -900,7 +914,7 @@ Object.prototype.toString.call(TypeError.prototype);    // before: "[object Erro
 ### 1.49 Typed array constructors and conversions
 
 ```js
-new Int8Array(-1);                     // before: Error "invalid argument"   now: RangeError
+new Int8Array(true).length;            // before: Error "invalid argument"   now: 1 (a length of -1: RangeError in both)
 new BigInt64Array([1]);                // before: BigInt64Array [1n]   now: TypeError (1 is a Number)
 Float64Array.from([, 1])[0];           // before: 0   now: NaN
 ```
@@ -969,12 +983,12 @@ var { 1.5: a } = { 1: "one", "1.5": "onefive" };       // before: "one"   now: "
 ### 1.53 Generator methods, `>>>` with BigInt, `finally` in compiled code
 
 ```js
-({ *g() {} }).g.prototype;                  // before: undefined   now: an object inheriting %GeneratorPrototype%
+({ *g() {} }).g.hasOwnProperty('prototype'); // before: false (inherited)   now: true, inheriting %GeneratorPrototype%
 0n >>> { [Symbol.toPrimitive]() { throw 'mine'; } };   // before: TypeError   now: throws 'mine'
 function f() { try { return 1; } catch (e) {} finally { n++; throw 'f'; } }   // compiled: before n += 2, now n += 1
 ```
 
-- A generator method has a `prototype` property; both operands of `>>>` are converted (ToNumeric) before a BigInt
+- A generator method has an own `prototype` property; both operands of `>>>` are converted (ToNumeric) before a BigInt
   operand throws; in compiled mode, an exception thrown by a `finally` block inlined for a `return` (or
   `break`/`continue`) in a `try` with a `catch` no longer runs the `finally` block again, and a `try` whose block
   ends with an unreachable `return` keeps covering its `catch` block with the `finally`. Under `VERSION_ES6`, the
@@ -1162,11 +1176,12 @@ Proxy.revocable({}, {}).revoke.hasOwnProperty("prototype"); // before: true   no
 
 ```js
 (function (a, b) {}).arity;                 // before: 2   now: undefined
-Object.getOwnPropertyNames(function () {}); // before: length,name,arity,prototype   now: length,name,prototype
+Object.getOwnPropertyNames(function () {});
+// before: length,name,arity,prototype   now: length,name,arguments,caller,prototype (see 1.71)
 ```
 
-- The `arity` property of JavaScript 1.2, which repeated `length`, is not created on functions (strict functions
-  already had none). Use `length` instead.
+- The `arity` property of JavaScript 1.2, which repeated `length`, is not created on functions, built-in, bound and
+  arrow functions included (in a strict function it was `null`). Use `length` instead.
 - **Why:** ECMA-262 2026, §10.2.9 and §20.2.4 (the own properties of function instances: `length`, `name`,
   `prototype`); test262 compares the own property names of classes. Decision 2026-10-14.
 
@@ -1219,7 +1234,8 @@ true.f();                                   // before: "object"   now: "boolean"
   and `Date.prototype[@@toPrimitive]` (also through `call`/`apply`, which now reject a non-object `this` where the
   spec requires one). `flatMap` passes its `thisArg` unchanged; `JSON.stringify` calls the `toJSON` of a BigInt with
   the bigint as `this`, and `Iterator.from` reads `@@iterator` of a string with the string as the receiver.
-- A sloppy function still gets a wrapper object. Getters read on a primitive still get the wrapper.
+- A sloppy function still gets a wrapper object. A strict getter or setter of a primitive gets the primitive too
+  (1.81).
 - **Why:** ECMA-262 2026, §10.2.1.2 (OrdinaryCallBindThis: the this of a strict function is not converted),
   §7.3.3 (GetV), §7.3.22 (Invoke).
 
@@ -1282,7 +1298,7 @@ it.return();   // before: { value: undefined, done: true }   now: TypeError (ret
 
 ```js
 let x = "outside";
-switch (x) { case "outside": let x = 1; }        // before: ReferenceError (TDZ)   now: matches the case
+switch (x) { case "outside": let x = 1; }        // before: no case matches (reads the inner x, undefined)   now: matches
 try { throw []; } catch ([a = () => x]) { let x = "inside"; }  // a() before: "inside"   now: "outside"
 ```
 
@@ -1297,7 +1313,7 @@ try { throw []; } catch ([a = () => x]) { let x = "inside"; }  // a() before: "i
 ```js
 let x = "outside", f;
 for (let x of (f = () => x, [1])) ;
-f();   // before: "outside"   now: ReferenceError (x is in its temporal dead zone)
+f();   // before: 1 (the x of the loop)   now: ReferenceError (x is in its temporal dead zone)
 ```
 
 - The expression after `in`/`of` is evaluated where the loop's `let`/`const` bindings exist but are not
@@ -1308,7 +1324,7 @@ f();   // before: "outside"   now: ReferenceError (x is in its temporal dead zon
 ### 1.76 `push` and `unshift` go through index properties of the prototypes
 
 ```js
-Object.defineProperty(Array.prototype, "0", { set(v) { log.push(v); } });
+Object.defineProperty(Array.prototype, "0", { set(v) { seen = v; } });
 [].push(1);   // before: the element is stored in the array   now: the setter is called, nothing is stored
 ```
 
@@ -1336,8 +1352,8 @@ var h = Proxy.revocable([], { get() { h.revoke(); } });
 Object.prototype.toString.call(h.proxy);    // before: TypeError (revoked)   now: "[object Array]"
 Object.defineProperty(new String("str"), "0", { value: "x" });
                                             // before: no error              now: TypeError
-Reflect.ownKeys(new Proxy(new Proxy([], { ownKeys: () => ["b", "a"] }), {}));
-                                            // before: integer keys first    now: the trap's order
+Reflect.ownKeys(new Proxy({}, { ownKeys: () => ["b", sym, "a"] }));
+                                            // before: b, a, sym (strings first)   now: b, sym, a (the trap's order)
 ```
 
 - `Object.prototype.toString` checks IsArray before reading `@@toStringTag`.
@@ -1396,7 +1412,9 @@ Object.defineProperty(Number.prototype, "x", {
 ```js
 var proto = { p: 1, q: "5" };
 var obj = { __proto__: proto, m() { return [super[k()]++, ++super.q]; } };
-obj.m();    // before: k() called twice, ++super.q is "51" (interpreted mode)   now: k() once, 6
+obj.m();    // before: k() called twice   now: k() once (++super.q is 6 in both)
+var big = { __proto__: { p: 1n }, m() { return super.p++; } };
+big.m();    // before: TypeError "Cannot convert BigInt to a number"   now: 1n
 ```
 
 - The key of `super[key]++` (and `--`, prefix or postfix) is evaluated and converted once; the old value is
@@ -1422,7 +1440,7 @@ g();        // before: "inner"      now: the h of the enclosing scope (a Referen
 
 ```js
 with (proxy) { p += 1; }
-// before: has, get @@unscopables, has, get @@unscopables, has, get p, has, set p
+// before: has, get p, has, set p (`VERSION_ES6` does not read @@unscopables, see 1.51)
 // now:    has, get @@unscopables, has, get p, has, set p
 ```
 
@@ -1665,6 +1683,9 @@ let [x = x] = [];   // VERSION_ES6: x is undefined   VERSION_ECMASCRIPT: Referen
   and could be assigned. They are uninitialized until the declaration runs, like the names of a plain
   declaration: reading or assigning them throws a ReferenceError. `for (let [x] of x)` throws it while evaluating
   `x`.
+- Each name is initialized when its own element of the pattern has been processed, so a default value reads the
+  names bound before it: `const {a, b = a} = {a: 1}` gives 1 and 1, as under `VERSION_ES6`. A default that reads
+  its own name or a later one (`let [x = y, y] = []`), and the initializer (`let [a, b] = [1, a]`), throw.
 - **Why:** ECMA-262 2026, §14.3.1 (Let and Const Declarations: the bindings are created uninitialized and "may
   not be accessed in any way until the variable's LexicalBinding is evaluated"), §14.7.5.6 (ForIn/OfHeadEvaluation:
   the bindings are uninitialized while the expression is evaluated).
@@ -1722,16 +1743,16 @@ mod(-9n, 7n);   // compiled, before: TypeError "Cannot convert BigInt to a numbe
   and `--` of a variable in a register that is not a number keep a BigInt. `+x` and `>>>` are still numbers
   (they throw for a BigInt). The interpreter was not affected. noble-ed25519 (JetStream 3)
   failed on it.
-- **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator), §13.5.4 and §13.5.6 (unary `-` and `~`
-  of a BigInt), §13.4.4 (postfix increment: BigInt::add).
+- **Why:** ECMA-262 2026, §13.15.3 (ApplyStringOrNumericBinaryOperator), §13.5.5 and §13.5.6 (unary `-` and `~`
+  of a BigInt), §13.4.2 (postfix increment: BigInt::add).
 
 ### 1.104 The value of a `return` of a generator that leaves a scope, a loop or a `try`
 
 ```js
-async function first(items) {
-  for (const item of items) { return item; }   // before: ReferenceError: "item" is not defined   now: the item
-}
 function* g() { try { return log('value'); } finally { log('finally'); } }   // before: finally, value   now: value, finally
+async function first(items) {
+  for (const item of items) { return item; }   // the item (`VERSION_ES6` has no async functions; `VERSION_ECMASCRIPT`
+}                                              // threw ReferenceError: "item" is not defined before this fix)
 ```
 
 - In a generator or an async function, a `return` that leaves a block with a scope object, a `for-of` loop or a

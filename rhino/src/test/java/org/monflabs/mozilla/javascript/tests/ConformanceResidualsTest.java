@@ -417,4 +417,19 @@ class ConformanceResidualsTest {
                         + " return String(Reflect.getOwnPropertyDescriptor(f, 'arguments').value); }\n"
                         + "f(1, 2)");
     }
+
+    @Test
+    void patternDefaultsSeeEarlierBindings() {
+        Utils.assertGatedBehavior(
+                "1,1|0,0|1,1|undefined|undefined",
+                "1,1|0,0|1,1|ReferenceError|ReferenceError",
+                "var r = [];\n"
+                        + "function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }\n"
+                        + "t(function () { const {a, b = a} = {a: 1}; return [a, b]; });\n"
+                        + "t(function () { let [i, n = i] = [0]; return [i, n]; });\n"
+                        + "t(function () { for (let [a, b = a] of [[1]]) return [a, b]; });\n"
+                        + "t(function () { let [x = y, y] = [undefined, 1]; return x; });\n"
+                        + "t(function () { let [a, b] = [1, a]; return b; });\n"
+                        + "r.join('|')");
+    }
 }

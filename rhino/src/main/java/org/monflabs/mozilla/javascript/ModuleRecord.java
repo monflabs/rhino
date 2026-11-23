@@ -24,8 +24,8 @@ import org.monflabs.mozilla.javascript.modules.PathModuleLoader;
 /**
  * A module of a realm (ECMA-262 16.2.1.6 Source Text Module Record), or a module of Java values.
  *
- * <p>A source module runs as a generator function compiled from its rewritten source (see {@link
- * ModuleInfo#generatorSource()}), whose scope is a {@link ModuleScope}: the first {@code next()}
+ * <p>A source module runs as a generator function made by the parser from its syntax tree (see
+ * {@code Parser.moduleFunction}), whose scope is a {@link ModuleScope}: the first {@code next()}
  * instantiates the module (its functions are hoisted and the getters of its exported bindings are
  * handed to its {@code init}), the second evaluates its body.
  */

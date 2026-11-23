@@ -17,7 +17,7 @@ git submodule update
 After doing so, the `./gradlew test` command will also execute all tests that are part of the official ECMAScript Test Suite
 
 As Rhino isn't 100% compliant with the latest ECMAScript standard, there is a mechanism to define which tests to run/skip,
-through the [test262.properties](test262.properties) file, the format of which is discussed in the [test262.properties format](#test262.properties-format) section
+through the [test262.properties](testsrc/test262.properties) file, the format of which is discussed in the [test262.properties format](#test262properties-format) section
 
 ## Compiled code and the interpreter
 In the tests, a compiler bug that makes a script fall back to the interpreter fails the test instead of logging a
@@ -31,11 +31,11 @@ compares what they compute: add a script there for a shape the class compiler sp
 ```
 
 ## test262.properties format
-The [test262.properties](test262.properties) file is used to specify which tests from the official ECMAScript Test Suite to include/exclude,
+The [test262.properties](testsrc/test262.properties) file is used to specify which tests from the official ECMAScript Test Suite to include/exclude,
 so that the test suite can pass even though Rhino is not yet 100% standards compliant
 
-The [test262.properties](test262.properties) file:
-- lists the subfolders of the [test262](../test262) folder to include or exclude when running tests
+The [test262.properties](testsrc/test262.properties) file:
+- lists the subfolders of the [test262](test262) folder to include or exclude when running tests
 - lists the .js test files that are expected to fail per (sub)folder
 
 **Basics**
@@ -43,7 +43,7 @@ The [test262.properties](test262.properties) file:
 built-ins/Array <- include all the tests in the test262/built-ins/Array folder
     from/calling-from-valid-1-noStrict.js <- but expect that this tests fails
 ```
-If `built-ins/Array/from/calling-from-valid-1-noStrict.js` indeed fails, it wont fail the test suite. If it passes, this will be logged while running the test suite
+If `built-ins/Array/from/calling-from-valid-1-noStrict.js` indeed fails, it wont fail the test suite. If it passes, the run fails (see [How the test262 results are checked](#how-the-test262-results-are-checked))
 
 **Skipping entire folders**
 ```
@@ -74,9 +74,10 @@ While the test262.properties file does support this (because it is a Java Proper
 lost when (re)generating the test262.properties file!
 
 ## Updating the test262.properties file
-While the [test262.properties](test262.properties) file could be manually updated, the tooling also comes with a mechanism to
+While the [test262.properties](testsrc/test262.properties) file could be manually updated, the tooling also comes with a mechanism to
 (re)generate the file based on the current revision of the test262 submodule and the results of running
-the Test262SuiteTest in both interpreted and compiled mode, and with strict mode on and off.
+the Test262SuiteTest in interpreted and compiled mode and in the interpreter with a debugger attached, and with
+strict mode on and off.
 
 (The result depends on the Java version, because Unicode data comes from the JDK. The reference JDK is
 Java 25, and the build refuses to regenerate the file unless RHINO_TEST_JAVA_VERSION=25 is set.)
@@ -89,7 +90,8 @@ The .properties file generation can be parameterized to affect the output:
 - stats: include stats on the # of failed and total tests
 - unsupported: include files containing tests for unsupported features
 
-These defaults can be overridden by specifying a value for the `generateTest262properties` parameter:
+These defaults can be overridden by specifying a value for the `updateTest262properties` parameter
+(`-DupdateTest262properties=none`):
 - all: rollup, stats and unsupported all true (default)
 - none: rollup, stats and unsupported all false
 - [rollup][stats][unsupported]: the ones included will be true
@@ -106,7 +108,8 @@ gradle to run all tests
   file (`-DupdateTest262properties`) never fails on it.
 - Tests flagged `async` run: `doneprintHandle.js` is loaded, the test's `print` output is captured, the
   microtask queue is drained after the test, and the test passes only if `$DONE` reported completion.
-- Tests flagged `module` are not run yet.
+- Tests flagged `module` run as modules, once: the source is loaded with `Context.loadModule`, linked,
+  then evaluated.
 - Every test has a time limit (60 seconds; `-Dtest262.timeout=<seconds>`), enforced through the
   instruction observer, so a test that never terminates fails instead of hanging the run.
 - Unicode data comes from the JDK, and test262.properties is generated on the reference JDK (Java 25).
@@ -133,8 +136,19 @@ RHINO_TEST_JAVA_VERSION=25 ./gradlew :tests:test -Drhino.splitWeight=3 -DupdateT
 then compare `test262.properties` with git: a test that fails only split is a splitting bug. Add
 `-Drhino.classUnits=3` to also spread the functions of every script over 3 classes.
 
+## Verifying the caches
+`-Drhino.verifyCaches=true` (see `CHANGELOG_MONFLABS.md`) makes the engine compare every answer of its property
+and name caches with the lookup it replaces; the build passes it to the tests of `rhino` and `tests`:
+```
+./gradlew :rhino:test :tests:test -Drhino.verifyCaches=true
+```
+
+## Integration tests
+`./gradlew check` also runs `:tests:integrationTest`, the JPMS and OSGi tests of `src/integrationTest`, against the
+built JARs of `rhino`, `rhino-engine`, `rhino-tools`, `rhino-xml` and `rhino-kotlin`.
+
 ## Running specific tests from the official ECMAScript Test Suite (test262)
-The default setup for running the test262 test suite is defined in [test262.properties](test262.properties).
+The default setup for running the test262 test suite is defined in [test262.properties](testsrc/test262.properties).
 
 Another .properties file to use can be specified using the `test262properties` commandline property
 ```
