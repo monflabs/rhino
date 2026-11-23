@@ -343,6 +343,12 @@ public class NativeArray extends ScriptableObject implements List {
 
     @Override
     public void put(String id, Scriptable start, Object value) {
+        if ((lengthAttr & READONLY) != 0
+                && start == this
+                && toArrayIndex(id) >= length
+                && rejectsIndexAboveLength()) {
+            return;
+        }
         super.put(id, start, value);
         if (start == this) {
             // If the object is sealed, super will throw exception
@@ -361,6 +367,21 @@ public class NativeArray extends ScriptableObject implements List {
      */
     private boolean isWritableDense() {
         return (lengthAttr & READONLY) == 0 && isExtensible() && !isSealed();
+    }
+
+    /**
+     * Whether an assignment to an index at or above a read-only length is rejected (10.4.2.1):
+     * ignored, or a TypeError in strict code. Before VERSION_ECMASCRIPT the element is written.
+     */
+    private static boolean rejectsIndexAboveLength() {
+        Context cx = Context.getCurrentContext();
+        if (cx == null || !cx.isLatestEcmaScript()) {
+            return false;
+        }
+        if (cx.isStrictMode()) {
+            throw ScriptRuntime.typeErrorById("msg.modify.readonly", "length");
+        }
+        return true;
     }
 
     private boolean ensureCapacity(int capacity) {
@@ -386,7 +407,9 @@ public class NativeArray extends ScriptableObject implements List {
                 && dense != null
                 && 0 <= index
                 && (denseOnly || (slot == null || !slot.isSetterSlot()))) {
-            if (!isExtensible() && this.length <= index) {
+            if (this.length <= index
+                    && (!isExtensible()
+                            || ((lengthAttr & READONLY) != 0 && rejectsIndexAboveLength()))) {
                 return;
             } else if (index < dense.length) {
                 dense[index] = value;
@@ -405,6 +428,12 @@ public class NativeArray extends ScriptableObject implements List {
             } else {
                 denseOnly = false;
             }
+        }
+        if ((lengthAttr & READONLY) != 0
+                && start == this
+                && this.length <= index
+                && rejectsIndexAboveLength()) {
+            return;
         }
         super.put(index, start, value);
         if (start == this && (lengthAttr & READONLY) == 0) {
@@ -1513,7 +1542,7 @@ public class NativeArray extends ScriptableObject implements List {
              */
             if (length > 0) {
                 for (i = 1; i <= length; i++) {
-                    Object temp = getRawElem(o, i);
+                    Object temp = getElemIfPresent(cx, o, i);
                     setRawElem(cx, o, i - 1, temp);
                 }
             }
@@ -1633,8 +1662,9 @@ public class NativeArray extends ScriptableObject implements List {
 
             /*  Slide up the array to make room for args at the bottom */
             if (length > 0) {
+                boolean latest = cx.isLatestEcmaScript();
                 for (long last = length - 1; last >= 0; last--) {
-                    Object temp = getRawElem(o, last);
+                    Object temp = latest ? getElemIfPresent(cx, o, last) : getRawElem(o, last);
                     setRawElem(cx, o, last + argc, temp);
                 }
             }
@@ -1748,12 +1778,12 @@ public class NativeArray extends ScriptableObject implements List {
 
         if (delta > 0) {
             for (long last = length - 1; last >= end; last--) {
-                Object temp = getRawElem(o, last);
+                Object temp = getElemIfPresent(cx, o, last);
                 setRawElem(cx, o, last + delta, temp);
             }
         } else if (delta < 0) {
             for (long last = end; last < length; last++) {
-                Object temp = getRawElem(o, last);
+                Object temp = getElemIfPresent(cx, o, last);
                 setRawElem(cx, o, last + delta, temp);
             }
             // Do this backwards because some implementations might use a

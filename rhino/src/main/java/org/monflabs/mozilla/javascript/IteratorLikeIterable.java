@@ -26,6 +26,9 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
     private final Scriptable iterator;
     private boolean closed;
 
+    /** The iterator is exhausted, or threw from a step: it is not closed (7.4.11). */
+    private boolean finished;
+
     /** Before VERSION_ECMASCRIPT, return is read when the iteration starts (or null). */
     private final boolean eagerReturn;
 
@@ -75,6 +78,9 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
                 }
                 return;
             }
+            if (finished) {
+                return;
+            }
             // IteratorClose (7.4.11): "return" is read when the iteration is closed
             Object retObj =
                     ScriptRuntime.getObjectPropNoWarn(
@@ -106,12 +112,14 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
             if (builtIn != null) {
                 Object value = builtIn.step(cx, scope);
                 if (value == ES6Iterator.DONE) {
+                    finished = true;
                     isDone = true;
                     return false;
                 }
                 nextVal = value;
                 return true;
             }
+            finished = true;
             Object val = next.call(cx, scope, iterator, ScriptRuntime.emptyArgs);
             // This will throw if "val" is not an object.
             // "getObjectPropNoWarn" won't, so do this as follows.
@@ -127,6 +135,7 @@ public class IteratorLikeIterable implements Iterable<Object>, Closeable {
                 return false;
             }
             nextVal = ScriptRuntime.getObjectPropNoWarn(val, ES6Iterator.VALUE_PROPERTY, cx, scope);
+            finished = false;
             return true;
         }
 

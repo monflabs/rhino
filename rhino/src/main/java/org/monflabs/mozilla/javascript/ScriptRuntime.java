@@ -7294,7 +7294,12 @@ public class ScriptRuntime {
         if (len == 0) {
             return ScriptRuntime.emptyArgs;
         }
-        Object[] result = new Object[len];
+        Object[] result;
+        try {
+            result = new Object[len];
+        } catch (OutOfMemoryError e) {
+            throw rangeErrorById("msg.arraylength.too.big", String.valueOf(longLen));
+        }
         for (int i = 0; i < len; i++) {
             Object elem = ScriptableObject.getProperty(object, i);
             result[i] = (elem == Scriptable.NOT_FOUND) ? Undefined.instance : elem;
@@ -7903,6 +7908,11 @@ public class ScriptRuntime {
      */
     public static EcmaError stackOverflowError() {
         return rangeError(StackOverflowMessage.TEXT);
+    }
+
+    /** Makes {@link #stackOverflowError} usable where the stack is nearly exhausted. */
+    public static void loadStackOverflowMessage() {
+        StackOverflowMessage.load();
     }
 
     /** Whether the exception is a {@link #stackOverflowError}. */

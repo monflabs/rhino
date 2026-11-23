@@ -194,7 +194,7 @@ public class RegExpImpl implements RegExpProxy {
             } else {
                 opt = null;
             }
-            RECompiled compiled = NativeRegExp.compileRE(cx, src, opt, forceFlat);
+            RECompiled compiled = NativeRegExp.compileRuntimeRE(cx, src, opt, forceFlat);
             re =
                     NativeRegExpInstantiator.withLanguageVersionScopeCompiled(
                             cx.getLanguageVersion(), topScope, compiled);

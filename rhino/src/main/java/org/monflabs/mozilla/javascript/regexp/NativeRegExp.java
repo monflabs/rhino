@@ -747,7 +747,7 @@ public class NativeRegExp extends ScriptableObject {
                         ? ""
                         : (pattern instanceof NativeRegExp ? (String) p : escapeRegExp(p));
         String flagString = Undefined.isUndefined(fl) ? null : ScriptRuntime.toString(fl);
-        obj.re = compileRE(cx, source, flagString, false);
+        obj.re = compileRuntimeRE(cx, source, flagString, false);
         obj.setLastIndex(ScriptRuntime.zeroObj);
         return obj;
     }
@@ -887,7 +887,7 @@ public class NativeRegExp extends ScriptableObject {
                 throw ScriptRuntime.typeErrorById("msg.bad.regexp.compile");
             }
 
-            this.re = compileRE(cx, pattern, flags, false);
+            this.re = compileRuntimeRE(cx, pattern, flags, false);
         }
         setLastIndex(ScriptRuntime.zeroObj);
         return this;
@@ -1337,6 +1337,19 @@ public class NativeRegExp extends ScriptableObject {
                 extractNamedCaptureGroups(src, node.kid, namedCaptureGroups);
             }
             node = node.next;
+        }
+    }
+
+    /**
+     * Compiles the pattern of a regular expression made at run time: one nested too deep for the
+     * stack of the thread is a RangeError, in all versions, rather than a StackOverflowError.
+     */
+    static RECompiled compileRuntimeRE(Context cx, String str, String global, boolean flat) {
+        ScriptRuntime.loadStackOverflowMessage();
+        try {
+            return compileRE(cx, str, global, flat);
+        } catch (StackOverflowError e) {
+            throw ScriptRuntime.stackOverflowError();
         }
     }
 
@@ -5953,6 +5966,10 @@ public class NativeRegExp extends ScriptableObject {
                                     replaceOps);
 
             if (position >= nextSourcePosition) {
+                ScriptRuntime.checkStringLength(
+                        (long) accumulatedResult.length()
+                                + (position - nextSourcePosition)
+                                + replacementString.length());
                 accumulatedResult.append(s, nextSourcePosition, position);
                 accumulatedResult.append(replacementString);
                 nextSourcePosition = position + matchLength;
@@ -5962,7 +5979,9 @@ public class NativeRegExp extends ScriptableObject {
         if (nextSourcePosition >= lengthS) {
             return accumulatedResult.toString();
         } else {
-            accumulatedResult.append(s.substring(nextSourcePosition));
+            ScriptRuntime.checkStringLength(
+                    (long) accumulatedResult.length() + (lengthS - nextSourcePosition));
+            accumulatedResult.append(s, nextSourcePosition, lengthS);
             return accumulatedResult.toString();
         }
     }
@@ -6070,6 +6089,10 @@ public class NativeRegExp extends ScriptableObject {
                                     replaceOps);
 
             if (position >= nextSourcePosition) {
+                ScriptRuntime.checkStringLength(
+                        (long) accumulatedResult.length()
+                                + (position - nextSourcePosition)
+                                + replacementString.length());
                 accumulatedResult.append(s, nextSourcePosition, position);
                 accumulatedResult.append(replacementString);
                 nextSourcePosition = position + matchLength;
@@ -6079,7 +6102,9 @@ public class NativeRegExp extends ScriptableObject {
         if (nextSourcePosition >= lengthS) {
             return accumulatedResult.toString();
         } else {
-            accumulatedResult.append(s.substring(nextSourcePosition));
+            ScriptRuntime.checkStringLength(
+                    (long) accumulatedResult.length() + (lengthS - nextSourcePosition));
+            accumulatedResult.append(s, nextSourcePosition, lengthS);
             return accumulatedResult.toString();
         }
     }

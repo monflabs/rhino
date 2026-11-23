@@ -70,12 +70,12 @@ public class StandardSlot<T extends PropHolder<T>> extends Slot<T> {
     @Override
     public boolean setValue(Object value, T owner, T start, boolean isThrow) {
         if ((attributes & ScriptableObject.READONLY) != 0) {
-            if (isThrow) {
-                throw ScriptRuntime.typeErrorById("msg.modify.readonly", getName());
-            }
             if (owner instanceof ScopeObject) {
                 // in a declarative scope, a read-only binding is a const
                 ScriptRuntime.constAssignment(Context.getContext(), String.valueOf(getName()));
+            }
+            if (isThrow) {
+                throw ScriptRuntime.typeErrorById("msg.modify.readonly", getName());
             }
             return true;
         }
