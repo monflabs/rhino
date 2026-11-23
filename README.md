@@ -22,6 +22,19 @@ This is the Monflabs fork of [mozilla/rhino](https://github.com/mozilla/rhino). 
 [doc/ROBUSTNESS_MONFLABS.md](./doc/ROBUSTNESS_MONFLABS.md) and its optimizations in
 [OPTIMIZATION.md](./OPTIMIZATION.md).
 
+## Goals
+
+- **Implement the latest ECMAScript standard**: ES2026, measured by test262
+  ([doc/CONFORMANCE_MONFLABS.md](./doc/CONFORMANCE_MONFLABS.md)).
+- **Have no performance regression**: every change to the engine passes `buildtools/perf-gate.sh`, which compares it
+  with the previous build in compiled and interpreted mode ([benchmarks/README.md](./benchmarks/README.md)).
+- **Do not break existing code in the old modes**: under `VERSION_ES6` and the older language versions a script behaves
+  as it does on stock Rhino, since every change of behavior is active under `VERSION_ECMASCRIPT` only
+  ([BACKWARD_COMPATIBILITY.md](./BACKWARD_COMPATIBILITY.md)). The one exception is a defect no script can rely on, such
+  as an exception of the engine itself, which is fixed in all versions.
+
+## Building
+
 To build and run a Rhino shell:
 
     ./gradlew :rhino-tools:run -q --console=plain

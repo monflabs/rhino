@@ -24,6 +24,18 @@ a checkout of [monflabs/rhino](https://github.com/monflabs/rhino) (branch
 ./gradlew :rhino:publishToMavenLocal :rhino-tools:publishToMavenLocal -x test
 ```
 
+## Goals
+
+- **Implement the latest ECMAScript standard.** The target is ES2026, and the measure is test262
+  ([validation](validation.md)).
+- **Have no performance regression.** Every change to the engine passes a performance gate that
+  compares it with the previous build, in compiled and interpreted mode
+  ([performance](performance.md)).
+- **Do not break existing code in the old modes.** Under `VERSION_ES6` and the older language
+  versions, a script behaves as it does on stock Rhino: every change of behavior is active under
+  `VERSION_ECMASCRIPT` only ([changes](changes.md)). The one exception is a defect no script can
+  rely on, such as an exception of the engine itself, which is fixed in all versions.
+
 ## At a glance
 
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
