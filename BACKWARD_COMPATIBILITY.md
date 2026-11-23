@@ -353,7 +353,9 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
   written with a Unicode escape, as `v\u0061r x`, except as a property name), a numeric literal
   directly followed by an identifier, `08n`, `const` without an initializer, declarations as the body of a
   label, `if`, `with` or a loop, a catch parameter redeclared by a lexical declaration, or a pattern
-  catch parameter redeclared by a `var` of the block (`catch ([e]) { var e; }`), `continue` to a label
+  catch parameter redeclared by a `var` of the block (`catch ([e]) { var e; }`), a function or a parameter named
+  by a word that strict code reserves when the body of the function is strict
+  (`function static() { "use strict"; }`, `function f(yield) { "use strict"; }`), `continue` to a label
   that is not a loop, a tagged template in an optional chain. The full list is in CHANGELOG_MONFLABS.md (plan
   1.10e).
 - `eval?.()` and a tagged template on `eval` are indirect evals.
@@ -729,7 +731,10 @@ var h = function k() { return function () { k = null; }; };   // JavaScript 1.x:
 - Inside a named function expression, assigning its name (directly, from a nested function or
   from eval code) has no effect, and throws a TypeError in strict code; so do `++` and `--`
   (`(function g() { g++; return typeof g; })()` is `"function"`; before: `"number"`). A parameter or a declaration
-  of the same name in the function still makes it an ordinary variable.
+  of the same name in the function still makes it an ordinary variable, and so does a `var` or a function that
+  sloppy eval code declares with that name (`(function g() { eval("var g"); return typeof g; })()` is
+  `"undefined"`; before: `"function"`). In a `with` statement, the name reaches a property of the object first:
+  `with (o) { g = 5 }` stores `o.g` when `o` has a `g`.
 - `name = null` where `name` is the name of an enclosing function is an ordinary assignment
   (JavaScript 1.x rewrote it as `this.name = null`).
 - A function compiled by `Context.compileFunction` (e.g. an event handler of an embedding) keeps both JavaScript 1.x
@@ -902,7 +907,9 @@ Object.setPrototypeOf(Object.prototype, Object.create(null)); // before: allowed
 
 - Truncating an array stops at a non-configurable element; an index cannot be defined at or
   above a read-only `length`, nor assigned (`a[1] = 2` is ignored, a TypeError in strict code; before: stored, and
-  the length grew); the prototype of `Object.prototype` cannot be changed; assigning an index of a String
+  the length grew); an assignment that would add an element to an array that is not extensible, above its length
+  or in a hole, is a TypeError in strict code and ignored otherwise (before: ignored above the length, stored in a
+  hole); the prototype of `Object.prototype` cannot be changed; assigning an index of a String
   object throws in strict mode, also from `Object.assign` (`Object.assign("a", [1])`); the `__proto__`
   getter throws for `undefined`/`null`; a setter-only accessor's descriptor has `get: undefined`.
 - **Why:** ECMA-262 2026, §10.4.2 (Array exotic objects), §10.4.7 (immutable prototype exotic objects), §10.4.3
@@ -1702,6 +1709,9 @@ let [x = x] = [];   // VERSION_ES6: x is undefined   VERSION_ECMASCRIPT: Referen
 - Each name is initialized when its own element of the pattern has been processed, so a default value reads the
   names bound before it: `const {a, b = a} = {a: 1}` gives 1 and 1, as under `VERSION_ES6`. A default that reads
   its own name or a later one (`let [x = y, y] = []`), and the initializer (`let [a, b] = [1, a]`), throw.
+- In the head of a `for` loop, an initializer reads the names declared before it, patterns included:
+  `for (let i = 0, n = i; ...)` and `for (let [i, n] = [0, 5], m = n; ...)` (before, in a function: a
+  ReferenceError, `"i" is not defined`, or `m` undefined when the loop holds a closure).
 - **Why:** ECMA-262 2026, §14.3.1 (Let and Const Declarations: the bindings are created uninitialized and "may
   not be accessed in any way until the variable's LexicalBinding is evaluated"), §14.7.5.6 (ForIn/OfHeadEvaluation:
   the bindings are uninitialized while the expression is evaluated).
@@ -1959,6 +1969,9 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
   `yield` in the default value of an arrow function's parameter, in a generator, failed to compile
   (`ClassFileFormatException`) or threw a `NullPointerException` when the default ran: the loop runs, and the
   default throws a SyntaxError when it runs outside of the generator.
+- Under `VERSION_ES6`, a `set` trap of a proxy that forwards a new property to `Reflect.set(t, k, v, receiver)`
+  (as `Array.prototype.push.call(proxy, x)` makes it do) recursed until a `java.lang.StackOverflowError`: the
+  property is created on the receiver.
 - **Why:** both are implementation limits, which ECMA-262 leaves to the host; reaching them must not take the host
   down.
 

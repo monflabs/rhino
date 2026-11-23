@@ -1186,6 +1186,11 @@ class NativeProxy extends ScriptableObject {
         return revocable;
     }
 
+    /** Whether the handler of this proxy, if not revoked, has a set trap. */
+    final boolean hasSetTrap() {
+        return handlerObj != null && getTrap(TRAP_SET) != null;
+    }
+
     protected final Function getTrap(String trapName) {
         Object handlerProp = ScriptableObject.getProperty(handlerObj, trapName);
         if (Scriptable.NOT_FOUND == handlerProp) {

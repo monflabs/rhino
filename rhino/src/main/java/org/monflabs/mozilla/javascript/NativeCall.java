@@ -167,6 +167,17 @@ public final class NativeCall extends DeclarationScope {
         return selfNameInitialized && value != function && name.equals(function.getFunctionName());
     }
 
+    /**
+     * A var or a function that sloppy eval code declares with the name of the function expression
+     * is a variable of the function, which hides the immutable binding of the name.
+     */
+    void declareEvalVar(String name) {
+        if (selfNameInitialized && name.equals(function.getFunctionName())) {
+            selfNameInitialized = false;
+            put(name, this, Undefined.instance);
+        }
+    }
+
     @Override
     protected boolean putOwnProperty(String name, VarScope start, Object value, boolean isThrow) {
         if (selfNameInitialized && name.equals(function.getFunctionName()) && start == this) {

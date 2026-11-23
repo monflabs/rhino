@@ -612,6 +612,16 @@ public class AbstractEcmaObjectOperations {
         return legacyOrdinarySetWithOwnDescriptor(cx, s, o, p, v, receiver, ownDesc);
     }
 
+    private static boolean hasProperty(Scriptable obj, Object key) {
+        if (ScriptRuntime.isSymbol(key)) {
+            return ScriptableObject.hasProperty(obj, (Symbol) key);
+        }
+        ScriptRuntime.StringIdOrIndex soi = ScriptRuntime.toStringIdOrIndex(key);
+        return soi.stringId == null
+                ? ScriptableObject.hasProperty(obj, soi.index)
+                : ScriptableObject.hasProperty(obj, soi.stringId);
+    }
+
     /**
      * Implements the OrdinarySetWithOwnDescriptor abstract operation.
      *
@@ -653,6 +663,15 @@ public class AbstractEcmaObjectOperations {
 
         if (ownDesc == null || Undefined.isUndefined(ownDesc)) {
             Scriptable parent = o.getPrototype();
+            if (parent != null
+                    && receiver instanceof NativeProxy
+                    && ((NativeProxy) receiver).hasSetTrap()
+                    && !hasProperty(parent, p)) {
+                // no object of the chain has the property: it is created on the receiver. Storing
+                // through the parent would call the set trap of the proxy again, without end
+                // when the trap forwards to Reflect.set
+                parent = null;
+            }
             if (parent != null) {
                 if (ScriptRuntime.isSymbol(p)) {
                     parent.put((Symbol) p, receiver, v);

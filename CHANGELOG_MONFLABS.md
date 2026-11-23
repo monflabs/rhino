@@ -40,6 +40,35 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Five defects found while fixing those of the review (2026-11-22)
+
+Found by the agents that fixed the nineteen defects below, outside of their lists. Gated under
+`VERSION_ECMASCRIPT` unless marked; tests in `ReviewDefectsFollowUpTest`.
+
+- `for (let i = 0, n = i; ...)` in a function threw `ReferenceError: "i" is not defined`: the head becomes a let
+  block whose initializers were evaluated outside of its scope (the JavaScript 1.7 let statement), and with a
+  pattern in the head a later declarator was initialized before the pattern. `NodeTransformer.visitLet` now
+  evaluates the initializers in the scope and in the order of the head, in registers and in scope objects
+  (`BACKWARD_COMPATIBILITY.md` 1.99).
+- In a function expression named `g`, `with (o) { g = 5 }` did not store `o.g`, `g++` and `g += 5` there were
+  wrong too (`g += 5` threw an `ArrayIndexOutOfBoundsException` in compiled mode), and a `var g` declared by
+  sloppy eval code did not hide the name. The compiler rewrites an assignment to the name only where it is known
+  to reach the immutable binding (`NodeTransformer.staticSelfName`: not in a `with`, not in a function with a
+  direct eval); elsewhere the runtime decides, and `NativeCall.declareEvalVar` turns the binding into a variable
+  (1.37).
+- A strict assignment that would add an element to an array that is not extensible was ignored, and one to a hole
+  of such an array stored the element (`NativeArray.rejectsNewIndex`; 1.47).
+- `function static() { "use strict"; }`, and a parameter named `static`, `yield`, `implements` and the other
+  words that strict code reserves, were accepted when the directive of the body made the function strict
+  (`Parser.checkParamsAfterBody`; 1.12).
+- All versions: under `VERSION_ES6`, `Array.prototype.push.call(proxy, x)` on a proxy whose `set` trap forwards to
+  `Reflect.set` with the receiver threw a `java.lang.StackOverflowError`
+  (`AbstractEcmaObjectOperations.legacyOrdinarySetWithOwnDescriptor`; 2.5).
+
+- Verification: full `check`, `test262.properties` unchanged. Perf gate: `run.typedarray.cmp.ecma` flagged
+  +10.3%, on code these fixes do not touch; +0.5% alone over 5 rounds and −1.1% after other scripts, and at about
+  12.4 or 13.6 ms for either build over the last three full gates: a JIT state.
+
 ### Nineteen defects found by the documentation review (2026-11-22)
 
 The review of 2026-11-22 ran every example of `BACKWARD_COMPATIBILITY.md` and found behavior that neither the

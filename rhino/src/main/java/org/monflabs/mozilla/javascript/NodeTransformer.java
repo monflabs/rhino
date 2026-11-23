@@ -503,7 +503,8 @@ public class NodeTransformer {
 
                 case Token.INC:
                 case Token.DEC:
-                    if (isSelfName(tree, node.getFirstChild(), Token.NAME, scope)) {
+                    if (staticSelfName(tree)
+                            && isSelfName(tree, node.getFirstChild(), Token.NAME, scope)) {
                         // ++ or -- on the immutable binding of a function expression's name:
                         // the value is computed on a copy, [name][0]++
                         Node name = node.getFirstChild();
@@ -523,7 +524,7 @@ public class NodeTransformer {
                     break;
 
                 case Token.SETNAME:
-                    if (isSelfNameAssignment(tree, node, scope)) {
+                    if (staticSelfName(tree) && isSelfNameAssignment(tree, node, scope)) {
                         // the binding of a function expression's name is immutable
                         Node value = node.getLastChild();
                         node.removeChild(value);
@@ -654,6 +655,40 @@ public class NodeTransformer {
         }
     }
 
+    /**
+     * Whether a reference to the name of the function expression being compiled is known to reach
+     * its immutable binding: not in a with statement, whose object may have the name, and not in a
+     * function with a direct eval, which may declare a var of that name. The runtime decides then.
+     */
+    private boolean staticSelfName(ScriptNode tree) {
+        if (!(tree instanceof FunctionNode) || !((FunctionNode) tree).hasSelfNameBinding()) {
+            return false;
+        }
+        if (inWith()) {
+            return false;
+        }
+        if (directEvalTree != tree) {
+            directEvalTree = tree;
+            hasDirectEval = containsDirectEval(tree);
+        }
+        return !hasDirectEval;
+    }
+
+    private ScriptNode directEvalTree;
+    private boolean hasDirectEval;
+
+    private static boolean containsDirectEval(Node node) {
+        if (node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL) == Node.SPECIALCALL_EVAL) {
+            return true;
+        }
+        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
+            if (containsDirectEval(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** An assignment to the name of the function expression being compiled, see IRFactory. */
     private static boolean isSelfNameAssignment(ScriptNode tree, Node setName, Scope scope) {
         return setName.getIntProp(Node.TDZ_DECLARATION_PROP, 0) != 1
@@ -727,6 +762,9 @@ public class NodeTransformer {
             result = new Node(isExpression ? Token.SCOPEEXPR : Token.BLOCK);
             result = replaceCurrent(parent, previous, scopeNode, result);
             ArrayList<Object> list = new ArrayList<>();
+            // the patterns of a for (let ...) head, and the declarators after them, are bound in
+            // the order of the head
+            List<Node> inOrder = tdz && !isExpression ? new ArrayList<>() : null;
             for (Node v = vars.getFirstChild(); v != null; v = v.getNext()) {
                 Node current = v;
                 if (current.getType() == Token.LETEXPR) {
@@ -738,6 +776,10 @@ public class NodeTransformer {
                     // Add initialization code to front of body
                     if (isExpression) {
                         body = new Node(Token.COMMA, c.getNext(), body);
+                    } else if (inOrder != null) {
+                        Node pattern = c.getNext();
+                        current.removeChild(pattern);
+                        inOrder.add(new Node(Token.EXPR_VOID, pattern));
                     } else {
                         body = new Node(Token.BLOCK, new Node(Token.EXPR_VOID, c.getNext()), body);
                     }
@@ -766,6 +808,20 @@ public class NodeTransformer {
                 if (current.getType() != Token.NAME) throw Kit.codeBug();
                 list.add(ScriptRuntime.getIndexObject(current.getString()));
                 Node init = current.getFirstChild();
+                if (init != null && inOrder != null && !inOrder.isEmpty()) {
+                    // declared after a pattern: initialized after it
+                    current.removeChild(init);
+                    Symbol symbol = ((Scope) scopeNode).getSymbol(current.getString());
+                    boolean isConst = symbol != null && symbol.getDeclType() == Symbol.Type.CONST;
+                    Node set =
+                            new Node(
+                                    isConst ? Token.SETCONST : Token.SETNAME,
+                                    Node.newString(Token.BINDNAME, current.getString()),
+                                    init);
+                    set.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+                    inOrder.add(new Node(Token.EXPR_VOID, set));
+                    init = new Node(Token.TDZ_SENTINEL);
+                }
                 if (init == null) {
                     init =
                             current.getIntProp(Node.LEXICAL_PROP, 0) == 1
@@ -773,6 +829,14 @@ public class NodeTransformer {
                                     : new Node(Token.VOID, Node.newNumber(0.0));
                 }
                 newVars.addChildToBack(init);
+            }
+            if (inOrder != null && !inOrder.isEmpty()) {
+                Node block = new Node(Token.BLOCK);
+                for (Node n : inOrder) {
+                    block.addChildToBack(n);
+                }
+                block.addChildToBack(body);
+                body = block;
             }
             newVars.putProp(Node.OBJECT_IDS_PROP, list.toArray());
             result.addChildToBack(newVars);
@@ -797,11 +861,13 @@ public class NodeTransformer {
                     // destructuring in let expr, e.g. let ([x, y] = [3, 4]) {}
                     Node c = current.getFirstChild();
                     if (c.getType() != Token.LET) throw Kit.codeBug();
+                    Node pattern = c.getNext();
+                    boolean inOrder = tdz && !isExpression;
                     // Add initialization code to front of body
                     if (isExpression) {
-                        body = new Node(Token.COMMA, c.getNext(), body);
-                    } else {
-                        body = new Node(Token.BLOCK, new Node(Token.EXPR_VOID, c.getNext()), body);
+                        body = new Node(Token.COMMA, pattern, body);
+                    } else if (!inOrder) {
+                        body = new Node(Token.BLOCK, new Node(Token.EXPR_VOID, pattern), body);
                     }
                     // We're removing the LETEXPR, so move the symbols
                     Scope.joinScopes((Scope) current, (Scope) scopeNode);
@@ -817,6 +883,11 @@ public class NodeTransformer {
                             init = new Node(Token.VOID, Node.newNumber(0.0));
                         }
                         newVars.addChildToBack(new Node(Token.SETVAR, stringNode, init));
+                    }
+                    if (inOrder) {
+                        // a pattern of a for (let ...) head is bound in the order of the head
+                        current.removeChild(pattern);
+                        newVars.addChildToBack(pattern);
                     }
                     continue; // Already processed all children, move to next sibling of LETEXPR
                 }
@@ -848,8 +919,14 @@ public class NodeTransformer {
                     ((Scope) scopeNode).setParentScope(scopeParent);
                 }
             } else {
-                result.addChildToBack(new Node(Token.EXPR_VOID, newVars));
                 scopeNode.setType(Token.BLOCK);
+                if (tdz) {
+                    // the initializers of a for (let ...) head see the bindings declared before
+                    // them: for (let i = 0, n = i; ...)
+                    scopeNode.addChildToBack(new Node(Token.EXPR_VOID, newVars));
+                } else {
+                    result.addChildToBack(new Node(Token.EXPR_VOID, newVars));
+                }
                 result.addChildToBack(scopeNode);
                 scopeNode.addChildrenToBack(body);
                 if (body instanceof Scope && ((Scope) body).getParentScope() != scopeNode) {

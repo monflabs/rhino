@@ -384,6 +384,24 @@ public class NativeArray extends ScriptableObject implements List {
         return true;
     }
 
+    /**
+     * An assignment that would add an element to an array that is not extensible: ignored, or a
+     * TypeError in strict code under VERSION_ECMASCRIPT.
+     */
+    private static boolean rejectsNewIndex() {
+        Context cx = Context.getCurrentContext();
+        if (cx != null && cx.isLatestEcmaScript() && cx.isStrictMode()) {
+            throw ScriptRuntime.typeErrorById("msg.not.extensible");
+        }
+        return true;
+    }
+
+    /** The same for a hole below the length, which VERSION_ES6 fills. */
+    private static boolean rejectsNewHole() {
+        Context cx = Context.getCurrentContext();
+        return cx != null && cx.isLatestEcmaScript() && rejectsNewIndex();
+    }
+
     private boolean ensureCapacity(int capacity) {
         if (capacity > dense.length) {
             if (capacity > MAX_PRE_GROW_SIZE) {
@@ -408,8 +426,13 @@ public class NativeArray extends ScriptableObject implements List {
                 && 0 <= index
                 && (denseOnly || (slot == null || !slot.isSetterSlot()))) {
             if (this.length <= index
-                    && (!isExtensible()
-                            || ((lengthAttr & READONLY) != 0 && rejectsIndexAboveLength()))) {
+                    ? (!isExtensible()
+                            ? rejectsNewIndex()
+                            : ((lengthAttr & READONLY) != 0 && rejectsIndexAboveLength()))
+                    : (!isExtensible()
+                            && index < dense.length
+                            && dense[index] == NOT_FOUND
+                            && rejectsNewHole())) {
                 return;
             } else if (index < dense.length) {
                 dense[index] = value;

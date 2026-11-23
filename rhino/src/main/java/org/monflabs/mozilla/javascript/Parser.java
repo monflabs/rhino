@@ -2534,6 +2534,19 @@ public class Parser {
      * in methods and with a non-simple list (ECMA-262 15.2.1); arrow functions check them while
      * parsing their parameters.
      */
+    /** The names that only strict mode code reserves (ECMA-262 12.7.2). */
+    private static final Set<String> STRICT_RESERVED_WORDS =
+            Set.of(
+                    "implements",
+                    "interface",
+                    "let",
+                    "package",
+                    "private",
+                    "protected",
+                    "public",
+                    "static",
+                    "yield");
+
     private void checkParamsAfterBody(FunctionNode fnNode, boolean isMethod) {
         if (!compilerEnv.isLatestEcmaScript()) {
             // before VERSION_ECMASCRIPT, only code that is already strict rejects duplicate
@@ -2573,8 +2586,8 @@ public class Parser {
             if (strict && ("eval".equals(name) || "arguments".equals(name))) {
                 reportError("msg.bad.id.strict", name);
             }
-            if (i < firstParam && "let".equals(name)) {
-                // function let() { "use strict"; }
+            if (strict && STRICT_RESERVED_WORDS.contains(name)) {
+                // function let() { "use strict"; }, function f(static) { "use strict"; }
                 reportError("msg.reserved.id", name);
             }
             if (i >= firstParam && checkDuplicates && !seen.add(name)) {

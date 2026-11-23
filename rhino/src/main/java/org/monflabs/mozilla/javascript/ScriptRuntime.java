@@ -6241,6 +6241,9 @@ public class ScriptRuntime {
             for (int i = varCount; i-- != 0; ) {
                 String name = desc.getParamOrVarName(i);
                 boolean isConst = desc.getParamOrVarConst(i);
+                if (evalScript && !isConst && varScope instanceof NativeCall) {
+                    ((NativeCall) varScope).declareEvalVar(name);
+                }
                 // Don't overwrite existing def if already defined in object
                 // or prototypes of object; a global var only looks at own properties
                 // (CreateGlobalVarBinding: var __proto__ shadows Object.prototype.__proto__)
