@@ -286,6 +286,18 @@ public class Context implements Closeable {
      *       let}, {@code const} and function declarations of the body.
      *   <li>A data property of an object literal replaces an accessor of the same name defined
      *       before it.
+     *   <li>A reserved word written with a Unicode escape is a SyntaxError, except as a property
+     *       name; {@code let} can name a function in sloppy code.
+     *   <li>A primitive {@code thisArg} of the Array, typed array and {@code Map} callback methods,
+     *       of {@code Array.from}, {@code Reflect.apply} and {@code bind} reaches a strict function
+     *       unchanged.
+     *   <li>The code of an indirect {@code eval} is strict only by its own directive, whatever the
+     *       code that calls it.
+     *   <li>An optional call {@code a.b?.()} throws a TypeError when {@code a} is null or
+     *       undefined.
+     *   <li>An index at or above a read-only {@code length} of an array cannot be assigned.
+     *   <li>The built-ins that consume an iterator do not call its {@code return} method once it is
+     *       exhausted or has thrown.
      *   <li>{@code new ArrayBuffer} reads the prototype of newTarget before allocating the data
      *       block.
      *   <li>A generator's {@code return()} inside an array destructuring pattern closes the

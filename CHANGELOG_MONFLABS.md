@@ -40,6 +40,68 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Nineteen defects found by the documentation review (2026-11-22)
+
+The review of 2026-11-22 ran every example of `BACKWARD_COMPATIBILITY.md` and found behavior that neither the
+document nor ECMA-262 describes. Gated under `VERSION_ECMASCRIPT` unless marked "all versions"; the entries of
+`BACKWARD_COMPATIBILITY.md` are amended in place (1.1, 1.10, 1.12, 1.22, 1.28, 1.37, 1.45 to 1.47, 1.51, 1.57,
+1.68, 1.85, 2.5).
+
+Parser and scoping (`ReviewDefectsParserTest`):
+
+- The default value of a destructuring parameter saw the `var`s of the body: `Parser.separateBodyVars` did not scan
+  those defaults (1.68).
+- `g++` and `g--` on the name of a function expression wrote the binding; they leave it, and throw in strict code,
+  as `g = 1` does (`NodeTransformer`, `ScriptRuntime.doScopeIncrDecr`; 1.37).
+- A reserved word written with a Unicode escape was accepted, but `true`, `null`, `this` and `new`. The parser now
+  rejects an escaped reserved word wherever it consumes one, and the places that take an IdentifierName (after
+  `.`, property and class element names, import attributes, export names) allow it (§12.7.1; 1.12).
+- `catch ([e]) { var e; }` was accepted (§14.15.1; Annex B.3.4 exempts only `catch (e)`).
+- `function let() {}` was a SyntaxError in sloppy code (1.10).
+- All versions: `for (const i = 0; ...; ...)` under `VERSION_ES6` threw `RuntimeException: Unexpected node type
+  147` in both backends (`IRFactory.createLoop`).
+- All versions: under `VERSION_ES6`, a `yield` in the default value of an arrow function's parameter failed to
+  compile (`ClassFileFormatException`), and threw a `NullPointerException` in the interpreter when the default ran
+  outside of the generator; it now throws a SyntaxError there (`ScriptRuntime.throwYieldOutsideGenerator`).
+
+Calls, eval and assignments (`ReviewDefectsRuntimeTest`):
+
+- A primitive `thisArg` reached a strict function as a wrapper from the callback methods of Array, the typed
+  arrays and `Map`, from `Array.from`, `Reflect.apply` and `bind` (`ScriptRuntime.getCallbackThis`,
+  `receivesThisUnchanged`; `BoundFunction.boundThis` is an `Object`; 1.22).
+- The top-level code of an eval kept the strictness of the code that called it at run time: `JSScript.exec` now
+  sets the strict flag of a nested script from the script itself (1.28).
+- `u[0]?.()` and `u.k?.()` on an undefined `u` returned `undefined`: an optional call tests its base only when the
+  member is itself in the optional chain (1.57). `LanguageResidualsGateTest.optionalCallOfAnElement` asserted the
+  old result and is updated.
+- `o[k] &&= v` converted an object key twice, and `x ||= v` in a `with` resolved the name twice
+  (`IRFactory.createLogicalAssignment`, `Node.FIELD_KEY_OBJECT`; 1.51).
+
+Built-ins (`ReviewDefectsBuiltinsTest`):
+
+- An index at or above a read-only `length` of an array could be assigned (`NativeArray.rejectsIndexAboveLength`;
+  1.47).
+- The built-ins that consume an iterable called `return` after the iterator was exhausted or had thrown
+  (`IteratorLikeIterable.close`; 1.46).
+- `splice`, `shift` and `unshift` did not call HasProperty for the elements they move (1.45).
+- A strict assignment to a global `const` reported "Cannot modify readonly property" instead of the message of
+  1.1 (`StandardSlot.setValue`).
+- The TypeError of the `flags` getter called on a primitive named the type "object" (1.85).
+- All versions: `replace` and `replaceAll` with a regular expression had no string length limit (2.5).
+- All versions: `f.apply(null, {length: 2**31 - 1})` threw a `java.lang.OutOfMemoryError`; it is the RangeError
+  of 1.61.
+- All versions: a deeply nested pattern given to `new RegExp` threw a `java.lang.StackOverflowError` under
+  `VERSION_ES6`; it is a RangeError (`NativeRegExp.compileRuntimeRE`).
+
+- Verification: full `check`, `test262.properties` unchanged (no file changes status); perf gate against the
+  previous commit, no metric outside its band (a first run, with the base itself 15% slower than usual on
+  `earley-boyer`, flagged five metrics; they were within 5% over 5 rounds and in a second full run).
+
+Not fixed: what code run by the legacy `Script(...)()` sees of the caller's variables still depends on whether
+the compiler split the function (`-Drhino.splitWeight=3` shows it). The variables shared by the chunks of a split
+function are named properties of its activation, which code evaluated in that scope finds by name; a fix needs
+those variables reachable by index only, a change of `VariableAllocation` and `NativeCall` in both backends.
+
 ### A default value of a `let`/`const` pattern reads the names bound before it (2026-11-22)
 
 Under `VERSION_ECMASCRIPT`, `const {a, b = a} = {a: 1}`, `let [i, n = i] = [0]` and

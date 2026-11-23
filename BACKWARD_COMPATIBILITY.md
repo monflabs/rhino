@@ -322,7 +322,8 @@ x = 1;                    // VERSION_ES6: SyntaxError (let declaration)   VERSIO
 
 - In sloppy code, `let` is a keyword only where it starts a lexical declaration; elsewhere it is an identifier,
   and in a single-statement position (the body of `if`, loops, `with`, a label) a line terminator after `let` ends
-  the statement. An escaped `l\u0065t` is always an identifier.
+  the statement. An escaped `l\u0065t` is always an identifier. `function let() {}` declares a function in sloppy
+  code (before: a SyntaxError).
 - **Why:** ECMA-262 2026, §14.3.1 (LexicalDeclaration), §14.5 (ExpressionStatement lookahead), §13.1
   (`let` is not a reserved word).
 
@@ -348,9 +349,11 @@ var r = 'g'; (function () { var r = 'l'; return eval?.('r'); })(); // VERSION_ES
 ```
 
 - Code that the specification rejects with an early error no longer compiles: invalid assignment targets, strict
-  mode restrictions (`delete` of an identifier, `eval++`, octal escapes), escaped keywords, a numeric literal
+  mode restrictions (`delete` of an identifier, `eval++`, octal escapes), escaped keywords (any reserved word
+  written with a Unicode escape, as `v\u0061r x`, except as a property name), a numeric literal
   directly followed by an identifier, `08n`, `const` without an initializer, declarations as the body of a
-  label, `if`, `with` or a loop, a catch parameter redeclared by a lexical declaration, `continue` to a label
+  label, `if`, `with` or a loop, a catch parameter redeclared by a lexical declaration, or a pattern
+  catch parameter redeclared by a `var` of the block (`catch ([e]) { var e; }`), `continue` to a label
   that is not a loop, a tagged template in an optional chain. The full list is in CHANGELOG_MONFLABS.md (plan
   1.10e).
 - `eval?.()` and a tagged template on `eval` are indirect evals.
@@ -482,9 +485,11 @@ f.call(1);      // before: "object"   now: "number" (call/apply no longer box a 
 
 - **Why:** in strict code, `this` is not coerced (ECMA-262 2026, §10.2.1.2 OrdinaryCallBindThis). A non-strict
   function still receives an object. A strict getter or method called on a primitive (`(5).x`, `"s".m()`) receives
-  the primitive too (1.69, 1.81). **Not covered yet:** a strict function still receives the wrapper object when it is
-  bound to a primitive with `bind`, called with `Reflect.apply(f, 1, [])`, or given a primitive `thisArg` by an Array
-  method (`[1].map(f, 1)`, `Array.from(a, f, 1)`).
+  the primitive too (1.69, 1.81), and so does a strict function bound to a primitive with `bind`, called with
+  `Reflect.apply(f, 1, [])`, or given a primitive `thisArg` by a callback method of Array, the typed arrays or `Map`
+  (`[1].map(f, 1)`, `Array.from(a, f, 1)`): `typeof this` is `"number"` there (before: `"object"`). A `null`
+  `thisArg` reaches a strict callback as `null`, and `%TypedArray%.from` accepts a primitive `thisArg` (before: a
+  TypeError).
 
 ### 1.23 `caller` of strict functions throws
 
@@ -577,7 +582,9 @@ f();                                 // before: fine   now: SyntaxError (also "v
   `arguments` (not `arguments` for an arrow function, which has none): they share the parameters' environment. This
   now applies to arrow functions too.
 - An indirect eval is never strict mode code, even when called from strict code (before, it inherited the caller's
-  strictness, and its `var`s did not reach the global object).
+  strictness, and its `var`s did not reach the global object). That holds at run time too: called from a strict
+  script, `(0, eval)("o.a = 2")` on a frozen `o` is silent (before: a TypeError), and eval code with its own
+  `"use strict"` called from sloppy code throws there (before: silent).
 - **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 20, §19.2.1.3 EvalDeclarationInstantiation
   step 3 and §19.2.1.1 PerformEval steps 12–13.
 
@@ -720,8 +727,9 @@ var h = function k() { return function () { k = null; }; };   // JavaScript 1.x:
 ```
 
 - Inside a named function expression, assigning its name (directly, from a nested function or
-  from eval code) has no effect, and throws a TypeError in strict code. A parameter or a declaration of the same name
-  in the function still makes it an ordinary variable.
+  from eval code) has no effect, and throws a TypeError in strict code; so do `++` and `--`
+  (`(function g() { g++; return typeof g; })()` is `"function"`; before: `"number"`). A parameter or a declaration
+  of the same name in the function still makes it an ordinary variable.
 - `name = null` where `name` is the name of an enclosing function is an ordinary assignment
   (JavaScript 1.x rewrote it as `this.name = null`).
 - A function compiled by `Context.compileFunction` (e.g. an event handler of an embedding) keeps both JavaScript 1.x
@@ -856,7 +864,7 @@ Reflect.has([1], "0");                                        // before: false  
   ArraySpeciesCreate sees through proxies; `Object.prototype.toString` of a non-array proxy is `[object Object]` or
   `[object Function]` (before, the class of the target).
 - `flat`/`flatMap` no longer write `length` on the result at the end; `splice()` with no argument reads
-  and writes `length`; `reverse`, `splice` and `flat` call HasProperty before Get; a generic Array method applied
+  and writes `length`; `reverse`, `splice`, `shift`, `unshift` and `flat` call HasProperty before Get, also for the elements they move; a generic Array method applied
   to a typed array (`Array.prototype.forEach.call(ta, f)`) skips the indexes out of bounds after a resize;
   `Reflect.has` converts its key (index keys given as strings are found).
 - **Why:** ECMA-262 2026, §23.1.3 (Array.prototype), §10.4.2.3 (ArraySpeciesCreate), §10.4.2.4 (ArraySetLength),
@@ -873,6 +881,9 @@ Promise.allSettled([Promise.reject(1)]);    // before: status " rejected"   now:
 - `Promise.all`/`allSettled`/`any`/`race` read `C.resolve` before the iterator and reject (instead of
   throwing) when the iterator's `return` method is not callable; the iterators of the built-ins read `return` when
   they are closed; an abrupt `then` getter rejects the promise.
+- The built-ins that consume an iterable (`new Set(it)`, `new Map(it)`, `WeakSet`, `WeakMap`, `Array.from`,
+  `Object.fromEntries`, the typed array constructors and `from`, `Object.groupBy`, `Map.groupBy`) do not call the
+  iterator's `return` method once it is exhausted, or once its `next` has thrown (before: `next, next, RETURN`).
 - `startsWith`/`endsWith`/`includes` throw a TypeError for any object whose `Symbol.match` is
   truthy; `null` returned by `valueOf`/`toString` is a valid primitive for ToPrimitive.
 - The `length` of a bound function is computed from the target's own `length` property (a
@@ -890,7 +901,8 @@ Object.setPrototypeOf(Object.prototype, Object.create(null)); // before: allowed
 ```
 
 - Truncating an array stops at a non-configurable element; an index cannot be defined at or
-  above a read-only `length`; the prototype of `Object.prototype` cannot be changed; assigning an index of a String
+  above a read-only `length`, nor assigned (`a[1] = 2` is ignored, a TypeError in strict code; before: stored, and
+  the length grew); the prototype of `Object.prototype` cannot be changed; assigning an index of a String
   object throws in strict mode, also from `Object.assign` (`Object.assign("a", [1])`); the `__proto__`
   getter throws for `undefined`/`null`; a setter-only accessor's descriptor has `get: undefined`.
 - **Why:** ECMA-262 2026, §10.4.2 (Array exotic objects), §10.4.7 (immutable prototype exotic objects), §10.4.3
@@ -955,7 +967,7 @@ null[{ toString() { return "k"; } }];       // before: message with "k"   now: m
 ```
 
 - Logical assignment does not write when it short-circuits; an accessor with `set: undefined` has no setter
-  (TypeError in strict mode); compound assignment and `++`/`--` convert an object key once; strict assignments to a
+  (TypeError in strict mode); compound and logical assignments and `++`/`--` convert an object key once; strict assignments to a
   deleted global binding throw a ReferenceError; `with` honors `Symbol.unscopables` and checks the binding again;
   the TypeError for a null or undefined base does not call the key's `toString`.
 - **Why:** ECMA-262 2026, §13.15.2 (assignment operators), §10.1.9.2 (OrdinarySetWithOwnDescriptor), §9.1.1.2
@@ -1049,7 +1061,9 @@ o["k"]?.();       // before: TypeError (cannot find function k)   now: undefined
 ```
 
 - A `[...]` access after `?.` in the same chain is short-circuited like a `.name` access; an optional call of an
-  element (`o[k]?.()`) returns `undefined` when the element or its base is null or undefined.
+  element (`o[k]?.()`) returns `undefined` when the element is null or undefined.
+- An optional call does not cover the base of its member: with `u` undefined, `u[0]?.()` and `u.k?.()` throw a
+  TypeError (before: `u.k?.()` gave `undefined`); `u?.k?.()` gives `undefined`, without evaluating a computed key.
 - **Why:** ECMA-262 2026, §13.3.9 (Optional Chains).
 
 ### 1.58 Strict generators resumed from sloppy code
@@ -1213,6 +1227,8 @@ k(1);  // before: 2   now: 1
   starts with the value of the parameter. Also applied when the body uses a direct `eval` or `with`.
 - The declarations that the parameter expressions name live in a scope around the statements of the body. A
   function declaration moved there is created when the body starts, after the parameters.
+- The default value of a destructuring parameter is a parameter expression like the others:
+  `function f({g} = {g: () => x}) { var x = "inside"; return g(); }` reads the outer `x`.
 - Not covered: a `var arguments` of the body of a non-arrow function, a `var` declared by a destructuring pattern,
   and a `var` that a direct `eval` in the body creates, which stay in the environment of the parameters.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation, step 28: a separate var environment when
@@ -1452,7 +1468,7 @@ with (proxy) { p += 1; }
 
 ```js
 Object.getOwnPropertyDescriptor(RegExp.prototype, "flags").get.call(4);
-// before: ""   now: TypeError
+// before: "gimsyu"   now: TypeError
 ```
 
 - **Why:** ECMA-262 2026, §22.2.6.4 (get RegExp.prototype.flags, step 2).
@@ -1933,7 +1949,16 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
   and `replaceAll`. Past it the JVM ran out of heap, or past 2^31 an int length overflowed (`join` threw a
   `NegativeArraySizeException`).
 - A regular expression of more than 65,536 capture groups (V8's limit) is a `SyntaxError`, instead of exhausting
-  the heap while it is parsed.
+  the heap while it is parsed. A pattern nested deeply enough to exhaust the stack while `new RegExp` compiles it
+  is a `RangeError` (before, under `VERSION_ES6`: a `java.lang.StackOverflowError`).
+- `replace` and `replaceAll` with a regular expression enforce the string limit like the other operations (before:
+  a result of any length).
+- An array-like whose length the JVM cannot allocate, passed to `apply`, `Reflect.apply` or `Reflect.construct`
+  (2^31 - 1 for instance), is a `RangeError` (before: a `java.lang.OutOfMemoryError`).
+- Under `VERSION_ES6`, `for (const i = 0; ...; ...)` threw `RuntimeException: Unexpected node type 147`, and a
+  `yield` in the default value of an arrow function's parameter, in a generator, failed to compile
+  (`ClassFileFormatException`) or threw a `NullPointerException` when the default ran: the loop runs, and the
+  default throws a SyntaxError when it runs outside of the generator.
 - **Why:** both are implementation limits, which ECMA-262 leaves to the host; reaching them must not take the host
   down.
 
