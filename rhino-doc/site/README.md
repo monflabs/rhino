@@ -41,7 +41,7 @@ a checkout of [monflabs/rhino](https://github.com/monflabs/rhino) (branch
 | | Stock Rhino 1.9.1 | Monflabs Rhino 2026.0 |
 |---|---|---|
 | Language | ES6 and parts of later editions | ES2026, measured by test262 |
-| test262 (in scope) | 56.9% (where the fork started) | 99.2% (42,271 of 42,616 tests) |
+| test262 (in scope) | 56.9% (where the fork started) | 99.2% (42,272 of 42,616 tests) |
 | Default language version | `VERSION_ES6` (200) | `VERSION_ECMASCRIPT` (250) |
 | Stock behavior | — | `VERSION_ES6`, selected explicitly |
 | Java packages | `org.mozilla.javascript` | `org.monflabs.mozilla.javascript` |
@@ -54,7 +54,7 @@ after ES2026, the same exclusions as the Nashorn fork.
 
 ### What does not pass
 
-On Java 25, the reference JDK, 345 of the 42,616 tests in scope do not pass:
+On Java 25, the reference JDK, 344 of the 42,616 tests in scope do not pass:
 
 | Tests | Area | Why |
 |---|---|---|
@@ -62,7 +62,6 @@ On Java 25, the reference JDK, 345 of the 42,616 tests in scope do not pass:
 | 10 | Several realms | Errors thrown by built-ins, and `Function.prototype.bind` and `apply`, do not track the realm of their function: the fork supports several realms only as separate scopes. |
 | 35 | `IsHTMLDDA` | A browser host hook (`document.all`). Skipped. |
 | 2 | `CanBlockIsFalse` | Written for a host whose main thread cannot call `Atomics.wait`; every thread of a server can. Skipped. |
-| 1 | A folder that is not run | `test262.properties` skips the folder `language/expressions/member-expression`, as the file of upstream Rhino did. Its one test passes when it is run by hand. |
 
 Each failing test is listed, with its reason, in
 [doc/CONFORMANCE_MONFLABS.md](https://github.com/monflabs/rhino/blob/monflabs_enhancements/doc/CONFORMANCE_MONFLABS.md).
@@ -74,9 +73,9 @@ Unicode version of the JDK the engine runs on:
 
 | JDK | Unicode | Tests that do not pass | Pass rate |
 |---|---|---|---|
-| 21 | 15.0 | 376 | 99.1% (42,240) |
-| 25 (reference) | 16.0 | 345 | 99.2% (42,271) |
-| 27 | 17.0 | 282 | 99.3% (42,334) |
+| 21 | 15.0 | 375 | 99.1% (42,241) |
+| 25 (reference) | 16.0 | 344 | 99.2% (42,272) |
+| 27 | 17.0 | 281 | 99.3% (42,335) |
 
 - **Java 21** fails 31 more tests than Java 25: the identifier characters of Unicode 15.1 and 16.0
   (16 tests), and 15 property escape tests of the scripts, categories and properties added or

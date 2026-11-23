@@ -10,7 +10,7 @@ A behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSIO
 the behavior of stock Rhino, so an embedding that needs it selects `VERSION_ES6`
 (`cx.setLanguageVersion(Context.VERSION_ES6)`, or `-version 200` in the shell). The exception is a defect that no
 script can rely on (a miscompilation, an exception of the engine itself): it is fixed in all versions, and the
-"Applies to" column of its row says so (1.90, 1.92 to 1.94, 1.103, 1.107, 1.108 in section 1; 2.5 to 2.7).
+"Applies to" column of its row says so (part of 1.53, 1.90, 1.92 to 1.94, 1.103, 1.107, 1.108 in section 1; 2.5 to 2.7).
 Section 2 lists platform and API changes.
 
 | # | Change | Applies to |
@@ -50,7 +50,7 @@ Section 2 lists platform and API changes.
 | 1.32 | Early errors of object literals and functions | `VERSION_ECMASCRIPT` |
 | 1.33 | `yield` | `VERSION_ECMASCRIPT` |
 | 1.34 | Names of functions and classes in default values | `VERSION_ECMASCRIPT` |
-| 1.35 | Getters and setters are not constructors | `VERSION_ECMASCRIPT` |
+| 1.35 | Getters and setters have no `prototype` property | `VERSION_ECMASCRIPT` |
 | 1.36 | Legacy static properties of RegExp read through another object | `VERSION_ECMASCRIPT` |
 | 1.37 | The name of a function expression is immutable | `VERSION_ECMASCRIPT` |
 | 1.38 | `Object.defineProperty` on a non-configurable property | `VERSION_ECMASCRIPT` |
@@ -68,7 +68,7 @@ Section 2 lists platform and API changes.
 | 1.50 | RegExp.prototype, constructor and patterns | `VERSION_ECMASCRIPT` |
 | 1.51 | Logical and compound assignment, setter-less accessors, `with` | `VERSION_ECMASCRIPT` |
 | 1.52 | `instanceof`, arrow covers, `eval(...)`, object rest | `VERSION_ECMASCRIPT` |
-| 1.53 | Generator methods, `>>>` with BigInt, `finally` in compiled code | `VERSION_ECMASCRIPT` |
+| 1.53 | Generator methods, `>>>` with BigInt, `finally` in compiled code | `VERSION_ECMASCRIPT`; one compiled-mode fix in all versions |
 | 1.54 | `for-in` shadowing, Use Strict Directives, nested cover initializers | `VERSION_ECMASCRIPT` |
 | 1.55 | Annex B built-ins and HTML-like comments | `VERSION_ECMASCRIPT` |
 | 1.56 | `await` is an identifier in scripts | `VERSION_ECMASCRIPT` |
@@ -130,17 +130,19 @@ Section 2 lists platform and API changes.
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
 | 2.4 | A script that compiled mode falls back to interpreting is logged | all |
-| 2.5 | Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups | all |
+| 2.5 | Implementation limits and engine exceptions (string length, capture groups, and others) | all |
 | 2.6 | Sixteen bug fixes taken from upstream Rhino | all |
 | 2.7 | `jsc` compiles a script with a `for-in` loop | all |
+| 2.8 | A compile spec numbers the first line 1 by default | all |
 
 ---
 
 ## 1. Changes of language behavior (under `VERSION_ECMASCRIPT` unless marked "all versions")
 
-Code running under `VERSION_ES6` is not affected. `VERSION_ECMASCRIPT` is the default (2.3): to keep the previous
-behavior, select `VERSION_ES6`. Each change is also listed in the Javadoc of `Context.VERSION_ECMASCRIPT`, and every place in
-the engine that implements one tests `isLatestEcmaScript()`.
+Code running under `VERSION_ES6` is not affected, except by the entries marked "all versions", which fix defects no
+script can rely on. `VERSION_ECMASCRIPT` is the default (2.3): to keep the previous behavior, select `VERSION_ES6`.
+Each gated change is also listed in the Javadoc of `Context.VERSION_ECMASCRIPT`, and every place in the engine that
+implements one tests `isLatestEcmaScript()`.
 
 Entries 1.17 to 1.62 were numbered 2.1 to 2.46 (the CHANGELOG uses these numbers) and applied to every version from
 `VERSION_ES6` until plan G (2026-10-13), which restored the stock behavior under `VERSION_ES6`. In these entries,
@@ -696,7 +698,7 @@ var [h = () => 1] = []; h.name;                      // before: ""   now: "h"
 - **Why:** ECMA-262 2026, §8.6.3 (IsAnonymousFunctionDefinition, NamedEvaluation in SingleNameBinding and
   AssignmentElement initializers).
 
-### 1.35 Getters and setters are not constructors
+### 1.35 Getters and setters have no `prototype` property
 
 ```js
 var d = Object.getOwnPropertyDescriptor({ get a() { return 1; } }, "a");
@@ -705,7 +707,8 @@ d.get.hasOwnProperty("prototype");   // before: true   now: false (`new d.get()`
 ```
 
 - The getters and setters of object literals (and classes) are method definitions: they have
-  no `prototype` property, like the methods of an object literal already were (they already were not constructors).
+  no `prototype` property, like the methods of an object literal, which already had none. They already were not
+  constructors.
 - **Why:** ECMA-262 2026, §15.4.4 (MethodDefinition: DefineMethodProperty without MakeConstructor).
 
 ### 1.36 Legacy static properties of RegExp read through another object
@@ -1012,6 +1015,9 @@ function f() { try { return 1; } catch (e) {} finally { n++; throw 'f'; } }   //
   `break`/`continue`) in a `try` with a `catch` no longer runs the `finally` block again, and a `try` whose block
   ends with an unreachable `return` keeps covering its `catch` block with the `finally`. Under `VERSION_ES6`, the
   compiled mode keeps these two bugs of stock Rhino.
+- In all versions, compiled code reads the `prototype` of a generator method as interpreted code does:
+  `typeof ({ *g() {} }).g.prototype` was `"undefined"` in compiled mode and `"object"` in interpreted mode, and is
+  `"object"` in both. Under `VERSION_ES6` the property stays inherited, as in stock Rhino.
 - **Why:** ECMA-262 2026, §15.5.4 (generator method definitions), §13.9.3 (unsigned right shift), §14.15.3
   (try statement).
 
@@ -1528,6 +1534,11 @@ f();   // before: [5, 2]   now: [5, 1]
   arguments object aliases them) keep every variable in the activation object. A strict function that uses
   `arguments` and has no other reason for an activation object no longer has one: its arguments object, which
   holds the values passed and nothing else, is a variable of the function.
+- In all versions, a function too large for a class file, which compiled mode splits into chunks, gives a `Script`
+  object the scope that it would give unsplit: a function with no other reason for an activation object does not
+  show its variables to the script. Two cases still differ in a split function that has an activation object of
+  its own: under `VERSION_ECMASCRIPT` the script sees the variables that the chunks share, and under
+  `VERSION_ES6` it does not see a `let` of a block inside a chunk.
 - **Why:** ECMA-262 2026, §10.2.11 (FunctionDeclarationInstantiation): only a direct eval (§19.2.1.1) can reach the
   variables of a function from code evaluated at runtime.
 
@@ -1952,7 +1963,7 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
   example with `java.util.logging` or the bridge of the application's logging framework).
 
 
-### 2.5 Strings longer than 2^29 - 24 characters, patterns of more than 65,536 groups
+### 2.5 Implementation limits and engine exceptions (string length, capture groups, and others)
 
 - A string operation that would make a string of more than 2^29 - 24 characters (V8's limit) throws
   `RangeError: Invalid string length`: concatenation, `padStart`/`padEnd`, `repeat`, `concat`, `join`, `replace`
@@ -1972,8 +1983,8 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
 - Under `VERSION_ES6`, a `set` trap of a proxy that forwards a new property to `Reflect.set(t, k, v, receiver)`
   (as `Array.prototype.push.call(proxy, x)` makes it do) recursed until a `java.lang.StackOverflowError`: the
   property is created on the receiver.
-- **Why:** both are implementation limits, which ECMA-262 leaves to the host; reaching them must not take the host
-  down.
+- **Why:** the first four are implementation limits, which ECMA-262 leaves to the host; reaching them must not take
+  the host down. The last two were exceptions of the engine itself, which no script can rely on.
 
 ### 2.6 Sixteen bug fixes taken from upstream Rhino
 
@@ -2003,3 +2014,16 @@ before: java.lang.NullPointerException (Context.getCurrentContext() is null)   n
 ```
 
 - The class compiler read the language version from the current `Context`, and `jsc` compiles without one.
+
+### 2.8 A compile spec numbers the first line 1 by default
+
+```java
+Script s = cx.compileScript(ScriptCompileSpec.fromSource("throw new Error('x')").build());
+// line of the error   before: 0   now: 1
+```
+
+- `ScriptCompileSpec` and `FunctionCompileSpec` (an API of upstream Rhino added after 1.9.1) numbered the first
+  line 0 unless `lineno(1)` was called, while every other entry point is given 1 by its callers. A source mapper
+  is asked for 1-indexed lines, so a spec with a mapper and no `lineno` looked every position up one line too
+  early. The default is 1; `lineno(0)` restores the former numbering.
+- **Why:** line numbers are 1-based in error messages, stack traces and the source map format.

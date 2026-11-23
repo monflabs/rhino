@@ -1,7 +1,8 @@
 # Rhino
 
 Rhino is an open source (MPL 2.0) JavaScript engine, implemented in Java 21. The build system used is gradle, via the
-gradle wrapper (`./gradlew`). There are no external dependencies, except for JUnit for unit tests.
+gradle wrapper (`./gradlew`). The `rhino` module has no external dependencies. `rhino-kotlin` and `rhino-playground`
+have some, and the tests use JUnit and a few test libraries.
 
 ## Target platform
 
@@ -63,11 +64,12 @@ Builtins such as `Object` or `Array` are implemented in
 
 ## Project goal: ECMAScript conformance
 
-The goal is to update Rhino to support the latest ECMAScript standard **without breaking existing code**. The following
-constraints apply to every change made toward that goal:
+The fork has three goals: implement the latest ECMAScript standard, have no performance regression, and not break
+existing code in the old modes (`VERSION_ES6` and the older language versions). The following constraints apply to
+every change made toward them:
 
-- **`VERSION_ECMASCRIPT` is the target.** The ultimate goal is to remove the language versions and always behave as
-  `Context.VERSION_ECMASCRIPT` (plan milestone M15). Until then, **every behavior change is gated: only active under
+- **`VERSION_ECMASCRIPT` is the target**, and the default language version of a new `Context` since plan milestone
+  M15, which removed nothing: every language version stays. **Every behavior change is gated: only active under
   `VERSION_ECMASCRIPT`**, so that `VERSION_ES6` and the older versions keep their exact behavior, bug fixes included.
   The one exception is a defect that no script can rely on (a miscompilation, an exception of the engine itself such
   as a `NullPointerException`): it is fixed in all versions, and its entry in `BACKWARD_COMPATIBILITY.md` says so.
@@ -93,7 +95,7 @@ primary source of inspiration: the order in which features were added, the spec 
 built-ins (`core/src/main/java/org/monflabs/nashorn/internal/objects`), the parser/desugaring changes, and the pitfalls
 it documents. Port the logic, not the code structure, and keep the differences in mind:
 
-- Nashorn dropped its legacy modes and is ES2026-only; Rhino must keep its existing behavior by default and gate
+- Nashorn dropped its legacy modes and is ES2026-only; Rhino must keep its existing behavior under `VERSION_ES6` and gate
   breaking changes behind `VERSION_ECMASCRIPT` (Nashorn's closest analog is how it gates Annex B behind `--annexB`).
 - Nashorn compiles to JVM bytecode only; Rhino has two backends, so every language feature must be implemented in
   both `Codegen` (compiled mode) and `CodeGenerator`/`Interpreter` (interpreted mode).

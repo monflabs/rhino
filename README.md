@@ -76,15 +76,18 @@ The version of this fork is 2026.0 (`gradle.properties`); its changes are in [CH
 [Compatibility table](https://mozilla.github.io/rhino/compat/engines.html) which shows which advanced JavaScript
 features from ES6, and ES2016+ are implemented in Rhino.
 
-[![GitHub Action Status](https://github.com/mozilla/rhino/actions/workflows/gradle.yml/badge.svg)](https://github.com/mozilla/rhino/actions/workflows/gradle.yml)
+[![GitHub Action Status](https://github.com/monflabs/rhino/actions/workflows/gradle.yml/badge.svg)](https://github.com/monflabs/rhino/actions/workflows/gradle.yml)
 
 ## Documentation
 
 Information for script builders and embedders:
 
-[Documentation](https://rhino.github.io)
+[Documentation of this fork](https://monflabs.github.io/rhino/)
 
-[JavaDoc](https://javadoc.io/doc/org.monflabs.mozilla/rhino)
+[Documentation of upstream Rhino](https://rhino.github.io)
+
+JavaDoc: the fork is not published to Maven Central, so it has no page on javadoc.io. Generate it with
+`./gradlew :rhino:javadoc` (output in `rhino/build/docs/javadoc`).
 
 [List of projects using Rhino](USAGE.md)
 

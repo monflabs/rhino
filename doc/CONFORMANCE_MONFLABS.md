@@ -37,11 +37,6 @@ The 35 tests of the `IsHTMLDDA` feature (an object that behaves as `undefined`, 
 `$262.IsHTMLDDA` host hook that this fork does not have; they are skipped (`UNSUPPORTED_FEATURES` in
 `Test262SuiteTest`).
 
-### A folder that is not run
-
-`test262.properties` skips the folder `language/expressions/member-expression` (`~`), as upstream's file did. Its
-one test, `computed-reference-null-or-undefined.js`, passes when it is run by hand, compiled and interpreted.
-
 ### Single realm per error (cross-realm tests)
 
 About 10 tests create a second realm (`$262.createRealm()`) and expect an error thrown by a built-in or a function

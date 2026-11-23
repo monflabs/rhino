@@ -40,6 +40,66 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The open items of the documentation review (2026-11-23)
+
+What the review of 2026-11-22 left open.
+
+- **`Script(...)()` in a split function**, all versions. The legacy `Script` object runs in the scope of its
+  caller. A function split into chunks (`Splitter`) has an activation that it would not have otherwise, since the
+  chunks are nested functions, so the script saw and wrote the variables of a function too large for a class file
+  and not those of a smaller one (compiled mode; `-Drhino.splitWeight=3` showed it). `IRFactory.initFunction`
+  marks a function whose activation has no other reason (`FunctionNode.hasSplitActivation`,
+  `JSDescriptor.hasSplitActivation`), and `NativeScript.call` runs the script in the scope the unsplit function
+  would pass: without these activations and the block scopes inside them, which would be registers. A function
+  with a `catch` clause or a closure has an activation either way, and nothing changes for it. Test:
+  `MethodSplittingTest.scriptObjectCalledInASplitFunction`. Two cases still differ once split, both in a function
+  that has an activation of its own (a closure, a `catch` clause): under `VERSION_ECMASCRIPT`, the script sees a
+  variable that only the chunks share, which would be a register (`BACKWARD_COMPATIBILITY.md` 1.88); under
+  `VERSION_ES6`, it does not see a `let` of a block that a chunk holds. Removing them needs the scope given to the
+  script to hide names of an activation, not whole activations. A host function that evaluates code in the scope
+  it is called with still sees a split activation.
+- **A split generator returned the wrong value from a `finally` block**, all versions that split generators
+  (`VERSION_ECMASCRIPT`). In a generator too large for a method, `try { yield 1; } finally { return 5; }` moved to
+  a chunk called with `yield*`; a `return(9)` of the generator, forwarded to the chunk, made it return its state
+  number (1) where the unsplit generator returns 5, and a `break` or `continue` in the `finally` block ended the
+  generator instead of resuming it. A chunk that holds a `finally` block is now called in a labeled `try` whose
+  `finally` leaves it when the chunk completed through one of its exits, which cancels the forwarded return so
+  that the replays run; the chunk stores its state itself, and its `finally` blocks clear the exit mark while
+  they run, so that an exception thrown after a `return` still propagates (`Splitter.delegation`). This was the
+  stress failure of `RobustnessFixesTest`, wrongly taken for a test that inspects generated code. Test:
+  `MethodSplittingTest.returnForwardedToAFinallyBlockThatLeaves`.
+- **Stress mode** (`rhino.splitWeight=3`, `rhino.classUnits=3`): the two tests of `NewTargetDirectCallTest` that
+  inspect the generated code are skipped in it, since a split function has an activation and is no direct call
+  target.
+- **`Reflect.get` under `VERSION_ES6`**, left as it is. With a missing property it returns the placeholder of
+  `undefined` (`Undefined.SCRIPTABLE_UNDEFINED`, the Java object that stands for `undefined` where a `Scriptable`
+  is required), as `Reflect.getOwnPropertyDescriptor` does: the value is `=== undefined`, its `typeof` is
+  `"object"`, and reading a property of it does not throw. This is what a proxy whose `get` trap forwards to
+  `Reflect.get` returns for `p[0]`, since the legacy path does not find an element by its string key. Returning
+  `undefined` made `Reflect.getOwnPropertyDescriptor(o, "missing").value` a TypeError where stock Rhino gives
+  `undefined`, a result a script can depend on, so the old modes keep it; `VERSION_ECMASCRIPT` is correct.
+- **`typeof ({ *g() {} }).g.prototype` in compiled `VERSION_ES6`** is `"object"` where the base of the fork gave
+  `"undefined"`. Not a regression: the interpreter gave `"object"`, and the compiled mode disagreed with it until
+  the generator methods fix of 2026-10-11. Now documented as an all-versions fix in `BACKWARD_COMPATIBILITY.md`
+  1.53; test `ReviewDefectsFollowUpTest.prototypeOfAGeneratorMethod`.
+- **A compile spec numbers the first line 1** (`CompileSpec.Builder.lineno`): the default was 0, so a
+  `ScriptCompileSpec` with a source mapper and no `lineno(1)` looked every position up one line too early
+  (`BACKWARD_COMPATIBILITY.md` 2.8, `docs/source-maps.md`).
+- **OSGi**: the bundle exports `org.monflabs.mozilla.javascript.modules` and the three `interpreterv2` packages,
+  which `module-info.java` exports and `-exportcontents` lacked.
+- **test262**: the folder `language/expressions/member-expression` is no longer skipped (one test, which passes).
+- **Links**: the SCM URLs of the POMs, `Implementation-URL`, `githubPackagesRepo` and the build badge point to
+  `monflabs/rhino`; the README links to the fork's documentation site and no longer to a javadoc.io page that
+  does not exist.
+- **Documentation**: `AGENTS.md` states the three goals, the default language version, what M15 did and the
+  dependencies of the modules. An entry-by-entry comparison of `BACKWARD_COMPATIBILITY.md` before and after the
+  review found no lost or duplicated text and four leftovers, corrected: the title and a sentence of 1.35, the
+  introduction of section 1, the title and the rationale of 2.5.
+
+- Verification: full `check`, `test262.properties` changed only by the folder no longer skipped (42,272 of
+  42,616 pass); stress mode (`rhino.splitWeight=3`, `rhino.classUnits=3`) with no failure and the same
+  `test262.properties`; perf gate against the previous commit, no metric outside its band.
+
 ### Five defects found while fixing those of the review (2026-11-22)
 
 Found by the agents that fixed the nineteen defects below, outside of their lists. Gated under
@@ -126,10 +186,11 @@ Built-ins (`ReviewDefectsBuiltinsTest`):
   previous commit, no metric outside its band (a first run, with the base itself 15% slower than usual on
   `earley-boyer`, flagged five metrics; they were within 5% over 5 rounds and in a second full run).
 
-Not fixed: what code run by the legacy `Script(...)()` sees of the caller's variables still depends on whether
-the compiler split the function (`-Drhino.splitWeight=3` shows it). The variables shared by the chunks of a split
-function are named properties of its activation, which code evaluated in that scope finds by name; a fix needs
-those variables reachable by index only, a change of `VariableAllocation` and `NativeCall` in both backends.
+Not fixed here (fixed on 2026-11-23, above, without that redesign): what code run by the legacy `Script(...)()`
+sees of the caller's variables still depends on whether the compiler split the function (`-Drhino.splitWeight=3`
+shows it). The variables shared by the chunks of a split function are named properties of its activation, which
+code evaluated in that scope finds by name; a fix was thought to need those variables reachable by index only, a
+change of `VariableAllocation` and `NativeCall` in both backends.
 
 ### A default value of a `let`/`const` pattern reads the names bound before it (2026-11-22)
 

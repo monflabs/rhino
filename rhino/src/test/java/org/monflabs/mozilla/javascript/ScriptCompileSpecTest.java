@@ -74,7 +74,7 @@ public class ScriptCompileSpecTest {
 
         assertEquals("1", spec.getSource());
         assertNull(spec.getSourceName());
-        assertEquals(0, spec.getLineno());
+        assertEquals(1, spec.getLineno());
         assertNull(spec.getSecurityDomain());
         assertNull(spec.getCompiler());
         assertNull(spec.getCompilationErrorReporter());

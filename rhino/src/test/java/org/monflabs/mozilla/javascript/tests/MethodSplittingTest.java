@@ -89,6 +89,31 @@ class MethodSplittingTest {
                 "function f(n) { var t = 0;\n" + filler(3000) + "return t; }\nf(5000);");
     }
 
+    /** The legacy Script object runs in the scope of its caller: the same scope, split or not. */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
+    void scriptObjectCalledInASplitFunction(int version) {
+        String head = "var x = 'global';\nfunction f(n) { var x = 'local', t = 0;\n";
+        String body =
+                "var a = Script('x')();\n"
+                        + "{ let x = 'block'; t++; var b = Script('x')(); }\n"
+                        + "Script('x += \"!\"; var made = 1')();\n"
+                        + "return [a, b, x, typeof made].join(); }\n"
+                        + "f(5000) + ',' + x + ',' + typeof made;";
+        String expected = "global,global,local,number,global!,number";
+        assertRuns(version, expected, head + body);
+        assertRuns(version, expected, head + filler(3000) + body);
+
+        if (version == Context.VERSION_ES6) {
+            // a catch clause gives the function an activation of its own, which the script sees
+            String caught =
+                    "try { throw 1; } catch (e) { Script('e++; x += \"?\"')(); var c = e; }\n";
+            String small = (String) run(version, head + caught + body, true);
+            assertRuns(version, small, head + caught + body);
+            assertRuns(version, small, head + filler(3000) + caught + body);
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {Context.VERSION_ES6, Context.VERSION_ECMASCRIPT})
     void loopBeyondTheJumpLimit(int version) {
@@ -459,6 +484,45 @@ class MethodSplittingTest {
                         + "7200,fin2,8550,8700,end8700;"
                         + "1500,{\"value\":\"fin0\",\"done\":false},{\"value\":\"R\",\"done\":true};"
                         + "1500,{\"value\":\"fin0\",\"done\":false},boom",
+                source);
+    }
+
+    /**
+     * A return() forwarded to a chunk that leaves through a finally block: its return or its jump
+     * replaces the return of the generator, and an exception it throws is not taken for an exit.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {Context.VERSION_ECMASCRIPT})
+    void returnForwardedToAFinallyBlockThatLeaves(int version) {
+        String fill = yieldingFiller(1500, 100000);
+        String source =
+                "function ops(g) { var it = g(5000), r = [];\n"
+                        + " for (var i = 0; i < 4; i++) {\n"
+                        + "  try { r.push(JSON.stringify(i == 1 ? it.return(9) : it.next())); }\n"
+                        + "  catch (e) { r.push('T:' + e); } }\n"
+                        + " return r.join(''); }\n"
+                        + "function* a(n) { var t = 0;\n"
+                        + fill
+                        + "try { yield 1; } finally { return 5; } }\n"
+                        + "function* b(n) { var t = 0;\n"
+                        + fill
+                        + "try { try { yield 1; } finally { return 5; } } finally { throw 'x'; } }\n"
+                        + "function* c(n) { var t = 0;\n"
+                        + fill
+                        + "for (var i = 0; i < 2; i++) { try { yield i; } finally { break; } }\n"
+                        + "yield 'after'; return 'end'; }\n"
+                        + "function* d(n) { var t = 0;\n"
+                        + fill
+                        + "try { yield 1; } finally { yield 7; } return 3; }\n"
+                        + "[ops(a), ops(b), ops(c), ops(d)].join(';');";
+        assertRuns(
+                version,
+                "{\"value\":1,\"done\":false}{\"value\":5,\"done\":true}{\"done\":true}{\"done\":true};"
+                        + "{\"value\":1,\"done\":false}T:x{\"done\":true}{\"done\":true};"
+                        + "{\"value\":0,\"done\":false}{\"value\":\"after\",\"done\":false}"
+                        + "{\"value\":\"end\",\"done\":true}{\"done\":true};"
+                        + "{\"value\":1,\"done\":false}{\"value\":7,\"done\":false}"
+                        + "{\"value\":9,\"done\":true}{\"done\":true}",
                 source);
     }
 }

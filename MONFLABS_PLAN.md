@@ -740,7 +740,8 @@ documented limits of `doc/CONFORMANCE_MONFLABS.md`: Unicode data from the JDK (d
 (decision 3.4) and a single realm per error. The stricter expectations are already in place: a test listed as failing
 that passes fails the run (0.3). 2026-10-24: the format-control characters of the source (the 25 `u180e` tests, no
 longer skipped): 42,248. 2026-11-10: the Unicode property escapes derived from the JDK and the identifier
-characters: 42,271 (99.2%; 305 files fail, 2 in strict or sloppy mode only, 38 are skipped), the current figure.
+characters: 42,271 (99.2%; 305 files fail, 2 in strict or sloppy mode only, 38 are skipped). 2026-11-23: the folder
+`language/expressions/member-expression` is no longer skipped: 42,272 (37 skipped), the current figure.
 
 ### M15 — A single language version
 
@@ -966,4 +967,4 @@ in a chunk; in a generator that is not async, statements that yield move to a ge
 | 15   | Single language version                         | 15.1 done   | 99.1% (15.1; rest: future work) | 4df7bbf6f |
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |
 | 17   | Method splitting                                | done        | 99.1% (17.0–17.4)            | 789550b8d |
-| —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616, current) | 397cd54b5 |
+| —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616; 42,272 since 2026-11-23, current) | 397cd54b5 |

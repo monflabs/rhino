@@ -70,9 +70,29 @@ class NativeScript extends BaseFunction {
     @Override
     public Object call(Context cx, Object nt, VarScope scope, Object thisObj, Object[] args) {
         if (script != null) {
-            return script.exec(cx, scope, thisObj);
+            return script.exec(cx, withoutSplitActivations(scope), thisObj);
         }
         return Undefined.instance;
+    }
+
+    /**
+     * The scope that the caller would have if the compiler had not split it into chunks: without
+     * the activations that only the chunks need, nor the block scopes inside them, which would be
+     * registers.
+     */
+    private static VarScope withoutSplitActivations(VarScope scope) {
+        VarScope outermost = null;
+        for (VarScope s = scope; s != null; s = s.getParentScope()) {
+            if (s instanceof NativeCall) {
+                if (!((NativeCall) s).function.getDescriptor().hasSplitActivation()) {
+                    break;
+                }
+                outermost = s;
+            } else if (outermost == null && !(s instanceof LocalScope)) {
+                break;
+            }
+        }
+        return outermost == null ? scope : outermost.getParentScope();
     }
 
     @Override

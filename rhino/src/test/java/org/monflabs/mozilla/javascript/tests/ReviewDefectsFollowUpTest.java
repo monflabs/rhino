@@ -132,4 +132,13 @@ class ReviewDefectsFollowUpTest {
                         + "var o = new Proxy({}, fwd); o.x = 1; o.y = 2;\n"
                         + "[t0.join(), p.length, Object.keys(o).join()].join('|')");
     }
+
+    @Test
+    void prototypeOfAGeneratorMethod() {
+        Utils.assertGatedBehavior(
+                "object|false",
+                "object|true",
+                "var g = ({ *g() {} }).g;\n"
+                        + "[typeof g.prototype, g.hasOwnProperty('prototype')].join('|')");
+    }
 }

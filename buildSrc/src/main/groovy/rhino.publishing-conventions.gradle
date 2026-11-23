@@ -23,7 +23,7 @@ tasks.withType(Jar).configureEach {
             "Implementation-Version": project.version,
             "Implementation-Title":  "Mozilla Rhino",
             "Implementation-Vendor": "Mozilla Foundation",
-            "Implementation-URL": "http://github.com/mozilla/rhino",
+            "Implementation-URL": "https://github.com/monflabs/rhino",
         )
     }
 }

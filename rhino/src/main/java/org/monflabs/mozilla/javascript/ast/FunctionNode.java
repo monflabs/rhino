@@ -154,6 +154,8 @@ public class FunctionNode extends ScriptNode {
     private boolean isAsync;
     private boolean isAsyncGenerator;
     private boolean isFieldInitializer;
+    private boolean splitActivation;
+    private boolean activationOfItsOwn;
     // ES2024, B.3.2.1: block-scoped function that should also be var-hoisted
     private boolean annexBHoisted;
     private List<Node> generatorResumePoints;
@@ -335,6 +337,24 @@ public class FunctionNode extends ScriptNode {
 
     public void setRequiresActivation() {
         needsActivation = true;
+        activationOfItsOwn = true;
+    }
+
+    /** Whether this function needs an activation for another reason than its nested functions. */
+    public boolean hasActivationOfItsOwn() {
+        return activationOfItsOwn;
+    }
+
+    /**
+     * Whether this function has an activation only because it was split into chunks, which are
+     * nested functions: without them, it would have none.
+     */
+    public boolean hasSplitActivation() {
+        return splitActivation;
+    }
+
+    public void setSplitActivation() {
+        splitActivation = true;
     }
 
     /**
@@ -518,6 +538,7 @@ public class FunctionNode extends ScriptNode {
         // different. Make sure that this is set now, even if the generator does not
         // have any "yield" statements.
         needsActivation = true;
+        activationOfItsOwn = true;
     }
 
     @Override

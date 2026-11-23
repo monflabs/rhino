@@ -92,7 +92,7 @@ public abstract class CompileSpec<T extends ScriptOrFn<T>> {
     public abstract static class Builder<T extends ScriptOrFn<T>, U extends Builder<T, U>> {
         protected final String source;
         protected String sourceName;
-        protected int lineno = 0;
+        protected int lineno = 1;
         protected Object securityDomain;
         protected Evaluator compiler;
         protected ErrorReporter compilationErrorReporter;

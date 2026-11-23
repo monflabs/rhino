@@ -78,6 +78,8 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
     /** Whether the function cannot read its this (see JSFunction#getCallThis). */
     private boolean ignoresThis;
 
+    private boolean splitActivation;
+
     /** The index of the variable that holds the arguments object, or -1 (see #argumentsVar). */
     private int argumentsVar = -1;
 
@@ -268,6 +270,14 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
      */
     public boolean ignoresThis() {
         return ignoresThis;
+    }
+
+    /**
+     * Whether the function has an activation only because the compiler split it into chunks: code
+     * that the function evaluates in its scope at run time must not see it.
+     */
+    boolean hasSplitActivation() {
+        return splitActivation;
     }
 
     /**
@@ -485,6 +495,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
         public boolean[] paramIsRegister;
         public boolean[] paramIsActivationVar;
         public boolean ignoresThis;
+        public boolean splitActivation;
         public int argumentsVar = -1;
 
         public Builder() {}
@@ -568,6 +579,7 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             result.paramIsRegister = paramIsRegister;
             result.paramIsActivationVar = paramIsActivationVar;
             result.ignoresThis = ignoresThis;
+            result.splitActivation = splitActivation;
             result.argumentsVar = argumentsVar;
             consumer.accept(result);
             result.nestedFunctions =

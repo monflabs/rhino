@@ -112,9 +112,9 @@ publishing {
                 l.appendNode("url", "http://www.mozilla.org/MPL/2.0/index.txt")
 
                 def scm = root.appendNode("scm")
-                scm.appendNode("connection", "scm:git:git@github.com:mozilla/rhino.git")
-                scm.appendNode("developerConnection", "scm:git:git@github.com:mozilla/rhino.git")
-                scm.appendNode("url", "git@github.com:mozilla/rhino.git")
+                scm.appendNode("connection", "scm:git:git@github.com:monflabs/rhino.git")
+                scm.appendNode("developerConnection", "scm:git:git@github.com:monflabs/rhino.git")
+                scm.appendNode("url", "git@github.com:monflabs/rhino.git")
 
                 def o = root.appendNode("organization")
                 o.appendNode("name", "The Mozilla Foundation")

@@ -13,13 +13,12 @@ SourceMapV3 mapper = SourceMapV3.parse(mapJsonString);
 Script script = cx.compileScript(
     ScriptCompileSpec.fromSource(transpiledSource)
         .sourceName("bundle.js")
-        .lineno(1)
         .sourceMapper(mapper)
         .build());
 ```
 
-`lineno(1)` matters: a compile spec numbers the first line 0 by default, and the mapper is asked
-for 1-indexed lines, so without it every position is looked up one line too early.
+The first line is numbered 1 by default, which is what the mapper expects; pass `lineno(n)` when the source
+starts at another line of its file.
 
 From that point on, `RhinoException.lineNumber()` reports the original source line,
 parser error messages quote the original source text, and the debugger receives the

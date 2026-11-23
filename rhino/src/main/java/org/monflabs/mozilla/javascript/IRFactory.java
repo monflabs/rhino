@@ -2344,6 +2344,20 @@ public final class IRFactory {
         return new Node(Token.CATCH, varName, catchCond, stmts, lineno, column);
     }
 
+    /**
+     * Whether the functions nested in a function are all chunks it was split into (Splitter), none
+     * of which has an activation for a reason of its own.
+     */
+    private static boolean nestsOnlyChunks(FunctionNode fnNode) {
+        for (FunctionNode nested : fnNode.getFunctions()) {
+            if (nested.getSplitOwner() == null
+                    || (nested.requiresActivation() && !nested.hasSplitActivation())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private Node initFunction(
             FunctionNode fnNode, int functionIndex, Node statements, int functionType) {
         fnNode.setFunctionType(functionType);
@@ -2353,10 +2367,10 @@ public final class IRFactory {
             fnNode.setInStrictMode(true);
         }
 
+        boolean activationOfItsOwn = fnNode.hasActivationOfItsOwn();
         int functionCount = fnNode.getFunctionCount();
         if (functionCount != 0) {
-            // Functions containing other functions require activation objects
-            fnNode.setRequiresActivation();
+            // Functions containing other functions require activation objects: set by addFunction
             propagateRequiresArgumentObjectFromNestedArrowFunctions(fnNode);
         }
         if (parser.compilerEnv.isLatestEcmaScript()
@@ -2375,7 +2389,11 @@ public final class IRFactory {
                 fnNode.setArgumentsInRegister();
             } else {
                 fnNode.setRequiresActivation();
+                activationOfItsOwn = true;
             }
+        }
+        if (!activationOfItsOwn && functionCount != 0 && nestsOnlyChunks(fnNode)) {
+            fnNode.setSplitActivation();
         }
 
         if (functionType == FunctionNode.FUNCTION_EXPRESSION) {

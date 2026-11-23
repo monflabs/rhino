@@ -45,6 +45,7 @@ public class CodeGenUtils {
     private static void fillInForFunction(JSDescriptor.Builder builder, FunctionNode fn) {
         builder.functionType = fn.getFunctionType();
         builder.requiresActivationFrame = fn.requiresActivation();
+        builder.splitActivation = fn.hasSplitActivation();
         builder.requiresArgumentObject = fn.requiresArgumentObject();
         builder.paramIsRegister = fn.getRegisterVars();
         builder.paramIsActivationVar = fn.getActivationVars();

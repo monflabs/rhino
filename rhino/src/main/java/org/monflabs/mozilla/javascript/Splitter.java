@@ -1125,15 +1125,24 @@ final class Splitter {
      *
      * <pre>
      * %exitN = 0;
-     * %state = yield* (function* () { statements; %exitN = 1; })();
+     * %delegN: try {
+     *   %state = yield* (function* () { statements; %exitN = 1; %state = undefined; })();
+     * } finally {
+     *   if (%exitN === 1) break %delegN;
+     * }
      * if (%exitN === 0) return %state;
      * replays
      * </pre>
      *
      * The chunk sets %exitN at each of its exits (its returns and jumps set it with the state they
-     * return): when it completes otherwise, a return() of the generator was forwarded to it, and a
-     * finally block that yielded let it complete later with the value of that return, which the
-     * generator returns too, as yield* only does when the chunk completes at once.
+     * return, which they also store in %state): when it completes otherwise, a return() of the
+     * generator was forwarded to it, and a finally block that yielded let it complete later with
+     * the value of that return, which the generator returns too, as yield* only does when the chunk
+     * completes at once. When the chunk completes at once through one of its exits (a return or a
+     * jump in a finally block that the return() runs), yield* makes the generator return the state:
+     * the break of the finally block cancels that return, and the replays run. A finally block of
+     * the chunk clears %exitN while it runs, so that an exception it throws after a return is not
+     * taken for that exit.
      */
     private List<AstNode> delegation(
             FunctionCall call,
@@ -1161,17 +1170,70 @@ final class Splitter {
             value.setParent(null);
             ret.setReturnValue(
                     new InfixExpression(
-                            Token.COMMA, assign(name(exit, at), number(1, at), at), value, at));
+                            Token.COMMA,
+                            assign(name(exit, at), number(1, at), at),
+                            assign(name(STATE, at), value, at),
+                            at));
+        }
+        List<TryStatement> guarded = new ArrayList<>();
+        body.visit(
+                n -> {
+                    if (n instanceof TryStatement && ((TryStatement) n).getFinallyBlock() != null) {
+                        guarded.add((TryStatement) n);
+                    }
+                    return !(n instanceof FunctionNode);
+                });
+        for (int i = 0; i < guarded.size(); i++) {
+            // finally { %markN_i = %exitN; %exitN = 0; statements; %exitN = %markN_i; }
+            TryStatement tryStatement = guarded.get(i);
+            AstNode block = tryStatement.getFinallyBlock();
+            int at = block.getAbsolutePosition();
+            String mark = "%mark" + exit.substring(EXIT.length()) + "_" + i;
+            owner.putSymbol(new Symbol(Symbol.Type.VAR, mark));
+            Block wrapper = new Block(at, block.getLength());
+            wrapper.setLineColumnNumber(block.getLineno(), block.getColumn());
+            wrapper.addStatement(
+                    statement(
+                            assign(name(mark, at), name(exit, at), at),
+                            block.getLineno(),
+                            block.getColumn()));
+            wrapper.addStatement(
+                    statement(
+                            assign(name(exit, at), number(0, at), at),
+                            block.getLineno(),
+                            block.getColumn()));
+            block.setParent(null);
+            wrapper.addStatement(block);
+            wrapper.addStatement(
+                    statement(
+                            assign(name(exit, at), name(mark, at), at),
+                            block.getLineno(),
+                            block.getColumn()));
+            tryStatement.setFinallyBlock(wrapper);
         }
         int end = body.getAbsolutePosition() + body.getLength();
         body.addStatement(statement(assign(name(exit, end), number(1, end), end), lineno, column));
+        body.addStatement(
+                statement(
+                        assign(
+                                name(STATE, end),
+                                new UnaryExpression(Token.VOID, end, number(0, end)),
+                                end),
+                        lineno,
+                        column));
 
         List<AstNode> statements = new ArrayList<>();
         statements.add(
                 statement(assign(name(exit, start), number(0, start), start), lineno, column));
         Yield yield = new Yield(start, call.getLength(), call, true);
         yield.setLineColumnNumber(lineno, column);
-        statements.add(statement(assign(name(STATE, start), yield, start), lineno, column));
+        AstNode delegation = statement(assign(name(STATE, start), yield, start), lineno, column);
+        // only a finally block of the chunk runs when a return() is forwarded to it
+        statements.add(
+                guarded.isEmpty()
+                        ? delegation
+                        : cancellingForwardedReturn(
+                                delegation, exit, start, call.getLength(), lineno, column));
         IfStatement forwarded = new IfStatement(start);
         forwarded.setCondition(
                 new InfixExpression(Token.SHEQ, name(exit, start), number(0, start), start));
@@ -1183,6 +1245,43 @@ final class Splitter {
         statements.add(forwarded);
         addReplays(statements, states, replays, start, lineno, column);
         return statements;
+    }
+
+    /**
+     * The delegation of a chunk in a try statement whose finally block leaves it when the chunk
+     * completed through one of its exits.
+     */
+    private LabeledStatement cancellingForwardedReturn(
+            AstNode delegation, String exit, int start, int length, int lineno, int column) {
+        Label label = new Label(start, 0, "%deleg" + exit.substring(EXIT.length()));
+        label.setLineColumnNumber(lineno, column);
+        LabeledStatement labeled = new LabeledStatement(start, length);
+        labeled.setLineColumnNumber(lineno, column);
+        labeled.addLabel(label);
+
+        Block tryBlock = new Block(start, length);
+        tryBlock.setLineColumnNumber(lineno, column);
+        tryBlock.addStatement(delegation);
+
+        BreakStatement leave = new BreakStatement(start, 0);
+        leave.setBreakLabel(name(label.getName(), start));
+        leave.setBreakTarget(label);
+        leave.setLineColumnNumber(lineno, column);
+        IfStatement exited = new IfStatement(start);
+        exited.setCondition(
+                new InfixExpression(Token.SHEQ, name(exit, start), number(1, start), start));
+        exited.setThenPart(leave);
+        exited.setLineColumnNumber(lineno, column);
+        Block finallyBlock = new Block(start, 0);
+        finallyBlock.setLineColumnNumber(lineno, column);
+        finallyBlock.addStatement(exited);
+
+        TryStatement guarded = new TryStatement(start, length);
+        guarded.setLineColumnNumber(lineno, column);
+        guarded.setTryBlock(tryBlock);
+        guarded.setFinallyBlock(finallyBlock);
+        labeled.setStatement(guarded);
+        return labeled;
     }
 
     private static void addReplays(

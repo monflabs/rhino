@@ -5,6 +5,7 @@
 package org.monflabs.mozilla.javascript.tests.es6;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -292,8 +293,20 @@ public class NewTargetDirectCallTest {
     // Structural checks: the optimized code really is emitted
     // ------------------------------------------------------------------
 
+    /**
+     * The stress modes that split every function and spread it over classes change the shape of the
+     * generated code, which these tests inspect: a split function has an activation.
+     */
+    private static void assumeUnsplitCode() {
+        assumeTrue(
+                System.getProperty("rhino.splitWeight") == null
+                        && System.getProperty("rhino.classUnits") == null,
+                "generated code inspected unsplit only");
+    }
+
     @Test
     public void generatesDirectConstructorAndInlinedNewCallSite() {
+        assumeUnsplitCode();
         String source =
                 Utils.lines(
                         "function target(a) { this.r = new.target === target; }",
@@ -317,6 +330,7 @@ public class NewTargetDirectCallTest {
 
     @Test
     public void generatesInlinedPlainCallSite() {
+        assumeUnsplitCode();
         String source =
                 Utils.lines(
                         "function target(a) { return typeof new.target + typeof this; }",
