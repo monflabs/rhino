@@ -280,14 +280,15 @@ public class NativeMap extends ScriptableObject {
         final Callable f = (Callable) arg1;
 
         boolean isStrict = cx.isStrictMode();
+        boolean thisUnchanged = ScriptRuntime.receivesThisUnchanged(cx, f);
         for (Hashtable.Entry entry : entries) {
             // Per spec must convert every time so that primitives are always regenerated...
-            Scriptable thisObj = ScriptRuntime.toObjectOrNull(cx, arg2, scope);
+            Object thisObj = thisUnchanged ? arg2 : ScriptRuntime.toObjectOrNull(cx, arg2, scope);
 
-            if (thisObj == null && !isStrict) {
+            if (thisObj == null && !isStrict && !thisUnchanged) {
                 thisObj = ScriptableObject.getTopLevelScope(scope).getGlobalThis();
             }
-            if (thisObj == null) {
+            if (thisObj == null && !thisUnchanged) {
                 thisObj = Undefined.SCRIPTABLE_UNDEFINED;
             }
 

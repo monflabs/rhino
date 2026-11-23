@@ -803,7 +803,11 @@ public class NativeArray extends ScriptableObject implements List {
             mapFn = (Function) mapArg;
 
             Object callThisArg = args.length >= 3 ? args[2] : Undefined.SCRIPTABLE_UNDEFINED;
-            thisArg = ScriptRuntime.getThisForScope(mapFn.getDeclarationScope(), callThisArg);
+            thisArg =
+                    ScriptRuntime.receivesThisUnchanged(cx, mapFn)
+                            ? callThisArg
+                            : ScriptRuntime.getThisForScope(
+                                    mapFn.getDeclarationScope(), callThisArg);
         }
 
         Object iteratorProp = ScriptableObject.getProperty(items, SymbolKey.ITERATOR);

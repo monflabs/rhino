@@ -1905,14 +1905,14 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
         Function mapFn = null;
         Object mapArg = (args.length >= 2) ? args[1] : Undefined.instance;
-        Scriptable mapFnThisArg = Undefined.SCRIPTABLE_UNDEFINED;
+        Object mapFnThisArg = Undefined.SCRIPTABLE_UNDEFINED;
         if (!Undefined.isUndefined(mapArg)) {
             if (!(mapArg instanceof Function)) {
                 throw ScriptRuntime.typeErrorById("msg.map.function.not");
             }
             mapFn = (Function) mapArg;
             if (args.length >= 3) {
-                mapFnThisArg = ScriptableObject.ensureScriptable(args[2]);
+                mapFnThisArg = ScriptRuntime.getCallbackThis(cx, s, mapFn, args[2]);
             }
         }
 

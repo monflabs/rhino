@@ -44,6 +44,12 @@ public class JSScript implements Script, ScriptOrFn<JSScript> {
             cx.processMicrotasks();
         } else {
             var event = InstrumentEmitter.emitter.startEvent(Type.SCRIPT_EXEC);
+            // nested code (an eval, a Script object) runs with its own strictness
+            boolean ownStrictness = cx.isLatestEcmaScript();
+            boolean callerStrict = cx.isStrictMode();
+            if (ownStrictness) {
+                cx.setIsStrictMode(descriptor.isStrict());
+            }
             try {
                 ret =
                         descriptor
@@ -56,6 +62,9 @@ public class JSScript implements Script, ScriptOrFn<JSScript> {
                                         thisObj,
                                         ScriptRuntime.emptyArgs);
             } finally {
+                if (ownStrictness) {
+                    cx.setIsStrictMode(callerStrict);
+                }
                 InstrumentEmitter.emitter.endEvent(event, getDescriptor().getSourceName());
             }
         }

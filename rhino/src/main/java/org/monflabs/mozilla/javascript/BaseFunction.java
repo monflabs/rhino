@@ -712,15 +712,18 @@ public class BaseFunction extends ScriptableObject implements Function {
         }
         Callable targetFunction = (Callable) thisObj;
         int argc = args.length;
-        final Scriptable boundThis;
+        final Object boundThis;
         final Object[] boundArgs;
         // an undefined this stays undefined for a strict target (null before VERSION_ECMASCRIPT)
         Scriptable noThis = cx.isLatestEcmaScript() ? Undefined.SCRIPTABLE_UNDEFINED : null;
         if (argc > 0) {
-            boundThis =
-                    Undefined.isUndefined(args[0]) && noThis != null
-                            ? noThis
-                            : ScriptRuntime.toObjectOrNull(cx, args[0], s);
+            if (Undefined.isUndefined(args[0]) && noThis != null) {
+                boundThis = noThis;
+            } else if (ScriptRuntime.receivesThisUnchanged(cx, targetFunction)) {
+                boundThis = args[0];
+            } else {
+                boundThis = ScriptRuntime.toObjectOrNull(cx, args[0], s);
+            }
             boundArgs = new Object[argc - 1];
             System.arraycopy(args, 1, boundArgs, 0, argc - 1);
         } else {

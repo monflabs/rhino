@@ -3511,6 +3511,13 @@ public final class IRFactory {
                 copy.setLineColumnNumber(name.getLineno(), name.getColumn());
                 target = copy;
             }
+            if (withDepth > 0) {
+                // the name is resolved once, as for a compound assignment; the backends skip
+                // the write when the operator short-circuits
+                left.putIntProp(Node.BOUND_NAME_PROP, 1);
+                Node bind = Node.newString(Token.BINDNAME, left.getString());
+                return new Node(Token.SETNAME, bind, new Node(assignOp, left, right));
+            }
             Node set = parser.simpleAssignment(target, right);
             return new Node(assignOp, left, set);
         }
@@ -3556,7 +3563,19 @@ public final class IRFactory {
                             parser.createName(idName),
                             right);
         }
-        scope.addChildToBack(new Node(assignOp, read, set));
+        Node assign = new Node(assignOp, read, set);
+        if (idName != null && id.getType() != Token.NUMBER && id.getType() != Token.STRING) {
+            // ToPropertyKey of an object key once, after the test of a null or undefined base
+            Node key = new Node(Token.FIELD_KEY, parser.createName(idName));
+            key.putIntProp(Node.FIELD_KEY_KIND_PROP, Node.FIELD_KEY_OBJECT);
+            Node nullBase = new Node(Token.EQ, parser.createName(objName), new Node(Token.NULL));
+            Node convert =
+                    parser.simpleAssignment(
+                            parser.createName(idName),
+                            new Node(Token.HOOK, nullBase, parser.createName(idName), key));
+            assign = new Node(Token.COMMA, convert, assign);
+        }
+        scope.addChildToBack(assign);
         return scope;
     }
 

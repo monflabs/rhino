@@ -31,7 +31,7 @@ class LanguageResidualsGateTest {
     void optionalCallOfAnElement() {
         Utils.assertGatedBehavior(
                 "TypeError|TypeError|TypeError|undefined",
-                "undefined|undefined|undefined|undefined",
+                "TypeError|TypeError|undefined|undefined",
                 "var r = []; function t(f) { try { r.push(String(f())); } catch (e) { r.push(e.name); } }"
                         + " t(() => { var x; return x[0]?.(); });"
                         + " t(() => { var x; return x['k']?.(); });"

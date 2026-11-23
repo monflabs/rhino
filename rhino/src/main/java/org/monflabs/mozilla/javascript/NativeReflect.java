@@ -87,6 +87,8 @@ final class NativeReflect extends ScriptableObject {
 
         if (args[1] instanceof Scriptable) {
             thisObj = (Scriptable) args[1];
+        } else if (ScriptRuntime.receivesThisUnchanged(cx, callable)) {
+            thisObj = args[1];
         } else if (ScriptRuntime.isPrimitive(args[1])) {
             thisObj = cx.newObject(s, "Object", new Object[] {args[1]});
         }

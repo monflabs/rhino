@@ -132,10 +132,11 @@ public class Node implements Iterable<Node> {
             AWAIT_ITER_CLOSE_ABRUPT = 5;
 
     /**
-     * The kinds of Token#FIELD_KEY: a new private name (its child is the description), and
-     * ToPropertyKey of a computed key evaluated ahead of its use.
+     * The kinds of Token#FIELD_KEY: a new private name (its child is the description),
+     * ToPropertyKey of a computed key evaluated ahead of its use, and ToPropertyKey of an object
+     * key only (the key of a reference that is read then written).
      */
-    public static final int FIELD_KEY_PRIVATE_NAME = 3, FIELD_KEY_ELEMENT = 5;
+    public static final int FIELD_KEY_PRIVATE_NAME = 3, FIELD_KEY_ELEMENT = 5, FIELD_KEY_OBJECT = 7;
 
     /**
      * The kind of a Token#CLASS_ELEMENT, and its flags: a static element; an element whose function
@@ -288,6 +289,16 @@ public class Node implements Iterable<Node> {
 
     public boolean hasChildren() {
         return first != null;
+    }
+
+    /**
+     * Whether this value of a SETNAME is a logical assignment in a with statement: the operator
+     * applied to the name read in the scope that the BINDNAME found (BOUND_NAME_PROP).
+     */
+    public boolean isBoundLogicalAssignment() {
+        return (type == Token.AND || type == Token.OR || type == Token.NULLISH_COALESCING)
+                && first.getType() == Token.NAME
+                && first.getIntProp(BOUND_NAME_PROP, 0) == 1;
     }
 
     public Node getFirstChild() {

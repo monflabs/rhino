@@ -3705,9 +3705,13 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             Object value = stackTopValue(frame);
             frame.stack[frame.stackTop] =
-                    frame.compilerData.itsICode[frame.pc++] == Node.FIELD_KEY_PRIVATE_NAME
-                            ? ScriptRuntime.newPrivateName(value, cx, frame.scope)
-                            : ScriptRuntime.classElementKey(value, cx, frame.scope);
+                    switch (frame.compilerData.itsICode[frame.pc++]) {
+                        case Node.FIELD_KEY_PRIVATE_NAME ->
+                                ScriptRuntime.newPrivateName(value, cx, frame.scope);
+                        case Node.FIELD_KEY_OBJECT ->
+                                ScriptRuntime.objectElementKey(value, cx, frame.scope);
+                        default -> ScriptRuntime.classElementKey(value, cx, frame.scope);
+                    };
             return null;
         }
     }

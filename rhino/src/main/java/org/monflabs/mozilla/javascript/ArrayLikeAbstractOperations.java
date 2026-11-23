@@ -112,12 +112,10 @@ public class ArrayLikeAbstractOperations {
 
         Function f = getCallbackArg(cx, callbackArg);
         TopLevel parent = ScriptableObject.getTopLevelScope(f.getDeclarationScope());
-        Scriptable thisArg;
-        if (args.length < 2 || args[1] == null || args[1] == Undefined.instance) {
-            thisArg = Undefined.SCRIPTABLE_UNDEFINED;
-        } else {
-            thisArg = ScriptRuntime.toObject(cx, scope, args[1]);
-        }
+        Object thisArg =
+                args.length < 2
+                        ? Undefined.SCRIPTABLE_UNDEFINED
+                        : ScriptRuntime.getCallbackThis(cx, scope, f, args[1]);
 
         Scriptable array = null;
         if (operation == IterativeOperation.FILTER || operation == IterativeOperation.MAP) {

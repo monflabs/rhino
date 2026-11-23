@@ -3804,9 +3804,6 @@ public class ScriptRuntime {
         Object value;
 
         if (elem instanceof PrivateName) {
-            if (isOptionalChainingCall && (obj == null || Undefined.isUndefined(obj))) {
-                return null;
-            }
             value = PrivateName.get(obj, (PrivateName) elem, cx, scope);
             if (!(value instanceof Callable)) {
                 if (isOptionalChainingCall && (value == null || Undefined.isUndefined(value))) {
@@ -3816,13 +3813,9 @@ public class ScriptRuntime {
             }
             return new LookupResult(value, (Scriptable) obj, elem.toString());
         }
-        boolean shortCircuit = isOptionalChainingCall && cx.isLatestEcmaScript();
         if (isSymbol(elem)) {
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
-                if (shortCircuit) {
-                    return null;
-                }
                 throw undefCallError(obj, String.valueOf(elem));
             }
             value = ScriptableObject.getProperty(thisObj, (Symbol) elem);
@@ -3837,9 +3830,6 @@ public class ScriptRuntime {
 
             thisObj = toObjectOrNull(cx, obj, scope);
             if (thisObj == null) {
-                if (shortCircuit) {
-                    return null;
-                }
                 throw undefCallError(obj, String.valueOf(elem));
             }
 
@@ -4020,7 +4010,8 @@ public class ScriptRuntime {
             Scriptable thisObj,
             boolean isOptionalChainingCall) {
         if (thisObj == null) {
-            if (isOptionalChainingCall) {
+            // a.b?.(): only a ?. before b covers a null or undefined a, and the compiler tests it
+            if (isOptionalChainingCall && !cx.isLatestEcmaScript()) {
                 return null;
             }
             throw undefCallError(obj, property);
@@ -4312,17 +4303,41 @@ public class ScriptRuntime {
                 && cx.isLatestEcmaScript()) {
             return l == 0 ? Undefined.instance : arg0;
         }
-        if (l != 0
-                && arg0 != Undefined.instance
-                && cx.isLatestEcmaScript()
-                && target instanceof JSFunction
-                && ((JSFunction) target).isStrict()
-                && (!((JSFunction) target).isBuiltIn()
-                        || ((JSFunction) target).acceptsPrimitiveThis())
-                && !cx.hasFeature(Context.FEATURE_OLD_UNDEF_NULL_THIS)) {
+        if (l != 0 && arg0 != Undefined.instance && receivesThisUnchanged(cx, target)) {
             return arg0;
         }
         return getApplyOrCallThis(cx, scope, arg0, l, target);
+    }
+
+    /**
+     * Whether a call gives {@code target} its this value unchanged: a strict script function does
+     * not convert a primitive to an object (OrdinaryCallBindThis).
+     */
+    static boolean receivesThisUnchanged(Context cx, Object target) {
+        return target instanceof JSFunction
+                && cx.isLatestEcmaScript()
+                && ((JSFunction) target).isStrict()
+                && (!((JSFunction) target).isBuiltIn()
+                        || ((JSFunction) target).acceptsPrimitiveThis())
+                && !cx.hasFeature(Context.FEATURE_OLD_UNDEF_NULL_THIS);
+    }
+
+    /**
+     * The this value a built-in passes to a callback for a {@code thisArg} argument: an object,
+     * except that a strict script function gets a primitive unchanged.
+     */
+    public static Object getCallbackThis(
+            Context cx, VarScope scope, Object callback, Object thisArg) {
+        if (thisArg instanceof Scriptable) {
+            return thisArg;
+        }
+        if (Undefined.isUndefined(thisArg)) {
+            return Undefined.SCRIPTABLE_UNDEFINED;
+        }
+        if (receivesThisUnchanged(cx, callback)) {
+            return thisArg;
+        }
+        return thisArg == null ? Undefined.SCRIPTABLE_UNDEFINED : toObject(cx, scope, thisArg);
     }
 
     public static Scriptable getApplyOrCallThis(
@@ -6703,6 +6718,11 @@ public class ScriptRuntime {
     /** ToPropertyKey of a computed key, ahead of its use (Token#FIELD_KEY). */
     public static Object classElementKey(Object key, Context cx, VarScope scope) {
         return toPropertyKey(key);
+    }
+
+    /** ToPropertyKey of an object key, once for a read and a write (Node#FIELD_KEY_OBJECT). */
+    public static Object objectElementKey(Object key, Context cx, VarScope scope) {
+        return key instanceof Scriptable && !(key instanceof Symbol) ? toPropertyKey(key) : key;
     }
 
     /** A new Private Name, for a private identifier declared by a class being evaluated. */

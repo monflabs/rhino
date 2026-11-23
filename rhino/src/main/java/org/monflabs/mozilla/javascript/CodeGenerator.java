@@ -1191,6 +1191,33 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     String name = child.getString();
                     visitExpression(child, 0);
                     child = child.getNext();
+                    if (child.isBoundLogicalAssignment()) {
+                        // stack: [scope, value]; no write when the operator short-circuits
+                        Node read = child.getFirstChild();
+                        visitExpression(read, 0);
+                        addIcode(Icode.DUP);
+                        stackChange(1);
+                        int skip = iCodeTop;
+                        addGotoOp(
+                                switch (child.getType()) {
+                                    case Token.AND -> Token.IFNE;
+                                    case Token.OR -> Token.IFEQ;
+                                    default -> Icode.IF_NOT_NULL_UNDEF;
+                                });
+                        stackChange(-1);
+                        addIcode(Icode.POP);
+                        stackChange(-1);
+                        visitExpression(read.getNext(), 0);
+                        addStringOp(type, name);
+                        stackChange(-1);
+                        int end = iCodeTop;
+                        addGotoOp(Token.GOTO);
+                        resolveForwardGoto(skip);
+                        addIcode(Icode.SWAP);
+                        addIcode(Icode.POP);
+                        resolveForwardGoto(end);
+                        break;
+                    }
                     visitExpression(child, 0);
                     addStringOp(type, name);
                     stackChange(-1);
@@ -1544,12 +1571,26 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     Node target = left.getFirstChild();
                     visitExpression(target, 0);
                     Node id = target.getNext();
+                    int skipLookupLabel = -1;
+                    if (isOptionalChainingCall
+                            && left.getIntProp(Node.OPTIONAL_CHAINING, 0) == 1
+                            && compilerEnv.isLatestEcmaScript()) {
+                        // a?.b?.(): a null or undefined a stands for the missing function
+                        addIcode(Icode.DUP);
+                        stackChange(1);
+                        skipLookupLabel = iCodeTop;
+                        addGotoOp(Icode.IF_NULL_UNDEF);
+                        stackChange(-1);
+                    }
                     if (type == Token.GETPROP) {
                         String property = id.getString();
                         // stack: ... target -> ... function thisObj
                         if (isOptionalChainingCall) {
                             addStringOp(Icode.PROP_AND_THIS_OPTIONAL, property);
                             stackChange(1);
+                            if (skipLookupLabel != -1) {
+                                resolveForwardGoto(skipLookupLabel);
+                            }
                             return completeOptionalCallJump();
                         } else {
                             addStringOp(Icode.PROP_AND_THIS, property);
@@ -1560,6 +1601,9 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                         // stack: ... target id -> ... function thisObj
                         if (isOptionalChainingCall) {
                             addIcode(Icode.ELEM_AND_THIS_OPTIONAL);
+                            if (skipLookupLabel != -1) {
+                                resolveForwardGoto(skipLookupLabel);
+                            }
                             return completeOptionalCallJump();
                         } else {
                             addIcode(Icode.ELEM_AND_THIS);

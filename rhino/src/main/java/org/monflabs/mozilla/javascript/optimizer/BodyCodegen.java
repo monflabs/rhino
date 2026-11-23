@@ -1761,10 +1761,11 @@ class BodyCodegen {
                 addScriptRuntimeInvoke(
                         type == Token.CLASS_STATIC
                                 ? "classStaticInit"
-                                : node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0)
-                                                == Node.FIELD_KEY_PRIVATE_NAME
-                                        ? "newPrivateName"
-                                        : "classElementKey",
+                                : switch (node.getIntProp(Node.FIELD_KEY_KIND_PROP, 0)) {
+                                    case Node.FIELD_KEY_PRIVATE_NAME -> "newPrivateName";
+                                    case Node.FIELD_KEY_OBJECT -> "objectElementKey";
+                                    default -> "classElementKey";
+                                },
                         "(Ljava/lang/Object;"
                                 + "Lorg/monflabs/mozilla/javascript/Context;"
                                 + "Lorg/monflabs/mozilla/javascript/VarScope;"
@@ -4102,6 +4103,21 @@ class BodyCodegen {
                     Node target = node.getFirstChild();
                     generateExpression(target, node);
                     Node id = target.getNext();
+                    int afterLookup = -1;
+                    if (isOptionalChainingCall
+                            && node.getIntProp(Node.OPTIONAL_CHAINING, 0) == 1
+                            && compilerEnv.isLatestEcmaScript()) {
+                        // a?.b?.(): no lookup result when a is null or undefined
+                        int doLookup = cfw.acquireLabel();
+                        afterLookup = cfw.acquireLabel();
+                        cfw.add(ByteCode.DUP);
+                        addOptRuntimeInvoke("isNullOrUndefined", "(Ljava/lang/Object;)Z");
+                        cfw.add(ByteCode.IFEQ, doLookup);
+                        cfw.add(ByteCode.POP);
+                        cfw.add(ByteCode.ACONST_NULL);
+                        cfw.add(ByteCode.GOTO, afterLookup);
+                        cfw.markLabel(doLookup);
+                    }
                     if (type == Token.GETPROP) {
                         String property = id.getString();
                         cfw.addALoad(contextLocal);
@@ -4127,6 +4143,9 @@ class BodyCodegen {
                                         + "Lorg/monflabs/mozilla/javascript/Context;"
                                         + "Lorg/monflabs/mozilla/javascript/VarScope;"
                                         + ")Lorg/monflabs/mozilla/javascript/ScriptRuntime$LookupResult;");
+                    }
+                    if (afterLookup != -1) {
+                        cfw.markLabel(afterLookup);
                     }
                     break;
                 }
@@ -5644,24 +5663,59 @@ class BodyCodegen {
 
     private void visitSetName(Node node, Node child) {
         String name = node.getFirstChild().getString();
-        while (child != null) {
-            generateExpression(child, node);
-            child = child.getNext();
-        }
+        int end = generateSetNameOperands(node, child);
         cfw.addALoad(contextLocal);
         cfw.addALoad(variableObjectLocal);
         addDynamicInvoke(nameNamespace + ":SET:" + name, Signatures.NAME_SET);
+        if (end != -1) {
+            cfw.markLabel(end);
+        }
     }
 
     private void visitStrictSetName(Node node, Node child) {
         String name = node.getFirstChild().getString();
-        while (child != null) {
-            generateExpression(child, node);
-            child = child.getNext();
-        }
+        int end = generateSetNameOperands(node, child);
         cfw.addALoad(contextLocal);
         cfw.addALoad(variableObjectLocal);
         addDynamicInvoke(nameNamespace + ":SETSTRICT:" + name, Signatures.NAME_SET_STRICT);
+        if (end != -1) {
+            cfw.markLabel(end);
+        }
+    }
+
+    /**
+     * The scope and the value of a SETNAME. For a logical assignment in a with statement, the value
+     * read is left alone on the stack when the operator short-circuits, and the code jumps to the
+     * label returned (-1 otherwise), past the write.
+     */
+    private int generateSetNameOperands(Node node, Node child) {
+        generateExpression(child, node);
+        Node value = child.getNext();
+        if (!value.isBoundLogicalAssignment()) {
+            generateExpression(value, node);
+            return -1;
+        }
+        Node read = value.getFirstChild();
+        generateExpression(read, value);
+        int write = cfw.acquireLabel();
+        int end = cfw.acquireLabel();
+        cfw.add(ByteCode.DUP);
+        if (value.getType() == Token.NULLISH_COALESCING) {
+            addOptRuntimeInvoke("isNullOrUndefined", "(Ljava/lang/Object;)Z");
+            cfw.add(ByteCode.IFNE, write);
+        } else {
+            addDynamicInvoke("MATH:TOBOOLEAN", Signatures.MATH_TO_BOOLEAN);
+            cfw.add(value.getType() == Token.AND ? ByteCode.IFNE : ByteCode.IFEQ, write);
+        }
+        int stack = cfw.getStackTop();
+        // stack: scope value -> value
+        cfw.add(ByteCode.SWAP);
+        cfw.add(ByteCode.POP);
+        cfw.add(ByteCode.GOTO, end);
+        cfw.markLabel(write, stack);
+        cfw.add(ByteCode.POP);
+        generateExpression(read.getNext(), value);
+        return end;
     }
 
     private void visitSetConst(Node node, Node child) {
