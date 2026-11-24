@@ -122,6 +122,9 @@ public class NativeGlobal implements Serializable {
                     (c, ctor) -> {
                         ctor.setPrototype(nativeError);
                         errorProto.setPrototype(nativeErrorProto);
+                        if (cx.hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES)) {
+                            NativeError.makeNameEnumerable(errorProto);
+                        }
                     });
         }
     }

@@ -586,6 +586,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
                                 false),
                         DONTENUM);
             }
+            if (sealed) {
+                proto.sealObject();
+                ((JSFunction) res).sealObject();
+            }
         }
         return (JSFunction) res;
     }

@@ -40,6 +40,164 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### M22.1: the neutral debugger API and its implementation (2026-11-24)
+
+New Java API, nothing gated, no change to the engine's hot paths (the hooks are the existing `javascript.debug`
+ones, so no perf gate run). Test: `DebuggerApiTest`.
+
+- **`org.monflabs.mozilla.api.debugger`**: 22 neutral types ported from Nashorn's debugger API (`Debugger`,
+  `DebugListener`, `Breakpoint`, `BreakpointRequest`, `PausedEvent`, `DebugFrame`, `DebugScope`, `ExecutionContext`,
+  `TraceListener`, `DebugValues`, ...), lines and columns zero-based. `Debugger.of(ContextFactory)` returns the
+  debugger of a factory.
+- **`javascript.debuggerimpl.DebuggerImpl`**: implemented over the interpreter's `Debugger`/`DebugFrame` hooks. It
+  registers as a `ContextFactory.Listener`, so every context of that factory is switched to interpreted mode
+  (`optimizationLevel -1`) and gets the hooks. Supports breakpoints (by URL, regex or script id, with conditions,
+  resolved to the next line with code), step into/over/out, pause on exceptions (`UNCAUGHT` is decided when the
+  exception leaves the outermost frame, since the hooks do not tell whether a `catch` exists), `debugger`
+  statements, `pauseOnStart`, `pause()`, `terminate()`, listeners, trace listeners, `clearScripts`, and evaluation in
+  a frame or an execution context.
+- Frames of top-level scripts evaluate against the global object: the interpreter's local-variable proxy holds
+  no value for a top-level `var`.
+
+### M22.2: `rhino-debugger`, a Chrome DevTools Protocol server (2026-11-24)
+
+New module and Java API, nothing gated. Test: `CdpProtocolTest`, `CdpServerTest` (ported from Nashorn's, run
+against a real WebSocket client).
+
+- `org.monflabs.mozilla.debugger.CdpServer.open(Debugger.of(factory), InspectOptions.parse("9229", false))` listens
+  for Chrome DevTools, VS Code or any CDP client (`Debugger`, `Runtime` domains; discovery over HTTP; an
+  in-process transport for the Swing UI).
+- Engine additions it needed, all in the neutral API or the debug hooks: `Debugger.registerContext(global, name)`
+  (so a client can evaluate before any script ran), `Debugger.consoleCalled(type, args)` (Rhino has no `console`;
+  the host's console calls it), `debug.InstructionObserver` (called by `Context.observeInstructionCount`, every
+  10,000 interpreter instructions, so `pause` and `Runtime.terminateExecution` reach a loop that stays on one
+  line).
+- A script's URL is its source name as given to the engine (`first.js`, not a file URL): breakpoints by URL match
+  that name. `executionFinished` fires only for a run that paused, so a client that never paused stays attached.
+- The first line event of a function (its declaration line) is not reported when the function has other lines, so
+  stepping into a function stops at its first statement.
+
+
+### M22.3: `rhino-debugger-ui`, a Swing debugger (2026-11-24)
+
+- New module `rhino-debugger-ui`: a Swing debugger panel (`DebuggerPanel`, `DebugSession`, source view, call stack, scopes, console) that
+  talks CDP, over WebSocket or in-process, to a `rhino-debugger` server. Adapted from Nashorn's `debugger-ui`; headless tests ported to
+  JUnit 5 on a Rhino `TestEngine`.
+- `DebugValues.ownProperties` of a `TopLevel` now lists the properties of its global object (`getGlobalThis()`), so the global scope of a
+  paused frame shows the script's top-level variables.
+
+### M22.4: the playground debugs (2026-11-24)
+
+- `rhino-playground`: a **Debug** button runs the script in the interpreter under the debugger, paused at its first statement, in a
+  `DebuggerPanel` window attached in memory (no socket); an **External debugger** button does the same but serves CDP on a port
+  (default 9229) for Chrome DevTools or an IDE. **Stop** also ends a script paused in the debugger.
+- `ScriptRunner.debug(...)` and `ScriptRunner.debugger()`: debug runs use a context factory of their own, so plain runs are unaffected.
+  Test: `DebugRunTest`.
+
+### M22.5: the debugger contract test kit (2026-11-24)
+
+- New module `rhino-debugger-testkit`: `DebuggerContractTest`, an abstract JUnit 5 class holding the contract of the neutral debugger
+  API, so that a debugger of another runtime (the Demandware one) is validated by extending it and supplying a `Fixture`. Rhino's
+  own debugger runs it in `RhinoDebuggerContractTest`; it replaces `DebuggerApiTest` of the `tests` module (same tests).
+
+### M22.6: licensing of the ported debugger (2026-11-24)
+
+- Every file of the debugger modules and of `api.debugger` carries the MPL 2.0 header; `NOTICE.txt` states that the code is adapted
+  from Nashorn's debugger and relicensed under MPL 2.0. This closes M22.
+
+### Playground: Debug after a finished session (2026-11-24)
+
+- Clicking **Debug** while a debug window of a finished session was still open (for example minimized) did nothing, and the window
+  could not be brought back. Now **Debug**, as in the Nashorn and GaltaJS playgrounds, always cancels the current session (stops
+  the run, closes its window and server) and opens a fresh one, and the button stays enabled during a run; **Run** also closes
+  the window.
+
+### Debugger documentation (2026-11-24)
+
+- `rhino-doc/site/debugger.md`: the debugger, from the API to the playground; linked from the sidebar and `features.md`.
+
+### Perf gate of M22 (2026-11-24)
+
+`buildtools/perf-gate.sh 13b295adb` (before M22): no metric regressed beyond its tolerance; `:tests:test` passes.
+
+### Perf gate of M18 to M21 (2026-11-23)
+
+The M18 and M19 gate ran together against `9f91ea64a` (`strbuild.cmp.es6` +19.7% led to the static
+`resourceLimitsUsed` flag, re-measured at +4.6%). The M20 and M21 gate ran against `a4abd32e1`: no regression.
+
+### M21 and M20.4: `MemberPolicy`, class cache snapshots, `FEATURE_NONNULL_PARAMETERS` (2026-11-23)
+
+New Java API, off by default, so nothing is gated. Test: `MemberPolicyTest`.
+
+- **21.0, the scope-sharing check.** The members of a class are reflected with the scope the `ClassCache` is
+  associated with, and keep it (their parent scope and `Function.prototype`). Calls use the scope of the call site, so
+  nothing wrong is visible to a script, but a `JavaMembers` reused by another cache keeps the first scope reachable.
+  Hence the rule on `ClassCache.Snapshot`: take it from a dedicated scope that lives as long as the snapshot.
+- **21.1 `MemberPolicy`** (`ClassCache.setMemberPolicy`): consulted when a class is reflected, for the visibility of
+  the class, the public name of each method, field and constructor (null hides it) and the non-null parameters. A
+  hidden class shows no member. Bean properties derive from the original Java names.
+- **21.2 `ClassCache.snapshot()` / `Snapshot.restore(ClassCache)`**: typed replacement for reaching into the class
+  table. The reflected members carry their own type information, so no type-factory snapshot is needed.
+- **21.3** `restore` throws `IllegalStateException` unless the target cache has an `equals` policy.
+- **20.4 `FEATURE_NONNULL_PARAMETERS`**: a method whose parameter is non-null for the policy is ruled out when the
+  script passes null there; read when the class is reflected.
+
+### M20.3: `FEATURE_LEGACY_OVERLOAD_RESOLUTION` (2026-11-23)
+
+Host opt-in, off by default, not gated by the language version. Test: `LegacyOverloadResolutionTest`. With the
+feature, `NativeJavaMethod.preferSignature` follows script4: a JavaScript array is ranked by its first non-null
+element when two overloads take Java arrays; the elements of a vararg are compared rather than the array that holds
+them; and a method without varargs beats one with varargs on a tie. The overload cache is bypassed when an argument
+is a JavaScript array, since the class of the argument no longer decides the overload. A `null` argument is already
+ambiguous between unrelated reference types without the feature, so no rule was added for it.
+
+### M20.2: `FEATURE_TYPE_HINTS`, phase 1 (2026-11-23)
+
+Host opt-in, off by default, not gated by the language version. Test: `TypeHintsTest`. The parser accepts and
+discards `: Type` after a `var`/`let`/`const` binding identifier, after a function parameter, and after the
+parameter list (`: void` included). The type is a name, a qualified name or an array suffix (`T[]`); there is no AST
+node and no check. The scanner only peeks for a `:` at those three positions, where plain JavaScript has none, so
+conditional expressions and labels are unaffected. Arrow functions and generics are not accepted.
+
+### M20.1: `FEATURE_LEGACY_ERROR_PROPERTIES` (2026-11-23)
+
+Host opt-in (`ContextFactory.hasFeature`), off by default, so nothing is gated by the language version. Test:
+`LegacyErrorPropertiesTest`. With the feature, errors follow script4: `name` (on the prototypes), `message` and
+`stack` are enumerable; the `stack` of an error is captured when it is first thrown, not at construction; and the V8
+stack trace API (`CallSite`, `Error.stackTraceLimit`, `Error.prepareStackTrace`) is not defined. A sealed standard
+global rejects a write to a missing `Error.stackTraceLimit` even in sloppy mode, so hiding it is what keeps scripts
+that probe it working.
+
+### M19: host controls (2026-11-23)
+
+New Java API, off by default, so no behavior changes and nothing is gated. Test: `M19HostControlsTest`.
+
+- **`ResourceLimits`** (`Context.setResourceLimits`): the engine reports the size of what a script is about to
+  allocate, by kind (`STRING`, `ARRAY`, `OBJECT`, `COLLECTION`, `BUFFER`, `SYMBOLS`, `EVAL`), and the limit throws to
+  refuse. It reuses the existing `checkStringLength` sites for strings (reported from 4,096 characters up) and adds
+  one call at each of the other slow paths (array growth, slot-map promotion at 1,536 properties, `Map`/`Set`
+  additions, `ArrayBuffer` allocation, `Symbol.for`, `eval`), so a limit costs nothing on the usual operations.
+- **`InvocationInterceptor`** (`ContextFactory.setInvocationInterceptor`): wraps the calls that scripts make to Java
+  methods and constructors (`NativeJavaMethod`, `new` on a Java class); one null check per call without one.
+- **`ContextFactory.mapThrowable`**: translates a Java exception thrown by a called method before it is wrapped for
+  the script; only on the failure path.
+- The array-safe overload cache fix of the plan is not needed yet: array arguments rank the same whatever their
+  elements, so the cache is correct. It moves to 20.3, where the legacy ranking would make it matter.
+
+### M18: defects found by the comparison with script4 (2026-11-23)
+
+All versions (defects no script can rely on); `BACKWARD_COMPATIBILITY.md` 1.111 to 1.113 and 2.9. Test:
+`M18DefectsTest`.
+
+- **Sort comparator**: a result of `-0` or `NaN` counts as 0 (it was ordered by `Double.compare`).
+- **Symbols**: `WrapFactory.wrap` returns a `SymbolKey` as it is (a Symbol returned by Java was wrapped).
+- **`Symbol.for` registry**: the JVM-wide registry was a `WeakHashMap` whose value refers to its key, so no entry was
+  ever collected; it now holds its symbols through weak references and drops cleared entries.
+- **Holes into Java arrays**: converting a sparse JavaScript array stored the `NOT_FOUND` marker; it is `undefined`.
+- **`ClassShutter` and Java arrays**: the shutter is asked about the component type of an array.
+- **Sealed scopes**: `Symbol.prototype`, `%TypedArray%` and `%TypedArray%.prototype` are sealed with the other standard objects
+  (`BACKWARD_COMPATIBILITY.md` 1.114). Test: `M18DefectsTest`.
+
 ### The open items of the documentation review (2026-11-23)
 
 What the review of 2026-11-22 left open.

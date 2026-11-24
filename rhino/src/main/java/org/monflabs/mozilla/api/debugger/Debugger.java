@@ -1,0 +1,196 @@
+/* -*- Mode: java; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+package org.monflabs.mozilla.api.debugger;
+
+import java.util.List;
+import org.monflabs.mozilla.javascript.ContextFactory;
+
+/**
+ * The debugger of one engine. Obtained with {@link #of(ContextFactory)} for an engine created with
+ * the {@code the debugger} option; every method is safe to call from any thread.
+ */
+public interface Debugger {
+
+    /**
+     * Returns the debugger of a Rhino context factory.
+     *
+     * @param factory the factory whose contexts are debugged
+     * @return its debugger
+     * @throws IllegalStateException if the factory is already initialized for another use
+     */
+    static Debugger of(final ContextFactory factory) {
+        return org.monflabs.mozilla.javascript.debuggerimpl.DebuggerImpl.of(factory);
+    }
+
+    /**
+     * Adds a listener.
+     *
+     * @param listener the listener
+     */
+    void addListener(DebugListener listener);
+
+    /**
+     * Removes a listener.
+     *
+     * @param listener the listener
+     */
+    void removeListener(DebugListener listener);
+
+    /**
+     * Adds a trace listener: a passive stream of statements and completion values, pausing nothing.
+     * Tracing keeps the statement hooks fully engaged while any trace listener is registered, which
+     * costs speed; remove the listener when done.
+     *
+     * @param listener the listener
+     */
+    void addTraceListener(TraceListener listener);
+
+    /**
+     * Removes a trace listener.
+     *
+     * @param listener the listener
+     */
+    void removeTraceListener(TraceListener listener);
+
+    /**
+     * The execution contexts - one per global object the engine has created.
+     *
+     * @return the contexts, in creation order
+     */
+    List<ExecutionContext> executionContexts();
+
+    /**
+     * The scripts the engine has compiled so far.
+     *
+     * @return the scripts, in compilation order
+     */
+    List<DebugScript> scripts();
+
+    /**
+     * Discards the debugger's record of parsed scripts and execution contexts and fires {@link
+     * DebugListener#executionContextsCleared()} (over CDP, a {@code
+     * Runtime.executionContextsCleared} that makes a frontend drop its Sources view) - without
+     * closing the connection and without touching breakpoints, which re-resolve as scripts parse
+     * again. For a host that reuses one engine across independent runs and wants each run to start
+     * with a clean script list.
+     */
+    void clearScripts();
+
+    /**
+     * Registers the global object of a scope the host created, so that clients can evaluate in it
+     * before any script ran.
+     *
+     * @param global the global object
+     * @param name the name shown to clients
+     * @return the execution context
+     */
+    ExecutionContext registerContext(Object global, String name);
+
+    /**
+     * Reports a call of the host's {@code console} to the listeners.
+     *
+     * @param type the method called: {@code log}, {@code error}, ...
+     * @param arguments the arguments
+     */
+    void consoleCalled(String type, List<Object> arguments);
+
+    /**
+     * Sets a breakpoint. A breakpoint whose url names a script not yet compiled stays pending - its
+     * {@link Breakpoint#locations()} is empty - and resolves when that script arrives, which {@link
+     * DebugListener#breakpointResolved} reports.
+     *
+     * @param request where and under which condition
+     * @return the breakpoint
+     */
+    Breakpoint setBreakpoint(BreakpointRequest request);
+
+    /**
+     * Removes a breakpoint.
+     *
+     * @param breakpointId the id of the breakpoint
+     */
+    void removeBreakpoint(String breakpointId);
+
+    /**
+     * Activates or deactivates all breakpoints without removing them.
+     *
+     * @param active whether breakpoints pause
+     */
+    void setBreakpointsActive(boolean active);
+
+    /**
+     * Makes the debugger skip every pause - breakpoints, steps, exceptions - or honour them again.
+     *
+     * @param skip whether to skip all pauses
+     */
+    void setSkipAllPauses(boolean skip);
+
+    /**
+     * Sets which exceptions pause execution.
+     *
+     * @param mode the mode
+     */
+    void setPauseOnExceptions(PauseOnExceptions mode);
+
+    /** Pauses at the next statement any script thread reaches. */
+    void pause();
+
+    /**
+     * Pauses at the first statement of the next script that starts executing, which is how a
+     * debugger that was waited for gets to see the beginning.
+     */
+    void pauseOnStart();
+
+    /**
+     * The pause a thread is currently blocked on, or {@code null} if nothing is paused. Unlike the
+     * fire-once {@link DebugListener#paused} event, this is durable state a frontend can consult
+     * when it attaches: a client that connects after a thread already paused (say, after {@link
+     * #pauseOnStart()} froze the script) can replay the pause from here instead of missing it. Set
+     * when a pause begins, cleared when it resumes and when the debugger is closed.
+     *
+     * @return the current pause, or null
+     */
+    PausedEvent currentPause();
+
+    /**
+     * Evaluates an expression in a context while nothing is paused. The expression runs on the
+     * calling thread with the context's realm bound; running it while a script thread is executing
+     * in that realm is a race the caller accepts.
+     *
+     * @param context the context to evaluate in
+     * @param expression the expression
+     * @return the value
+     * @throws DebugException if the expression throws or does not parse
+     */
+    Object evaluate(ExecutionContext context, String expression) throws DebugException;
+
+    /**
+     * Runs an operation on the calling thread with a context's realm bound, so that it may read the
+     * context's objects while no thread is paused. The same race as {@link #evaluate} applies.
+     *
+     * @param context the context
+     * @param operation what to run
+     * @param <T> the result type
+     * @return the result
+     * @throws Exception whatever the operation threw
+     */
+    <T> T call(ExecutionContext context, java.util.concurrent.Callable<T> operation)
+            throws Exception;
+
+    /**
+     * The value model, for interpreting the objects the other methods hand out.
+     *
+     * @return the value helpers
+     */
+    DebugValues values();
+
+    /**
+     * Resumes every paused thread, removes every breakpoint and detaches every listener. The engine
+     * keeps running; a new listener may attach later.
+     */
+    void close();
+}

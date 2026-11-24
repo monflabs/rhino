@@ -113,6 +113,9 @@ testing but which are not published to Maven Central:
 * **examples**: Surprisingly, this contains example code.
 * **testutils**: Library code shared by the tests of the other modules.
 * **rhino-playground**: A desktop playground: samples, an editor and a console, with the language version and the execution mode to choose (`./gradlew :rhino-playground:run`).
+* **rhino-debugger**: A Chrome DevTools Protocol server (WebSocket or in-process) over the neutral debugger API of `rhino` (`org.monflabs.mozilla.api.debugger`); the debugger works in interpreted mode.
+* **rhino-debugger-ui**: A Swing debugger panel that talks CDP to *rhino-debugger*.
+* **rhino-debugger-testkit**: The contract tests of the neutral debugger API, to validate another runtime's debugger.
 * **rhino-doc**: The documentation site of the fork, with the playground running in the browser (`buildtools/build-doc.sh --serve`; published to GitHub Pages).
 
 ### Recommendations

@@ -1,6 +1,10 @@
 Rhino is licensed subject to the terms of the Mozilla Public License, v. 2.0.
 See "License.txt" for the text of the license.
 
+The modules rhino-debugger, rhino-debugger-ui and rhino-debugger-testkit, and the
+org.monflabs.mozilla.api.debugger package, are adapted from the debugger of the Nashorn engine
+(a peer project of the same authors) and are relicensed under the Mozilla Public License, v. 2.0.
+
 Rhino contains the following additional software:
 
 ----

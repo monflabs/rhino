@@ -53,6 +53,8 @@ public class JavaScriptException extends RhinoException {
                 }
                 // set stack property, see bug #549604
                 error.setStackProvider(this);
+            } else if (Context.getContext().hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES)) {
+                error.setStackProviderIfAbsent(this);
             }
         }
         if (javaCause instanceof Wrapper) {

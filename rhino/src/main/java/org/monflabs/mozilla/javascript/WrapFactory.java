@@ -55,7 +55,10 @@ public class WrapFactory {
      * @since 1.9.0
      */
     public Object wrap(Context cx, VarScope scope, Object obj, TypeInfo staticType) {
-        if (obj == null || obj == Undefined.instance || obj instanceof Scriptable) {
+        if (obj == null
+                || obj == Undefined.instance
+                || obj instanceof Scriptable
+                || obj instanceof SymbolKey) {
             return obj;
         }
         if (staticType.isPrimitive()) {

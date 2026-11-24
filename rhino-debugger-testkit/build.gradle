@@ -1,0 +1,9 @@
+plugins {
+    id 'rhino.java-conventions'
+}
+
+dependencies {
+    api project(':rhino')
+    api platform(libs.junit.platform.get())
+    api 'org.junit.jupiter:junit-jupiter'
+}

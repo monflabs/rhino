@@ -10,7 +10,7 @@ A behavior change is only active under `VERSION_ECMASCRIPT` (section 1): `VERSIO
 the behavior of stock Rhino, so an embedding that needs it selects `VERSION_ES6`
 (`cx.setLanguageVersion(Context.VERSION_ES6)`, or `-version 200` in the shell). The exception is a defect that no
 script can rely on (a miscompilation, an exception of the engine itself): it is fixed in all versions, and the
-"Applies to" column of its row says so (part of 1.53, 1.90, 1.92 to 1.94, 1.103, 1.107, 1.108 in section 1; 2.5 to 2.7).
+"Applies to" column of its row says so (part of 1.53, 1.90, 1.92 to 1.94, 1.103, 1.107, 1.108, 1.111 to 1.114 in section 1; 2.5 to 2.7, 2.9).
 Section 2 lists platform and API changes.
 
 | # | Change | Applies to |
@@ -126,6 +126,10 @@ Section 2 lists platform and API changes.
 | 1.108 | A Symbol on the left of `instanceof` | all versions |
 | 1.109 | Unicode property escapes follow ECMA-262 | `VERSION_ECMASCRIPT` |
 | 1.110 | Identifier characters are ID_Start and ID_Continue | `VERSION_ECMASCRIPT` |
+| 1.111 | A sort comparator that returns -0 or NaN | all versions |
+| 1.112 | A Symbol returned by a Java method | all versions |
+| 1.113 | A hole of a JavaScript array converted to a Java array | all versions |
+| 1.114 | `Symbol.prototype` and `%TypedArray%` sealed in a sealed scope | all versions |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -134,6 +138,7 @@ Section 2 lists platform and API changes.
 | 2.6 | Sixteen bug fixes taken from upstream Rhino | all |
 | 2.7 | `jsc` compiles a script with a `for-in` loop | all |
 | 2.8 | A compile spec numbers the first line 1 by default | all |
+| 2.9 | A `ClassShutter` no longer blocks Java arrays of visible classes | all |
 
 ---
 
@@ -1915,6 +1920,50 @@ eval("var a\u0001b");  // (a raw U+0001)          VERSION_ES6: declares it  VERS
   (U+0000–U+0008, U+000E–U+001B, U+007F–U+009F) as identifier parts.
 - **Why:** ECMA-262 2026, §12.7 (Names and Keywords: `ID_Start`, `ID_Continue`); UAX #31.
 
+### 1.111 A sort comparator that returns -0 or NaN
+
+*Fixed in all language versions since 2026-11-23: the former order depended on a defect.*
+
+```js
+[3, 1, 2].sort(() => -0).join()   // before: 2,1,3 (-0 counted as negative)   now: 3,1,2
+[3, 1, 2].sort(() => NaN).join()  // before: 1,2,3 (NaN counted as positive)   now: 3,1,2
+```
+
+- **Why:** ECMA-262 2026, §23.1.3.30.2 SortCompare, step 4: a NaN result is +0, and only `v < 0` and `v > 0` order.
+
+### 1.112 A Symbol returned by a Java method
+
+*Fixed in all language versions since 2026-11-23: the former result was a defect that no script can rely on.*
+
+```js
+var s = Symbol("x"); list.add(s); list.get(0) === s   // before: false (wrapped as a Java object)   now: true
+```
+
+- `WrapFactory.wrap` returns a Symbol as it is, like a `Scriptable`; `typeof` of it was `object`.
+
+### 1.113 A hole of a JavaScript array converted to a Java array
+
+*Fixed in all language versions since 2026-11-23: the former result was a defect that no script can rely on.*
+
+```js
+host.holder(['a', , 'c'])   // Object[] parameter; before: the internal NOT_FOUND marker   now: "undefined"
+```
+
+- A hole converts like `undefined`.
+
+### 1.114 `Symbol.prototype` and `%TypedArray%` sealed in a sealed scope
+
+*Fixed in all language versions since 2026-11-24: the former result was a defect that no script can rely on.*
+
+```js
+// a scope made with initSafeStandardObjects(cx, null, true)
+Symbol.prototype.x = 1                  // before: accepted   now: the scope is sealed, the write throws
+Object.getPrototypeOf(Int8Array).y = 1  // before: accepted   now: throws
+```
+
+- A host that seals its standard objects to share them between scripts could still have state written into `Symbol.prototype`,
+  `%TypedArray%` and `%TypedArray%.prototype`. The scope is unchanged when it is not sealed.
+
 ---
 
 ## 2. Platform and embedding
@@ -2027,3 +2076,64 @@ Script s = cx.compileScript(ScriptCompileSpec.fromSource("throw new Error('x')")
   is asked for 1-indexed lines, so a spec with a mapper and no `lineno` looked every position up one line too
   early. The default is 1; `lineno(0)` restores the former numbering.
 - **Why:** line numbers are 1-based in error messages, stack traces and the source map format.
+
+### 2.9 A `ClassShutter` no longer blocks Java arrays of visible classes
+
+*Fixed in all language versions since 2026-11-23: the former result was a defect that no script can rely on.*
+
+```java
+cx.getClassShutterSetter().setClassShutter(n -> n.equals("Host") || n.equals("java.lang.String"));
+// host.names() returns String[]; before: Access to Java class "[Ljava.lang.String;" is prohibited   now: allowed
+```
+
+- The shutter is asked about the innermost component type of an array (never about a primitive), as the array
+  class name `[L...;` is not a class that a shutter can list. An array of a hidden class stays hidden.
+
+### 2.10 `Context.FEATURE_LEGACY_ERROR_PROPERTIES`
+
+*Host opt-in, independent of the language version; off by default.*
+
+```js
+var e = new Error('x'); for (var p in e) print(p);
+// default: nothing    with the feature: message (and name, from the prototype); stack once e is thrown
+typeof CallSite, typeof Error.stackTraceLimit   // default: function, number   with the feature: undefined
+```
+
+- Reproduces the error objects of the script4 engine. The stack is captured when the error is first thrown, so an
+  error that is never thrown has no `stack`. Not a spec behavior: ECMA-262 §20.5.3 makes `message` and `name`
+  non-enumerable and defines no `stack`.
+
+### 2.11 `Context.FEATURE_TYPE_HINTS`
+
+*Host opt-in, independent of the language version; off by default.*
+
+```js
+var x : number = 1; function f(a : String, b : Foo[]) : void {}   // SyntaxError by default; accepted with the feature
+```
+
+- The hints are discarded: they are not part of the AST and `Function.prototype.toString` keeps the source as written.
+  Not ECMAScript syntax.
+
+### 2.12 `Context.FEATURE_LEGACY_OVERLOAD_RESOLUTION`
+
+*Host opt-in, independent of the language version; off by default.*
+
+```java
+public String arr(int[] a); public String arr(String[] a);
+// host.arr(['a'])   default: ambiguous   with the feature: the String[] overload (first element is a string)
+// host.fixed('a') with fixed(String) and fixed(String...)   default: ambiguous   with the feature: fixed(String)
+```
+
+- Reproduces the choices of the script4 engine for scripts written against it.
+
+### 2.13 `MemberPolicy`, `ClassCache.Snapshot` and `Context.FEATURE_NONNULL_PARAMETERS`
+
+*New API and a host opt-in; with no policy installed nothing changes.*
+
+```java
+ClassCache.get(scope).setMemberPolicy(policy);   // hide `secret`, expose `oldName` as `newName`
+// host.secret   before: the method   now: undefined
+```
+
+- With `FEATURE_NONNULL_PARAMETERS`, `host.pick(null)` skips the overloads whose parameter the policy marks non-null.
+

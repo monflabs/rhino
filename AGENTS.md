@@ -38,6 +38,8 @@ README.md for the full list.
 
 - `rhino`: The primary codebase necessary and sufficient to run JavaScript code
 - `rhino-tools`: Contains the shell, debugger, and the "Global" object, which many tests and other Rhino-based tools use
+- `rhino-debugger`, `rhino-debugger-ui`, `rhino-debugger-testkit`: the CDP server, the Swing debugger and the contract tests of
+  the neutral debugger API (`org.monflabs.mozilla.api.debugger` in `rhino`)
 - `tests`: The tests that depend on all of Rhino and also the external tests, including the Mozilla legacy test scripts
   and the test262 tests
 

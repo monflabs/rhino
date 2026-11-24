@@ -124,6 +124,9 @@ decycle {
      * using the ServiceLoader mechanism
      */
 
+    // accepted cycle: Debugger.of is the one entry of the neutral API into its implementation
+    ignoring from: "org.monflabs.mozilla.api.debugger.Debugger", to: "org.monflabs.mozilla.javascript.debuggerimpl.DebuggerImpl"
+
     // accepted cycle: package o.m.j.json contains only one class. Maybe move it to o.m.j
     ignoring from: "org.monflabs.mozilla.javascript.NativeJSON", to: "org.monflabs.mozilla.javascript.json.JsonParser*"
 

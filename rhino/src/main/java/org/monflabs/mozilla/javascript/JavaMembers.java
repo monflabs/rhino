@@ -51,7 +51,13 @@ class JavaMembers {
     JavaMembers(VarScope scope, Class<?> cl, boolean includeProtected) {
         try (Context cx = ContextFactory.getGlobal().enterContext()) {
             ClassShutter shutter = cx.getClassShutter();
-            if (shutter != null && !shutter.visibleToScripts(cl.getName())) {
+            Class<?> shuttered = cl;
+            while (shuttered.isArray()) {
+                shuttered = shuttered.getComponentType();
+            }
+            if (shutter != null
+                    && !shuttered.isPrimitive()
+                    && !shutter.visibleToScripts(shuttered.getName())) {
                 throw Context.reportRuntimeErrorById("msg.access.prohibited", cl.getName());
             }
             this.members = new HashMap<>();
@@ -426,9 +432,34 @@ class JavaMembers {
         }
     }
 
+    private transient MemberPolicy policy;
+
+    private void markNonNullParameters(ExecutableBox box, java.lang.reflect.Executable executable) {
+        if (policy == null
+                || !Context.getContext().hasFeature(Context.FEATURE_NONNULL_PARAMETERS)) {
+            return;
+        }
+        boolean[] mask = null;
+        for (int p = 0; p < executable.getParameterCount(); p++) {
+            if (policy.isParameterNonNull(executable, p)) {
+                if (mask == null) {
+                    mask = new boolean[executable.getParameterCount()];
+                }
+                mask[p] = true;
+            }
+        }
+        box.setNonNullParameters(mask);
+    }
+
     private void reflect(
             Context cx, VarScope scope, boolean includeProtected, boolean includePrivate) {
         var typeFactory = TypeInfoFactory.get(scope);
+
+        policy = ClassCache.get(scope).getMemberPolicy();
+        if (policy != null && !policy.isClassVisible(cl)) {
+            ctors = new NativeJavaMethod(scope, new ExecutableBox[0], cl.getSimpleName());
+            return;
+        }
 
         var accessibleMethods = discoverAccessibleMethods(cl, includeProtected, includePrivate);
         var accessibleFields = getAccessibleFields(includeProtected, includePrivate);
@@ -449,9 +480,16 @@ class JavaMembers {
 
         // Reflect constructors
         Constructor<?>[] constructors = getAccessibleConstructors(includePrivate);
+        if (policy != null) {
+            constructors =
+                    Arrays.stream(constructors)
+                            .filter(c -> policy.publicName(cl, c) != null)
+                            .toArray(Constructor<?>[]::new);
+        }
         ExecutableBox[] ctorMembers = new ExecutableBox[constructors.length];
         for (int i = 0; i != constructors.length; ++i) {
             ctorMembers[i] = new ExecutableBox(constructors[i], typeFactory);
+            markNonNullParameters(ctorMembers[i], constructors[i]);
         }
         ctors = new NativeJavaMethod(scope, ctorMembers, cl.getSimpleName());
     }
@@ -467,7 +505,13 @@ class JavaMembers {
         var grouped =
                 methods.stream()
                         .filter(m -> isStatic == Modifier.isStatic(m.getModifiers()))
-                        .collect(Collectors.groupingBy(Method::getName));
+                        .filter(m -> policy == null || policy.publicName(cl, m) != null)
+                        .collect(
+                                Collectors.groupingBy(
+                                        m ->
+                                                policy == null
+                                                        ? m.getName()
+                                                        : policy.publicName(cl, m)));
 
         for (var entry : grouped.entrySet()) {
             var name = entry.getKey();
@@ -477,7 +521,8 @@ class JavaMembers {
             var i = 0;
 
             for (var method : sameNameMethods) {
-                array[i++] = new ExecutableBox(method, typeFactory, cl);
+                array[i] = new ExecutableBox(method, typeFactory, cl);
+                markNonNullParameters(array[i++], method);
             }
 
             table.put(name, new ExecutableOverload(name, array));
@@ -496,7 +541,13 @@ class JavaMembers {
         var grouped =
                 fields.stream()
                         .filter(f -> isStatic == Modifier.isStatic(f.getModifiers()))
-                        .collect(Collectors.groupingBy(Field::getName));
+                        .filter(f -> policy == null || policy.publicName(cl, f) != null)
+                        .collect(
+                                Collectors.groupingBy(
+                                        f ->
+                                                policy == null
+                                                        ? f.getName()
+                                                        : policy.publicName(cl, f)));
 
         for (var entry : grouped.entrySet()) {
             var name = entry.getKey();

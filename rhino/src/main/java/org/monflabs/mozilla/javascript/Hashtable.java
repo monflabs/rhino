@@ -128,6 +128,7 @@ public class Hashtable implements Serializable, Iterable<Hashtable.Entry> {
                 nv,
                 (k, existing) -> {
                     if (existing == null) {
+                        ScriptRuntime.checkResource(ResourceLimits.Kind.COLLECTION, map.size() + 1);
                         // New value -- insert to end of doubly-linked list
                         if (first == null) {
                             first = last = nv;

@@ -83,10 +83,13 @@ final class NativeError extends ScriptableObject {
 
     static void init(Context cx, VarScope scope, boolean sealed) {
         var ctor = DESCRIPTOR.buildConstructor(cx, scope, new NativeObject(), sealed);
-        NativeCallSite.init(cx, scope, sealed);
-
         ProtoProps protoProps = new ProtoProps();
         ((ScriptableObject) ctor.getPrototypeProperty()).associateValue(ProtoProps.KEY, protoProps);
+        if (cx.hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES)) {
+            makeNameEnumerable((ScriptableObject) ctor.getPrototypeProperty());
+            return;
+        }
+        NativeCallSite.init(cx, scope, sealed);
 
         ctor.defineProperty(
                 "stackTraceLimit",
@@ -98,6 +101,11 @@ final class NativeError extends ScriptableObject {
                 protoProps::getPrepareStackTrace,
                 protoProps::setPrepareStackTrace,
                 0);
+    }
+
+    static void makeNameEnumerable(ScriptableObject proto) {
+        proto.setAttributes("name", proto.getAttributes("name") & ~DONTENUM);
+        proto.setAttributes("message", proto.getAttributes("message") & ~DONTENUM);
     }
 
     static ScriptableObject makeProto(Context cx, VarScope scope, Function ctorObj) {
@@ -120,12 +128,15 @@ final class NativeError extends ScriptableObject {
             Object[] args,
             TopLevel.NativeErrors type) {
         NativeError obj = new NativeError();
+        boolean legacy = cx.hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES);
         ScriptRuntime.setBuiltinProtoAndParent(obj, f, nt, s, type);
         int arglen = args.length;
         if (arglen >= 1) {
             if (!Undefined.isUndefined(args[0])) {
                 ScriptableObject.putProperty(obj, "message", ScriptRuntime.toString(args[0]));
-                obj.setAttributes("message", DONTENUM);
+                if (!legacy) {
+                    obj.setAttributes("message", DONTENUM);
+                }
             }
             if (arglen >= 2) {
                 if (isErrorOptions(args[1])) {
@@ -141,13 +152,16 @@ final class NativeError extends ScriptableObject {
         }
         // All new Errors (but not prototypes) have a default exception installed so that
         // there is a stack trace captured even if they are never thrown.
-        obj.setStackProvider(new EvaluatorException(""));
+        if (!legacy) {
+            obj.setStackProvider(new EvaluatorException(""));
+        }
         return obj;
     }
 
     static NativeError makeAggregate(
             Context cx, JSFunction f, Object nt, VarScope s, Object thisObj, Object[] args) {
         NativeError obj = new NativeError();
+        boolean legacy = cx.hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES);
         ScriptRuntime.setBuiltinProtoAndParent(obj, f, nt, s, TopLevel.NativeErrors.AggregateError);
 
         int arglen = args.length;
@@ -155,7 +169,9 @@ final class NativeError extends ScriptableObject {
             if (arglen >= 2) {
                 if (!Undefined.isUndefined(args[1])) {
                     ScriptableObject.putProperty(obj, "message", ScriptRuntime.toString(args[1]));
-                    obj.setAttributes("message", DONTENUM);
+                    if (!legacy) {
+                        obj.setAttributes("message", DONTENUM);
+                    }
                 }
 
                 if (arglen >= 3) {
@@ -187,7 +203,9 @@ final class NativeError extends ScriptableObject {
         }
         // All new Errors (but not prototypes) have a default exception installed so that
         // there is a stack trace captured even if they are never thrown.
-        obj.setStackProvider(new EvaluatorException(""));
+        if (!legacy) {
+            obj.setStackProvider(new EvaluatorException(""));
+        }
         return obj;
     }
 
@@ -237,13 +255,25 @@ final class NativeError extends ScriptableObject {
         return toString instanceof String ? (String) toString : super.toString();
     }
 
+    /** The stack of a legacy error is captured when it is first thrown. */
+    void setStackProviderIfAbsent(RhinoException re) {
+        if (stackProvider == null && stack == null) {
+            setStackProvider(re);
+        }
+    }
+
     public void setStackProvider(RhinoException re) {
         // We go some extra miles to make sure the stack property is only
         // generated on demand, is cached after the first access, and is
         // overwritable like an ordinary property. Hence this setup with
         // the getter and setter below.
         if (stackProvider == null) {
-            defineProperty(STACK_TAG, this::getStackDelegated, this::setStackDelegated, DONTENUM);
+            Context cx = Context.getCurrentContext();
+            int attrs =
+                    cx != null && cx.hasFeature(Context.FEATURE_LEGACY_ERROR_PROPERTIES)
+                            ? 0
+                            : DONTENUM;
+            defineProperty(STACK_TAG, this::getStackDelegated, this::setStackDelegated, attrs);
         }
         stackProvider = re;
     }

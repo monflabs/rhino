@@ -27,6 +27,10 @@ mode choice is disabled there.
   (`ImporterTopLevel`, with `print`, `console`, `sync`, `setTimeout`/`setInterval` and their
   `clear` functions). Stop works through the instruction observer of the `Context`, and
   interrupts a script that waits on a timer or in Java.
+- **Debug** runs the script in the interpreter under the debugger (`rhino-debugger-ui`), paused
+  at its first statement, in a window attached in memory. **External debugger** does the same and
+  serves the Chrome DevTools Protocol on a port (9229 by default): open `chrome://inspect`, or
+  attach an IDE. Auto-run is off while a debug window is open.
 - **Version**: ES2026 (`Context.VERSION_ECMASCRIPT`) or ES6 (`Context.VERSION_ES6`, the
   behaviour of stock Rhino).
 - **Compiled** or **Interpreted**: Rhino's class compiler or its interpreter.

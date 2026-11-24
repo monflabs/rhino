@@ -112,6 +112,8 @@ public class NativeArrayBuffer extends ScriptableObject {
     }
 
     private NativeArrayBuffer(int len) {
+        ScriptRuntime.checkResource(
+                org.monflabs.mozilla.javascript.ResourceLimits.Kind.BUFFER, len);
         byteOrder = defaultByteOrder();
         try {
             buffer = allocateBuffer(len);

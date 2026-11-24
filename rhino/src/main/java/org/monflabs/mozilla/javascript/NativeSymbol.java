@@ -10,9 +10,11 @@ import static org.monflabs.mozilla.javascript.SymbolKey.TO_PRIMITIVE;
 import static org.monflabs.mozilla.javascript.SymbolKey.TO_STRING_TAG;
 
 import java.io.Serial;
-import java.util.Collections;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 
 /**
  * This is an implementation of the standard "Symbol" type that implements all of its weird
@@ -67,6 +69,9 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
         if (sealed) {
             // Can't seal until we have created all the stuff above!
             ctor.sealObject();
+            if (ctor.getPrototypeProperty() instanceof ScriptableObject proto) {
+                proto.sealObject();
+            }
         }
     }
 
@@ -122,8 +127,7 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
                         ? ScriptRuntime.toString(args[0])
                         : ScriptRuntime.toString(Undefined.instance));
 
-        Map<String, SymbolKey> table = getGlobalMap();
-        return table.computeIfAbsent(name, (k) -> new SymbolKey(k, Symbol.Kind.REGISTERED));
+        return registered(name);
     }
 
     @SuppressWarnings("ReferenceEquality")
@@ -136,7 +140,7 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
             throw ScriptRuntime.throwCustomError(cx, scope, "TypeError", "Not a Symbol");
         }
 
-        if (getGlobalMap().get(sym.getName()) == sym) {
+        if (registeredIfPresent(sym.getName()) == sym) {
             return sym.getName();
         }
 
@@ -218,16 +222,47 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
         return key;
     }
 
-    private static final Map<String, SymbolKey> globalMap =
-            Collections.synchronizedMap(new WeakHashMap<>());
+    // Values are weak: a registered symbol refers to its own name, so a weak key never cleared.
+    private static final Map<String, WeakReference<SymbolKey>> registry = new HashMap<>();
+    private static final ReferenceQueue<SymbolKey> registryQueue = new ReferenceQueue<>();
 
-    /**
-     * Return the Map that stores global symbols for the 'for' and 'keyFor' operations. It must work
-     * across "realms" in the same top-level Rhino scope, so we store it there as an associated
-     * property.
-     */
-    @SuppressWarnings("unchecked")
-    private static Map<String, SymbolKey> getGlobalMap() {
-        return globalMap;
+    private static final class RegistryRef extends WeakReference<SymbolKey> {
+        final String name;
+
+        RegistryRef(SymbolKey key) {
+            super(key, registryQueue);
+            this.name = key.getName();
+        }
+    }
+
+    private static void expungeRegistry() {
+        Reference<? extends SymbolKey> r;
+        while ((r = registryQueue.poll()) != null) {
+            RegistryRef ref = (RegistryRef) r;
+            if (registry.get(ref.name) == ref) {
+                registry.remove(ref.name);
+            }
+        }
+    }
+
+    private static SymbolKey registered(String name) {
+        synchronized (registry) {
+            expungeRegistry();
+            WeakReference<SymbolKey> ref = registry.get(name);
+            SymbolKey key = ref == null ? null : ref.get();
+            if (key == null) {
+                ScriptRuntime.checkResource(ResourceLimits.Kind.SYMBOLS, registry.size() + 1);
+                key = new SymbolKey(name, Symbol.Kind.REGISTERED);
+                registry.put(name, new RegistryRef(key));
+            }
+            return key;
+        }
+    }
+
+    private static SymbolKey registeredIfPresent(String name) {
+        synchronized (registry) {
+            WeakReference<SymbolKey> ref = registry.get(name);
+            return ref == null ? null : ref.get();
+        }
     }
 }

@@ -7,12 +7,15 @@ package org.monflabs.mozilla.playground;
 import java.io.Serial;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.monflabs.mozilla.api.debugger.Debugger;
+import org.monflabs.mozilla.api.debugger.PausedEvent;
 import org.monflabs.mozilla.javascript.Context;
 import org.monflabs.mozilla.javascript.ContextFactory;
 import org.monflabs.mozilla.javascript.EvaluatorException;
@@ -142,10 +145,17 @@ public final class ScriptRunner {
                     });
     private final AtomicReference<Run> current = new AtomicReference<>();
     private final ContextFactory factory = new PlaygroundContextFactory();
+    private ContextFactory debugFactory;
+    private Debugger debugger;
 
     private static final class Run {
         final Thread thread = Thread.currentThread();
         volatile boolean stopRequested;
+        final boolean debug;
+
+        Run(boolean debug) {
+            this.debug = debug;
+        }
     }
 
     private final class PlaygroundContextFactory extends ContextFactory {
@@ -170,7 +180,38 @@ public final class ScriptRunner {
      */
     public Future<?> run(
             Sample sample, String source, Settings settings, Console console, Listener listener) {
-        return worker.submit(() -> execute(sample, source, settings, console, listener));
+        return worker.submit(() -> execute(sample, source, settings, console, listener, false));
+    }
+
+    /**
+     * Runs a script under the debugger of {@link #debugger()}, interpreted whatever the settings
+     * say. The caller attaches a front end first; a pause requested on the debugger holds the
+     * script at its first statement.
+     *
+     * @param sample the sample the script comes from (its files)
+     * @param source the script text, as edited
+     * @param settings the language version
+     * @param console where output goes; it is also sent to the debugger's console
+     * @param listener who to tell
+     * @return the run, cancellable while it waits
+     */
+    public Future<?> debug(
+            Sample sample, String source, Settings settings, Console console, Listener listener) {
+        Debugger dbg = debugger();
+        dbg.clearScripts();
+        return worker.submit(() -> execute(sample, source, settings, console, listener, true));
+    }
+
+    /**
+     * The debugger of debug runs, which use a context factory of their own so that plain runs stay
+     * unaffected.
+     */
+    public synchronized Debugger debugger() {
+        if (debugger == null) {
+            debugFactory = new PlaygroundContextFactory();
+            debugger = Debugger.of(debugFactory);
+        }
+        return debugger;
     }
 
     /**
@@ -183,6 +224,12 @@ public final class ScriptRunner {
             return;
         }
         run.stopRequested = true;
+        if (run.debug) {
+            PausedEvent pause = debugger().currentPause();
+            if (pause != null && !pause.isResumed()) {
+                pause.terminate();
+            }
+        }
         run.thread.interrupt();
     }
 
@@ -198,22 +245,31 @@ public final class ScriptRunner {
     }
 
     private void execute(
-            Sample sample, String source, Settings settings, Console console, Listener listener) {
-        Run run = new Run();
+            Sample sample,
+            String source,
+            Settings settings,
+            Console userConsole,
+            Listener listener,
+            boolean debug) {
+        Run run = new Run(debug);
+        Console console = debug ? tee(userConsole, debugger()) : userConsole;
         current.set(run);
         listener.started();
         long start = System.nanoTime();
         Throwable failure = null;
-        Context cx = factory.enterContext();
+        Context cx = (debug ? debugFactory : factory).enterContext();
         try {
             cx.setLanguageVersion(settings.version().value());
-            cx.setInterpretedMode(settings.interpreted());
+            cx.setInterpretedMode(debug || settings.interpreted());
             cx.setInstructionObserverThreshold(10_000);
             EventLoop loop = new EventLoop();
             cx.setHostJobScheduler(loop);
             TopLevel scope = new ImporterTopLevel(cx);
             install(scope, console, sample.files());
             installTimers(scope, loop);
+            if (debug) {
+                debugger().registerContext(scope, "global");
+            }
             String name = sample.fileName();
             boolean module = cx.isLatestEcmaScript() && MODULE.matcher(source).find();
             Script script = null;
@@ -248,6 +304,26 @@ public final class ScriptRunner {
                         (System.nanoTime() - start) / 1_000_000,
                         terminated ? null : failure,
                         terminated));
+    }
+
+    private static Console tee(Console console, Debugger debugger) {
+        return new Console() {
+            @Override
+            public void out(String text) {
+                console.out(text);
+                debugger.consoleCalled("log", List.of(strip(text)));
+            }
+
+            @Override
+            public void err(String text) {
+                console.err(text);
+                debugger.consoleCalled("error", List.of(strip(text)));
+            }
+
+            private String strip(String text) {
+                return text.endsWith("\n") ? text.substring(0, text.length() - 1) : text;
+            }
+        };
     }
 
     /** The globals the playground adds: print, sync, console, and the sample's other files. */

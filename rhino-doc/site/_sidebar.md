@@ -13,3 +13,4 @@
 
 - **Embedding**
   - [Asynchronous code](/async.md)
+  - [Debugging scripts](/debugger.md)

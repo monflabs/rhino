@@ -307,6 +307,7 @@ an array literal with a spread element, which fails with a `VerifyError` in Rhin
   [--by-feature]` reports the in-scope pass rate.
 - **Java**: the engine compiles for Java 21 and is meant for Java server applications; Android is not supported.
   Java 25 is the reference JDK for test262, since Unicode data comes from the JDK.
+- **Debugger**: a neutral debugger API, a Chrome DevTools Protocol server and a Swing debugger; see [Debugging scripts](/debugger.md).
 - **Playground**: a [browser playground](playground/index.html ':ignore') runs the engine in the page.
 
 ## Scope and conformance

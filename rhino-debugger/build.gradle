@@ -1,0 +1,7 @@
+plugins {
+    id 'rhino.java-conventions'
+}
+
+dependencies {
+    api project(':rhino')
+}

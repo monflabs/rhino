@@ -30,12 +30,18 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import org.monflabs.mozilla.api.debugger.Debugger;
+import org.monflabs.mozilla.api.debugger.InspectOptions;
+import org.monflabs.mozilla.debugger.CdpServer;
+import org.monflabs.mozilla.debugger.inprocess.InProcessCdpServer;
+import org.monflabs.mozilla.debugger.ui.DebuggerPanel;
 import org.monflabs.mozilla.playground.Sample;
 import org.monflabs.mozilla.playground.SampleLibrary;
 import org.monflabs.mozilla.playground.ScriptRunner;
@@ -65,6 +71,8 @@ public final class PlaygroundFrame extends JFrame {
     private final JSplitPane readmeSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
     private final JButton runButton = new JButton("Run");
     private final JButton stopButton = new JButton("Stop");
+    private final JButton debugButton = new JButton("Debug");
+    private final JButton externalButton = new JButton("External debugger");
     private final JComboBox<ScriptRunner.Version> version =
             new JComboBox<>(ScriptRunner.Version.values());
     private final JComboBox<String> mode = new JComboBox<>(new String[] {COMPILED, INTERPRETED});
@@ -74,6 +82,10 @@ public final class PlaygroundFrame extends JFrame {
     private final Timer autoRunTimer = new Timer(500, e -> run());
     private final Timer scratchTimer = new Timer(1000, e -> saveScratch());
     private final transient Font mono;
+    private final boolean dark;
+    private transient AutoCloseable debugServer;
+    private transient JFrame debugWindow;
+    private transient Runnable debugWindowClose;
     private transient Sample sample;
     private transient Sample scratch;
     private transient Future<?> queued;
@@ -87,6 +99,7 @@ public final class PlaygroundFrame extends JFrame {
     public PlaygroundFrame(SampleLibrary library, boolean dark) {
         super("Rhino Playground");
         this.mono = new Font(Font.MONOSPACED, Font.PLAIN, 13);
+        this.dark = dark;
         scratch = loadScratch();
         tree = new SampleTree(library, scratch);
         editor = new EditorPane(this, mono, dark);
@@ -162,6 +175,14 @@ public final class PlaygroundFrame extends JFrame {
         runButton.addActionListener(e -> run());
         stopButton.addActionListener(e -> stop());
         stopButton.setEnabled(false);
+        debugButton.setToolTipText(
+                "Runs the script in the interpreter under a debugger, paused at its first"
+                        + " statement");
+        debugButton.addActionListener(e -> debug());
+        externalButton.setToolTipText(
+                "Runs the script paused at its first statement, and serves the Chrome DevTools"
+                        + " Protocol on a port, for Chrome DevTools or an IDE");
+        externalButton.addActionListener(e -> debugExternal());
         JButton clear = new JButton("Clear console");
         clear.addActionListener(e -> console.clear());
         version.setToolTipText(
@@ -175,6 +196,8 @@ public final class PlaygroundFrame extends JFrame {
         wordWrap.addActionListener(e -> console.setWrap(wordWrap.isSelected()));
         bar.add(runButton);
         bar.add(stopButton);
+        bar.add(debugButton);
+        bar.add(externalButton);
         bar.addSeparator();
         bar.add(new JLabel("Version "));
         bar.add(version);
@@ -238,7 +261,7 @@ public final class PlaygroundFrame extends JFrame {
         readme.show(s.readme() != null ? s.readme() : "## " + s.title());
         setTitle("Rhino Playground - " + s.title());
         prefs.put("sample", s.id());
-        if (autoRun.isSelected()) {
+        if (autoRun.isSelected() && debugWindow == null) {
             run();
         }
     }
@@ -247,7 +270,7 @@ public final class PlaygroundFrame extends JFrame {
         if (sample == scratch) {
             scratchTimer.restart();
         }
-        if (autoRun.isSelected()) {
+        if (autoRun.isSelected() && debugWindow == null) {
             autoRunTimer.restart();
         }
     }
@@ -310,6 +333,15 @@ public final class PlaygroundFrame extends JFrame {
     }
 
     private void run() {
+        closeDebugWindow();
+        if (debugServer != null) {
+            return;
+        }
+        start(false, null);
+    }
+
+    /** Starts a run; a debug run is given what to do when it ended. */
+    private void start(boolean debug, Runnable ended) {
         if (sample == null) {
             return;
         }
@@ -322,45 +354,150 @@ public final class PlaygroundFrame extends JFrame {
         if (!preserve.isSelected()) {
             console.clear();
         }
-        queued =
-                runner.run(
-                        sample.withSource(source),
-                        source,
-                        settings,
-                        console,
-                        new ScriptRunner.Listener() {
-                            @Override
-                            public void started() {
-                                SwingUtilities.invokeLater(
-                                        () -> {
-                                            runButton.setEnabled(false);
-                                            stopButton.setEnabled(true);
-                                            console.status("Running…");
-                                        });
-                            }
+        ScriptRunner.Listener listener =
+                new ScriptRunner.Listener() {
+                    @Override
+                    public void started() {
+                        SwingUtilities.invokeLater(
+                                () -> {
+                                    runButton.setEnabled(false);
+                                    externalButton.setEnabled(false);
+                                    stopButton.setEnabled(true);
+                                    console.status("Running…");
+                                });
+                    }
 
-                            @Override
-                            public void finished(ScriptRunner.Result result) {
-                                if (result.failure() != null) {
-                                    console.err(ScriptRunner.describe(result.failure()) + "\n");
-                                }
-                                SwingUtilities.invokeLater(
-                                        () -> {
-                                            runButton.setEnabled(true);
-                                            stopButton.setEnabled(false);
-                                            console.status(
-                                                    (result.terminated()
-                                                                    ? "Stopped after "
-                                                                    : result.failure() != null
-                                                                            ? "Failed after "
-                                                                            : "Done in ")
-                                                            + result.millis()
-                                                            + " ms ("
-                                                            + settings.describe()
-                                                            + ")");
-                                        });
-                            }
-                        });
+                    @Override
+                    public void finished(ScriptRunner.Result result) {
+                        if (result.failure() != null) {
+                            console.err(ScriptRunner.describe(result.failure()) + "\n");
+                        }
+                        SwingUtilities.invokeLater(
+                                () -> {
+                                    runButton.setEnabled(true);
+                                    externalButton.setEnabled(true);
+                                    stopButton.setEnabled(false);
+                                    console.status(
+                                            (result.terminated()
+                                                            ? "Stopped after "
+                                                            : result.failure() != null
+                                                                    ? "Failed after "
+                                                                    : "Done in ")
+                                                    + result.millis()
+                                                    + " ms ("
+                                                    + settings.describe()
+                                                    + ")");
+                                });
+                        if (ended != null) {
+                            SwingUtilities.invokeLater(ended);
+                        }
+                    }
+                };
+        Sample run = sample.withSource(source);
+        queued =
+                debug
+                        ? runner.debug(run, source, settings, console, listener)
+                        : runner.run(run, source, settings, console, listener);
+    }
+
+    /** Debugs in a window of this process: no socket, the front end attaches in memory. */
+    private void debug() {
+        runner.stop();
+        closeDebugWindow();
+        closeDebugServer();
+        autoRunTimer.stop();
+        Debugger debugger = runner.debugger();
+        debugger.pauseOnStart();
+        InProcessCdpServer.Handle handle =
+                InProcessCdpServer.open(debugger, InspectOptions.parse("", false));
+        DebuggerPanel panel = new DebuggerPanel(mono, dark);
+        JFrame window = new JFrame("Rhino Debugger - " + sample.title());
+        window.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        window.add(panel);
+        window.setSize(1100, 750);
+        window.setLocationRelativeTo(this);
+        debugServer = handle;
+        debugWindow = window;
+        debugWindowClose =
+                () -> {
+                    panel.close();
+                    closeDebugServer();
+                    window.dispose();
+                };
+        boolean[] started = {false};
+        panel.onConnectionChange(
+                (state, detail) -> {
+                    if (state == DebuggerPanel.ConnectionState.CONNECTED && !started[0]) {
+                        started[0] = true;
+                        start(true, null);
+                    }
+                });
+        window.addWindowListener(
+                new WindowAdapter() {
+                    @Override
+                    public void windowClosing(WindowEvent e) {
+                        runner.stop();
+                        closeDebugWindow();
+                    }
+                });
+        window.setVisible(true);
+        panel.attach(handle.clientChannel());
+    }
+
+    /** Closes the debug window of an earlier session, finished or not. */
+    private void closeDebugWindow() {
+        Runnable close = debugWindowClose;
+        debugWindowClose = null;
+        debugWindow = null;
+        if (close != null) {
+            close.run();
+        }
+    }
+
+    /** Debugs from another tool: the script waits at its first statement for a client. */
+    private void debugExternal() {
+        if (runner.isRunning() || debugServer != null) {
+            return;
+        }
+        String port =
+                JOptionPane.showInputDialog(
+                        this, "Port of the DevTools server:", prefs.get("debugPort", "9229"));
+        if (port == null) {
+            return;
+        }
+        try {
+            prefs.put("debugPort", port.strip());
+            Debugger debugger = runner.debugger();
+            debugger.pauseOnStart();
+            CdpServer.Handle handle =
+                    CdpServer.open(
+                            debugger, InspectOptions.parse("127.0.0.1:" + port.strip(), false));
+            debugServer = handle;
+            console.clear();
+            console.out(
+                    "Waiting for a debugger at the first statement.\n"
+                            + "Chrome: chrome://inspect, Configure, add 127.0.0.1:"
+                            + port.strip()
+                            + "\nWebSocket: "
+                            + handle.webSocketUrl()
+                            + "\n");
+            start(true, this::closeDebugServer);
+        } catch (Exception e) {
+            closeDebugServer();
+            console.err("Cannot start the debugger: " + e.getMessage() + "\n");
+        }
+    }
+
+    private void closeDebugServer() {
+        AutoCloseable server = debugServer;
+        debugServer = null;
+        if (server != null) {
+            try {
+                server.close();
+            } catch (Exception ignored) {
+                // gone already
+            }
+        }
     }
 
     private void stop() {

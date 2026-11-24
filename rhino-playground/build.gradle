@@ -10,6 +10,7 @@ application {
 
 dependencies {
     implementation project(':rhino')
+    implementation project(':rhino-debugger-ui')
     implementation libs.rsyntaxtextarea
     // rstaui was built against an older rsyntaxtextarea: keep the direct one only
     implementation(libs.rstaui) {

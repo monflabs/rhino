@@ -34,6 +34,16 @@ public final class ExecutableBox {
     private final List<TypeInfo> argTypes;
     private final TypeInfo returnType;
     private final boolean varArgs;
+    private boolean[] nonNullParameters;
+
+    /** The parameters that reject null, or null when there are none. */
+    public boolean[] getNonNullParameters() {
+        return nonNullParameters;
+    }
+
+    public void setNonNullParameters(boolean[] nonNullParameters) {
+        this.nonNullParameters = nonNullParameters;
+    }
 
     public ExecutableBox(Method method, TypeInfoFactory factory, Class<?> parent) {
         this.member = method;

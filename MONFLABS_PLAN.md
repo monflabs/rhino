@@ -59,6 +59,13 @@ existing code and without slowing the engine down.
 | 2026-10-23 | **M17, 17.3: several classes per script** (user decision, rather than loading the numbers and strings of a class from static tables, which would fit the measured scripts but not lift the invokedynamic limit): the functions of a script spread over more classes on a class limit, as Nashorn's compile units; literals of data compiled as data. |
 | 2026-11-20 | **Exception to the gating rule: a defect that no script can rely on** (a miscompilation, an exception of the engine itself such as a `NullPointerException`) **is fixed in all versions** (`AGENTS.md`), and its `BACKWARD_COMPATIBILITY.md` entry says so: 1.90, 1.92–1.94, 1.103, 1.107, 1.108 and 2.7 (the upstream fixes of 2.6 apply to all versions too). |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
+| 2026-11-23 | **M18–M22: embedding extensions for the Salesforce platform** (replacing the script4 fork's patches by minimal extension points): every new behavior is a host choice (`Context.FEATURE_*` through `ContextFactory.hasFeature`, or a Java API), so it needs no `VERSION_ECMASCRIPT` gate. |
+| 2026-11-23 | **Debugger: interpreted mode only**, layered as in Nashorn: engine hooks, then a neutral `org.monflabs.mozilla.api.debugger` in `rhino`, then frontends: `rhino-debugger` (CDP) and `rhino-debugger-ui` (Swing), both new modules. The Demandware debugger protocol is **not** in this repo (it is an add-on of the Salesforce commerce code base, written against the neutral API). The Nashorn debugger code is relicensed to MPL 2.0 (we own it). |
+| 2026-11-23 | **API versions work as in script4**: one active version set per JVM, owned by the host; the engine only offers a `MemberPolicy` hook in `JavaMembers.reflect`, a typed snapshot/restore of the class cache, and a policy identity check. The host keeps the pool of global scopes, compares versions, flushes the pool and selects the engine. |
+| 2026-11-23 | **`FEATURE_LEGACY_ERROR_PROPERTIES`** makes `name`, `message` and `stack` of errors enumerable (script4's answer to W-8493628) and hides `CallSite`, `Error.prepareStackTrace` and `Error.stackTraceLimit` (hidden, not no-op: user decision), since sealed globals make them unusable. |
+| 2026-11-23 | **`FEATURE_TYPE_HINTS`, phase 1 only**: `var x : T`, `function f(a : T) : T`, `: void` are parsed and discarded, with a Galta-style peek-only scanner and no AST node; every check gated on the flag. |
+| 2026-11-23 | **Overload resolution**: `FEATURE_LEGACY_OVERLOAD_RESOLUTION` and `FEATURE_NONNULL_PARAMETERS` flags for script4's quirks; the array-safe overload cache fix is unflagged (a defect no script can rely on). |
+| 2026-11-23 | Sort with an inconsistent comparator needs no change: it never throws in either backend (verified). |
 
 Every further decision is added to this table when it is made (see [Decision protocol](#decision-protocol)).
 
@@ -928,6 +935,114 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 in a chunk; in a generator that is not async, statements that yield move to a generator called with `yield*`
 (changelog, "Functions too large for the JIT": a function whose method exceeds 8,000 bytes is also split once).
 
+### M18–M22 — Embedding extensions for the Salesforce platform
+
+Source: the comparison of the script4 fork (`core.script-engine-rhino4`, described in
+`~/Documents/Rhino/SalesforceChnages.md`) with this fork (2026-11-23). Goal: drop script4's patches in favor of small,
+host-controlled extension points, without changing the behavior of existing embeddings. Nothing here is gated by
+`VERSION_ECMASCRIPT`: the new behaviors are host choices (`FEATURE_*`, new Java API) and are off by default. Order:
+M18, M19 plus the overload cache fix, M20 (sealed-write check first), M21 (scope-sharing check first), M22.
+Each item needs both backends where relevant, tests, docs (`CHANGELOG_MONFLABS.md`, `BACKWARD_COMPATIBILITY.md` for
+anything observable), the perf gate before committing engine changes, and a commit on `monflabs_enhancements`.
+Starting any item needs the user's go-ahead.
+
+#### M18 — Defects found by the comparison (all versions: no script can rely on them)
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 18.1 | `Array.prototype.sort` comparator result `-0` handled as 0                                  |
+| 18.2 | Wrapped `Symbol` values passed into Java                                                    |
+| 18.3 | The `Symbol.for` registry leak                                                              |
+| 18.4 | `NOT_FOUND` stored into Java arrays                                                         |
+| 18.5 | `ClassShutter` blocking Java arrays                                                         |
+| 18.6 *(done 2026-11-24)* | `Symbol.prototype` and `%TypedArray%` not sealed in a sealed scope (found by 23.0) |
+
+Not scheduled: compiled `Integer` versus interpreted `Double` results, and `StackOverflowError` from JSON under
+`VERSION_ES6`.
+
+#### M19 — Host controls
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 19.1 | `ResourceLimits` (instructions, time, depth, memory hints) per `Context`                    |
+| 19.2 | `InvocationInterceptor` around Java calls from scripts                                      |
+| 19.3 | `ContextFactory.mapThrowable`                                                               |
+| 19.4 | (moved to 20.3) The overload cache is correct today (array arguments rank the same whatever their elements); it must skip JS array arguments once the legacy ranking by first element exists |
+
+#### M20 — Legacy-compatibility flags
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 20.1 | `FEATURE_LEGACY_ERROR_PROPERTIES`. **First**: the sealed-write check (seal the globals, assign `Error.stackTraceLimit` and `Error.prepareStackTrace` in strict and sloppy mode, present and absent) to decide whether a tolerant mode is ever needed. Gates in `NativeError` (`message`, `name`, `stack`, `NativeCallSite.init`, `stackTraceLimit`); test that enumerability is the same before and after reading `stack`. |
+| 20.2 | `FEATURE_TYPE_HINTS` phase 1: peek-only scanner after a binding identifier, a parameter or `)`; label ambiguity (`msg.ambiguous.label`) resolved as in GaltaJS |
+| 20.3 | `FEATURE_LEGACY_OVERLOAD_RESOLUTION`: script4's `preferSignature` rules (typeless `null` giving ambiguity, vararg element comparison, array ranked by its first non-null element, `JSMirror` losing ties, non-vararg beating vararg on a tie) |
+| 20.4 | `FEATURE_NONNULL_PARAMETERS`: non-null parameters rule out overloads (parameters read from `MemberPolicy`, so after 21.1) |
+
+#### M21 — API versions
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 21.0 | **First**: the scope-sharing check. Shared `NativeJavaMethod`s hold the prototype and parent of the scope that triggered reflection; check for a leaked scope or a wrong `Function.prototype`. |
+| 21.1 | `MemberPolicy` consulted by `JavaMembers.reflect` (public name, visibility per member, class visibility), as script4's `getPublicNameIfVisible` / `isVisibleForVersion` |
+| 21.2 | Public typed `ClassCache.snapshot()` / `restore(...)` and the type-factory equivalent, replacing script4's `Object`-typed hack into `getClassCacheMap()` |
+| 21.3 | A policy identity check, so a cache is never restored under another policy                  |
+| 21.4 | Host side (outside this repo): the pool, version comparison, flush on change, engine toggle |
+
+#### M22 — Debugger
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 22.1 *(done 2026-11-24)* | Engine hooks (interpreter only) and `org.monflabs.mozilla.api.debugger` in `rhino`: about 22 neutral types ported from Nashorn (`Debugger`, `DebugListener`, `Breakpoint`, `PausedEvent`, `DebugFrame`, `DebugScope`, `ExecutionContext`, `TraceListener`, `DebuggerFrontend`, ...), built on the existing `javascript/debug` package |
+| 22.2 *(done 2026-11-24)* | `rhino-debugger`: CDP server (WebSocket, in-process transport, `Debugger`, `Runtime` domains), after Nashorn's CDP module |
+| 22.3 *(done 2026-11-24)* | `rhino-debugger-ui`: Swing UI adapted from Nashorn's `debugger-ui`                           |
+| 22.4 *(done 2026-11-24)* | `rhino-playground`: Debug button (in-process, paused at the first statement) and External Debugger button (CDP on a port), Stop, a headless sample test, working as in GaltaJS |
+| 22.5 *(done 2026-11-24)* | Contract test kit so the out-of-repo Demandware debugger can be validated against the neutral API |
+| 22.6 *(done 2026-11-24)* | Relicense the ported Nashorn code to MPL 2.0 (file headers, `LICENSE` notes)                 |
+
+### M23 — Remaining script4 extensions (gap analysis of 2026-11-24)
+
+Source: the Confluence page "Demandware Rhino Customizations Overview" (1.7R3 to 1.7R5) and
+`~/Documents/Rhino/SalesforceChnages.md`, compared with this fork. Decisions of 2026-11-24: E4X is in scope; platform-specific
+behavior (cartridges, `JSMirror`, `Decimal`, Joda, `Record`) becomes a **host hook**, never engine code; the compiled `Integer`
+constants are an open question, not scheduled. Same rules as M18–M22: nothing gated by `VERSION_ECMASCRIPT`, every behavior is a
+host choice (`FEATURE_*` or Java API) and off by default, both backends where relevant, tests, docs, perf gate, a commit each.
+Starting any item needs the user's go-ahead.
+
+| #    | Change                                                                                      |
+|------|---------------------------------------------------------------------------------------------|
+| 23.0 *(done 2026-11-24)* | The checks, by probing the built jars (results below); each missing line gets its tests in the item that fixes it |
+| 23.1 | E4X: `XmlMutationObserver` hook around every DOM mutation (`appendChild`, `insertBefore`, `removeChild`, `replaceChild`, `setAttributeNS`, `removeNamedItemNS`, `renameNode`, `normalize`) and the string length of `new XML(string)`, so a host can account for size; default calls the DOM directly |
+| 23.2 | E4X: `FEATURE_XML_PROLOG`: a leading `<?xml ...?>` and `<!DOCTYPE ...>` accepted by the XML constructor and literals (stripped before parsing; Mozilla bugs 336551, 395853) |
+| 23.3 | E4X: `FEATURE_XML_TRANSFORMER_PRETTY_PRINT`: pretty printing through the JAXP transformer (indent amount, UTF-8, no trailing newline) and a serializer hook |
+| 23.4 | E4X: `x += y` appends only the new items when the left side is the head of the right list; same results, so unflagged; documented in `OPTIMIZATION.md` with a measure |
+| 23.5 | E4X: `FEATURE_XML_SETTINGS_SURVIVE_SEAL`: `XML.sealObject` leaves the settings (`ignoreWhitespace`, `prettyPrinting`, ...) writable; and the namespace copy skipped when printing a top-level node (observable: flagged with 23.3) |
+| 23.6 | `require`: a `ModuleIdResolver` hook (normalizes ids such as `~/x`, so a module loads once, and may deny access) and a module-object customizer (extra read-only properties such as `cartridge`, `superModule`); the engine keeps no notion of cartridge |
+| 23.7 | Equality hook: `ContextFactory.unwrapForEquality(Object)` consulted by `==` and by `shallowEq` for `Wrapper` operands only (the hot path is untouched) |
+| 23.8 | Shared-object locking (sealing of `Symbol.prototype` and `%TypedArray%` moved to 18.6): `ScriptableObject.lockSharedObjects(...)` so that writes to the listed objects throw, beyond `seal()`; the host fills the list while it initializes the shared scope |
+| 23.9 | Conversion hook `ValueConverter` for Java parameter types, with a conversion weight, replacing script4's `JSMirror`, `Decimal`, Joda and `Record` code; and, as flags, `BigDecimal` and `BigInteger` targets, `Wrapper.getDefaultValue` first for primitive targets, no eager narrowing of a boxed `Integer`, natural type for `Object` parameters |
+| 23.10 | Host-registered global error constructors (script4's `IOError`, `XMLStreamError`, `Fault`, `SystemError`) |
+| 23.11 | Java members: `FEATURE_HIDE_SYNTHETIC_MEMBERS` (bridge and synthetic methods and fields not exposed); a hook to convert `static final` array fields (for example to a frozen array); `NativeJavaClass` answers `name` and `constructor` like a function |
+
+Results of 23.0 (a sealed `initSafeStandardObjects(null, true)` scope, `VERSION_ECMASCRIPT`):
+
+| Line | Result | Goes to |
+|------|--------|---------|
+| Sealing of `Symbol.prototype`, `%TypedArray%` and its prototype | **missing**, fixed as 18.6: writes succeed (`Int8Array.prototype`, `GeneratorFunction`, `Math`, `Map.prototype`, `Promise` are sealed) | 23.8 |
+| `JavaMembers` hides synthetic and bridge methods | **missing**: `compareTo(java.lang.Object)` is listed beside `compareTo(C)` | new 23.11 |
+| `static final` array fields | **missing**: `HC.ARR[0] = 9` writes through | new 23.11 (a `StaticFieldConverter` hook, not a hard-coded freeze) |
+| `NativeJavaClass` `name` and `constructor` | **missing**: `HC.name` throws "no public instance field or method named name" | new 23.11 |
+| XML prolog and DOCTYPE | **missing**: both throw | 23.2 |
+| XML pretty printing | works, output `<a>\n  <b>x</b>\n</a>`; not through JAXP | 23.3 |
+| XML `x += y` | **quadratic**: 3,000 appends 4.4 s, 6,000 appends 19 s (4.3 times for double) | 23.4 |
+| XML null namespace URI (`XMLNode.create`) | not reachable from script (`new Namespace("p", null)` works); check in the Java test of 23.1 | 23.1 |
+| Extra global errors (`IOError`, `Fault`, ...) | missing, as expected | 23.10 |
+| `Kit.classOrNull` | no gap: it already uses `Class.forName` | none |
+| Deprecation reporting | no engine counterpart; check `InvocationInterceptor` and `MemberPolicy` cover it in 23.6 | 23.9 |
+
+**Open question (not scheduled):** script4 always uses `Double` for number constants in compiled code; this fork keeps `Integer`
+where it is faster, so a compiled script and an interpreted one can differ (`RhinoOptTest.testOptAndNoneOptEqual`). Script4 calls
+its choice "still required". Should a host flag, or a change in all versions, remove the difference, and what does it cost?
+
 ---
 
 ## Status tracker
@@ -968,3 +1083,9 @@ in a chunk; in a generator that is not async, statements that yield move to a ge
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |
 | 17   | Method splitting                                | done        | 99.1% (17.0–17.4)            | 789550b8d |
 | —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616; 42,272 since 2026-11-23, current) | 397cd54b5 |
+| 18   | Defects found by the comparison                 | done        | n/a (18.1–18.5)                          | — |
+| 19   | Host controls                                   | done        | n/a (19.1–19.3)                          | — |
+| 20   | Legacy-compatibility flags                      | done (20.1-20.4) | n/a                          | — |
+| 21   | API versions                                    | done (21.4 is host side) | n/a                          | — |
+| 22   | Debugger (API, CDP, Swing UI, playground)       | done        | n/a                          | — |
+| 23   | Remaining script4 extensions (E4X, hooks)       | planned     | n/a                          | — |

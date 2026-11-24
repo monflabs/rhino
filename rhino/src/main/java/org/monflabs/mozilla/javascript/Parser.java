@@ -2065,6 +2065,7 @@ public class Parser {
                             }
                         }
 
+                        skipTypeHint();
                         if (matchToken(Token.ASSIGN, true)) {
                             if (wasRest && compilerEnv.isLatestEcmaScript()) {
                                 // a rest parameter has no initializer
@@ -2246,6 +2247,7 @@ public class Parser {
         insideMethod = isMethodDefiniton;
         try {
             Collection<AstNode> patternDefaults = parseFunctionParams(fnNode);
+            skipTypeHint();
             AstNode body = parseFunctionBody(type, fnNode);
             fnNode.setBody(body);
             checkParamsAfterBody(fnNode, isMethodDefiniton);
@@ -4124,6 +4126,35 @@ public class Parser {
      *     declaration.
      * @return the parsed variable list
      */
+    /**
+     * Skips a type hint ({@code : Type}, {@code : void}) after a binding identifier or the
+     * parameters of a function, when the host enabled {@link Context#FEATURE_TYPE_HINTS}. The type
+     * is not kept: a name, qualified names and array suffixes.
+     */
+    private void skipTypeHint() throws IOException {
+        if (!compilerEnv.isTypeHints() || peekToken() != Token.COLON) {
+            return;
+        }
+        consumeToken();
+        int tt = peekToken();
+        if (tt != Token.NAME
+                && tt != Token.VOID
+                && tt != Token.UNDEFINED
+                && tt != Token.NULL
+                && !isReservedWordToken(tt)) {
+            reportError("msg.syntax");
+            return;
+        }
+        consumeToken();
+        while (matchToken(Token.DOT, true)) {
+            mustMatchToken(Token.NAME, "msg.syntax", true);
+        }
+        while (peekToken() == Token.LB) {
+            consumeToken();
+            mustMatchToken(Token.RB, "msg.syntax", true);
+        }
+    }
+
     private VariableDeclaration variables(int declType, int pos, boolean isStatement)
             throws IOException {
         int end;
@@ -4177,6 +4208,7 @@ public class Parser {
                     }
                 }
                 defineSymbol(declType, ts.getString(), inForInit);
+                skipTypeHint();
             }
 
             int lineno = lineNumber(), column = columnNumber();

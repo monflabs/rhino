@@ -504,13 +504,8 @@ public class ArrayLikeAbstractOperations {
                     cmpBuf[1] = y;
                     Object ret = compare.call(cx, scope, compareThis, cmpBuf);
                     double d = ScriptRuntime.toNumber(ret);
-                    int cmp = Double.compare(d, 0);
-                    if (cmp < 0) {
-                        return -1;
-                    } else if (cmp > 0) {
-                        return +1;
-                    }
-                    return 0;
+                    // -0 and NaN count as 0 (23.1.3.30.2 SortCompare)
+                    return d < 0 ? -1 : d > 0 ? +1 : 0;
                 });
     }
 

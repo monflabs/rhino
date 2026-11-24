@@ -1,0 +1,13 @@
+plugins {
+    id 'rhino.java-conventions'
+}
+
+dependencies {
+    api project(':rhino-debugger')
+    implementation libs.rsyntaxtextarea
+    testImplementation project(':rhino')
+}
+
+test {
+    systemProperty 'java.awt.headless', 'true'
+}
