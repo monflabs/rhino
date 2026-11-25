@@ -190,6 +190,7 @@ function f() {
   (in the same function, after the declaration) are not checked; others are checked by one comparison.
 - The bindings of a destructuring declaration (`let [a, b] = …`) are covered too (1.99), and so is a read that a
   `switch` clause reaches by jumping over a declaration (1.91).
+- Plain assignments in eval code (`eval('x = 1'); let x;`) throw since 2026-11-25; its other references did before.
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 

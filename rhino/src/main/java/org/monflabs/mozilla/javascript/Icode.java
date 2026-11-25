@@ -221,9 +221,12 @@ abstract class Icode {
             // functions out
             OUTER_GETVAR = ACTIVATION_SETVAR - 1,
             OUTER_SETVAR = OUTER_GETVAR - 1,
+            // the dead zone of the binding that the store that follows assigns to
+            // (Node#TDZ_BOUND_PROP)
+            CHECK_BOUND_TDZ = OUTER_SETVAR - 1,
 
             // Last icode
-            MIN_ICODE = OUTER_SETVAR;
+            MIN_ICODE = CHECK_BOUND_TDZ;
 
     /** The operand of ITER_OP. */
     static final int ITER_OPEN = 0, ITER_STEP = 1, ITER_REST = 2, ITER_CLOSE = 3;
@@ -474,6 +477,8 @@ abstract class Icode {
                 return "OUTER_GETVAR";
             case OUTER_SETVAR:
                 return "OUTER_SETVAR";
+            case CHECK_BOUND_TDZ:
+                return "CHECK_BOUND_TDZ";
         }
 
         // icode without name

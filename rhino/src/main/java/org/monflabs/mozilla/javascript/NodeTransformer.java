@@ -177,6 +177,14 @@ public class NodeTransformer {
                 }
             }
 
+            if (tdz
+                    && inEval
+                    && (type == Token.SETNAME || type == Token.STRICT_SETNAME)
+                    && node.getIntProp(Node.TDZ_DECLARATION_PROP, 0) == 0
+                    && !TemporalDeadZone.isLexicalName(node.getFirstChild().getString(), scope)) {
+                node.putIntProp(Node.TDZ_BOUND_PROP, 1);
+            }
+
             if (checkDeadZone && node.getIntProp(Node.TDZ_CHECKED_PROP, 0) == 0) {
                 Node replacement =
                         deadZone.check(

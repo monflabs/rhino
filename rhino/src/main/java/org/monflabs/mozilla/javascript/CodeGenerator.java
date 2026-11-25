@@ -1189,6 +1189,7 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                 }
                 {
                     String name = child.getString();
+                    boolean checkTdz = node.getIntProp(Node.TDZ_BOUND_PROP, 0) == 1;
                     visitExpression(child, 0);
                     child = child.getNext();
                     if (child.isBoundLogicalAssignment()) {
@@ -1219,6 +1220,9 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                         break;
                     }
                     visitExpression(child, 0);
+                    if (checkTdz) {
+                        addStringOp(Icode.CHECK_BOUND_TDZ, name);
+                    }
                     addStringOp(type, name);
                     stackChange(-1);
                 }

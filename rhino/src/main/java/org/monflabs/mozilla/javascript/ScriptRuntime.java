@@ -6878,6 +6878,19 @@ public class ScriptRuntime {
     }
 
     /**
+     * Throws a ReferenceError if the binding of name in bound, the scope that {@link #bind} found
+     * for it, is a let/const binding in its temporal dead zone. Object environments have none, and
+     * reading them could run a getter.
+     */
+    static void checkBoundInitialized(VarScope bound, String name) {
+        if (bound instanceof ScopeObject
+                && (!(bound instanceof TopLevel)
+                        || ((TopLevel) bound).hasLexicalDeclaration(name))) {
+            checkInitialized(bound.get(name, bound), name);
+        }
+    }
+
+    /**
      * Called when code assigns to a const binding, which has no effect: under {@link
      * Context#VERSION_ECMASCRIPT} it is a TypeError, also outside strict mode.
      */

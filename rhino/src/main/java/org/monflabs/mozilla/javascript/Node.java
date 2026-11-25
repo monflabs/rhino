@@ -116,7 +116,10 @@ public class Node implements Iterable<Node> {
             // a TRY whose finally block only runs when an exception leaves the try block: the
             // code that completes it otherwise has done the work of the block already
             FINALLY_ON_THROW_PROP = 54,
-            LAST_PROP = FINALLY_ON_THROW_PROP,
+            // SETNAME of eval code that may assign to a let/const of the code around the eval:
+            // its temporal dead zone is checked on the binding found
+            TDZ_BOUND_PROP = 55,
+            LAST_PROP = TDZ_BOUND_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -565,6 +568,8 @@ public class Node implements Iterable<Node> {
                 return "tdz_declaration_prop";
             case TDZ_CHECKED_PROP:
                 return "tdz_checked_prop";
+            case TDZ_BOUND_PROP:
+                return "tdz_bound_prop";
             case SPREAD_ARGS_PROP:
                 return "spread_args_prop";
             case LEXICAL_PROP:

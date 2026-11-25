@@ -40,6 +40,19 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Assignments in eval code to a `let` in its temporal dead zone (2026-11-25)
+
+Gated by `VERSION_ECMASCRIPT`, already described in `BACKWARD_COMPATIBILITY.md` 1.2. test262 does not cover it. Test:
+`TemporalDeadZoneWritesTest`.
+
+- `(function () { eval('x = 1'); let x; })()` did not throw a ReferenceError: the checks of writes are placed where the
+  compiler sees the declaration, and eval code does not see those of the code around it (its reads were checked).
+  The same goes for a `const` (a TypeError before), a class, a block, a global `let` and an indirect eval.
+- `NodeTransformer` marks the assignments of eval code that are not to a lexical binding of its own
+  (`Node.TDZ_BOUND_PROP`), and the interpreter, which runs all eval code, checks the binding that was found before
+  the store (`CHECK_BOUND_TDZ`). Properties of `with` objects and of the global object are not read. Other code has no
+  new check.
+
 ### Cheaper compilation of small scripts and of scripts without `let` (2026-11-25)
 
 No behavior change, nothing gated; `test262.properties` is unchanged. Test: `LexicalBindingsFlagTest`. The perf gate

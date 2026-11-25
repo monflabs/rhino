@@ -809,6 +809,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
         instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
+        instructionObjs[base + Icode.CHECK_BOUND_TDZ] = new DoCheckBoundTdz();
         instructionObjs[base + Icode.ITER_OP] = new DoIterOp();
         instructionObjs[base + Icode.ITER_GUARD] = new DoIteratorGuard();
         instructionObjs[base + Icode.REQUIRE_OBJECT] = new DoRequireObject();
@@ -3633,6 +3634,15 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             ScriptRuntime.checkInitialized(frame.stack[frame.stackTop], state.stringReg);
+            return null;
+        }
+    }
+
+    private static class DoCheckBoundTdz extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            ScriptRuntime.checkBoundInitialized(
+                    (VarScope) frame.stack[frame.stackTop - 1], state.stringReg);
             return null;
         }
     }
