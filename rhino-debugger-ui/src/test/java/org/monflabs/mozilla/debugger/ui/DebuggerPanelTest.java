@@ -101,6 +101,15 @@ public class DebuggerPanelTest {
         throw new AssertionError("condition not met within " + TIMEOUT + "s");
     }
 
+    /** Sets a breakpoint and waits until the server has it: a script may run right after. */
+    private void setBreakpoint(final String url, final int line) throws Exception {
+        onEdt(() -> panel.session().toggleBreakpoint(url, line));
+        waitUntil(
+                () ->
+                        panel.session().breakpoints().stream()
+                                .anyMatch(b -> b.url().equals(url) && b.serverId() != null));
+    }
+
     protected interface EdtCondition {
         boolean holds();
     }
@@ -120,7 +129,7 @@ public class DebuggerPanelTest {
 
         // set a breakpoint by url and run a script reporting that url
         final String url = "file:///work/panel.js";
-        onEdt(() -> panel.session().toggleBreakpoint(url, 1));
+        setBreakpoint(url, 1);
         final CompletableFuture<Object> done = new CompletableFuture<>();
         engine.put(TestEngine.FILENAME, url);
         worker.submit(
@@ -151,7 +160,7 @@ public class DebuggerPanelTest {
         waitUntil(() -> connState.get() == DebuggerPanel.ConnectionState.CONNECTED);
 
         final String url = "file:///work/hang.js";
-        onEdt(() -> panel.session().toggleBreakpoint(url, 0));
+        setBreakpoint(url, 0);
         final CompletableFuture<Object> done = new CompletableFuture<>();
         engine.put(TestEngine.FILENAME, url);
         worker.submit(

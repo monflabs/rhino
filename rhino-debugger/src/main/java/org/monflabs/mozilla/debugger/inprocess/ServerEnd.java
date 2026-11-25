@@ -55,7 +55,9 @@ final class ServerEnd implements CdpTransport {
     }
 
     @Override
-    public void send(final String text) throws IOException {
+    public synchronized void send(final String text) throws IOException {
+        // one message at a time, as a socket delivers them: the paused script and the session
+        // both send
         if (closed.get()) {
             throw new IOException("connection closed");
         }

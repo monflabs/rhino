@@ -187,6 +187,19 @@ public class DebugSessionTest {
         pumpUntil(() -> session.state() == DebugSession.State.RUNNING);
     }
 
+    /** Sets a breakpoint and waits until the server has it: a script may run right after. */
+    protected void setBreakpoint(final String url, final int line) {
+        session.toggleBreakpoint(url, line);
+        pumpUntil(
+                () ->
+                        session.breakpoints().stream()
+                                .anyMatch(
+                                        b ->
+                                                b.url().equals(url)
+                                                        && b.line() == line
+                                                        && b.serverId() != null));
+    }
+
     protected CompletableFuture<Object> runScript(final String fileName, final String source) {
         engine.put(TestEngine.FILENAME, fileName);
         final CompletableFuture<Object> done = new CompletableFuture<>();
@@ -231,8 +244,7 @@ public class DebugSessionTest {
     @Test
     public void clearScriptsDropsScriptsButKeepsBreakpointsAndConnection() {
         attach();
-        session.toggleBreakpoint("file:///work/keep.js", 1);
-        ui.pump();
+        setBreakpoint("file:///work/keep.js", 1);
         runScript("gone.js", "1 + 1;");
         pumpUntil(() -> !session.scripts().isEmpty());
         assertTrue(recorder.scripts.stream().anyMatch(s -> s.url().endsWith("/gone.js")));
@@ -291,8 +303,7 @@ public class DebugSessionTest {
         attach();
         // the script does not exist yet; set the breakpoint by url
         final String url = "file:///work/loop.js";
-        session.toggleBreakpoint(url, 1);
-        ui.pump();
+        setBreakpoint(url, 1);
         engine.put(TestEngine.FILENAME, "loop.js");
         // give the url the shape the engine will report (file:///.../loop.js won't match a bare
         // name)
@@ -329,8 +340,7 @@ public class DebugSessionTest {
     public void framesScopesEvaluateAndProperties() {
         attach();
         final String url = "file:///work/vars.js";
-        session.toggleBreakpoint(url, 2);
-        ui.pump();
+        setBreakpoint(url, 2);
         final CompletableFuture<Object> done =
                 runScriptAtUrl(url, "var x = 41;\nvar y = { a: 1 };\ny;");
         pumpUntil(() -> recorder.lastPause != null);
@@ -381,8 +391,7 @@ public class DebugSessionTest {
     public void stalePropertyResultsAreDroppedAfterResume() {
         attach();
         final String url = "file:///work/stale.js";
-        session.toggleBreakpoint(url, 1);
-        ui.pump();
+        setBreakpoint(url, 1);
         final CompletableFuture<Object> done = runScriptAtUrl(url, "var o = { a: 1 };\no;");
         pumpUntil(() -> recorder.lastPause != null);
         final RemoteValue scope = recorder.lastPause.frames().get(0).scopeChain().get(0).object();
@@ -402,8 +411,7 @@ public class DebugSessionTest {
     public void steppingAdvancesLineByLine() {
         attach();
         final String url = "file:///work/step.js";
-        session.toggleBreakpoint(url, 0);
-        ui.pump();
+        setBreakpoint(url, 0);
         final CompletableFuture<Object> done =
                 runScriptAtUrl(url, "var a = 1;\nvar b = 2;\nvar c = 3;\nc;");
         pumpUntil(() -> recorder.lastPause != null);
@@ -422,8 +430,7 @@ public class DebugSessionTest {
     public void detachAndReattachReArmsBreakpoints() {
         attach();
         final String url = "file:///work/rearm.js";
-        session.toggleBreakpoint(url, 1);
-        ui.pump();
+        setBreakpoint(url, 1);
         // first run hits
         CompletableFuture<Object> done = runScriptAtUrl(url, "var a = 1;\na = a + 1;\na;");
         pumpUntil(() -> recorder.lastPause != null);
@@ -453,8 +460,7 @@ public class DebugSessionTest {
     public void detachWhilePausedResumesTheScript() {
         attach();
         final String url = "file:///work/hang.js";
-        session.toggleBreakpoint(url, 0);
-        ui.pump();
+        setBreakpoint(url, 0);
         final CompletableFuture<Object> done = runScriptAtUrl(url, "var a = 1;\na;");
         pumpUntil(() -> recorder.lastPause != null);
         assertEquals(session.state(), DebugSession.State.PAUSED);

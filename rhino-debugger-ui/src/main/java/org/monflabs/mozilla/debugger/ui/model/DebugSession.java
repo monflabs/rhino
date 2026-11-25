@@ -91,6 +91,10 @@ public final class DebugSession {
 
     private CdpConnection connection;
     private State state = State.DETACHED;
+
+    /** The listener of the connection in use, or being opened; null when detached. */
+    private ConnectionListener currentListener;
+
     private String attachedUrl;
     private PauseState pauseState;
     private int selectedFrame;
@@ -135,11 +139,20 @@ public final class DebugSession {
         }
         attachedUrl = wsUrl;
         setState(State.CONNECTING);
-        CdpConnection.connect(wsUrl, new ConnectionListener())
+        final ConnectionListener listener = new ConnectionListener();
+        currentListener = listener;
+        CdpConnection.connect(wsUrl, listener)
                 .whenComplete(
                         (conn, error) ->
                                 run(
                                         () -> {
+                                            if (listener != currentListener) {
+                                                // detached, or attached elsewhere, meanwhile
+                                                if (conn != null) {
+                                                    conn.close();
+                                                }
+                                                return;
+                                            }
                                             if (error != null) {
                                                 final String message =
                                                         error.getCause() instanceof CdpException cdp
@@ -167,11 +180,13 @@ public final class DebugSession {
         }
         attachedUrl = null;
         setState(State.CONNECTING);
-        connection = CdpConnection.open(channel, new ConnectionListener());
+        currentListener = new ConnectionListener();
+        connection = CdpConnection.open(channel, currentListener);
         enableAndArm();
     }
 
     private void enableAndArm() {
+        final ConnectionListener listener = currentListener;
         connection.call("Runtime.enable", null);
         connection
                 .call("Debugger.enable", null)
@@ -179,6 +194,9 @@ public final class DebugSession {
                         (result, error) ->
                                 run(
                                         () -> {
+                                            if (listener != currentListener) {
+                                                return;
+                                            }
                                             if (error != null) {
                                                 onClosed(String.valueOf(error.getMessage()));
                                                 return;
@@ -237,9 +255,11 @@ public final class DebugSession {
                                                                                 // RUNNING if we are
                                                                                 // not already
                                                                                 // showing a pause.
-                                                                                if (state
-                                                                                        != State
-                                                                                                .PAUSED) {
+                                                                                if (listener
+                                                                                                == currentListener
+                                                                                        && state
+                                                                                                != State
+                                                                                                        .PAUSED) {
                                                                                     setState(
                                                                                             State
                                                                                                     .RUNNING);
@@ -250,15 +270,18 @@ public final class DebugSession {
 
     /** Detaches: resumes first if paused, then closes the connection. */
     public void detach() {
-        if (connection == null) {
+        if (state == State.DETACHED) {
             return;
         }
-        if (state == State.PAUSED) {
-            connection.call("Debugger.resume", null);
+        currentListener = null;
+        if (connection != null) {
+            if (state == State.PAUSED) {
+                connection.call("Debugger.resume", null);
+            }
+            final CdpConnection closing = connection;
+            connection = null;
+            closing.close();
         }
-        final CdpConnection closing = connection;
-        connection = null;
-        closing.close();
         forgetServerState();
         attachedUrl = null;
         setState(State.DETACHED);
@@ -411,6 +434,7 @@ public final class DebugSession {
             params.put("condition", bp.condition());
         }
         final CompletableFuture<Void> armed = new CompletableFuture<>();
+        final ConnectionListener listener = currentListener;
         connection
                 .call("Debugger.setBreakpointByUrl", params)
                 .whenComplete(
@@ -418,7 +442,9 @@ public final class DebugSession {
                                 run(
                                         () -> {
                                             try {
-                                                if (error != null || result == null) {
+                                                if (error != null
+                                                        || result == null
+                                                        || listener != currentListener) {
                                                     return;
                                                 }
                                                 final Breakpoint current =
@@ -686,15 +712,29 @@ public final class DebugSession {
 
     // ---- event handling ----
 
+    /**
+     * Its callbacks are queued on the executor: those of a connection that is not the current one
+     * any more, which may run after the next attach, are dropped.
+     */
     private final class ConnectionListener implements CdpConnection.Listener {
         @Override
         public void onEvent(final String method, final Map<String, Object> params) {
-            run(() -> handleEvent(method, params));
+            run(
+                    () -> {
+                        if (this == currentListener) {
+                            handleEvent(method, params);
+                        }
+                    });
         }
 
         @Override
         public void onClosed(final String reason) {
-            run(() -> DebugSession.this.onClosed(reason));
+            run(
+                    () -> {
+                        if (this == currentListener) {
+                            DebugSession.this.onClosed(reason);
+                        }
+                    });
         }
     }
 
@@ -856,6 +896,7 @@ public final class DebugSession {
 
     private void onClosed(final String reason) {
         connection = null;
+        currentListener = null;
         forgetServerState();
         final boolean wasConnected = state != State.DETACHED;
         attachedUrl = null;

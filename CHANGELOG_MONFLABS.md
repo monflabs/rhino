@@ -40,6 +40,16 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Debugger: lost messages and stale connections (2026-11-25)
+
+Not gated, no engine change. Tests: `ServerEndTest`, `DebugSessionReattachTest`.
+
+- The in-process server end sent messages from the paused script's thread and the session's at the same time,
+  although `CdpTransport.send` may be called from any thread: the client mixed them up and dropped both.
+- `DebugSession` handled the events and the close of a previous connection, which run later on its executor, as those
+  of the current one: attaching right after detaching could end detached. Detaching while connecting now cancels.
+- The tests of `rhino-debugger-ui` wait until the server has a breakpoint before they run the script.
+
 ### Named class expressions in a parameter list (2026-11-25)
 
 A defect that no script can rely on (a miscompilation), in code that only `VERSION_ECMASCRIPT` accepts. Test:
