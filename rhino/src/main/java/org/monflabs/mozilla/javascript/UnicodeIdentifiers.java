@@ -6,6 +6,9 @@ package org.monflabs.mozilla.javascript;
  */
 public final class UnicodeIdentifiers {
 
+    /** The bits of 0-9, and of A-Z, _ and a-z. */
+    private static final long[] ASCII_ID_CONTINUE = {0x03FF000000000000L, 0x07FFFFFE87FFFFFEL};
+
     private UnicodeIdentifiers() {}
 
     /**
@@ -28,10 +31,7 @@ public final class UnicodeIdentifiers {
      */
     public static boolean isIdContinue(int c) {
         if (c < 0x80) {
-            return (c >= 'a' && c <= 'z')
-                    || (c >= 'A' && c <= 'Z')
-                    || (c >= '0' && c <= '9')
-                    || c == '_';
+            return c >= 0 && (ASCII_ID_CONTINUE[c >> 6] & (1L << c)) != 0;
         }
         return Character.isUnicodeIdentifierPart(c)
                 && !isPatternSyntax(c)

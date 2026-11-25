@@ -1337,6 +1337,7 @@ public class Parser {
         root.setBaseLineno(baseLineno);
         root.setEndLineno(ts.getLineno());
         root.doAnnexBHoisting();
+        root.setNoLexicalBindings(!lexicalBindings);
         return root;
     }
 
@@ -4273,7 +4274,13 @@ public class Parser {
         defineSymbol(Symbol.Type.fromToken(declType), name, ignoreNotInBlock);
     }
 
+    /** Whether a let, const or class binding was declared, see AstRoot#hasNoLexicalBindings. */
+    boolean lexicalBindings;
+
     void defineSymbol(Symbol.Type declType, String name, boolean ignoreNotInBlock) {
+        if (declType == Symbol.Type.LET || declType == Symbol.Type.CONST) {
+            lexicalBindings = true;
+        }
         if ((declType == Symbol.Type.VAR || declType == Symbol.Type.FUNCTION_VAR)
                 && currentScriptOrFn instanceof FunctionNode
                 && ((FunctionNode) currentScriptOrFn).getSplitOwner() != null) {

@@ -353,8 +353,11 @@ final class VariableAllocation {
             return false;
         }
         String name = nameSource.getString();
+        if (nameSource.getScope() != null || scope.getDefiningScope(name) != null) {
+            return false;
+        }
         Integer var = ((FunctionNode) tree).getOuterVar(name);
-        if (var == null || nameSource.getScope() != null || scope.getDefiningScope(name) != null) {
+        if (var == null) {
             return false;
         }
         node.putIntProp(Node.OUTER_VAR_PROP, var);

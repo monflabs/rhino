@@ -40,6 +40,24 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Cheaper compilation of small scripts and of scripts without `let` (2026-11-25)
+
+No behavior change, nothing gated; `test262.properties` is unchanged. Test: `LexicalBindingsFlagTest`. The perf gate
+against `perf-baseline` had `evalcache` and `compile.earley-boyer` beyond their bands, from compile-time work added
+by several commits (found by bisecting). See "Compile-time work only where it is needed" in
+[OPTIMIZATION.md](OPTIMIZATION.md).
+
+- The temporal dead zone is not checked in a script that declares no `let`, `const` or class, and an enclosing `with`
+  is only looked up when the check needs it. `AstRoot.hasNoLexicalBindings` is new.
+- Scope sets of `NodeTransformer` allocated on use; no stream in `JSDescriptor.Builder.build`; a cheaper order of the
+  checks in `VariableAllocation.markOuterVar`; a bit table for the ASCII identifier characters.
+- Perf gate against the previous commit, two runs: `run.evalcache` compiled −13% to −18%, interpreted −7% to −14%,
+  `compile.earley-boyer.int.ecma` −7%. The flags of these runs (`stringmethods.cmp.ecma`, `typedarray.cmp.ecma`, then
+  `v8-splay.cmp.es6`) are JIT states: the compiled classes of the three scripts are byte-identical, alone they are
+  level, and the previous commit also reaches the slow mode of `stringmethods`. Against `perf-baseline`, `evalcache`
+  is back in its band; `compile.earley-boyer` is not (interpreted +26% ECMASCRIPT and +14% ES6, compiled +14% ES6, on a
+  busy machine).
+
 ### M22.1: the neutral debugger API and its implementation (2026-11-24)
 
 New Java API, nothing gated, no change to the engine's hot paths (the hooks are the existing `javascript.debug`

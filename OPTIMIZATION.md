@@ -978,6 +978,26 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   JetStream 3, interpreted: 457 MB held after its first run → 178 MB (224 MB compiled); the tree was 280 MB, and
   the workload ran out of memory in the harness's 1 GB heap within 8 runs. All versions.
 
+### Compile-time work only where it is needed (2026-11-25)
+
+- **What.** (1) `NodeTransformer` skips `TemporalDeadZone.check`, which ran on every node, when the script declares no
+  `let`, `const` or class. `Parser.defineSymbol` records such declarations, and the flag is kept on the `AstRoot`.
+  (2) Whether a node is inside a `with` was computed, with an iterator, for every node; the check now does it
+  only once it needs the answer. (3) The three identity sets of scopes are allocated on first use, and
+  `JSDescriptor.Builder.build` uses a loop rather than a stream: these are fixed costs, which dominate a
+  one-line `eval`. (4) `VariableAllocation.markOuterVar` tests the scope of the name before the map lookups of
+  `getOuterVar`. (5) `UnicodeIdentifiers.isIdContinue` tests ASCII characters with a bit table.
+- **When it applies.** (1) and (2) under `VERSION_ECMASCRIPT`, the only version that checks the dead zone; the others
+  in all versions.
+- **Correctness.** The flag defaults to "may have lexical bindings", so a tree that does not come from `Parser.parse`
+  is checked as before. `IRFactory` clears it when it declares a pattern's bindings itself, which happens
+  after parsing. Without a lexical binding in the script there is nothing to classify: the bindings of an enclosing
+  scope (code of an `eval`) were not classified before either.
+- **Gain.** `evalcache` compiled, alone: 17.4 → 15.2 ms, the time of `perf-baseline`, and 7,027 → 5,707 bytes
+  allocated per `eval`. Compilation of `earley-boyer`, interpreted, `VERSION_ECMASCRIPT`: −7% in the gate (4.00 →
+  3.69 ms alone before (3)), ES6 level. What remains to `perf-baseline` is mostly the scans of
+  `VariableAllocation` and `CodeGenUtils.readsThis`.
+
 ### Algorithms of built-ins
 
 - **BigInt literals and `BigInt()` of long strings** (2026-10-26). `new BigInteger(String)` takes a time

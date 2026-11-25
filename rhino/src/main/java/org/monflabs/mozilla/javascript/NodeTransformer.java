@@ -16,6 +16,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
 import org.monflabs.mozilla.javascript.ast.AstNode;
+import org.monflabs.mozilla.javascript.ast.AstRoot;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.ast.Jump;
 import org.monflabs.mozilla.javascript.ast.Name;
@@ -47,6 +48,11 @@ public class NodeTransformer {
             useStrictMode = true;
         }
         tdz = env.isLatestEcmaScript();
+        if (tree instanceof AstRoot) {
+            checkDeadZone = tdz && !((AstRoot) tree).hasNoLexicalBindings();
+        } else if (deadZone == null) {
+            checkDeadZone = tdz;
+        }
         inEval = env.isInEval();
         deadZone = new TemporalDeadZone(inEval);
         activationNames = env.getActivationNames();
@@ -132,7 +138,7 @@ public class NodeTransformer {
                     && node instanceof Scope
                     && TemporalDeadZone.isSwitchScope((Scope) node)
                     && ((Scope) node).getSymbolTable() != null
-                    && uninitializedSwitches.add((Scope) node)) {
+                    && scopeMarks().uninitializedSwitches.add((Scope) node)) {
                 TemporalDeadZone.initSwitchLexicalsUninitialized((Scope) node);
             }
             if (createScopeObjects
@@ -143,8 +149,9 @@ public class NodeTransformer {
                         && registerLexicals != null
                         && registerLexicals.containsAll(newScope.getSymbolTable().values())) {
                     // all its bindings live in registers: no scope object
-                    unwrappedScopes.add(newScope);
-                } else if (newScope.getSymbolTable() != null && wrappedScopes.add(newScope)) {
+                    scopeMarks().unwrapped.add(newScope);
+                } else if (newScope.getSymbolTable() != null
+                        && scopeMarks().wrapped.add(newScope)) {
                     // transform to let statement so we get a with statement
                     // created to contain scoped let variables
                     Node let = new Node(type == Token.ARRAYCOMP ? Token.LETEXPR : Token.LET);
@@ -170,10 +177,10 @@ public class NodeTransformer {
                 }
             }
 
-            if (tdz && node.getIntProp(Node.TDZ_CHECKED_PROP, 0) == 0) {
+            if (checkDeadZone && node.getIntProp(Node.TDZ_CHECKED_PROP, 0) == 0) {
                 Node replacement =
                         deadZone.check(
-                                tree, parent, previous, node, scope, createScopeObjects, inWith());
+                                tree, parent, previous, node, scope, createScopeObjects, loops);
                 if (replacement != node) {
                     node = replacement;
                     type = node.getType();
@@ -183,8 +190,10 @@ public class NodeTransformer {
             switch (type) {
                 case Token.COPY_SCOPE:
                     if (!createScopeObjects
-                            || unwrappedScopes.contains(scope)
-                            || unwrappedScopes.contains(scope.getParentScope())) {
+                            || (scopeMarks != null
+                                    && (scopeMarks.unwrapped.contains(scope)
+                                            || scopeMarks.unwrapped.contains(
+                                                    scope.getParentScope())))) {
                         // bindings live in registers: no closure can observe a per-iteration copy
                         node = replaceCurrent(parent, previous, node, new Node(Token.EMPTY));
                     }
@@ -411,7 +420,7 @@ public class NodeTransformer {
                             if (createWith && inRegisters(node)) {
                                 // all its bindings live in registers: initialized as variables
                                 createWith = false;
-                                unwrappedScopes.add((Scope) node);
+                                scopeMarks().unwrapped.add((Scope) node);
                             }
                             node = visitLet(createWith, parent, previous, node);
                             break;
@@ -664,7 +673,7 @@ public class NodeTransformer {
         if (!(tree instanceof FunctionNode) || !((FunctionNode) tree).hasSelfNameBinding()) {
             return false;
         }
-        if (inWith()) {
+        if (inWith(loops)) {
             return false;
         }
         if (directEvalTree != tree) {
@@ -967,10 +976,13 @@ public class NodeTransformer {
     /** Whether the temporal dead zone is checked: code compiled for VERSION_ECMASCRIPT. */
     private boolean tdz;
 
+    /** Whether the script may have references to check: not when it declares no let or const. */
+    private boolean checkDeadZone;
+
     private TemporalDeadZone deadZone;
 
     /** Whether the node being transformed is inside a with statement of its function. */
-    private boolean inWith() {
+    static boolean inWith(Iterable<Node> loops) {
         for (Node loop : loops) {
             if (loop.getType() == Token.WITH) {
                 return true;
@@ -1017,13 +1029,6 @@ public class NodeTransformer {
      */
     private Set<Symbol> registerLexicals;
 
-    /** The switch scopes whose register bindings are already made uninitialized on entry. */
-    private final Set<Scope> uninitializedSwitches =
-            Collections.newSetFromMap(new IdentityHashMap<>());
-
-    /** The block scopes left without a binding in a scope object: they need no runtime scope. */
-    private final Set<Scope> unwrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
-
     /**
      * In a function with an activation object, the names of its parameters and variables that
      * nested functions refer to, which it reads at a fixed position of the activation (null: none).
@@ -1068,8 +1073,26 @@ public class NodeTransformer {
         }
     }
 
-    /** Block scopes already wrapped in a LET for their scope object. */
-    private final Set<Scope> wrappedScopes = Collections.newSetFromMap(new IdentityHashMap<>());
+    /** The scopes already handled, by identity: allocated on use, most scripts have none. */
+    private static final class ScopeMarks {
+        /** Switches whose bindings in registers were made uninitialized. */
+        final Set<Scope> uninitializedSwitches = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        /** Block scopes whose bindings all live in registers: they have no scope object. */
+        final Set<Scope> unwrapped = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        /** Block scopes already wrapped in a LET for their scope object. */
+        final Set<Scope> wrapped = Collections.newSetFromMap(new IdentityHashMap<>());
+    }
+
+    private ScopeMarks scopeMarks;
+
+    private ScopeMarks scopeMarks() {
+        if (scopeMarks == null) {
+            scopeMarks = new ScopeMarks();
+        }
+        return scopeMarks;
+    }
 
     /**
      * Whether "let x;" must store undefined: for code compiled for VERSION_ECMASCRIPT (the binding

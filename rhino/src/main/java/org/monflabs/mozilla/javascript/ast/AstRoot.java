@@ -24,6 +24,7 @@ import org.monflabs.mozilla.javascript.Token;
 public class AstRoot extends ScriptNode {
 
     private SortedSet<Comment> comments;
+    private boolean noLexicalBindings;
 
     {
         type = Token.SCRIPT;
@@ -33,6 +34,18 @@ public class AstRoot extends ScriptNode {
 
     public AstRoot(int pos) {
         super(pos);
+    }
+
+    /**
+     * Whether the script is known to declare no let, const or class binding, at any depth, once
+     * transformed by IRFactory (which declares the bindings of the patterns).
+     */
+    public boolean hasNoLexicalBindings() {
+        return noLexicalBindings;
+    }
+
+    public void setNoLexicalBindings(boolean noLexicalBindings) {
+        this.noLexicalBindings = noLexicalBindings;
     }
 
     /**

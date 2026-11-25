@@ -134,7 +134,7 @@ final class TemporalDeadZone {
             Node reference,
             Scope scope,
             boolean createScopeObjects,
-            boolean inWith) {
+            Iterable<Node> loops) {
         if (!(reference instanceof Name)) {
             return NONE; // a name created by the compiler
         }
@@ -156,7 +156,7 @@ final class TemporalDeadZone {
         if (top.getType() == Token.SCRIPT && defining == top && inEval) {
             return NONE; // eval code's own let/const are variables of the eval
         }
-        if (top != tree || inWith) {
+        if (top != tree || NodeTransformer.inWith(loops)) {
             return RUNTIME;
         }
         if (!isInSyntaxTree((Name) reference)) {
@@ -301,14 +301,14 @@ final class TemporalDeadZone {
             Node node,
             Scope scope,
             boolean createScopeObjects,
-            boolean inWith) {
+            Iterable<Node> loops) {
         switch (node.getType()) {
             case Token.NAME:
             case Token.TYPEOFNAME:
                 {
                     // a read: a runtime check is done by the name lookup itself, but not by a
                     // register
-                    int kind = classify(tree, node, scope, createScopeObjects, inWith);
+                    int kind = classify(tree, node, scope, createScopeObjects, loops);
                     if (kind == THROW) {
                         return NodeTransformer.replaceCurrent(
                                 parent, previous, node, tdzError(node.getString()));
@@ -329,7 +329,7 @@ final class TemporalDeadZone {
                     if (target.getType() != Token.NAME) {
                         return node;
                     }
-                    int kind = classify(tree, target, scope, createScopeObjects, inWith);
+                    int kind = classify(tree, target, scope, createScopeObjects, loops);
                     if (kind == THROW) {
                         return NodeTransformer.replaceCurrent(
                                 parent, previous, node, tdzError(target.getString()));
@@ -352,7 +352,7 @@ final class TemporalDeadZone {
                         return node;
                     }
                     Node target = node.getFirstChild();
-                    int kind = classify(tree, target, scope, createScopeObjects, inWith);
+                    int kind = classify(tree, target, scope, createScopeObjects, loops);
                     if (kind == NONE
                             && node.getIntProp(Node.DESTRUCTURING_TARGET_PROP, 0) == 1
                             && isLexicalName(target.getString(), scope)) {

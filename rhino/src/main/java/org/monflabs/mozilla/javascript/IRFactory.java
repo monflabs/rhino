@@ -141,7 +141,11 @@ public final class IRFactory {
 
         astNodePos.push(root);
         try {
-            return (ScriptNode) transform(root);
+            ScriptNode tree = (ScriptNode) transform(root);
+            if (parser.lexicalBindings) {
+                root.setNoLexicalBindings(false);
+            }
+            return tree;
         } catch (Parser.ParserException e) {
             parser.reportErrorsIfExists(root.getLineno());
             return null;

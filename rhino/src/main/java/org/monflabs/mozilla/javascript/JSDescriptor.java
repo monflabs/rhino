@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import org.monflabs.mozilla.javascript.ast.FunctionNode;
 import org.monflabs.mozilla.javascript.debug.DebuggableScript;
 
@@ -582,11 +581,11 @@ public final class JSDescriptor<T extends ScriptOrFn<T>> implements Serializable
             result.splitActivation = splitActivation;
             result.argumentsVar = argumentsVar;
             consumer.accept(result);
-            result.nestedFunctions =
-                    Collections.unmodifiableList(
-                            nestedFunctions.stream()
-                                    .map(x -> x.build(result, consumer))
-                                    .collect(Collectors.toList()));
+            List<JSDescriptor<JSFunction>> nested = new ArrayList<>(nestedFunctions.size());
+            for (Builder<JSFunction> function : nestedFunctions) {
+                nested.add(function.build(result, consumer));
+            }
+            result.nestedFunctions = Collections.unmodifiableList(nested);
             return result;
         }
 
