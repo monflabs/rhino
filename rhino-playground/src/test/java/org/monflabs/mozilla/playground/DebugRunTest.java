@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,5 +76,52 @@ class DebugRunTest {
         assertTrue(result.terminated());
         assertNull(result.failure());
         assertEquals("", recorder.out.toString());
+    }
+
+    /** A front end that stops the first run at its first pause, and resumes the others. */
+    @Test
+    void aRunAfterAStoppedOneIsNotStopped() throws Exception {
+        List<String> pauses = new CopyOnWriteArrayList<>();
+        List<Boolean> interrupts = new CopyOnWriteArrayList<>();
+        runner.debugger()
+                .addListener(
+                        new DebugListener() {
+                            @Override
+                            public void paused(PausedEvent event) {
+                                pauses.add(event.reason().name());
+                                interrupts.add(Thread.currentThread().isInterrupted());
+                                if (pauses.size() == 1) {
+                                    runner.stop();
+                                    // terminated, not interrupted
+                                    interrupts.add(Thread.currentThread().isInterrupted());
+                                } else {
+                                    event.resume();
+                                }
+                            }
+                        });
+        String source = "print('run');\n";
+        for (int i = 0; i < 3; i++) {
+            runner.debugger().pauseOnStart();
+            Recorder recorder = new Recorder();
+            runner.debug(sample(source), source, ScriptRunner.Settings.DEFAULT, recorder, recorder);
+            ScriptRunner.Result result = recorder.await(30, "debug run " + i);
+            assertNull(result.failure());
+            assertEquals(i == 0, result.terminated());
+            assertEquals(i == 0 ? "" : "run\n", recorder.out.toString());
+        }
+        assertEquals(List.of("START", "START", "START"), pauses);
+        assertEquals(List.of(false, false, false, false), interrupts);
+    }
+
+    @Test
+    void aDebugRunAfterAnInterruptedRun() throws Exception {
+        String sleeping = "setTimeout(() => print('late'), 3600000);";
+        Recorder stopped = new Recorder();
+        runner.run(sample(sleeping), sleeping, ScriptRunner.Settings.DEFAULT, stopped, stopped);
+        assertTrue(stopped.started.await(30, TimeUnit.SECONDS));
+        Thread.sleep(200);
+        runner.stop();
+        assertTrue(stopped.await(30, "the stopped run").terminated());
+        pausesAtTheFirstStatementThenRuns();
     }
 }

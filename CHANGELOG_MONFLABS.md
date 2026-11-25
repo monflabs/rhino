@@ -40,6 +40,18 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Playground: debugging again after a stopped run in the browser (2026-11-25)
+
+Not gated, no engine change. Test: `DebugRunTest` (the defect itself only shows under CheerpJ, where it was checked by
+hand).
+
+- In the browser playground, once a script paused in the debugger was stopped (its window closed, or Debug clicked
+  again), every later debug run ended at its first pause with "script terminated by the debugger". Stop interrupted the
+  thread of the scripts, and CheerpJ throws from the next wait of a thread that was interrupted even when its interrupt
+  status was cleared; the debugger takes that for a termination.
+- `ScriptRunner.stop` no longer interrupts a script paused in the debugger, which it terminates; a run that was
+  interrupted otherwise consumes the interrupt at its end, and none reaches the thread afterwards.
+
 ### Debugger: lost messages and stale connections (2026-11-25)
 
 Not gated, no engine change. Tests: `ServerEndTest`, `DebugSessionReattachTest`.

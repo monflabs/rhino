@@ -152,9 +152,36 @@ public final class ScriptRunner {
         final Thread thread = Thread.currentThread();
         volatile boolean stopRequested;
         final boolean debug;
+        private boolean interrupted;
+        private boolean ended;
 
         Run(boolean debug) {
             this.debug = debug;
+        }
+
+        synchronized void interrupt() {
+            if (!ended) {
+                interrupted = true;
+                thread.interrupt();
+            }
+        }
+
+        /**
+         * Ends the run on its thread, which no interrupt reaches afterwards and which keeps none
+         * for the next run.
+         */
+        synchronized void end() {
+            ended = true;
+            Thread.interrupted();
+            if (interrupted) {
+                // CheerpJ: the next wait throws even though the interrupt status is cleared, which
+                // ended the next debug run at its first pause
+                try {
+                    wait(1);
+                } catch (InterruptedException e) {
+                    // consumed
+                }
+            }
         }
     }
 
@@ -228,9 +255,10 @@ public final class ScriptRunner {
             PausedEvent pause = debugger().currentPause();
             if (pause != null && !pause.isResumed()) {
                 pause.terminate();
+                return;
             }
         }
-        run.thread.interrupt();
+        run.interrupt();
     }
 
     /** Whether a script is running. */
@@ -296,7 +324,7 @@ public final class ScriptRunner {
         } finally {
             Context.exit();
         }
-        Thread.interrupted();
+        run.end();
         current.set(null);
         boolean terminated = run.stopRequested || isStopped(failure);
         listener.finished(
