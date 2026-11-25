@@ -2371,7 +2371,7 @@ public class Parser {
                 arrowFunctionParams(
                         fnNode, params, destructuring, destructuringDefault, paramNames);
             }
-            markEvalInArrowParams(params);
+            adoptArrowParams(params);
 
             if (!destructuring.isEmpty()) {
                 Node destructuringNode = new Node(Token.COMMA);
@@ -6832,7 +6832,18 @@ public class Parser {
      * The parameters of an arrow function were parsed as an expression of the enclosing function: a
      * direct eval in them is a call in the parameters of the arrow (which needs an activation).
      */
-    private void markEvalInArrowParams(AstNode params) {
+    private void adoptArrowParams(AstNode params) {
+        params.visit(
+                node -> {
+                    if (node instanceof FunctionNode) {
+                        return false;
+                    }
+                    if (node instanceof ClassNode && ((ClassNode) node).getScope() != null) {
+                        moveToArrow(((ClassNode) node).getScope());
+                    }
+                    return true;
+                });
+
         params.visit(
                 node -> {
                     if (node instanceof FunctionNode) {
@@ -6849,6 +6860,17 @@ public class Parser {
                     }
                     return true;
                 });
+    }
+
+    /** The scope of a class in the parameters of an arrow function is one of the arrow. */
+    private void moveToArrow(Scope scope) {
+        ScriptNode outer = scope.getTop();
+        if (outer != null && outer != currentScriptOrFn) {
+            if (scope.getParentScope().getTop() != currentScriptOrFn) {
+                scope.setParentScope(currentScriptOrFn);
+            }
+            outer.moveSymbolsOf(scope, currentScriptOrFn);
+        }
     }
 
     private void checkCallRequiresActivation(AstNode pn) {

@@ -40,6 +40,15 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Named class expressions in a parameter list (2026-11-25)
+
+A defect that no script can rely on (a miscompilation), in code that only `VERSION_ECMASCRIPT` accepts. Test:
+`ClassInParametersTest`.
+
+- `(function (a = class q {}, b) {})` failed to compile, and the interpreter mixed up its variables: the name of the
+  class took the index of a parameter declared after it (`ScriptNode.addSymbol` puts the parameters first). In an arrow
+  function, the name was a variable of the enclosing function.
+
 ### The temporal dead zone of global bindings, parameters and `for` heads at run time (2026-11-25)
 
 Gated by `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2 and 1.2b). Test: `TemporalDeadZoneRuntimeTest`.

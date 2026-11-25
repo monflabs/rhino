@@ -292,9 +292,22 @@ public class ScriptNode extends Scope {
     void addSymbol(Symbol symbol) {
         if (variableNames != null) codeBug();
         if (symbol.getDeclType() == Symbol.Type.LP) {
-            paramCount++;
+            // the parameters come first, also after a name declared in a default value (a class)
+            symbols.add(paramCount++, symbol);
+        } else {
+            symbols.add(symbol);
         }
-        symbols.add(symbol);
+    }
+
+    /** Moves the symbols of a scope to the function that the scope turns out to belong to. */
+    public void moveSymbolsOf(Scope scope, ScriptNode dest) {
+        scope.setTop(dest);
+        if (scope.getSymbolTable() != null) {
+            symbols.removeAll(scope.getSymbolTable().values());
+            for (Symbol symbol : scope.getSymbolTable().values()) {
+                dest.addSymbol(symbol);
+            }
+        }
     }
 
     public List<Symbol> getSymbols() {
