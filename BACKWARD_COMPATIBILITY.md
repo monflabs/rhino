@@ -130,6 +130,7 @@ Section 2 lists platform and API changes.
 | 1.112 | A Symbol returned by a Java method | all versions |
 | 1.113 | A hole of a JavaScript array converted to a Java array | all versions |
 | 1.114 | `Symbol.prototype` and `%TypedArray%` sealed in a sealed scope | all versions |
+| 1.115 | Parameters with both default values and patterns are initialized in order | `VERSION_ECMASCRIPT` |
 | 2.1 | Packages and Maven coordinates renamed | all |
 | 2.2 | Java 21 minimum; Android not supported | all |
 | 2.3 | `VERSION_ECMASCRIPT` is the default language version | embeddings that do not set a version |
@@ -187,7 +188,8 @@ function f() {
   (ECMA-262 2026, §9.1.1.1.6 GetBindingValue and §9.1.1.1.5 SetMutableBinding, step 3: "If the binding for N in
   envRec has not yet been initialized, throw a ReferenceError").
 - **Cost:** none for `VERSION_ES6`. Under `VERSION_ECMASCRIPT`, references that can be proven safe at compile time
-  (in the same function, after the declaration) are not checked; others are checked by one comparison.
+  (in the same function, after the declaration) are not checked; others are checked by one comparison. A function whose
+  parameter list calls `eval`, or has a closure that names a parameter not initialized yet, keeps its variables by name.
 - The bindings of a destructuring declaration (`let [a, b] = …`) are covered too (1.99), and so is a read that a
   `switch` clause reaches by jumping over a declaration (1.91).
 - Plain assignments in eval code (`eval('x = 1'); let x;`) throw since 2026-11-25; its other references did before.
@@ -210,8 +212,7 @@ g();          // VERSION_ES6: fine        VERSION_ECMASCRIPT: ReferenceError
   a default value and called later is not affected. Since 2026-11-25, nor may it assign them, or use them from eval
   code or a closure that it calls (`(a = eval('b'), b) => a`, `(a = (() => b)(), b) => a`).
   The same goes for the default values and the computed keys of patterns: `({a = b, b}) => a`, `({b = a}, a = 2) => b`.
-- Since 2026-11-25, the parameters are initialized in their order when the list has both default values and patterns:
-  `(a = 1, {b = a}) => b` called with `(undefined, {})` gives 1 (the patterns came first: `undefined`).
+- The order of the parameters is in 1.115.
 - **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 26 (IteratorBindingInitialization of the
   formals, in order).
 
@@ -1971,6 +1972,23 @@ Object.getPrototypeOf(Int8Array).y = 1  // before: accepted   now: throws
 
 - A host that seals its standard objects to share them between scripts could still have state written into `Symbol.prototype`,
   `%TypedArray%` and `%TypedArray%.prototype`. The scope is unchanged when it is not sealed.
+
+### 1.115 Parameters with both default values and patterns are initialized in order
+
+*Since 2026-11-25.*
+
+```js
+function f(a = 1, {b = a}) { return b; }
+f(undefined, {});                          // VERSION_ES6: undefined   VERSION_ECMASCRIPT: 1
+function g(a = log("a"), [b] = log("b")) {}
+g();                                       // VERSION_ES6: logs b, a   VERSION_ECMASCRIPT: logs a, b
+```
+
+- The patterns of a parameter list were all destructured before the default values of its other parameters were
+  evaluated, so a pattern did not see a default value before it, and side effects ran in another order. A list with
+  default values only, or patterns only, is unchanged.
+- **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 26 (IteratorBindingInitialization of the
+  formals, in order).
 
 ---
 

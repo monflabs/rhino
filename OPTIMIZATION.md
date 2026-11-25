@@ -206,7 +206,9 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   declarations, `let`/`const` and class bindings. The other `var`s and parameters become registers
   (`FunctionNode.isVarInRegister`), and `NativeCall` no longer defines them (`JSDescriptor.isParamOrVarInRegister`),
   which saved a property creation per variable and per call.
-- **When it does not apply.** A direct `eval` or `with` in the function or in a nested function, a use of
+- **When it does not apply.** A direct `eval` or `with` in the function or in a nested function, a function whose
+  parameters start in their temporal dead zone at run time (`FunctionNode.getUninitializedParams`: eval code or a
+  closure of the parameter list may refer to one not initialized yet; the reads by name check it), a use of
   `arguments` in a non-strict function with parameters (see "The arguments object of strict functions"), and
   generators keep every variable in the activation. So does a function with more than 256 such
   variables (a module wrapper such as Octane's `pdfjs`), to stay within the 1024 JVM locals of a compiled method.
@@ -260,6 +262,7 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   capture go to their slot in the activation (`Node.ACTIVATION_VAR_PROP`, `NativeCall.getVar`/`setVar`) instead of a
   name lookup. The activation keeps its slots by index when it is created and looks them up again when one is stale.
   Compiled code keeps the activation in a local; the interpreter has `Icode.ACTIVATION_GETVAR`/`ACTIVATION_SETVAR`.
+  It does not apply to the functions excluded above, whose variables stay by name.
 - **Gain.** A loop updating a captured variable: 143 ms → 65 ms compiled, 767 ms → 635 ms interpreted, close to the
   same loop without a closure (58 ms). `VERSION_ECMASCRIPT`.
 
@@ -996,7 +999,8 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
 - **Gain.** `evalcache` compiled, alone: 17.4 → 15.2 ms, the time of `perf-baseline`, and 7,027 → 5,707 bytes
   allocated per `eval`. Compilation of `earley-boyer`, interpreted, `VERSION_ECMASCRIPT`: −7% in the gate (4.00 →
   3.69 ms alone before (3)), ES6 level. What remains to `perf-baseline` is mostly the scans of
-  `VariableAllocation` and `CodeGenUtils.readsThis`.
+  `VariableAllocation` and `CodeGenUtils.readsThis`: +19.9% (3.70 → 4.44 ms) in the gate at `43688e5ec`, which also has
+  compiled `VERSION_ES6` at +10.2% (23.7 → 26.1 ms), both beyond their band of 10%.
 
 ### Algorithms of built-ins
 

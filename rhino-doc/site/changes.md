@@ -172,8 +172,10 @@ k = 2;        // before: ignored (TypeError in strict mode)   now: TypeError
 ```
 
 **Temporal dead zone [1.2, 1.2b, 1.75, 1.91, 1.99].** Using a `let`/`const` before its declaration has run is a
-ReferenceError, including from a closure, from a default parameter value, or from a `switch` clause entered past
-the declaration. The names of a destructuring declaration (`let { a } = o`) follow the same rule.
+ReferenceError: reading or assigning it, from the same function, from a closure, from `eval` code, from a function of
+another script or of `new Function`, or from a `switch` clause entered past the declaration. The names of a
+destructuring declaration (`let { a } = o`) and of the head of a `for (let ...)` loop follow the same rule, and so do
+parameters, for the default values and the computed keys of the parameter list, its patterns included.
 
 ```js
 function f() {
@@ -182,6 +184,22 @@ function f() {
   function g() { return x; }
 }
 function h(a = b, b) {}  h();   // before: a is undefined   now: ReferenceError
+(function () { eval("x = 1"); let x; })();     // before: assigned   now: ReferenceError
+(({ a = b, b }) => a)({ b: 2 });               // before: undefined  now: ReferenceError
+let y = 5;
+for (let y = (() => y)(); ;) break;            // before: the outer y, 5  now: ReferenceError
+```
+
+The assignments from `eval` code and from other scripts, the parameter patterns, the closures of a parameter list and
+the heads of `for` loops are checked since 2026-11-25; scripts that ran on an earlier build of the fork can start to
+throw there.
+
+**Parameters are initialized in order [1.115].** In a list with both default values and patterns, the patterns used to
+come first. Since 2026-11-25:
+
+```js
+function f(a = 1, { b = a }) { return b; }
+f(undefined, {});      // before: undefined   now: 1
 ```
 
 **Global lexical declarations [1.3].** The top-level `let`/`const` of a script are bindings of the global scope,
@@ -486,7 +504,7 @@ The others apply under `VERSION_ECMASCRIPT` only; under `VERSION_ES6`, compiled 
 5. **Runtime.** Run on Java 21 or later. Android and micro JVMs are not supported.
 6. **Compile every script once** under `VERSION_ECMASCRIPT`: the new early errors (1.12, 1.26, 1.32, 1.33) show up
    at compile time, before any code runs.
-7. **Look for the common runtime differences:** assignments to `const` (1.1), use before declaration (1.2),
+7. **Look for the common runtime differences:** assignments to `const` (1.1), use before declaration (1.2, 1.2b),
    top-level `let`/`const` redeclared across scripts or re-run in one scope (1.3), `this` in strict functions
    (1.22), array destructuring of non-iterables (1.29), `Iterator(...)` (1.64), `.arity` (1.66).
 8. **Check the Java side:** global `let`/`const` read through `getGlobalThis()` (1.3), byte order of typed array

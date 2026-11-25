@@ -1058,6 +1058,7 @@ its choice "still required". Should a host flag, or a change in all versions, re
 | 16   | Second performance pass                         | done        | 99.1% (16.5 dropped; 16.17 added) | (this) |
 | 17   | Method splitting                                | done        | 99.1% (17.0–17.4)            | 789550b8d |
 | —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616; 42,272 since 2026-11-23, current) | 397cd54b5 |
+| —    | Dead zone at run time, order of the parameters, compile time (2026-11-25) | done | 99.2% (unchanged: not covered by test262) | 43688e5ec |
 | 18   | Defects found by the comparison                 | done        | n/a (18.1–18.5)                          | — |
 | 19   | Host controls                                   | removed     | n/a                                      | — |
 | 20   | Legacy-compatibility flags                      | removed     | n/a                                      | — |

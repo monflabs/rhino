@@ -45,6 +45,17 @@ panel.attach(handle.clientChannel());              // in memory: no socket
 
 Ask for `debugger.pauseOnStart()` and start the script once the panel is connected (`panel.onConnectionChange`).
 
+- **Threads.** The paused script and the CDP session send from different threads; the in-process server delivers their
+  messages one at a time, as a socket does (since 2026-11-25). A `DebugSession` belongs to the executor given to its
+  constructor (the event dispatch thread for the panel).
+- **Detaching and attaching again** can be done in a row: what a previous connection still reports is dropped, and
+  detaching while a connection is being opened cancels it (since 2026-11-25). An in-process channel is used once: open a
+  new one to attach again. A WebSocket server accepts one client at a time and can refuse a new one for as long as it
+  has not seen the previous connection close.
+- **Breakpoints are set asynchronously.** `DebugSession.toggleBreakpoint` returns before the server has the breakpoint:
+  a program that starts a script right after waits until `Breakpoint.serverId()` is set. Breakpoints are kept across a
+  detach, and the session is `RUNNING` again only once the server has them back.
+
 ## In the playground
 
 `./gradlew :rhino-playground:run`. **Debug** runs the script in the interpreter under the debugger, paused at its

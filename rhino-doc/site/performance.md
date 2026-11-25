@@ -227,7 +227,8 @@ every parameter and variable in it, each access a name lookup. Only the names th
 stay in the activation now; the rest, `let` and `const` included, become registers, and a block whose bindings
 are all registers gets no scope object.
 
-- **Does not apply** with a direct `eval` or `with` in the function or a nested function, a mapped `arguments`
+- **Does not apply** with a direct `eval` or `with` in the function or a nested function, a parameter list whose
+  closures name a parameter not initialized yet, a mapped `arguments`
   object, in generators, or past 256 such variables (a variable takes up to three of the 1,024 JVM locals that a
   compiled method may use).
 - **Applies to:** both modes, `VERSION_ECMASCRIPT` only: code evaluated at runtime in the function's scope other
@@ -410,6 +411,21 @@ instead:
   test262 file on `f.arguments`, fixed on 2026-11-22.
 - A remaining fallback to the interpreter is reported as a warning rather than silent.
 
+## Compilation
+
+Compiling a script does more work than it did: it decides where each variable lives, checks the dead zone and finds
+what nested functions capture. Since 2026-11-25 that work is skipped where it is not needed: the dead zone is not
+checked in a script that declares no `let`, `const` or class, and the fixed cost of a compilation, which dominates a
+short `eval`, is lower.
+
+- **Applies to:** both modes; the dead zone part under `VERSION_ECMASCRIPT`, the rest to all versions.
+- **Gain:** the gate's `evalcache` (repeated `eval` of short sources) 17.4 → 15.2 ms alone, the time of the upstream
+  base, and 7.0 → 5.7 KB allocated per `eval`; compiling `earley-boyer` in the interpreter −7%.
+- **Still slower than the upstream base:** in the gate of 2026-11-25 (`43688e5ec`), `compile.earley-boyer` takes +19.9%
+  interpreted under `VERSION_ECMASCRIPT` (3.70 → 4.44 ms) and +10.2% compiled under `VERSION_ES6` (23.7 → 26.1 ms), and
+  these two metrics fail the gate. Most of it is the analysis that keeps variables in registers and at fixed positions:
+  running the same script is 18–20% faster compiled and 9–11% faster interpreted (`v8-earley-boyer`).
+
 ## Practical guidance
 
 - **Prefer compiled mode for long-running or hot code.** Many optimizations on this page are compiled-mode only:
@@ -429,6 +445,8 @@ instead:
   - strict functions using `arguments`, or rest parameters (faster still);
   - dense arrays with plain prototypes and unmodified built-ins.
 - **Things that turn optimizations off** for the function involved: a direct `eval` or a `with` statement; a
+  parameter list with a direct `eval`, or with a closure that names a parameter not initialized yet
+  (`(a = () => b, b) => ...`; `VERSION_ECMASCRIPT`); a
   mapped `arguments` object (non-strict with parameters); reassigning a function declaration or passing it as a
   value (no direct call, no unboxed parameters); replacing iteration, species or `RegExp.prototype` methods;
   holes, accessors or frozen state on arrays. The behavior is unchanged in each case; only the fast path is lost.

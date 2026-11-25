@@ -160,6 +160,8 @@ JavaScript.
 - [Code complexity added](complexity.md): what the ES2026 work added to the engine's source.
 - [Asynchronous code](async.md): generators, promises and the optional event loop, and how to
   write host functions such as `setTimeout()` and `fetch()` in Java.
+- [Debugging scripts](debugger.md): the debugger API, the Chrome DevTools Protocol server and the
+  Swing debugger.
 - [How the engine is validated](validation.md): the harnesses that check the engine, from test262
   to the JavascriptPerformance project.
 

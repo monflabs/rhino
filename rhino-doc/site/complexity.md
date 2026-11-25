@@ -16,24 +16,30 @@ somewhat later than the Rhino 1.9.1 release.
 
 The cleanup of 2026-11-20 (branch `monflabs_cleanup`, since merged into `monflabs_enhancements`) and the changes
 of 2026-11-21 and 2026-11-22 removed several of the points below. The rest of this page still describes the code as
-it was reviewed; the right column is the code on 2026-11-22.
+it was reviewed; the right column is the code on 2026-11-25 (`43688e5ec`).
 
 | Point of the review | Now |
 | --- | --- |
-| No icodes left; the depth of an outer variable packed in the high byte of an index | 113 icodes, 16 values free: the variants of an operation take an operand byte. Outer variables have their own icodes, with the depth as an operand |
+| No icodes left; the depth of an outer variable packed in the high byte of an index | 115 icodes, 14 values free: the variants of an operation take an operand byte. Outer variables have their own icodes, with the depth as an operand |
 | Scoping done by renaming variables to `name$body` and `name$block`, with bail-outs on `eval` and `with` | No renaming is left. The switch discriminant, the catch parameter, the head of a for-in/of loop and the body of a function with parameter expressions each have a scope, and the `eval` and `with` cases are conformant |
 | The class kind stored as a one-letter string prefix | A flags property on the node and an operand of the instruction |
 | Classes encoded as two object literals, with a placeholder constructor and the computed keys hoisted into temporaries | A class is its constructor, its heritage and one node per element, evaluated in source order by one runtime call each |
-| `NodeTransformer`: semantics and optimization in one 1,640-line tree walker | 1,011 lines. `TemporalDeadZone` holds the dead-zone rules and `VariableAllocation` the placement of variables |
+| `NodeTransformer`: semantics and optimization in one 1,640-line tree walker | 1,172 lines. `TemporalDeadZone` (469) holds the dead-zone rules and `VariableAllocation` (369) the placement of variables; the dead zone of parameters is set up in `IRFactory` |
 | Modules re-emitted as `function*` source text and compiled a second time | A module is parsed once; its body is moved into a generator function at the AST level |
 | 19 parser fields added, mostly saved and restored by hand | 17: the two one-shot flags are parameters. The fields saved by hand remain |
 | The rules of the caches and of the positional variables enforced by tests only; no protection seen for a binding declared at run time | `-Drhino.verifyCaches=true` (`CacheVerifier`) compares every answer of `PropertyCache`, of `GlobalNameCache` and of the variables read at a fixed position with the lookup it replaces, and fails when a scope between the code and an outer activation declares the name |
-| 158,021 engine source lines; 451 version gates in 58 files; 21 new tokens and 17 new node properties; 45 new engine source files | 158,195 lines; 438 gates in 57 files; 22 tokens (`CLASS_ELEMENT`) and 21 node properties (`CLASS_FLAGS_PROP`, `FIELD_KEY_KIND_PROP`, `CLASS_ELEMENT_PROP`, `FINALLY_ON_THROW_PROP`); 48 files |
-| `Parser` 8,878 lines, `ScriptRuntime` 8,147, `BodyCodegen` 6,391, `IRFactory` 3,720, `Interpreter` 4,949, `CodeGenerator` 2,316; `generateExpression` 1,007 and `visitExpression` 827 | `Parser` 8,763, `ScriptRuntime` 8,106, `BodyCodegen` 6,357, `IRFactory` 3,789, `Interpreter` 5,018, `CodeGenerator` 2,339; `generateExpression` 1,021 and `visitExpression` 837 |
-| 226 uses of `assertGatedBehavior`; 116 behavior changes in `BACKWARD_COMPATIBILITY.md` | 228 and 118 |
+| 158,021 engine source lines; 451 version gates in 58 files; 21 new tokens and 17 new node properties; 45 new engine source files | 162,284 lines; 449 gates in 58 files; 22 tokens (`CLASS_ELEMENT`) and 23 node properties (`CLASS_FLAGS_PROP`, `FIELD_KEY_KIND_PROP`, `CLASS_ELEMENT_PROP`, `FINALLY_ON_THROW_PROP`, `TDZ_BOUND_PROP`, `LEXICAL_INIT_PROP`); 78 files, 30 of them since 2026-11-22, mostly the debugger API and its implementation |
+| `Parser` 8,878 lines, `ScriptRuntime` 8,147, `BodyCodegen` 6,391, `IRFactory` 3,720, `Interpreter` 4,949, `CodeGenerator` 2,316; `generateExpression` 1,007 and `visitExpression` 827 | `Parser` 8,887, `ScriptRuntime` 8,178, `BodyCodegen` 6,435, `IRFactory` 4,160, `Interpreter` 5,050, `CodeGenerator` 2,391; `generateExpression` 1,024 and `visitExpression` 872 |
+| 226 uses of `assertGatedBehavior`; 116 behavior changes in `BACKWARD_COMPATIBILITY.md` | 281 and 125 |
 
 Still as reviewed: the legacy twins and the version gates, the optimizer's
 number typing, `Splitter`, and the property cache rules.
+
+The dead zone is now checked in four places, which an edit has to keep consistent: from the syntax
+(`TemporalDeadZone`), by the lookups by name (`ScriptRuntime.checkInitialized`), on the binding found by an assignment of
+eval code (`CHECK_BOUND_TDZ`) or to a global (`ScriptRuntime.setName`), and by the initialization of the parameters in
+`IRFactory`. A declaration marks its stores so that they are not taken for assignments (`TDZ_DECLARATION_PROP`,
+`LEXICAL_INIT_PROP`). Tests: `TemporalDeadZoneWritesTest`, `TemporalDeadZoneRuntimeTest`.
 
 ## The size of the change
 

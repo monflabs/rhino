@@ -72,10 +72,13 @@ compute. A script is added there for each shape that the class compiler speciali
 
 ### Java unit tests
 
-About 560 JUnit test classes across the modules test the engine from Java: the embedding API (`Context`, scopes,
+About 580 JUnit test classes across the modules test the engine from Java: the embedding API (`Context`, scopes,
 Java interop, the language versions), the `javax.script` engine (`rhino-engine`), the stack traces of the
 different formats, the source maps (`SourceMapSpecSuiteTest`, the
-[source map specification's](https://github.com/tc39/source-map-tests) test cases), CommonJS modules and E4X.
+[source map specification's](https://github.com/tc39/source-map-tests) test cases), CommonJS modules, E4X and the
+debugger: its API (`DebuggerContractTest`), the protocol server (`CdpProtocolTest`, `ServerEndTest`) and the session and
+the panel of the Swing debugger, over a socket and in memory. The behaviors that test262 does not cover have tests of
+their own, for example `TemporalDeadZoneWritesTest`, `TemporalDeadZoneRuntimeTest` and `ClassInParametersTest`.
 
 ### Stress modes
 

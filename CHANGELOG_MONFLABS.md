@@ -73,7 +73,7 @@ A defect that no script can rely on (a miscompilation), in code that only `VERSI
 
 ### The temporal dead zone of global bindings, parameters and `for` heads at run time (2026-11-25)
 
-Gated by `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2 and 1.2b). Test: `TemporalDeadZoneRuntimeTest`.
+Gated by `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2, 1.2b and 1.115). Test: `TemporalDeadZoneRuntimeTest`.
 
 - **Global `let`, `const` and classes**: a function of another script, or of `new Function`, could assign them before
   their declaration. `ScriptRuntime.setName` and `strictSetName` check the global binding; the declaration itself
@@ -119,8 +119,9 @@ by several commits (found by bisecting). See "Compile-time work only where it is
   `compile.earley-boyer.int.ecma` −7%. The flags of these runs (`stringmethods.cmp.ecma`, `typedarray.cmp.ecma`, then
   `v8-splay.cmp.es6`) are JIT states: the compiled classes of the three scripts are byte-identical, alone they are
   level, and the previous commit also reaches the slow mode of `stringmethods`. Against `perf-baseline`, `evalcache`
-  is back in its band; `compile.earley-boyer` is not (interpreted +26% ECMASCRIPT and +14% ES6, compiled +14% ES6, on a
-  busy machine).
+  is back in its band; `compile.earley-boyer` is not: interpreted `VERSION_ECMASCRIPT` +19.9% and compiled `VERSION_ES6`
+  +10.2%, against a band of 10% (interpreted ES6 +7.8%, compiled ECMASCRIPT +6.8%; gate of 2026-11-25 at `43688e5ec`,
+  idle machine; a first run on a busy one had +26%, +14% and +14%).
 
 ### M22.1: the neutral debugger API and its implementation (2026-11-24)
 

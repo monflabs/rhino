@@ -181,8 +181,8 @@ properties of strings of the `v` flag (`\p{RGI_Emoji}` and similar) are not supp
 
 ### Specification semantics
 
-Much of the work makes existing syntax behave as the specification says: the temporal dead zone of `let` and
-`const`, a TypeError on assignment to a `const`, global lexical declarations shared across scripts, early errors at
+Much of the work makes existing syntax behave as the specification says: the temporal dead zone of `let`, `const`
+and parameters, a TypeError on assignment to a `const`, global lexical declarations shared across scripts, early errors at
 compile time, strict-mode `this`, iterator closing in destructuring and `for-of`, completion values, and Annex B.
 These change results that existing code may rely on, which is why they are gated. They are listed, with examples, in
 [Changes and incompatibilities](changes.md).
