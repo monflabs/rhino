@@ -149,7 +149,16 @@ final class TemporalDeadZone {
             }
         }
         Symbol symbol = defining.getSymbol(name);
-        if (symbol == null || !isLexical(symbol)) {
+        if (symbol == null) {
+            return NONE;
+        }
+        if (defining instanceof FunctionNode && defining != tree) {
+            Set<String> params = ((FunctionNode) defining).getUninitializedParams();
+            if (params != null && params.contains(name)) {
+                return RUNTIME;
+            }
+        }
+        if (!isLexical(symbol)) {
             return NONE;
         }
         ScriptNode top = defining instanceof ScriptNode ? (ScriptNode) defining : defining.getTop();

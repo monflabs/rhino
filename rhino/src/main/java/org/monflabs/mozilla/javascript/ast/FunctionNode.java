@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.monflabs.mozilla.javascript.Node;
 import org.monflabs.mozilla.javascript.Token;
 
@@ -153,6 +154,7 @@ public class FunctionNode extends ScriptNode {
     private boolean isES6Generator;
     private boolean isAsync;
     private boolean isAsyncGenerator;
+    private Set<String> uninitializedParams;
     private boolean isFieldInitializer;
     private boolean splitActivation;
     private boolean activationOfItsOwn;
@@ -597,6 +599,18 @@ public class FunctionNode extends ScriptNode {
 
     public boolean isCompiledByContext() {
         return compiledByContext;
+    }
+
+    /**
+     * The names of the parameters that start in their temporal dead zone at run time, because eval
+     * code or a closure in the parameter list may refer to them (null: none, see IRFactory).
+     */
+    public Set<String> getUninitializedParams() {
+        return uninitializedParams;
+    }
+
+    public void setUninitializedParams(Set<String> names) {
+        uninitializedParams = names;
     }
 
     /** Marks a function with a destructuring pattern in its parameter list. */

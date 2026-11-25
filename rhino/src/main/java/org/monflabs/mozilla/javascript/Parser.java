@@ -7559,6 +7559,10 @@ public class Parser {
      */
     private Node destructuringSet(int setOp, String name, Node value, int variableType) {
         Node set = new Node(setOp, createName(Token.BINDNAME, name, null), value);
+        if (variableType == Token.LET) {
+            set.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+            set.putIntProp(Node.LEXICAL_INIT_PROP, 1);
+        }
         if (variableType == -1) {
             set.putIntProp(Node.DESTRUCTURING_TARGET_PROP, 1);
             if (inUseStrictDirective

@@ -119,7 +119,9 @@ public class Node implements Iterable<Node> {
             // SETNAME of eval code that may assign to a let/const of the code around the eval:
             // its temporal dead zone is checked on the binding found
             TDZ_BOUND_PROP = 55,
-            LAST_PROP = TDZ_BOUND_PROP,
+            // SETNAME of a script that initializes a let binding, possibly a global one
+            LEXICAL_INIT_PROP = 56,
+            LAST_PROP = LEXICAL_INIT_PROP,
             FIRST_PROP = FUNCTION_PROP;
 
     /**
@@ -570,6 +572,8 @@ public class Node implements Iterable<Node> {
                 return "tdz_checked_prop";
             case TDZ_BOUND_PROP:
                 return "tdz_bound_prop";
+            case LEXICAL_INIT_PROP:
+                return "lexical_init_prop";
             case SPREAD_ARGS_PROP:
                 return "spread_args_prop";
             case LEXICAL_PROP:

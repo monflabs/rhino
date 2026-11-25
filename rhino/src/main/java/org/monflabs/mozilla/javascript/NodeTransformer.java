@@ -184,6 +184,11 @@ public class NodeTransformer {
                     && !TemporalDeadZone.isLexicalName(node.getFirstChild().getString(), scope)) {
                 node.putIntProp(Node.TDZ_BOUND_PROP, 1);
             }
+            if (type == Token.SETNAME
+                    && node.getIntProp(Node.LEXICAL_INIT_PROP, 0) == 1
+                    && !mayDeclareGlobals(tree)) {
+                node.removeProp(Node.LEXICAL_INIT_PROP);
+            }
 
             if (checkDeadZone && node.getIntProp(Node.TDZ_CHECKED_PROP, 0) == 0) {
                 Node replacement =
@@ -468,6 +473,9 @@ public class NodeTransformer {
                                                 n,
                                                 init);
                                 n.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+                                if (type == Token.LET && mayDeclareGlobals(tree)) {
+                                    n.putIntProp(Node.LEXICAL_INIT_PROP, 1);
+                                }
                             } else {
                                 // May be a destructuring assignment already transformed
                                 // to a LETEXPR
@@ -782,6 +790,15 @@ public class NodeTransformer {
             // the patterns of a for (let ...) head, and the declarators after them, are bound in
             // the order of the head
             List<Node> inOrder = tdz && !isExpression ? new ArrayList<>() : null;
+            if (inOrder != null && IRFactory.mayCapture(vars)) {
+                // the initializers may refer to the bindings of the head in their dead zone
+                for (Node v = vars.getFirstChild(); v != null; v = v.getNext()) {
+                    if (v.getType() == Token.NAME) {
+                        list.add(ScriptRuntime.getIndexObject(v.getString()));
+                        newVars.addChildToBack(new Node(Token.TDZ_SENTINEL));
+                    }
+                }
+            }
             for (Node v = vars.getFirstChild(); v != null; v = v.getNext()) {
                 Node current = v;
                 if (current.getType() == Token.LETEXPR) {
@@ -805,7 +822,10 @@ public class NodeTransformer {
                     if (destructuringNames != null) {
                         list.addAll(destructuringNames);
                         for (int i = 0; i < destructuringNames.size(); i++) {
-                            newVars.addChildToBack(new Node(Token.VOID, Node.newNumber(0.0)));
+                            newVars.addChildToBack(
+                                    inOrder != null
+                                            ? new Node(Token.TDZ_SENTINEL)
+                                            : new Node(Token.VOID, Node.newNumber(0.0)));
                         }
                     }
                     // Process all NAME children of the inner LET node (not just the first)
@@ -988,6 +1008,13 @@ public class NodeTransformer {
     private boolean checkDeadZone;
 
     private TemporalDeadZone deadZone;
+
+    /** Whether the let declarations of tree may be global: in a script, or a chunk of one. */
+    private boolean mayDeclareGlobals(ScriptNode tree) {
+        return tdz
+                && (!(tree instanceof FunctionNode)
+                        || ((FunctionNode) tree).getSplitOwner() != null);
+    }
 
     /** Whether the node being transformed is inside a with statement of its function. */
     static boolean inWith(Iterable<Node> loops) {

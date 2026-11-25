@@ -3140,6 +3140,17 @@ public class ScriptRuntime {
 
     public static Object setName(
             VarScope bound, Object value, Context cx, VarScope scope, String id) {
+        if (bound instanceof TopLevel) {
+            checkBoundInitialized(bound, id);
+        }
+        return initName(bound, value, cx, scope, id);
+    }
+
+    /**
+     * Sets a name that may be a global let binding in its temporal dead zone: its declaration does.
+     */
+    public static Object initName(
+            VarScope bound, Object value, Context cx, VarScope scope, String id) {
         if (bound != null) {
             // TODO: we used to special-case XMLObject here, but putProperty
             // seems to work for E4X and it's better to optimize  the common case
@@ -3182,6 +3193,9 @@ public class ScriptRuntime {
                 // Object Environment Record SetMutableBinding (9.1.1.2.5): the binding was
                 // deleted after the reference was resolved
                 throw notFoundError(bound, id);
+            }
+            if (bound instanceof TopLevel) {
+                checkBoundInitialized(bound, id);
             }
             ScriptableObject.putProperty(bound, id, value);
             return value;

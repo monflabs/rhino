@@ -40,6 +40,26 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### The temporal dead zone of global bindings, parameters and `for` heads at run time (2026-11-25)
+
+Gated by `VERSION_ECMASCRIPT` (`BACKWARD_COMPATIBILITY.md` 1.2 and 1.2b). Test: `TemporalDeadZoneRuntimeTest`.
+
+- **Global `let`, `const` and classes**: a function of another script, or of `new Function`, could assign them before
+  their declaration. `ScriptRuntime.setName` and `strictSetName` check the global binding; the declaration itself
+  stores with `initName` (`Node.LEXICAL_INIT_PROP`). The cached stores of `GlobalNameCache` are unchanged: they already
+  left an uninitialized binding to `setName`.
+- **Parameters**: eval code and closures in the parameter list did not see the later parameters in their dead zone, an
+  assignment in a default value (`a = (b = 1), b`) was not checked, and `a = b++, b` failed to compile. When eval code or
+  a closure of the list may refer to a parameter not initialized yet (`IRFactory.findUninitializedParams`), the
+  parameters start uninitialized and are initialized in order from the values passed; such a function keeps its
+  variables by name (no register, no fixed position). Other functions are unchanged.
+- **Patterns of parameters**: their default values and computed keys could read the names that come later
+  (`{a = b, b}`, `{b = a}, a`); they are checked at compile time, as the default values of plain parameters were. The
+  check leaves the names that a class of the default value declares itself: `(a = class b {...}, b)` failed to compile.
+- **Parameters with both default values and patterns** are initialized in their order; the patterns came first.
+- **`for (let ...)` heads**: the initializers resolved the names of the head outside of the loop. The bindings are
+  created uninitialized when an initializer has a closure or a direct eval.
+
 ### Assignments in eval code to a `let` in its temporal dead zone (2026-11-25)
 
 Gated by `VERSION_ECMASCRIPT`, already described in `BACKWARD_COMPATIBILITY.md` 1.2. test262 does not cover it. Test:

@@ -224,9 +224,11 @@ abstract class Icode {
             // the dead zone of the binding that the store that follows assigns to
             // (Node#TDZ_BOUND_PROP)
             CHECK_BOUND_TDZ = OUTER_SETVAR - 1,
+            // the initialization of a let binding by its declaration (Node#LEXICAL_INIT_PROP)
+            INIT_NAME = CHECK_BOUND_TDZ - 1,
 
             // Last icode
-            MIN_ICODE = CHECK_BOUND_TDZ;
+            MIN_ICODE = INIT_NAME;
 
     /** The operand of ITER_OP. */
     static final int ITER_OPEN = 0, ITER_STEP = 1, ITER_REST = 2, ITER_CLOSE = 3;
@@ -479,6 +481,8 @@ abstract class Icode {
                 return "OUTER_SETVAR";
             case CHECK_BOUND_TDZ:
                 return "CHECK_BOUND_TDZ";
+            case INIT_NAME:
+                return "INIT_NAME";
         }
 
         // icode without name

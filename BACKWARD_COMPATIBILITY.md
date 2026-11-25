@@ -191,6 +191,9 @@ function f() {
 - The bindings of a destructuring declaration (`let [a, b] = …`) are covered too (1.99), and so is a read that a
   `switch` clause reaches by jumping over a declaration (1.91).
 - Plain assignments in eval code (`eval('x = 1'); let x;`) throw since 2026-11-25; its other references did before.
+- Since 2026-11-25, so do an assignment to a global binding by a function of another script or of `new Function`, and
+  the references to the bindings of a `for (let ...)` head by eval code and closures of its initializers, which
+  resolved to a variable of the same name outside of the loop: `let x = 5; for (let x = (() => x)();;) break`.
 - **Embedding note:** under `VERSION_ECMASCRIPT`, Java code that reads such a binding from a scope object before its
   declaration has run (`scope.get("x", scope)`) gets the internal marker `UniqueTag.UNINITIALIZED`.
 
@@ -204,7 +207,11 @@ g();          // VERSION_ES6: fine        VERSION_ECMASCRIPT: ReferenceError
 ```
 
 - A default value may not read its own parameter or a later one: they are not initialized yet. A closure created in
-  a default value and called later is not affected.
+  a default value and called later is not affected. Since 2026-11-25, nor may it assign them, or use them from eval
+  code or a closure that it calls (`(a = eval('b'), b) => a`, `(a = (() => b)(), b) => a`).
+  The same goes for the default values and the computed keys of patterns: `({a = b, b}) => a`, `({b = a}, a = 2) => b`.
+- Since 2026-11-25, the parameters are initialized in their order when the list has both default values and patterns:
+  `(a = 1, {b = a}) => b` called with `(undefined, {})` gives 1 (the patterns came first: `undefined`).
 - **Why:** ECMA-262 2026, §10.2.11 FunctionDeclarationInstantiation step 26 (IteratorBindingInitialization of the
   formals, in order).
 

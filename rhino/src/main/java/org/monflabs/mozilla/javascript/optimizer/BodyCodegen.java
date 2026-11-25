@@ -2068,6 +2068,8 @@ class BodyCodegen {
                 } else if (node.getIntProp(Node.OUTER_VAR_PROP, -1) != -1) {
                     generateExpression(child.getNext(), node);
                     visitSetOuterVar(node.getIntProp(Node.OUTER_VAR_PROP, -1), child.getString());
+                } else if (node.getIntProp(Node.LEXICAL_INIT_PROP, 0) == 1) {
+                    visitInitName(node, child);
                 } else if (type == Token.SETNAME) {
                     visitSetName(node, child);
                 } else {
@@ -5670,6 +5672,21 @@ class BodyCodegen {
         if (end != -1) {
             cfw.markLabel(end);
         }
+    }
+
+    private void visitInitName(Node node, Node child) {
+        generateExpression(child, node);
+        generateExpression(child.getNext(), node);
+        cfw.addALoad(contextLocal);
+        cfw.addALoad(variableObjectLocal);
+        cfw.addPush(child.getString());
+        addScriptRuntimeInvoke(
+                "initName",
+                "(Lorg/monflabs/mozilla/javascript/VarScope;"
+                        + "Ljava/lang/Object;"
+                        + "Lorg/monflabs/mozilla/javascript/Context;"
+                        + "Lorg/monflabs/mozilla/javascript/VarScope;"
+                        + "Ljava/lang/String;)Ljava/lang/Object;");
     }
 
     private void visitStrictSetName(Node node, Node child) {

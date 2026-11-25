@@ -8,11 +8,18 @@ package org.monflabs.mozilla.javascript;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
+import java.util.function.ObjIntConsumer;
 import org.monflabs.mozilla.javascript.ast.AbstractObjectProperty;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehension;
 import org.monflabs.mozilla.javascript.ast.ArrayComprehensionLoop;
@@ -897,10 +904,14 @@ public final class IRFactory {
                 fn.setSplitKey(fn.getAbsolutePosition());
                 splitIfTooLarge(fn, fn.getSplitKey());
             }
+            List<Object> defaultParams = fn.getDefaultParams();
+            if (parser.compilerEnv.isLatestEcmaScript()
+                    && (defaultParams != null || destructuring != null)) {
+                findUninitializedParams(fn);
+            }
             ++parser.nestingOfFunction; // only for body, not params
             Node body = transform(fn.getBody());
 
-            List<Object> defaultParams = fn.getDefaultParams();
             if (parser.compilerEnv.isLatestEcmaScript()
                     && (defaultParams != null || destructuring != null)
                     && !fn.isGenerator()
@@ -915,8 +926,16 @@ public final class IRFactory {
                 fn.setFunctionsAfterParams();
             }
 
-            /* Process simple default parameters */
-            if (defaultParams != null) {
+            boolean paramsInOrder =
+                    parser.compilerEnv.isLatestEcmaScript()
+                            && (fn.getUninitializedParams() != null
+                                    || (defaultParams != null && destructuring != null));
+            if (paramsInOrder) {
+                transformDestructuringDefaults(fn, destructuring);
+                initParamsInOrder(fn, body, destructuring, lineno, column);
+                destructuring = null;
+            } else if (defaultParams != null) {
+                /* Process simple default parameters */
                 Node paramInitBlock = null;
                 for (int i = defaultParams.size() - 1; i > 0; ) {
                     if (defaultParams.get(i) instanceof AstNode
@@ -961,20 +980,8 @@ public final class IRFactory {
                 }
             }
 
-            /* transform nodes used as default parameters */
-            List<Node[]> dfns = fn.getDestructuringRvalues();
-            if (dfns != null) {
-                for (var i : dfns) {
-                    Node a = i[0];
-                    if (i[1] instanceof AstNode) {
-                        AstNode b = (AstNode) i[1];
-                        Node transformed = transform(b);
-                        a.replaceChild(b, transformed);
-                        if (i.length > 2) {
-                            parser.nameAnonymousFunction(transformed, i[2].getString());
-                        }
-                    }
-                }
+            if (!paramsInOrder) {
+                transformDestructuringDefaults(fn, destructuring);
             }
 
             if (destructuring != null) {
@@ -1016,6 +1023,300 @@ public final class IRFactory {
         }
     }
 
+    /** Transforms the nodes used as default values in the patterns of the parameters. */
+    private void transformDestructuringDefaults(FunctionNode fn, Node destructuring) {
+        List<Node[]> dfns = fn.getDestructuringRvalues();
+        if (dfns != null) {
+            Map<Node, List<String>> uninitialized =
+                    parser.compilerEnv.isLatestEcmaScript()
+                            ? uninitializedInPatterns(fn, destructuring)
+                            : Map.of();
+            for (var i : dfns) {
+                Node a = i[0];
+                if (i[1] instanceof AstNode) {
+                    AstNode b = (AstNode) i[1];
+                    Node transformed = transform(b);
+                    if (i.length > 2) {
+                        parser.nameAnonymousFunction(transformed, i[2].getString());
+                    }
+                    List<String> names = uninitialized.get(b);
+                    if (names != null) {
+                        transformed = checkParamTdz(transformed, new HashSet<>(names));
+                    }
+                    a.replaceChild(b, transformed);
+                }
+            }
+        }
+    }
+
+    /**
+     * The parameters that are not initialized yet when the default values and the computed keys of
+     * the patterns in the parameter list are evaluated.
+     */
+    private static Map<Node, List<String>> uninitializedInPatterns(
+            FunctionNode fn, Node destructuring) {
+        Map<Node, List<String>> result = new IdentityHashMap<>();
+        List<String> names = new ArrayList<>();
+        for (AstNode param : fn.getParams()) {
+            collectParamNames(param, names);
+        }
+        int[] index = new int[1];
+        Node assignment = destructuring == null ? null : destructuring.getFirstChild();
+        for (AstNode param : fn.getParams()) {
+            int start = index[0];
+            visitPatternExpressions(
+                    param,
+                    index,
+                    (expression, first) ->
+                            result.put(expression, names.subList(first, names.size())));
+            if (!(param instanceof Name) && assignment != null) {
+                // the default value of the pattern itself
+                for (Node[] value : fn.getDestructuringRvalues()) {
+                    if (!result.containsKey(value[1]) && contains(assignment, value[0])) {
+                        result.put(value[1], names.subList(start, names.size()));
+                    }
+                }
+                assignment = assignment.getNext();
+            }
+        }
+        return result;
+    }
+
+    private static boolean contains(Node tree, Node node) {
+        if (tree == node) {
+            return true;
+        }
+        for (Node child = tree.getFirstChild(); child != null; child = child.getNext()) {
+            if (contains(child, node)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Calls visitor with the default values and the computed keys of a binding pattern, and the
+     * index, among the bound names counted from index[0], of the first one that is not initialized
+     * when they are evaluated.
+     */
+    private static void visitPatternExpressions(
+            AstNode pattern, int[] index, ObjIntConsumer<AstNode> visitor) {
+        if (pattern instanceof Name) {
+            index[0]++;
+        } else if (pattern instanceof ArrayLiteral) {
+            for (AstNode elem : ((ArrayLiteral) pattern).getElements()) {
+                visitPatternExpressions(elem, index, visitor);
+            }
+        } else if (pattern instanceof ObjectLiteral) {
+            for (AbstractObjectProperty prop : ((ObjectLiteral) pattern).getElements()) {
+                if (prop instanceof ObjectProperty) {
+                    AstNode key = ((ObjectProperty) prop).getKey();
+                    if (key instanceof ComputedPropertyKey) {
+                        visitor.accept(((ComputedPropertyKey) key).getExpression(), index[0]);
+                    }
+                    visitPatternExpressions(((ObjectProperty) prop).getValue(), index, visitor);
+                } else if (prop instanceof SpreadObjectProperty) {
+                    visitPatternExpressions(
+                            ((SpreadObjectProperty) prop).getSpreadNode(), index, visitor);
+                }
+            }
+        } else if (pattern instanceof Assignment) {
+            int start = index[0];
+            visitPatternExpressions(((Assignment) pattern).getLeft(), index, visitor);
+            visitor.accept(((Assignment) pattern).getRight(), start);
+        } else if (pattern instanceof Spread) {
+            visitPatternExpressions(((Spread) pattern).getExpression(), index, visitor);
+        }
+    }
+
+    /**
+     * Initializes the parameters in their order (ECMA-262 10.2.11 IteratorBindingInitialization):
+     * default values, patterns and, when they start uninitialized, the values passed.
+     */
+    private void initParamsInOrder(
+            FunctionNode fn, Node body, Node destructuring, int lineno, int column) {
+        Map<String, AstNode> defaults = new HashMap<>();
+        if (fn.getDefaultParams() != null) {
+            for (int i = 0; i + 1 < fn.getDefaultParams().size(); i += 2) {
+                defaults.put(
+                        (String) fn.getDefaultParams().get(i),
+                        (AstNode) fn.getDefaultParams().get(i + 1));
+            }
+        }
+        Set<String> uninitialized = fn.getUninitializedParams();
+        boolean generator = fn.isGeneratorFunction();
+        Node init = new Node(Token.BLOCK);
+        Map<String, String> passed = new HashMap<>();
+        if (uninitialized != null) {
+            for (AstNode param : fn.getParams()) {
+                if (param instanceof Name) {
+                    String name = ((Name) param).getIdentifier();
+                    String temp = fn.getNextTempName();
+                    fn.putSymbol(new Symbol(Symbol.Type.VAR, temp));
+                    passed.put(name, temp);
+                    init.addChildToBack(initParam(temp, parser.createName(name)));
+                }
+            }
+            for (String name : uninitialized) {
+                init.addChildToBack(initParam(name, new Node(Token.TDZ_SENTINEL)));
+            }
+        }
+        for (AstNode param : fn.getParams()) {
+            if (!(param instanceof Name)) {
+                // one pattern for each assignment, in the same order
+                Node pattern = destructuring.getFirstChild();
+                destructuring.removeChild(pattern);
+                Node destructure = new Node(Token.EXPR_VOID, pattern, lineno, column);
+                // the prologue of a compiled generator cannot hold a try
+                init.addChildToBack(
+                        generator ? destructure : guardIterators(destructure, lineno, column));
+                continue;
+            }
+            String name = ((Name) param).getIdentifier();
+            AstNode defaultValue = defaults.get(name);
+            String source = passed.getOrDefault(name, name);
+            if (defaultValue != null) {
+                Node value = transform(defaultValue);
+                parser.nameAnonymousFunction(value, name);
+                value = checkParamTdz(value, uninitializedParams(fn, name));
+                Node isUndefined =
+                        createBinary(
+                                Token.SHEQ,
+                                parser.createName(source),
+                                new KeywordLiteral().setType(Token.UNDEFINED));
+                if (passed.isEmpty()) {
+                    init.addChildToBack(
+                            createIf(
+                                    isUndefined,
+                                    initParam(name, value),
+                                    null,
+                                    body.getLineno(),
+                                    body.getColumn()));
+                } else {
+                    init.addChildToBack(
+                            initParam(
+                                    name,
+                                    new Node(
+                                            Token.HOOK,
+                                            isUndefined,
+                                            value,
+                                            parser.createName(source))));
+                }
+            } else if (!passed.isEmpty()) {
+                init.addChildToBack(initParam(name, parser.createName(source)));
+            }
+        }
+        if (generator) {
+            fn.setGeneratorParamInitBlock(init);
+        } else {
+            body.addChildToFront(init);
+        }
+    }
+
+    private Node initParam(String name, Node value) {
+        Node set = new Node(Token.SETNAME, Node.newString(Token.BINDNAME, name), value);
+        set.putIntProp(Node.TDZ_DECLARATION_PROP, 1);
+        return new Node(Token.EXPR_VOID, set);
+    }
+
+    /**
+     * Finds whether eval code or a closure in the parameter list may refer to a parameter that is
+     * not initialized yet: if so, the parameters start in their temporal dead zone at run time.
+     */
+    private void findUninitializedParams(FunctionNode fn) {
+        List<String> names = new ArrayList<>();
+        for (AstNode param : fn.getParams()) {
+            collectParamNames(param, names);
+        }
+        int[] index = new int[1];
+        boolean[] inPattern = new boolean[1];
+        boolean found = false;
+        for (AstNode param : fn.getParams()) {
+            int start = index[0];
+            visitPatternExpressions(
+                    param,
+                    index,
+                    (expression, first) ->
+                            inPattern[0] |=
+                                    mayReferTo(expression, names.subList(first, names.size())));
+            List<Object> defaults = fn.getDefaultParams();
+            if (param instanceof Name && defaults != null) {
+                int i = defaults.indexOf(((Name) param).getIdentifier());
+                if (i >= 0) {
+                    found |=
+                            mayReferTo(
+                                    (AstNode) defaults.get(i + 1),
+                                    names.subList(start, names.size()));
+                }
+            }
+        }
+        found |= inPattern[0];
+        List<Node[]> patternDefaults = fn.getDestructuringRvalues();
+        if (!found && patternDefaults != null) {
+            // the default value of a whole pattern is not part of it
+            for (Node[] value : patternDefaults) {
+                found |= value[1] instanceof AstNode && containsEval((AstNode) value[1]);
+            }
+        }
+        if (found) {
+            fn.setRequiresActivation();
+            fn.setUninitializedParams(new LinkedHashSet<>(names));
+            parser.lexicalBindings = true;
+            // the closures resolve the parameters through the syntax tree
+            if (fn.getDefaultParams() != null) {
+                for (Object value : fn.getDefaultParams()) {
+                    if (value instanceof AstNode && ((AstNode) value).getParent() != fn) {
+                        // an arrow function's: parsed as an assignment of the code around it
+                        ((AstNode) value).setParent(fn);
+                    }
+                }
+            }
+            for (AstNode param : fn.getParams()) {
+                if (param.getParent() != fn) {
+                    param.setParent(fn);
+                }
+            }
+        }
+    }
+
+    private static boolean containsEval(AstNode expression) {
+        return mayReferTo(expression, List.of());
+    }
+
+    /** Whether expression evaluates code, or has a function that refers to one of names. */
+    private static boolean mayReferTo(AstNode expression, List<String> names) {
+        boolean[] found = new boolean[1];
+        expression.visit(
+                node -> {
+                    if (node instanceof FunctionCall
+                            && ((FunctionCall) node).getTarget() instanceof Name
+                            && "eval"
+                                    .equals(
+                                            ((Name) ((FunctionCall) node).getTarget())
+                                                    .getIdentifier())) {
+                        found[0] = true;
+                    } else if (node instanceof Name
+                            && names.contains(((Name) node).getIdentifier())
+                            && isInFunction(node, expression)) {
+                        found[0] = true;
+                    }
+                    return !found[0];
+                });
+        return found[0];
+    }
+
+    private static boolean isInFunction(AstNode node, AstNode limit) {
+        for (AstNode n = node; n != null; n = n.getParent()) {
+            if (n instanceof FunctionNode) {
+                return true;
+            }
+            if (n == limit) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     /**
      * Splits the body of a function that the class compiler found too large into chunks (Splitter),
      * before it is transformed.
@@ -1051,7 +1352,7 @@ public final class IRFactory {
         return names;
     }
 
-    private static void collectParamNames(AstNode pattern, Set<String> names) {
+    private static void collectParamNames(AstNode pattern, Collection<String> names) {
         if (pattern instanceof Name) {
             names.add(((Name) pattern).getIdentifier());
         } else if (pattern instanceof ArrayLiteral) {
@@ -1087,6 +1388,38 @@ public final class IRFactory {
         }
         if (type == Token.FUNCTION) {
             return node;
+        }
+        if (node instanceof Scope && ((Scope) node).getSymbolTable() != null) {
+            // the names that the scope declares itself, e.g. of a class
+            Set<String> declared = ((Scope) node).getSymbolTable().keySet();
+            if (!Collections.disjoint(uninitialized, declared)) {
+                uninitialized = new HashSet<>(uninitialized);
+                uninitialized.removeAll(declared);
+            }
+        }
+        Object ids = node.getProp(Node.OBJECT_IDS_PROP);
+        if (ids instanceof Object[]) {
+            // computed keys are kept out of the children
+            Object[] keys = (Object[]) ids;
+            for (int i = 0; i < keys.length; i++) {
+                if (keys[i] instanceof Node) {
+                    keys[i] = checkParamTdz((Node) keys[i], uninitialized);
+                }
+            }
+        }
+        Node target = node.getFirstChild();
+        if ((type == Token.INC || type == Token.DEC)
+                && target.getType() == Token.NAME
+                && uninitialized.contains(target.getString())) {
+            return checkParamTdz(target, uninitialized);
+        }
+        if (type == Token.SETNAME && uninitialized.contains(target.getString())) {
+            // the value is evaluated, then storing it throws
+            Node value = target.getNext();
+            node.removeChild(value);
+            Node check = Node.newString(Token.CHECK_TDZ, target.getString());
+            check.addChildToBack(new Node(Token.TDZ_SENTINEL));
+            return new Node(Token.COMMA, checkParamTdz(value, uninitialized), check);
         }
         for (Node child = node.getFirstChild(); child != null; ) {
             Node next = child.getNext();
@@ -2530,7 +2863,7 @@ public final class IRFactory {
      * Whether a closure or a direct eval created by these nodes can capture the bindings of a loop
      * head: only then does each iteration need its own copy of the loop's scope.
      */
-    private static boolean mayCapture(Node... nodes) {
+    static boolean mayCapture(Node... nodes) {
         for (Node node : nodes) {
             if (node != null && capturesScope(node)) {
                 return true;

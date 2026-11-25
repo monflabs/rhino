@@ -809,6 +809,7 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         instructionObjs[base + Icode.COPY_SCOPE] = new DoCopyScope();
         instructionObjs[base + Icode.TDZ_SENTINEL] = new DoTdzSentinel();
         instructionObjs[base + Icode.CHECK_TDZ] = new DoCheckTdz();
+        instructionObjs[base + Icode.INIT_NAME] = new DoInitName();
         instructionObjs[base + Icode.CHECK_BOUND_TDZ] = new DoCheckBoundTdz();
         instructionObjs[base + Icode.ITER_OP] = new DoIterOp();
         instructionObjs[base + Icode.ITER_GUARD] = new DoIteratorGuard();
@@ -3634,6 +3635,20 @@ public final class Interpreter extends AInterpreter<CallFrame, InterpreterData<?
         @Override
         NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
             ScriptRuntime.checkInitialized(frame.stack[frame.stackTop], state.stringReg);
+            return null;
+        }
+    }
+
+    private static class DoInitName extends InstructionClass {
+        @Override
+        NewState execute(Context cx, CallFrame frame, InterpreterState state, int op) {
+            Object value = frame.stack[frame.stackTop];
+            if (value == DOUBLE_MARK) {
+                value = ScriptRuntime.wrapNumber(frame.doubleStack[frame.stackTop]);
+            }
+            VarScope bound = (VarScope) frame.stack[--frame.stackTop];
+            frame.stack[frame.stackTop] =
+                    ScriptRuntime.initName(bound, value, cx, frame.scope, state.stringReg);
             return null;
         }
     }

@@ -309,6 +309,9 @@ public class Context implements Closeable {
      *       functions have their own {@code arguments} and {@code caller} (undefined).
      *   <li>The discriminant of a {@code switch} and the parameter of a {@code catch} do not see
      *       the block's {@code let}/{@code const}.
+     *   <li>Parameters are initialized in their order, default values and patterns together, and
+     *       eval code and closures of the list see the later ones in their TDZ.
+     *   <li>The initializers of a {@code for (let ...)} head see its bindings in their TDZ.
      *   <li>Closures in the head of {@code for (let/const ... in/of ...)} see the loop bindings in
      *       their TDZ.
      *   <li>{@code push} and {@code unshift} go through index properties of the prototypes.

@@ -65,6 +65,9 @@ final class VariableAllocation {
     }
 
     private void allocate(FunctionNode fn, Set<String> activationNames) {
+        if (fn.getUninitializedParams() != null) {
+            return; // reads by name check the temporal dead zone
+        }
         boolean generator = fn.isGenerator() || fn.isES6Generator();
         if ((fn.requiresArgumentObject()
                 && ((!fn.isInStrictMode() && fn.getParamCount() != 0)

@@ -1223,7 +1223,11 @@ class CodeGenerator<T extends ScriptOrFn<T>> {
                     if (checkTdz) {
                         addStringOp(Icode.CHECK_BOUND_TDZ, name);
                     }
-                    addStringOp(type, name);
+                    addStringOp(
+                            node.getIntProp(Node.LEXICAL_INIT_PROP, 0) == 1
+                                    ? Icode.INIT_NAME
+                                    : type,
+                            name);
                     stackChange(-1);
                 }
                 break;
