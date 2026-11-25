@@ -28,57 +28,6 @@ public class ClassCache implements Serializable {
     private transient volatile Map<Class<?>, Object> interfaceAdapterCache;
     private int generatedClassSerial;
     private VarScope associatedScope;
-    private transient volatile MemberPolicy memberPolicy;
-
-    /**
-     * Sets the policy that decides which Java members scripts see. The reflection information
-     * cached so far is dropped, so set it before scripts run.
-     */
-    public synchronized void setMemberPolicy(MemberPolicy policy) {
-        memberPolicy = policy;
-        clearCaches();
-    }
-
-    public MemberPolicy getMemberPolicy() {
-        return memberPolicy;
-    }
-
-    /**
-     * The reflection information of a class cache, to be reused by another one (typically that of
-     * another scope of the same host) under the same {@link MemberPolicy}. The entries are shared,
-     * not copied; they keep the scope that reflected them reachable, so take a snapshot from a
-     * dedicated scope that lives as long as the snapshot.
-     */
-    public static final class Snapshot {
-        private final Map<CacheKey, JavaMembers> entries;
-        private final MemberPolicy policy;
-
-        private Snapshot(Map<CacheKey, JavaMembers> entries, MemberPolicy policy) {
-            this.entries = entries;
-            this.policy = policy;
-        }
-
-        public int size() {
-            return entries.size();
-        }
-
-        /**
-         * Loads the entries into the cache.
-         *
-         * @throws IllegalStateException when the cache has another member policy than the one the
-         *     snapshot was taken under
-         */
-        public void restore(ClassCache cache) {
-            if (!Objects.equals(policy, cache.getMemberPolicy())) {
-                throw new IllegalStateException("the member policy differs from the snapshot's");
-            }
-            cache.getClassCacheMap().putAll(entries);
-        }
-    }
-
-    public Snapshot snapshot() {
-        return new Snapshot(new ConcurrentHashMap<>(getClassCacheMap()), memberPolicy);
-    }
 
     /**
      * CacheKey is a combination of class and securityContext. This is required when classes are

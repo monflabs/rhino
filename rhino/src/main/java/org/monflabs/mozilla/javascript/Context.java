@@ -574,40 +574,6 @@ public class Context implements Closeable {
      */
     public static final int FEATURE_INTL_402 = 22;
 
-    /**
-     * Error objects behave as they did in the Salesforce script4 engine: {@code name}, {@code
-     * message} and {@code stack} are enumerable own properties, the {@code stack} is captured when
-     * the error is first thrown rather than when it is constructed, and the V8 stack trace API
-     * ({@code CallSite}, {@code Error.stackTraceLimit}, {@code Error.prepareStackTrace}) is not
-     * defined. Host choice, independent of the language version; off by default.
-     */
-    public static final int FEATURE_LEGACY_ERROR_PROPERTIES = 23;
-
-    /**
-     * The parser accepts and discards type hints: {@code var x : T}, {@code function f(a : T) : T}
-     * and {@code : void}. The type is a name, qualified names and array suffixes; nothing is kept
-     * or checked. Host choice, independent of the language version; off by default.
-     */
-    public static final int FEATURE_TYPE_HINTS = 24;
-
-    /**
-     * Overload resolution of the Java methods called by scripts follows the Salesforce script4
-     * engine, for scripts that depend on its choices: a JavaScript array is ranked by its first
-     * non-null element, the elements of a vararg are compared rather than the array that holds
-     * them, and a method without varargs beats one with varargs on a tie. Host choice, independent
-     * of the language version; off by default.
-     */
-    public static final int FEATURE_LEGACY_OVERLOAD_RESOLUTION = 25;
-
-    /**
-     * An overload whose parameter does not accept null (according to {@link
-     * MemberPolicy#isParameterNonNull}) is ruled out when a script passes null there, so that a
-     * null argument selects the overload that accepts it. Needs a {@link MemberPolicy} on the
-     * {@link ClassCache} and is read when a class is reflected. Host choice, independent of the
-     * language version; off by default.
-     */
-    public static final int FEATURE_NONNULL_PARAMETERS = 26;
-
     public static final String languageVersionProperty = "language version";
     public static final String errorReporterProperty = "error reporter";
 
@@ -2294,10 +2260,6 @@ public class Context implements Closeable {
         while ((e instanceof InvocationTargetException)) {
             e = ((InvocationTargetException) e).getTargetException();
         }
-        Context current = getCurrentContext();
-        if (current != null) {
-            e = current.getFactory().mapThrowable(current, e);
-        }
         // special handling of Error so scripts would not catch them
         if (e instanceof Error) {
             Context cx = getContext();
@@ -2533,24 +2495,6 @@ public class Context implements Closeable {
         }
         classShutter = shutter;
         hasClassShutter = true;
-    }
-
-    /**
-     * Sets the limits that bound what scripts running in this context can allocate, or null for
-     * none.
-     *
-     * @see ResourceLimits
-     */
-    public final void setResourceLimits(ResourceLimits limits) {
-        if (limits != null) {
-            ScriptRuntime.resourceLimitsUsed = true;
-        }
-        this.resourceLimits = limits;
-    }
-
-    /** The resource limits of this context, or null. */
-    public final ResourceLimits getResourceLimits() {
-        return resourceLimits;
     }
 
     final synchronized ClassShutter getClassShutter() {
@@ -3554,7 +3498,6 @@ public class Context implements Closeable {
 
     private SecurityController securityController;
     private boolean hasClassShutter;
-    private ResourceLimits resourceLimits;
     private ClassShutter classShutter;
     private ErrorReporter errorReporter;
     RegExpProxy regExpProxy;

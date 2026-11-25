@@ -188,11 +188,7 @@ public class NativeJavaMethod extends BaseFunction {
             printDebug("Calling ", meth, args);
         }
 
-        var interceptor = cx.getFactory().getInvocationInterceptor();
-        var returnValue =
-                interceptor == null
-                        ? meth.invoke(javaObject, args)
-                        : interceptor.invoke(cx, meth.member(), javaObject, args, meth::invoke);
+        var returnValue = meth.invoke(javaObject, args);
         var returnType = meth.getReturnType();
 
         if (debug) {
@@ -226,15 +222,6 @@ public class NativeJavaMethod extends BaseFunction {
 
     int findCachedFunction(Context cx, Object[] args) {
         if (methods.length > 1) {
-            if (cx.hasFeature(Context.FEATURE_LEGACY_OVERLOAD_RESOLUTION)) {
-                // the ranking looks inside JavaScript arrays: the classes of the arguments do not
-                // decide the overload
-                for (Object arg : args) {
-                    if (arg instanceof NativeArray) {
-                        return findFunction(cx, methods, args);
-                    }
-                }
-            }
             for (ResolvedOverload ovl : overloadCache) {
                 if (ovl.matches(args)) {
                     return ovl.index;
@@ -268,7 +255,6 @@ public class NativeJavaMethod extends BaseFunction {
             return 0;
         }
 
-        final boolean legacy = cx.hasFeature(Context.FEATURE_LEGACY_OVERLOAD_RESOLUTION);
         int firstBestFit = -1;
         int[] firstBestFitWeights = null;
 
@@ -313,7 +299,7 @@ public class NativeJavaMethod extends BaseFunction {
                     else ++worseCount;
                 } else {
                     int preference =
-                            preferSignature(args, member, weights, bestFit, bestFitWeights, legacy);
+                            preferSignature(args, member, weights, bestFit, bestFitWeights);
                     if (preference == PREFERENCE_AMBIGUOUS) {
                         break;
                     } else if (preference == PREFERENCE_FIRST_ARG) {
@@ -428,30 +414,20 @@ public class NativeJavaMethod extends BaseFunction {
             ExecutableBox member1,
             int[] computedWeights1,
             ExecutableBox member2,
-            int[] computedWeights2,
-            boolean legacy) {
+            int[] computedWeights2) {
         final var types1 = member1.getArgTypes();
         final var types2 = member2.getArgTypes();
 
         int totalPreference = 0;
         for (int j = 0; j < args.length; j++) {
-            var type1 =
+            final var type1 =
                     member1.isVarArgs() && j >= types1.size()
                             ? types1.get(types1.size() - 1)
                             : types1.get(j);
-            var type2 =
+            final var type2 =
                     member2.isVarArgs() && j >= types2.size()
                             ? types2.get(types2.size() - 1)
                             : types2.get(j);
-            if (legacy) {
-                // the elements of a vararg are compared, not the array that holds them
-                if (member1.isVarArgs() && j >= types1.size() - 1 && type1.isArray()) {
-                    type1 = type1.getComponentType();
-                }
-                if (member2.isVarArgs() && j >= types2.size() - 1 && type2.isArray()) {
-                    type2 = type2.getComponentType();
-                }
-            }
             if (type1.asClass() == type2.asClass()) {
                 continue;
             }
@@ -459,26 +435,14 @@ public class NativeJavaMethod extends BaseFunction {
 
             // Determine which of type1, type2 is easier to convert from arg.
 
-            var rank1 =
+            final var rank1 =
                     j < computedWeights1.length
                             ? computedWeights1[j]
                             : NativeJavaObject.getConversionWeight(arg, type1);
-            var rank2 =
+            final var rank2 =
                     j < computedWeights2.length
                             ? computedWeights2[j]
                             : NativeJavaObject.getConversionWeight(arg, type2);
-            if (legacy
-                    && rank1 == rank2
-                    && arg instanceof NativeArray array
-                    && type1.isArray()
-                    && type2.isArray()) {
-                // a JavaScript array is ranked by its first non-null element
-                Object first = firstNonNullElement(array);
-                if (first != null) {
-                    rank1 = NativeJavaObject.getConversionWeight(first, type1.getComponentType());
-                    rank2 = NativeJavaObject.getConversionWeight(first, type2.getComponentType());
-                }
-            }
 
             int preference;
             if (rank1 < rank2) {
@@ -506,24 +470,7 @@ public class NativeJavaMethod extends BaseFunction {
                 break;
             }
         }
-        if (legacy
-                && totalPreference == PREFERENCE_EQUAL
-                && member1.isVarArgs() != member2.isVarArgs()) {
-            return member1.isVarArgs() ? PREFERENCE_SECOND_ARG : PREFERENCE_FIRST_ARG;
-        }
         return totalPreference;
-    }
-
-    private static Object firstNonNullElement(NativeArray array) {
-        for (long i = 0, n = array.getLength(); i < n; i++) {
-            Object element = array.get((int) i, array);
-            if (element != Scriptable.NOT_FOUND
-                    && element != null
-                    && element != Undefined.instance) {
-                return element;
-            }
-        }
-        return null;
     }
 
     /**
@@ -549,14 +496,6 @@ public class NativeJavaMethod extends BaseFunction {
         } else {
             if (typeLen != args.length) {
                 return null;
-            }
-        }
-        final var nonNull = member.getNonNullParameters();
-        if (nonNull != null) {
-            for (int i = 0; i < nonNull.length && i < args.length; i++) {
-                if (nonNull[i] && args[i] == null) {
-                    return null;
-                }
             }
         }
         final var weights = new int[typeLen];

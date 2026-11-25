@@ -183,16 +183,7 @@ public class NativeJavaClass extends NativeJavaObject implements Function {
 
     static Scriptable constructSpecific(
             Context cx, VarScope scope, Object[] args, ExecutableBox ctor) {
-        var interceptor = cx.getFactory().getInvocationInterceptor();
-        Object instance;
-        if (interceptor == null) {
-            instance = constructInternal(args, ctor);
-        } else {
-            Object[] converted = ctor.wrapArgsInternal(args, Map.of());
-            instance =
-                    interceptor.invoke(
-                            cx, ctor.member(), null, converted, (t, a) -> ctor.newInstance(a));
-        }
+        Object instance = constructInternal(args, ctor);
         // we need to force this to be wrapped, because construct _has_
         // to return a scriptable
         VarScope topLevel = ScriptableObject.getTopLevelScope(scope);

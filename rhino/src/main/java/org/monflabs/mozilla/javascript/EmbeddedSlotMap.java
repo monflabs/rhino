@@ -149,7 +149,6 @@ public class EmbeddedSlotMap<T extends PropHolder<T>> implements SlotMap<T> {
     }
 
     protected void promoteMap(SlotMapOwner<T> owner, Slot<T> newSlot) {
-        ScriptRuntime.checkResource(ResourceLimits.Kind.OBJECT, count + 1);
         var newMap = new HashSlotMap<T>(this, newSlot);
         owner.setMap(newMap);
     }

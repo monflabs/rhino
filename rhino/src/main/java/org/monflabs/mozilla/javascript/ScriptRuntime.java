@@ -4446,9 +4446,6 @@ public class ScriptRuntime {
             Context.reportWarning(message);
             return x;
         }
-        if (cx.getResourceLimits() != null) {
-            cx.getResourceLimits().check(cx, ResourceLimits.Kind.EVAL, ((CharSequence) x).length());
-        }
         if (filename == null) {
             int[] linep = new int[1];
             filename = Context.getSourcePositionFromStack(linep);
@@ -7987,26 +7984,6 @@ public class ScriptRuntime {
     public static void checkStringLength(long length) {
         if (length > MAX_STRING_LENGTH) {
             throw rangeError(getMessageById("msg.string.too.long"));
-        }
-        if (length >= ResourceLimits.STRING_FLOOR) {
-            checkResource(ResourceLimits.Kind.STRING, length);
-        }
-    }
-
-    /** Set once any context has limits, so that the usual case costs a field read. */
-    static volatile boolean resourceLimitsUsed;
-
-    /** Reports the size of what is about to be created to the {@link ResourceLimits}, if any. */
-    public static void checkResource(ResourceLimits.Kind kind, long size) {
-        if (!resourceLimitsUsed) {
-            return;
-        }
-        Context cx = Context.getCurrentContext();
-        if (cx != null) {
-            ResourceLimits limits = cx.getResourceLimits();
-            if (limits != null) {
-                limits.check(cx, kind, size);
-            }
         }
     }
 

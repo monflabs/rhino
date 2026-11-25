@@ -409,7 +409,6 @@ public class NativeArray extends ScriptableObject implements List {
                 return false;
             }
             capacity = Math.max(capacity, (int) (dense.length * GROW_FACTOR));
-            ScriptRuntime.checkResource(ResourceLimits.Kind.ARRAY, capacity);
             Object[] newDense = new Object[capacity];
             System.arraycopy(dense, 0, newDense, 0, dense.length);
             Arrays.fill(newDense, dense.length, newDense.length, Scriptable.NOT_FOUND);

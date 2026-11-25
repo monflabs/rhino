@@ -114,7 +114,6 @@ public class ContextFactory {
     private volatile boolean sealed;
 
     private volatile List<ModuleLoader> moduleLoaders = List.of();
-    private volatile InvocationInterceptor invocationInterceptor;
 
     private final Object listenersLock = new Object();
     private volatile Object listeners;
@@ -276,12 +275,6 @@ public class ContextFactory {
 
             case Context.FEATURE_INTL_402:
                 return false;
-
-            case Context.FEATURE_LEGACY_ERROR_PROPERTIES:
-            case Context.FEATURE_TYPE_HINTS:
-            case Context.FEATURE_LEGACY_OVERLOAD_RESOLUTION:
-            case Context.FEATURE_NONNULL_PARAMETERS:
-                return false;
         }
         // It is a bug to call the method with unknown featureIndex
         throw new IllegalArgumentException(String.valueOf(featureIndex));
@@ -320,32 +313,6 @@ public class ContextFactory {
     public final void setModuleLoaders(ModuleLoader... loaders) {
         checkNotSealed();
         this.moduleLoaders = List.of(loaders);
-    }
-
-    /**
-     * Sets the interceptor that wraps the calls scripts make to Java methods and constructors.
-     *
-     * @see InvocationInterceptor
-     */
-    public final void setInvocationInterceptor(InvocationInterceptor interceptor) {
-        checkNotSealed();
-        this.invocationInterceptor = interceptor;
-    }
-
-    /** The interceptor of Java calls, or null. */
-    public final InvocationInterceptor getInvocationInterceptor() {
-        return invocationInterceptor;
-    }
-
-    /**
-     * Translates a Java exception thrown by a method or constructor called from a script, before it
-     * is wrapped for the script. Return the throwable to throw: a {@link RhinoException} reaches
-     * the script as is (for example an {@code EcmaError} built with {@link
-     * ScriptRuntime#constructError}); anything else is wrapped in a {@link WrappedException}. Only
-     * called on this failure path. The default returns the throwable unchanged.
-     */
-    protected Throwable mapThrowable(Context cx, Throwable t) {
-        return t;
     }
 
     /** The module loaders of the contexts this factory creates. */

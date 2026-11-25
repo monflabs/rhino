@@ -39,7 +39,6 @@ public class CompilerEnvirons {
         reservedKeywordAsIdentifier = cx.hasFeature(Context.FEATURE_RESERVED_KEYWORD_AS_IDENTIFIER);
         allowMemberExprAsFunctionName = cx.hasFeature(Context.FEATURE_MEMBER_EXPR_AS_FUNCTION_NAME);
         strictMode = cx.hasFeature(Context.FEATURE_STRICT_MODE);
-        typeHints = cx.hasFeature(Context.FEATURE_TYPE_HINTS);
         warningAsError = cx.hasFeature(Context.FEATURE_WARNING_AS_ERROR);
         xmlAvailable = cx.hasFeature(Context.FEATURE_E4X);
 
@@ -51,14 +50,6 @@ public class CompilerEnvirons {
         // Observer code generation in compiled code :
         generateObserverCount = cx.isGenerateObserverCount();
         securityController = cx.getSecurityController();
-    }
-
-    public final boolean isTypeHints() {
-        return typeHints;
-    }
-
-    public void setTypeHints(boolean typeHints) {
-        this.typeHints = typeHints;
     }
 
     public final ErrorReporter getErrorReporter() {
@@ -526,8 +517,6 @@ public class CompilerEnvirons {
     private EvaluationMethod evaluationMethod;
     private boolean generatingSource;
     private boolean strictMode;
-    private boolean typeHints;
-
     private boolean warningAsError;
     private boolean generateObserverCount;
     private boolean recordingComments;

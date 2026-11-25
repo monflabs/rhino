@@ -251,7 +251,6 @@ public class NativeSymbol extends ScriptableObject implements Symbol {
             WeakReference<SymbolKey> ref = registry.get(name);
             SymbolKey key = ref == null ? null : ref.get();
             if (key == null) {
-                ScriptRuntime.checkResource(ResourceLimits.Kind.SYMBOLS, registry.size() + 1);
                 key = new SymbolKey(name, Symbol.Kind.REGISTERED);
                 registry.put(name, new RegistryRef(key));
             }

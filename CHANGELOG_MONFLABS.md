@@ -120,69 +120,12 @@ against a real WebSocket client).
 
 `buildtools/perf-gate.sh 13b295adb` (before M22): no metric regressed beyond its tolerance; `:tests:test` passes.
 
-### Perf gate of M18 to M21 (2026-11-23)
+### M19, M20 and M21 removed from this version (2026-11-24)
 
-The M18 and M19 gate ran together against `9f91ea64a` (`strbuild.cmp.es6` +19.7% led to the static
-`resourceLimitsUsed` flag, re-measured at +4.6%). The M20 and M21 gate ran against `a4abd32e1`: no regression.
-
-### M21 and M20.4: `MemberPolicy`, class cache snapshots, `FEATURE_NONNULL_PARAMETERS` (2026-11-23)
-
-New Java API, off by default, so nothing is gated. Test: `MemberPolicyTest`.
-
-- **21.0, the scope-sharing check.** The members of a class are reflected with the scope the `ClassCache` is
-  associated with, and keep it (their parent scope and `Function.prototype`). Calls use the scope of the call site, so
-  nothing wrong is visible to a script, but a `JavaMembers` reused by another cache keeps the first scope reachable.
-  Hence the rule on `ClassCache.Snapshot`: take it from a dedicated scope that lives as long as the snapshot.
-- **21.1 `MemberPolicy`** (`ClassCache.setMemberPolicy`): consulted when a class is reflected, for the visibility of
-  the class, the public name of each method, field and constructor (null hides it) and the non-null parameters. A
-  hidden class shows no member. Bean properties derive from the original Java names.
-- **21.2 `ClassCache.snapshot()` / `Snapshot.restore(ClassCache)`**: typed replacement for reaching into the class
-  table. The reflected members carry their own type information, so no type-factory snapshot is needed.
-- **21.3** `restore` throws `IllegalStateException` unless the target cache has an `equals` policy.
-- **20.4 `FEATURE_NONNULL_PARAMETERS`**: a method whose parameter is non-null for the policy is ruled out when the
-  script passes null there; read when the class is reflected.
-
-### M20.3: `FEATURE_LEGACY_OVERLOAD_RESOLUTION` (2026-11-23)
-
-Host opt-in, off by default, not gated by the language version. Test: `LegacyOverloadResolutionTest`. With the
-feature, `NativeJavaMethod.preferSignature` follows script4: a JavaScript array is ranked by its first non-null
-element when two overloads take Java arrays; the elements of a vararg are compared rather than the array that holds
-them; and a method without varargs beats one with varargs on a tie. The overload cache is bypassed when an argument
-is a JavaScript array, since the class of the argument no longer decides the overload. A `null` argument is already
-ambiguous between unrelated reference types without the feature, so no rule was added for it.
-
-### M20.2: `FEATURE_TYPE_HINTS`, phase 1 (2026-11-23)
-
-Host opt-in, off by default, not gated by the language version. Test: `TypeHintsTest`. The parser accepts and
-discards `: Type` after a `var`/`let`/`const` binding identifier, after a function parameter, and after the
-parameter list (`: void` included). The type is a name, a qualified name or an array suffix (`T[]`); there is no AST
-node and no check. The scanner only peeks for a `:` at those three positions, where plain JavaScript has none, so
-conditional expressions and labels are unaffected. Arrow functions and generics are not accepted.
-
-### M20.1: `FEATURE_LEGACY_ERROR_PROPERTIES` (2026-11-23)
-
-Host opt-in (`ContextFactory.hasFeature`), off by default, so nothing is gated by the language version. Test:
-`LegacyErrorPropertiesTest`. With the feature, errors follow script4: `name` (on the prototypes), `message` and
-`stack` are enumerable; the `stack` of an error is captured when it is first thrown, not at construction; and the V8
-stack trace API (`CallSite`, `Error.stackTraceLimit`, `Error.prepareStackTrace`) is not defined. A sealed standard
-global rejects a write to a missing `Error.stackTraceLimit` even in sloppy mode, so hiding it is what keeps scripts
-that probe it working.
-
-### M19: host controls (2026-11-23)
-
-New Java API, off by default, so no behavior changes and nothing is gated. Test: `M19HostControlsTest`.
-
-- **`ResourceLimits`** (`Context.setResourceLimits`): the engine reports the size of what a script is about to
-  allocate, by kind (`STRING`, `ARRAY`, `OBJECT`, `COLLECTION`, `BUFFER`, `SYMBOLS`, `EVAL`), and the limit throws to
-  refuse. It reuses the existing `checkStringLength` sites for strings (reported from 4,096 characters up) and adds
-  one call at each of the other slow paths (array growth, slot-map promotion at 1,536 properties, `Map`/`Set`
-  additions, `ArrayBuffer` allocation, `Symbol.for`, `eval`), so a limit costs nothing on the usual operations.
-- **`InvocationInterceptor`** (`ContextFactory.setInvocationInterceptor`): wraps the calls that scripts make to Java
-  methods and constructors (`NativeJavaMethod`, `new` on a Java class); one null check per call without one.
-- **`ContextFactory.mapThrowable`**: translates a Java exception thrown by a called method before it is wrapped for
-  the script; only on the failure path.
-- The array-safe overload cache fix of the plan is not needed yet: array arguments rank the same whatever their
-  elements, so the cache is correct. It moves to 20.3, where the legacy ranking would make it matter.
+The host controls (`ResourceLimits`, `InvocationInterceptor`, `ContextFactory.mapThrowable`), the legacy flags
+(`FEATURE_LEGACY_ERROR_PROPERTIES`, `FEATURE_TYPE_HINTS`, `FEATURE_LEGACY_OVERLOAD_RESOLUTION`,
+`FEATURE_NONNULL_PARAMETERS`) and `MemberPolicy` with the `ClassCache` snapshots are not part of this version: code,
+tests and documentation are removed. The M18 defect fixes and the M22 debugger stay.
 
 ### M18: defects found by the comparison with script4 (2026-11-23)
 
