@@ -214,13 +214,6 @@ against a real WebSocket client).
 
 `buildtools/perf-gate.sh 13b295adb` (before M22): no metric regressed beyond its tolerance; `:tests:test` passes.
 
-### M19, M20 and M21 removed from this version (2026-11-24)
-
-The host controls (`ResourceLimits`, `InvocationInterceptor`, `ContextFactory.mapThrowable`), the legacy flags
-(`FEATURE_LEGACY_ERROR_PROPERTIES`, `FEATURE_TYPE_HINTS`, `FEATURE_LEGACY_OVERLOAD_RESOLUTION`,
-`FEATURE_NONNULL_PARAMETERS`) and `MemberPolicy` with the `ClassCache` snapshots are not part of this version: code,
-tests and documentation are removed. The M18 defect fixes and the M22 debugger stay.
-
 ### M18: defects found by the comparison with script4 (2026-11-23)
 
 All versions (defects no script can rely on); `BACKWARD_COMPATIBILITY.md` 1.111 to 1.113 and 2.9. Test:

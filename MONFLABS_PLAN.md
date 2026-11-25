@@ -59,7 +59,7 @@ existing code and without slowing the engine down.
 | 2026-10-23 | **M17, 17.3: several classes per script** (user decision, rather than loading the numbers and strings of a class from static tables, which would fit the measured scripts but not lift the invokedynamic limit): the functions of a script spread over more classes on a class limit, as Nashorn's compile units; literals of data compiled as data. |
 | 2026-11-20 | **Exception to the gating rule: a defect that no script can rely on** (a miscompilation, an exception of the engine itself such as a `NullPointerException`) **is fixed in all versions** (`AGENTS.md`), and its `BACKWARD_COMPATIBILITY.md` entry says so: 1.90, 1.92–1.94, 1.103, 1.107, 1.108 and 2.7 (the upstream fixes of 2.6 apply to all versions too). |
 | 2026-10-12 | **8.2: private elements in a per-object slot** (as Nashorn): a lazily allocated identity map on ScriptableObject, and a weak side table for the other Scriptables (a constructor's return override); invisible to reflection, Java interop and Proxy. |
-| 2026-11-23 | **M18–M22: embedding extensions for the Salesforce platform** (replacing the script4 fork's patches by minimal extension points): every new behavior is a host choice (`Context.FEATURE_*` through `ContextFactory.hasFeature`, or a Java API), so it needs no `VERSION_ECMASCRIPT` gate. |
+| 2026-11-23 | **M18 and M22: embedding extensions for the Salesforce platform** (replacing the script4 fork's patches by minimal extension points): every new behavior is a host choice (`Context.FEATURE_*` through `ContextFactory.hasFeature`, or a Java API), so it needs no `VERSION_ECMASCRIPT` gate. |
 | 2026-11-23 | **Debugger: interpreted mode only**, layered as in Nashorn: engine hooks, then a neutral `org.monflabs.mozilla.api.debugger` in `rhino`, then frontends: `rhino-debugger` (CDP) and `rhino-debugger-ui` (Swing), both new modules. The Demandware debugger protocol is **not** in this repo (it is an add-on of the Salesforce commerce code base, written against the neutral API). The Nashorn debugger code is relicensed to MPL 2.0 (we own it). |
 | 2026-11-23 | Sort with an inconsistent comparator needs no change: it never throws in either backend (verified). |
 
@@ -931,13 +931,13 @@ tests beyond the constant pool; a backward jump over 32 KB no longer wraps (upst
 in a chunk; in a generator that is not async, statements that yield move to a generator called with `yield*`
 (changelog, "Functions too large for the JIT": a function whose method exceeds 8,000 bytes is also split once).
 
-### M18–M22 — Embedding extensions for the Salesforce platform
+### M18 and M22 — Embedding extensions for the Salesforce platform
 
 Source: the comparison of the script4 fork (`core.script-engine-rhino4`, described in
 `~/Documents/Rhino/SalesforceChnages.md`) with this fork (2026-11-23). Goal: drop script4's patches in favor of small,
 host-controlled extension points, without changing the behavior of existing embeddings. Nothing here is gated by
 `VERSION_ECMASCRIPT`: the new behaviors are host choices (`FEATURE_*`, new Java API) and are off by default. Order:
-M18 and M22 (M19, M20 and M21 are not part of this version).
+M18 and M22.
 Each item needs both backends where relevant, tests, docs (`CHANGELOG_MONFLABS.md`, `BACKWARD_COMPATIBILITY.md` for
 anything observable), the perf gate before committing engine changes, and a commit on `monflabs_enhancements`.
 Starting any item needs the user's go-ahead.
@@ -956,13 +956,6 @@ Starting any item needs the user's go-ahead.
 Not scheduled: compiled `Integer` versus interpreted `Double` results, and `StackOverflowError` from JSON under
 `VERSION_ES6`.
 
-#### M19, M20, M21 — Removed from this version (2026-11-24)
-
-Host controls (`ResourceLimits`, `InvocationInterceptor`, `mapThrowable`), the legacy flags (`FEATURE_LEGACY_ERROR_PROPERTIES`,
-`FEATURE_TYPE_HINTS`, `FEATURE_LEGACY_OVERLOAD_RESOLUTION`, `FEATURE_NONNULL_PARAMETERS`) and API versions
-(`MemberPolicy`, `ClassCache` snapshots) are not part of this version; code, tests and docs are removed. They remain in
-the Salesforce fork.
-
 #### M22 — Debugger
 
 | #    | Change                                                                                      |
@@ -979,7 +972,7 @@ the Salesforce fork.
 Source: the Confluence page "Demandware Rhino Customizations Overview" (1.7R3 to 1.7R5) and
 `~/Documents/Rhino/SalesforceChnages.md`, compared with this fork. Decisions of 2026-11-24: E4X is in scope; platform-specific
 behavior (cartridges, `JSMirror`, `Decimal`, Joda, `Record`) becomes a **host hook**, never engine code; the compiled `Integer`
-constants are an open question, not scheduled. Same rules as M18–M22: nothing gated by `VERSION_ECMASCRIPT`, every behavior is a
+constants are an open question, not scheduled. Same rules as M18 and M22: nothing gated by `VERSION_ECMASCRIPT`, every behavior is a
 host choice (`FEATURE_*` or Java API) and off by default, both backends where relevant, tests, docs, perf gate, a commit each.
 Starting any item needs the user's go-ahead.
 
@@ -1012,7 +1005,7 @@ Results of 23.0 (a sealed `initSafeStandardObjects(null, true)` scope, `VERSION_
 | XML null namespace URI (`XMLNode.create`) | not reachable from script (`new Namespace("p", null)` works); check in the Java test of 23.1 | 23.1 |
 | Extra global errors (`IOError`, `Fault`, ...) | missing, as expected | 23.10 |
 | `Kit.classOrNull` | no gap: it already uses `Class.forName` | none |
-| Deprecation reporting | no engine counterpart (`InvocationInterceptor` and `MemberPolicy` are not in this version) | 23.9 |
+| Deprecation reporting | no engine counterpart | 23.9 |
 
 **Open question (not scheduled):** script4 always uses `Double` for number constants in compiled code; this fork keeps `Integer`
 where it is faster, so a compiled script and an interpreted one can differ (`RhinoOptTest.testOptAndNoneOptEqual`). Script4 calls
@@ -1060,8 +1053,5 @@ its choice "still required". Should a host flag, or a change in all versions, re
 | —    | After the milestones (Unicode property escapes, identifier characters; 2026-11-10) | done | 99.1% → 99.2% (42,271 of 42,616; 42,272 since 2026-11-23, current) | 397cd54b5 |
 | —    | Dead zone at run time, order of the parameters, compile time (2026-11-25) | done | 99.2% (unchanged: not covered by test262) | 43688e5ec |
 | 18   | Defects found by the comparison                 | done        | n/a (18.1–18.5)                          | — |
-| 19   | Host controls                                   | removed     | n/a                                      | — |
-| 20   | Legacy-compatibility flags                      | removed     | n/a                                      | — |
-| 21   | API versions                                    | removed     | n/a                                      | — |
 | 22   | Debugger (API, CDP, Swing UI, playground)       | done        | n/a                          | — |
 | 23   | Remaining script4 extensions (E4X, hooks)       | planned     | n/a                          | — |
