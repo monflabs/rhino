@@ -19,12 +19,16 @@ public final class PlaygroundCheerpJ {
     /**
      * Opens the playground over the whole page.
      *
-     * @param args {@code --dark} or {@code --light} to force the theme; otherwise the system's
+     * @param args {@code --dark} or {@code --light} to force the theme; otherwise the system's.
+     *     {@code --sample=NAME} opens that sample: the page passes the {@code sample} parameter of
+     *     its URL
      */
     public static void main(String[] args) {
         Playground.open(
                 args,
                 frame -> {
+                    // the URL names the sample shown, so that it can be bookmarked
+                    frame.onSampleShown(s -> showInUrl(s.urlName(), s.title()));
                     frame.setUndecorated(true);
                     frame.interpretedOnly(
                             "Interpreted only in the browser: CheerpJ cannot link the call sites"
@@ -32,4 +36,13 @@ public final class PlaygroundCheerpJ {
                     frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
                 });
     }
+
+    /**
+     * Sets the {@code sample} parameter of the page's URL, without a reload or a history entry, and
+     * the page's title. Implemented in JavaScript by the page (playground/index.html).
+     *
+     * @param name the sample's name in the URL
+     * @param title the sample's title
+     */
+    static native void showInUrl(String name, String title);
 }

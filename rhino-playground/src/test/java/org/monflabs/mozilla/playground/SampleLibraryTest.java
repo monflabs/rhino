@@ -51,6 +51,37 @@ class SampleLibraryTest {
         assertTrue(library.samples().size() == 2);
     }
 
+    @Test
+    void urlNamesAreReadableAndUnique() throws IOException {
+        SampleLibrary library = SampleLibrary.load();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (Sample sample : library.samples()) {
+            String name = sample.urlName();
+            assertTrue(name.matches("[a-z0-9-]+(/[a-z0-9-]+)+"), name);
+            assertTrue(names.add(name), "two samples named " + name);
+            assertEquals(sample, library.byUrlName(name));
+        }
+        assertEquals(
+                "getting-started/hello", library.byId("01 - Getting started/01 - Hello").urlName());
+        assertEquals(null, library.byUrlName("no/such-sample"));
+    }
+
+    @Test
+    void urlNamesDropNumbersAndPunctuation(@TempDir Path dir) throws IOException {
+        write(
+                dir.resolve("03 - ECMAScript support/12 - ES2026/04 - Math.sumPrecise()/main.js"),
+                "");
+        assertEquals(
+                "ecmascript-support/es2026/math-sumprecise",
+                SampleLibrary.load(dir).samples().get(0).urlName());
+    }
+
+    @Test
+    void theSampleArgument() {
+        assertEquals("a/b", Playground.sampleArgument(new String[] {"--dark", "--sample=a/b"}));
+        assertEquals(null, Playground.sampleArgument(new String[] {"--dark"}));
+    }
+
     private static void write(Path file, String text) throws IOException {
         Files.createDirectories(file.getParent());
         Files.writeString(file, text);

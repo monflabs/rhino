@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.prefs.Preferences;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -89,6 +90,8 @@ public final class PlaygroundFrame extends JFrame {
     private transient Sample sample;
     private transient Sample scratch;
     private transient Future<?> queued;
+    private transient String initial;
+    private transient Consumer<Sample> sampleShown = s -> {};
 
     /**
      * Creates the window.
@@ -146,7 +149,15 @@ public final class PlaygroundFrame extends JFrame {
                             readmeSplit.setDividerLocation(0.72);
                         }
                         // the first run, with the settings made before the window was shown
-                        if (!tree.select(prefs.get("sample", ""))) {
+                        Sample asked =
+                                initial == null
+                                        ? null
+                                        : initial.equals(scratch.urlName())
+                                                ? scratch
+                                                : library.byUrlName(initial);
+                        if (asked != null) {
+                            tree.select(asked.id());
+                        } else if (!tree.select(prefs.get("sample", ""))) {
                             List<Sample> samples = library.samples();
                             if (!samples.isEmpty()) {
                                 tree.select(samples.get(0).id());
@@ -252,11 +263,31 @@ public final class PlaygroundFrame extends JFrame {
 
     // -- samples ----------------------------------------------------------------
 
+    /**
+     * Opens a sample when the window opens, instead of the last one shown.
+     *
+     * @param urlName a name of {@link Sample#urlName()}, or null; an unknown one is ignored
+     */
+    public void openFirst(String urlName) {
+        initial = urlName;
+    }
+
+    /**
+     * Tells a listener each sample shown, for a host that shows it elsewhere: the browser build
+     * puts its name in the page's URL.
+     *
+     * @param listener called on the event dispatch thread
+     */
+    public void onSampleShown(Consumer<Sample> listener) {
+        sampleShown = listener;
+    }
+
     private void show(Sample s) {
         if (sample != null && sample == scratch) {
             saveScratch();
         }
         sample = s;
+        sampleShown.accept(s);
         editor.show(s.source(), s.files(), true);
         readme.show(s.readme() != null ? s.readme() : "## " + s.title());
         setTitle("Rhino Playground - " + s.title());

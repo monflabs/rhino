@@ -149,7 +149,9 @@ JavaScript.
   Swing application, running in this page with [CheerpJ](https://cheerpj.com), with no Java to
   install. It has samples of the language and of the Rhino extensions, and lets you switch between
   ES2026 and ES6. It runs the interpreter only: CheerpJ cannot link the call sites of the classes
-  the compiler generates. The desktop playground has both modes.
+  the compiler generates. The desktop playground has both modes. The page's URL names the sample
+  shown, so that it can be bookmarked or shared: for example
+  [playground/index.html?sample=ecmascript-support/es2020/optional-chaining](playground/index.html?sample=ecmascript-support/es2020/optional-chaining ':ignore').
 - [Features on top of stock Rhino](features.md): what the fork adds, the language and the API
   for embedders.
 - [Changes and incompatibilities](changes.md): what behaves differently, and how to migrate.

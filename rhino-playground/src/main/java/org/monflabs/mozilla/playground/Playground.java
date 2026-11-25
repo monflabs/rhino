@@ -25,10 +25,22 @@ public final class Playground {
     /**
      * Opens the window.
      *
-     * @param args {@code --dark} or {@code --light} to force the theme; otherwise the system's
+     * @param args {@code --dark} or {@code --light} to force the theme; otherwise the system's.
+     *     {@code --sample=NAME} opens that sample (a name of {@link Sample#urlName()})
      */
     public static void main(String[] args) {
         open(args, frame -> {});
+    }
+
+    /** The sample that {@code --sample=NAME} asks for, or null. */
+    static String sampleArgument(String[] args) {
+        String name = null;
+        for (String arg : args) {
+            if (arg.startsWith("--sample=")) {
+                name = arg.substring("--sample=".length());
+            }
+        }
+        return name;
     }
 
     /**
@@ -55,6 +67,7 @@ public final class Playground {
                     UIManager.put("TextComponent.arc", 6);
                     try {
                         PlaygroundFrame frame = new PlaygroundFrame(SampleLibrary.load(), dark);
+                        frame.openFirst(sampleArgument(args));
                         beforeShow.accept(frame);
                         frame.setVisible(true);
                     } catch (IOException e) {

@@ -5,6 +5,7 @@
 package org.monflabs.mozilla.playground;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -30,6 +31,25 @@ public record Sample(
     /** The name the script runs under. */
     public String fileName() {
         return id.substring(id.lastIndexOf('/') + 1) + "/main.js";
+    }
+
+    /**
+     * The name of the sample in a URL: the folders without their numbers, in lower case, with
+     * hyphens, such as {@code getting-started/hello}.
+     */
+    public String urlName() {
+        StringBuilder name = new StringBuilder();
+        for (String folder : id.split("/")) {
+            if (!name.isEmpty()) {
+                name.append('/');
+            }
+            name.append(
+                    SampleLibrary.displayName(folder)
+                            .toLowerCase(Locale.ROOT)
+                            .replaceAll("[^a-z0-9]+", "-")
+                            .replaceAll("^-|-$", ""));
+        }
+        return name.toString();
     }
 
     /** The same sample with another script. */

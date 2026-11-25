@@ -82,11 +82,30 @@
         const dir = location.pathname.replace(/[^/]*$/, "");
         const jar = "/app" + dir + "rhino-playground.jar";
         try {
-          await cheerpjInit({ version: 21 });
+          await cheerpjInit({
+            version: 21,
+            natives: {
+              // PlaygroundCheerpJ.showInUrl: the sample shown is in the URL, to bookmark or share
+              async Java_org_monflabs_mozilla_playground_cheerpj_PlaygroundCheerpJ_showInUrl(lib, name, title) {
+                const params = new URLSearchParams(location.search);
+                params.set("sample", name);
+                // a name is made of [a-z0-9-] and slashes, which stay readable
+                const query = params.toString().replace(/%2F/g, "/");
+                history.replaceState(null, "", location.pathname + "?" + query + location.hash);
+                document.title = "Rhino Playground - " + title.replace(/`/g, "");
+              },
+            },
+          });
           cheerpjCreateDisplay(-1, -1, document.getElementById("cheerpj"));
           document.getElementById("loading").remove();
-          // The playground starts in the same mode
-          await cheerpjRunMain("org.monflabs.mozilla.playground.cheerpj.PlaygroundCheerpJ", jar, "--" + theme);
+          // The playground starts in the same mode, on the sample named in the URL
+          // (?sample=getting-started/hello), else the last one shown
+          const args = ["--" + theme];
+          const sample = new URLSearchParams(location.search).get("sample");
+          if (sample) {
+            args.push("--sample=" + sample);
+          }
+          await cheerpjRunMain("org.monflabs.mozilla.playground.cheerpj.PlaygroundCheerpJ", jar, ...args);
         } catch (e) {
           document.getElementById("loading").textContent = "The playground could not be started: " + e;
         }

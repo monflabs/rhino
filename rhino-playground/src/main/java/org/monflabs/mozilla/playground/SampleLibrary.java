@@ -185,6 +185,16 @@ public final class SampleLibrary {
         return samples;
     }
 
+    /** The sample with a name of {@link Sample#urlName()}, or null. */
+    public Sample byUrlName(String name) {
+        for (Sample s : samples) {
+            if (s.urlName().equals(name)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
     /** The sample with an id, or null. */
     public Sample byId(String id) {
         for (Sample s : samples) {

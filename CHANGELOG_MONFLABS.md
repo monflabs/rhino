@@ -40,6 +40,17 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Playground: the URL names the sample (2026-11-25)
+
+Not gated, no engine change. Test: `SampleLibraryTest`; the page itself checked in a browser.
+
+- In the browser playground, the URL names the sample shown (`?sample=getting-started/hello`), and is updated when
+  another one is selected, without a reload or a history entry; the page's title follows. Opening such a URL opens that
+  sample; an unknown name opens the last sample shown, as before.
+- The name is the sample's folders without their numbers, in lower case with hyphens (`Sample.urlName`; the scratchpad
+  is `scratch`). The page passes it as `--sample=NAME`, which the desktop playground also accepts, and the playground
+  updates the URL through a native method that the page implements (`PlaygroundCheerpJ.showInUrl`).
+
 ### Playground: debugging again after a stopped run in the browser (2026-11-25)
 
 Not gated, no engine change. Test: `DebugRunTest` (the defect itself only shows under CheerpJ, where it was checked by
