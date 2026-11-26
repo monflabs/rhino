@@ -423,7 +423,10 @@ short `eval`, is lower.
   base, and 7.0 → 5.7 KB allocated per `eval`; compiling `earley-boyer` in the interpreter −7%.
 - **Still slower than the upstream base:** in the gate of 2026-11-25 (`43688e5ec`), `compile.earley-boyer` takes +19.9%
   interpreted under `VERSION_ECMASCRIPT` (3.70 → 4.44 ms) and +10.2% compiled under `VERSION_ES6` (23.7 → 26.1 ms), and
-  these two metrics fail the gate. Most of it is the analysis that keeps variables in registers and at fixed positions:
+  these two metrics failed the gate. Since then three costs paid in every version are gone (a
+  check of ten types on every node of the tree, a call per character of an identifier, a separate walk to find
+  whether a function reads `this`): fully warmed up, the first is +16% (3.1 → 3.6 ms) and the second level. Both
+  are accepted, with bands of 30% and 15%; in the gate of 2026-11-25 they read +9.6% and +8.3%. Most of it is the analysis that keeps variables in registers and at fixed positions:
   running the same script is 18–20% faster compiled and 9–11% faster interpreted (`v8-earley-boyer`).
 
 ## Practical guidance

@@ -1001,6 +1001,24 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   3.69 ms alone before (3)), ES6 level. What remains to `perf-baseline` is mostly the scans of
   `VariableAllocation` and `CodeGenUtils.readsThis`: +19.9% (3.70 → 4.44 ms) in the gate at `43688e5ec`, which also has
   compiled `VERSION_ES6` at +10.2% (23.7 → 26.1 ms), both beyond their band of 10%.
+- **Three costs removed** (2026-11-25, measured phase by phase: parsing, building the tree, generating the code,
+  each the best of 10 s of compilations of `earley-boyer` in one JVM). They are paid in every language version:
+  (1) `IRFactory.transform` sent every node, expressions included, through ten type checks for the two wrappers of
+  statements (the guard of the iterators they open, the reset of the completion value); a table of the token types
+  of the statements that may be wrapped sends the others straight to the dispatch (building the tree 0.32 → 0.29 ms,
+  against 0.23 ms at `perf-baseline`); (2) `TokenStream.isIdentifierStart`/`isIdentifierPart` read a table for the
+  ASCII characters, filled from the same methods, instead of a call per character of an identifier that the lexer, too
+  large, no longer inlines; (3) whether a function reads `this` (to skip computing it for its calls) is recorded by
+  `NodeTransformer`, which visits every node, instead of a walk over each function (`CodeGenUtils.readsThis`):
+  generating the code, `VERSION_ES6`, 0.97 → 0.91 ms against 0.88 ms. The type table and the flag were checked over
+  the whole test suite and test262 against what they replace (a failure on any difference) before the old code was
+  removed. Compilation of `earley-boyer`, interpreted: `VERSION_ES6` 3.38–3.42 → 3.27–3.33 ms, `VERSION_ECMASCRIPT`
+  3.74–3.78 → 3.56–3.64 ms, against 3.04–3.16 ms at `perf-baseline` (3 alternating runs).
+- **Accepted** (2026-11-25). Interpreted `VERSION_ECMASCRIPT`, fully warmed up (one JVM, best of several seconds of
+  compilations): 3.1 → 3.6 ms, +16% after the three fixes above (+20% before), spread over the analyses (deciding where variables live 8% of the compilation,
+  the dead zone, what closures capture); the two largest candidates gained nothing (OPTIMIZATION_DROPPED.md). Compiled
+  `VERSION_ES6` is level once warm (22.1 ms both) and +8–12% only after the gate's 20 warmups under `-Xbatch`. The two
+  bands are 30% and 15% since (`ACCEPTED` in `buildtools/perf-calibrate.py`).
 
 ### Algorithms of built-ins
 

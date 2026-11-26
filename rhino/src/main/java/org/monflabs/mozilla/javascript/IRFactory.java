@@ -179,7 +179,37 @@ public final class IRFactory {
     /** Depth of with statements around the code being transformed. */
     private int withDepth;
 
+    /**
+     * The token types of the statements that transform may wrap (transformStatement,
+     * resetsCompletionValue): the other nodes, expressions above all, go straight to transformNode.
+     */
+    private static final boolean[] WRAPPED_STATEMENTS = new boolean[Token.LAST_TOKEN + 1];
+
+    static {
+        for (int type :
+                new int[] {
+                    Token.EXPR_VOID,
+                    Token.EXPR_RESULT,
+                    Token.VAR,
+                    Token.LET,
+                    Token.CONST,
+                    Token.FOR,
+                    Token.TRY,
+                    Token.IF,
+                    Token.WHILE,
+                    Token.DO,
+                    Token.SWITCH,
+                    Token.WITH
+                }) {
+            WRAPPED_STATEMENTS[type] = true;
+        }
+    }
+
     private Node transform(AstNode node) {
+        int type = node.getType();
+        if (type < 0 || type >= WRAPPED_STATEMENTS.length || !WRAPPED_STATEMENTS[type]) {
+            return transformNode(node);
+        }
         Node result = transformStatement(node);
         if (resetsCompletionValue(node)) {
             // UpdateEmpty(stmt, undefined) (ES2015 completion reform): the statement's value is

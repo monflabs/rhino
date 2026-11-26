@@ -133,6 +133,13 @@ public class NodeTransformer {
             }
 
             int type = node.getType();
+            if (type == Token.THIS
+                    || type == Token.SUPER
+                    || ((type == Token.CALL || type == Token.NEW)
+                            && node.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
+                                    != Node.NON_SPECIALCALL)) {
+                tree.setReadsThis();
+            }
             if (tdz
                     && !createScopeObjects
                     && node instanceof Scope

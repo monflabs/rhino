@@ -629,13 +629,35 @@ class TokenStream implements Parser.CurrentPositionReporter {
     }
 
     static boolean isIdentifierStart(int c, boolean ecmaScript) {
+        if (c >= 0 && c < 0x80) {
+            return (ecmaScript ? ASCII_ID_START : ASCII_JDK_ID_START)[c];
+        }
         return ecmaScript ? UnicodeIdentifiers.isIdStart(c) : Character.isUnicodeIdentifierStart(c);
     }
 
     static boolean isIdentifierPart(int c, boolean ecmaScript) {
+        if (c >= 0 && c < 0x80) {
+            return (ecmaScript ? ASCII_ID_PART : ASCII_JDK_ID_PART)[c];
+        }
         return ecmaScript
                 ? UnicodeIdentifiers.isIdContinue(c)
                 : Character.isUnicodeIdentifierPart(c);
+    }
+
+    // The answers of the methods above for the ASCII characters, read once per character of an
+    // identifier: the lexer is too large for the JIT to inline the calls into it
+    private static final boolean[] ASCII_ID_START = new boolean[0x80];
+    private static final boolean[] ASCII_ID_PART = new boolean[0x80];
+    private static final boolean[] ASCII_JDK_ID_START = new boolean[0x80];
+    private static final boolean[] ASCII_JDK_ID_PART = new boolean[0x80];
+
+    static {
+        for (int c = 0; c < 0x80; c++) {
+            ASCII_ID_START[c] = UnicodeIdentifiers.isIdStart(c);
+            ASCII_ID_PART[c] = UnicodeIdentifiers.isIdContinue(c);
+            ASCII_JDK_ID_START[c] = Character.isUnicodeIdentifierStart(c);
+            ASCII_JDK_ID_PART[c] = Character.isUnicodeIdentifierPart(c);
+        }
     }
 
     final String getSourceString() {

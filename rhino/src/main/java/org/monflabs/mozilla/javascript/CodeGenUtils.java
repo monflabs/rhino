@@ -101,30 +101,16 @@ public class CodeGenUtils {
      * arrow functions, which share its this.
      */
     public static boolean readsThis(FunctionNode fn) {
-        return readsThis_r(fn);
+        return readsThis((ScriptNode) fn);
     }
 
-    private static boolean readsThis_r(Node node) {
-        if (node instanceof ScriptNode) {
-            ScriptNode scriptOrFn = (ScriptNode) node;
-            for (int i = 0, n = scriptOrFn.getFunctionCount(); i != n; ++i) {
-                FunctionNode nested = scriptOrFn.getFunctionNode(i);
-                if (nested.getFunctionType() == FunctionNode.ARROW_FUNCTION
-                        && readsThis_r(nested)) {
-                    return true;
-                }
-            }
+    private static boolean readsThis(ScriptNode fn) {
+        if (fn.readsThisItself()) {
+            return true;
         }
-        for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
-            int type = child.getType();
-            if (type == Token.THIS
-                    || type == Token.SUPER
-                    || ((type == Token.CALL || type == Token.NEW)
-                            && child.getIntProp(Node.SPECIALCALL_PROP, Node.NON_SPECIALCALL)
-                                    != Node.NON_SPECIALCALL)) {
-                return true;
-            }
-            if (!(child instanceof ScriptNode) && readsThis_r(child)) {
+        for (int i = 0, n = fn.getFunctionCount(); i != n; ++i) {
+            FunctionNode nested = fn.getFunctionNode(i);
+            if (nested.getFunctionType() == FunctionNode.ARROW_FUNCTION && readsThis(nested)) {
                 return true;
             }
         }

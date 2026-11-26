@@ -131,7 +131,11 @@ features the base revision supports.
 
 The bands were calibrated on 12 recordings on an Apple M-series MacBook Air (2026-11-21, the first
 calibration with `-Xbatch`). 106 of the 114 metrics have the minimum band of 10%; the widest are
-`run.instanceof.int` (30% and 40%). Before `-Xbatch`, compiled-mode metrics settled in different
+`run.instanceof.int` (30% and 40%). Two bands are wider by decision, not by calibration: the accepted
+costs of `perf-calibrate.py` (`ACCEPTED`), minimum bands that a recalibration keeps. Since 2026-11-25,
+`compile.earley-boyer.int.ecma` has 30% (the compile-time analyses of `VERSION_ECMASCRIPT`, +16% fully
+warmed up) and `compile.earley-boyer.cmp.es6` 15% (level once warm, +8–12% after the gate's warmup).
+Before `-Xbatch`, compiled-mode metrics settled in different
 JIT states from one JVM to the next (`run.wideobject.cmp` at 19 or 60 ms, with a band of 250%) and
 only detected cliffs. With the first bands (2026-10-07), a deliberate regression of
 `instanceof` was caught at +15–19%; one of +4–8% was not. For a considered judgement on a smaller

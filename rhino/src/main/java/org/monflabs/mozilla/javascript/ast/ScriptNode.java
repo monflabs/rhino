@@ -299,6 +299,20 @@ public class ScriptNode extends Scope {
         }
     }
 
+    /**
+     * Whether the code of this script or function itself (not that of its nested functions) has a
+     * this, a super or a direct eval: set by NodeTransformer.
+     */
+    public boolean readsThisItself() {
+        return readsThis;
+    }
+
+    public void setReadsThis() {
+        readsThis = true;
+    }
+
+    private boolean readsThis;
+
     /** Moves the symbols of a scope to the function that the scope turns out to belong to. */
     public void moveSymbolsOf(Scope scope, ScriptNode dest) {
         scope.setTop(dest);

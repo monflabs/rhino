@@ -40,6 +40,22 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Compile time: three costs removed, the rest accepted (2026-11-25)
+
+No behavior change, nothing gated. The gate against `perf-baseline` failed on the compilation of `earley-boyer`:
+interpreted `VERSION_ECMASCRIPT` +14% to +29% depending on what ran before it, interpreted `VERSION_ES6` +9% to +15%,
+compiled `VERSION_ES6` +8% to +12%. Timed phase by phase, every phase was slower, in both versions.
+
+- Three costs paid in every version are removed (`OPTIMIZATION.md`, "Three costs removed"): ten type checks on every
+  node of the tree for the wrappers of statements (`IRFactory.transform`), a call per character of an identifier that
+  the lexer no longer inlines (`TokenStream.isIdentifierPart`), and a walk over each function to find whether it reads
+  `this` (`CodeGenUtils.readsThis`, now a flag set by `NodeTransformer`). Fully warmed up, interpreted compilation goes
+  from +10% to +6% (`VERSION_ES6`) and from +20% to +16% (`VERSION_ECMASCRIPT`) over `perf-baseline`.
+- The rest is accepted: the analyses of `VERSION_ECMASCRIPT` (where variables live, the dead zone, what closures capture),
+  with no single hotspot (an attempt dropped, `OPTIMIZATION_DROPPED.md`), and compiled `VERSION_ES6`, level once warm,
+  which the gate measures before the JIT has compiled the larger compiler. Their bands are 30% and 15%, kept by a
+  recalibration (`ACCEPTED` in `buildtools/perf-calibrate.py`). Gate at the end: +9.6%, +4.2% and +8.3%, no regression.
+
 ### Playground: the URL names the sample (2026-11-25)
 
 Not gated, no engine change. Test: `SampleLibraryTest`; the page itself checked in a browser.
