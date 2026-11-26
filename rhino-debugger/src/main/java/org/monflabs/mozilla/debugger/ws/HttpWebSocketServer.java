@@ -23,6 +23,8 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -30,10 +32,14 @@ import java.util.function.Supplier;
  * The little HTTP server a DevTools client expects: the discovery documents under {@code /json},
  * and one path that upgrades to a WebSocket. One client at a time; the {@code Host} header must
  * name an IP address or localhost, which is what keeps a web page from reaching the debugger by DNS
- * rebinding.
+ * rebinding. A client that attaches while the previous one is closing waits for its session to end,
+ * up to {@link #CLOSING_GRACE_MILLIS}.
  */
 public final class HttpWebSocketServer implements AutoCloseable {
     private static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+    /** How long a new client waits for the session of the previous one to end. */
+    static final long CLOSING_GRACE_MILLIS = 2000;
 
     private final String host;
     private final int requestedPort;
@@ -43,7 +49,13 @@ public final class HttpWebSocketServer implements AutoCloseable {
     private final Consumer<WebSocketConnection> onSession;
     private ServerSocket serverSocket;
     private Thread acceptor;
-    private volatile WebSocketConnection active;
+    private volatile Session active;
+
+    private record Session(WebSocketConnection connection, CountDownLatch ended) {
+        boolean running() {
+            return ended.getCount() > 0;
+        }
+    }
 
     /**
      * Creates a server.
@@ -157,8 +169,17 @@ public final class HttpWebSocketServer implements AutoCloseable {
                     socket.close();
                     return;
                 }
+                final Session previous = active;
+                if (previous != null && previous.running()) {
+                    try {
+                        previous.ended.await(CLOSING_GRACE_MILLIS, TimeUnit.MILLISECONDS);
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                final Session session;
                 synchronized (this) {
-                    if (active != null && !active.isClosed()) {
+                    if (active != null && active.running()) {
                         respond(
                                 out,
                                 403,
@@ -168,8 +189,13 @@ public final class HttpWebSocketServer implements AutoCloseable {
                         socket.close();
                         return;
                     }
-                    final WebSocketConnection connection = new WebSocketConnection(socket, in, out);
-                    active = connection;
+                    session =
+                            new Session(
+                                    new WebSocketConnection(socket, in, out),
+                                    new CountDownLatch(1));
+                    active = session;
+                }
+                try {
                     out.write(
                             ("HTTP/1.1 101 Switching Protocols\r\n"
                                             + "Upgrade: websocket\r\n"
@@ -179,8 +205,11 @@ public final class HttpWebSocketServer implements AutoCloseable {
                                             + "\r\n\r\n")
                                     .getBytes(StandardCharsets.ISO_8859_1));
                     out.flush();
+                    onSession.accept(session.connection);
+                } finally {
+                    session.connection.close(1000, "");
+                    session.ended.countDown();
                 }
-                onSession.accept(active);
             } else {
                 respond(out, 404, "Not Found", "text/plain", "");
                 socket.close();
@@ -274,9 +303,9 @@ public final class HttpWebSocketServer implements AutoCloseable {
 
     @Override
     public void close() {
-        final WebSocketConnection connection = active;
-        if (connection != null) {
-            connection.close(1001, "server closing");
+        final Session session = active;
+        if (session != null) {
+            session.connection.close(1001, "server closing");
         }
         try {
             if (serverSocket != null) {

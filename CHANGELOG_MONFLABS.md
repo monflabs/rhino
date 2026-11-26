@@ -40,6 +40,16 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Debugger: attaching again over a WebSocket (2026-11-26)
+
+Not gated, no engine change. Tests: `CdpServerTest`.
+
+- A client that dropped its socket without a WebSocket close left its connection open for the server, which then
+  refused every new client with "Another client is already attached" until it was restarted.
+- A client that attached right after closing could be refused: the server replied to the close before it marked the
+  connection closed. A new client now waits up to 2 seconds for the previous session to end; a second client while
+  the first is still attached is refused as before.
+
 ### Compile time: three costs removed, the rest accepted (2026-11-25)
 
 No behavior change, nothing gated. The gate against `perf-baseline` failed on the compilation of `earley-boyer`:

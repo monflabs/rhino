@@ -50,8 +50,8 @@ Ask for `debugger.pauseOnStart()` and start the script once the panel is connect
   constructor (the event dispatch thread for the panel).
 - **Detaching and attaching again** can be done in a row: what a previous connection still reports is dropped, and
   detaching while a connection is being opened cancels it (since 2026-11-25). An in-process channel is used once: open a
-  new one to attach again. A WebSocket server accepts one client at a time and can refuse a new one for as long as it
-  has not seen the previous connection close.
+  new one to attach again. A WebSocket server accepts one client at a time: a new client waits up to 2 seconds for the
+  previous one to finish closing (since 2026-11-26), and is refused if it is still attached.
 - **Breakpoints are set asynchronously.** `DebugSession.toggleBreakpoint` returns before the server has the breakpoint:
   a program that starts a script right after waits until `Breakpoint.serverId()` is set. Breakpoints are kept across a
   detach, and the session is `RUNNING` again only once the server has them back.

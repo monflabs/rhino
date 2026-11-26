@@ -182,6 +182,37 @@ class CdpServerTest {
         }
     }
 
+    @Test
+    void aClientCanAttachRightAfterTheLastOneClosed() throws Exception {
+        for (int i = 0; i < 20; i++) {
+            try (CdpClient client = new CdpClient(server.webSocketUrl())) {
+                assertNotNull(client.call("Runtime.getIsolateId").get("id"), "attach " + i);
+            }
+        }
+    }
+
+    @Test
+    void aClientCanAttachAfterTheLastOneDroppedItsSocket() throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", server.port())) {
+            socket.getOutputStream()
+                    .write(
+                            ("GET "
+                                            + path()
+                                            + " HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                                            + "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")
+                                    .getBytes(StandardCharsets.ISO_8859_1));
+            socket.getOutputStream().flush();
+            socket.setSoTimeout(5000);
+            final byte[] buf = new byte[4096];
+            final int n = socket.getInputStream().read(buf);
+            assertTrue(
+                    new String(buf, 0, n, StandardCharsets.ISO_8859_1).startsWith("HTTP/1.1 101 "));
+        }
+        try (CdpClient client = new CdpClient(server.webSocketUrl())) {
+            assertNotNull(client.call("Runtime.getIsolateId").get("id"));
+        }
+    }
+
     private String path() {
         final String url = server.webSocketUrl();
         return url.substring(url.lastIndexOf('/'));
