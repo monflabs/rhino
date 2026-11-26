@@ -12,7 +12,7 @@ import org.monflabs.mozilla.javascript.ScriptableObject;
 import org.monflabs.mozilla.javascript.TopLevel;
 import org.monflabs.mozilla.javascript.testutils.Utils;
 
-public class M18DefectsTest {
+public class EngineDefectsTest {
 
     @Test
     public void sortComparatorMinusZeroAndNaNAreEqual() {

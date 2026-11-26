@@ -160,7 +160,7 @@ by several commits (found by bisecting). See "Compile-time work only where it is
   +10.2%, against a band of 10% (interpreted ES6 +7.8%, compiled ECMASCRIPT +6.8%; gate of 2026-11-25 at `43688e5ec`,
   idle machine; a first run on a busy one had +26%, +14% and +14%).
 
-### M22.1: the neutral debugger API and its implementation (2026-11-24)
+### Debugger: the neutral debugger API and its implementation (2026-11-24)
 
 New Java API, nothing gated, no change to the engine's hot paths (the hooks are the existing `javascript.debug`
 ones, so no perf gate run). Test: `DebuggerApiTest`.
@@ -179,7 +179,7 @@ ones, so no perf gate run). Test: `DebuggerApiTest`.
 - Frames of top-level scripts evaluate against the global object: the interpreter's local-variable proxy holds
   no value for a top-level `var`.
 
-### M22.2: `rhino-debugger`, a Chrome DevTools Protocol server (2026-11-24)
+### Debugger: `rhino-debugger`, a Chrome DevTools Protocol server (2026-11-24)
 
 New module and Java API, nothing gated. Test: `CdpProtocolTest`, `CdpServerTest` (ported from Nashorn's, run
 against a real WebSocket client).
@@ -198,7 +198,7 @@ against a real WebSocket client).
   stepping into a function stops at its first statement.
 
 
-### M22.3: `rhino-debugger-ui`, a Swing debugger (2026-11-24)
+### Debugger: `rhino-debugger-ui`, a Swing debugger (2026-11-24)
 
 - New module `rhino-debugger-ui`: a Swing debugger panel (`DebuggerPanel`, `DebugSession`, source view, call stack, scopes, console) that
   talks CDP, over WebSocket or in-process, to a `rhino-debugger` server. Adapted from Nashorn's `debugger-ui`; headless tests ported to
@@ -206,7 +206,7 @@ against a real WebSocket client).
 - `DebugValues.ownProperties` of a `TopLevel` now lists the properties of its global object (`getGlobalThis()`), so the global scope of a
   paused frame shows the script's top-level variables.
 
-### M22.4: the playground debugs (2026-11-24)
+### Debugger: the playground debugs (2026-11-24)
 
 - `rhino-playground`: a **Debug** button runs the script in the interpreter under the debugger, paused at its first statement, in a
   `DebuggerPanel` window attached in memory (no socket); an **External debugger** button does the same but serves CDP on a port
@@ -214,16 +214,16 @@ against a real WebSocket client).
 - `ScriptRunner.debug(...)` and `ScriptRunner.debugger()`: debug runs use a context factory of their own, so plain runs are unaffected.
   Test: `DebugRunTest`.
 
-### M22.5: the debugger contract test kit (2026-11-24)
+### Debugger: the contract test kit (2026-11-24)
 
 - New module `rhino-debugger-testkit`: `DebuggerContractTest`, an abstract JUnit 5 class holding the contract of the neutral debugger
-  API, so that a debugger of another runtime (the Demandware one) is validated by extending it and supplying a `Fixture`. Rhino's
+  API, so that a debugger of another runtime is validated by extending it and supplying a `Fixture`. Rhino's
   own debugger runs it in `RhinoDebuggerContractTest`; it replaces `DebuggerApiTest` of the `tests` module (same tests).
 
-### M22.6: licensing of the ported debugger (2026-11-24)
+### Debugger: licensing of the ported code (2026-11-24)
 
 - Every file of the debugger modules and of `api.debugger` carries the MPL 2.0 header; `NOTICE.txt` states that the code is adapted
-  from Nashorn's debugger and relicensed under MPL 2.0. This closes M22.
+  from Nashorn's debugger and relicensed under MPL 2.0.
 
 ### Playground: Debug after a finished session (2026-11-24)
 
@@ -236,14 +236,14 @@ against a real WebSocket client).
 
 - `rhino-doc/site/debugger.md`: the debugger, from the API to the playground; linked from the sidebar and `features.md`.
 
-### Perf gate of M22 (2026-11-24)
+### Perf gate of the debugger (2026-11-24)
 
-`buildtools/perf-gate.sh 13b295adb` (before M22): no metric regressed beyond its tolerance; `:tests:test` passes.
+`buildtools/perf-gate.sh 13b295adb` (before the debugger): no metric regressed beyond its tolerance; `:tests:test` passes.
 
-### M18: defects found by the comparison with script4 (2026-11-23)
+### Defects: sort comparator, Symbols, Java arrays, sealed scopes (2026-11-23)
 
 All versions (defects no script can rely on); `BACKWARD_COMPATIBILITY.md` 1.111 to 1.113 and 2.9. Test:
-`M18DefectsTest`.
+`EngineDefectsTest`.
 
 - **Sort comparator**: a result of `-0` or `NaN` counts as 0 (it was ordered by `Double.compare`).
 - **Symbols**: `WrapFactory.wrap` returns a `SymbolKey` as it is (a Symbol returned by Java was wrapped).
@@ -252,7 +252,7 @@ All versions (defects no script can rely on); `BACKWARD_COMPATIBILITY.md` 1.111 
 - **Holes into Java arrays**: converting a sparse JavaScript array stored the `NOT_FOUND` marker; it is `undefined`.
 - **`ClassShutter` and Java arrays**: the shutter is asked about the component type of an array.
 - **Sealed scopes**: `Symbol.prototype`, `%TypedArray%` and `%TypedArray%.prototype` are sealed with the other standard objects
-  (`BACKWARD_COMPATIBILITY.md` 1.114). Test: `M18DefectsTest`.
+  (`BACKWARD_COMPATIBILITY.md` 1.114). Test: `EngineDefectsTest`.
 
 ### The open items of the documentation review (2026-11-23)
 

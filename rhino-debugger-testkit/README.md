@@ -1,8 +1,7 @@
 # rhino-debugger-testkit
 
 The contract of the neutral debugger API (`org.monflabs.mozilla.api.debugger`), as JUnit 5 tests, for
-any debugger that implements it: Rhino's own, or the one of another runtime (such as the Demandware
-debugger).
+any debugger that implements it: Rhino's own, or the one of another runtime.
 
 Depend on this module from the test scope, extend `DebuggerContractTest` and implement
 `createFixture()`: the debugger attached to your engine, and a way to run a script under a name.
