@@ -1020,6 +1020,29 @@ thresholds the property paths are (a compilation race that changes `deltablue` b
   `VERSION_ES6` is level once warm (22.1 ms both) and +8–12% only after the gate's 20 warmups under `-Xbatch`. The two
   bands are 30% and 15% since (`ACCEPTED` in `buildtools/perf-calibrate.py`).
 
+### Typed array element writes check the bounds once (2026-11-28)
+
+- **What.** (1) `NativeTypedArrayView.checkIndex` compares the index with the stored length when the view has a fixed
+  length on a buffer that cannot be resized, instead of calling `isTypedArrayOutOfBounds()`, which recomputes the
+  view's end from the buffer's length. (2) A write with the array as the receiver (`setElement`, `set`) tests only
+  that the key is an integer index and lets `js_set` check the bounds, which every `js_set` already does after its
+  conversion: the bounds were checked twice per write, three times with the check of `getBase`. (3) The default
+  `toNumeric` returns an `Integer` or a `Double` as it is instead of converting it to a new `Double`.
+- **Why.** Octane `gbemu`, compiled, ran 7–9% slower than Rhino 1.9.1 under `-Xbatch`. In JFR, the out-of-bounds test of
+  resizable buffers (ES2024) took 7% of the samples and `toNumber` 8.6% (1.2% in 1.9.1), all under the element writes
+  `ScriptRuntime.setObjectIndex` → `putProperty` → `NativeTypedArrayView.put`.
+- **Correctness.** A buffer's length changes only through `resize` (a resizable buffer) or by being detached (its
+  length becomes 0), and a growable `SharedArrayBuffer` is resizable: on any other buffer, an attached view that was
+  in range when it was created stays in range, which is what the test of the detached flag, `outOfRange` and the
+  length keeps. `js_set` checks the bounds after the conversion, as `TypedArraySetElement` does, so a `valueOf` that
+  detaches or shrinks the buffer still cancels the write. `NativeBigIntArrayView` overrides `toNumeric`, so a number
+  written to a `BigInt64Array` still throws. No behavior change, all versions. Tests: `TypedArrayElementWriteTest`.
+- **Gain.** Writes and reads through call sites that see six kinds of typed arrays, compiled, 3 alternating JVMs:
+  about 300 → 225 ms per pass in both versions. Monomorphic sites, where the JIT folds the checks, level (as the
+  gate's `typedarray`). Octane `gbemu` under `-Xbatch`, 3 JVMs per side: `VERSION_ES6` +5.7% (score 1,575 → 1,665),
+  `VERSION_ECMASCRIPT` level (1,555 → 1,569), with the typed-array costs down from 15.6% to 4.7% of the samples; without
+  `-Xbatch`, `gbemu` varies by ±15% from one JVM to the next. Perf gate against the commit before: no regression.
+
 ### Algorithms of built-ins
 
 - **BigInt literals and `BigInt()` of long strings** (2026-10-26). `new BigInteger(String)` takes a time

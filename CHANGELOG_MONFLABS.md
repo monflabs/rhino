@@ -40,6 +40,17 @@ future work in the M15 status of [MONFLABS_PLAN.md](MONFLABS_PLAN.md).
 
 The Maven version is `2026.0` (it was `2.0.0-SNAPSHOT`).
 
+### Typed array element writes check the bounds once (2026-11-28)
+
+No behavior change, nothing gated. Tests: `TypedArrayElementWriteTest`.
+
+- An element write to a typed array checked the bounds two or three times, each time recomputing the view's end from
+  its buffer for resizable buffers (ES2024), and converted a number that was already one. A fixed-length view on a
+  buffer that cannot be resized now compares the index with its length, and `js_set` alone checks the bounds, after
+  the conversion (`OPTIMIZATION.md`, "Typed array element writes check the bounds once"). Call sites that see several
+  kinds of typed arrays: −25%; Octane `gbemu` under `-Xbatch`: +5.7% under `VERSION_ES6`, level under
+  `VERSION_ECMASCRIPT`. Perf gate: no regression.
+
 ### Debugger: attaching again over a WebSocket (2026-11-26)
 
 Not gated, no engine change. Tests: `CdpServerTest`.

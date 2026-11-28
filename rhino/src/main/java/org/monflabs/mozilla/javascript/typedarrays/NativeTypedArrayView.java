@@ -190,6 +190,14 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         return index >= 0 && index <= Integer.MAX_VALUE && !checkIndex((int) index);
     }
 
+    /** IsValidIntegerIndex without the bounds, which every {@code js_set} checks itself. */
+    private static boolean isIntegerIndex(double index) {
+        return index == Math.rint(index)
+                && !(index == 0 && 1 / index < 0)
+                && index >= 0
+                && index <= Integer.MAX_VALUE;
+    }
+
     @Override
     protected boolean isTypedArray() {
         return true;
@@ -254,7 +262,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         if (num != null) {
             if (receiver == this) {
                 Object numeric = toNumeric(value);
-                if (isValidIntegerIndex(num)) {
+                if (isIntegerIndex(num)) {
                     js_set(num.intValue(), numeric);
                 }
                 return true;
@@ -317,7 +325,7 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
         if (start == this || start == null) {
             // TypedArraySetElement: the value is converted even when the index is not valid
             Object numeric = toNumeric(val);
-            if (isValidIntegerIndex(index)) {
+            if (isIntegerIndex(index)) {
                 js_set((int) index, numeric);
             }
             return;
@@ -616,6 +624,10 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
 
     /** Returns {@code true}, if the index is wrong. */
     protected boolean checkIndex(int index) {
+        if (isFixedLength()) {
+            // the buffer cannot change length: only detaching takes the view out of bounds
+            return arrayBuffer.isDetached() || outOfRange || index < 0 || index >= length;
+        }
         return isTypedArrayOutOfBounds() || ((index < 0) || (index >= getLength()));
     }
 
@@ -641,6 +653,9 @@ public abstract class NativeTypedArrayView<T> extends NativeArrayBufferView
     protected abstract Object js_set(int index, Object c);
 
     protected Object toNumeric(Object num) {
+        if (num instanceof Integer || num instanceof Double) {
+            return num;
+        }
         return ScriptRuntime.toNumber(num);
     }
 
